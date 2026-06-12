@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="body-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B5E3C"/>
+      <stop offset="100%" stop-color="#5C3A1E"/>
+    </linearGradient>
+    <linearGradient id="head-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A06B42"/>
+      <stop offset="100%" stop-color="#704020"/>
+    </linearGradient>
+  </defs>
+  <!-- Drop shadow -->
+  <ellipse cx="72" cy="108" rx="36" ry="6" fill="rgba(0,0,0,0.15)"/>
+  <!-- Body (oval thorax/abdomen) -->
+  <ellipse cx="80" cy="66" rx="42" ry="30" fill="url(#body-grad)"/>
+  <!-- Wing divider line -->
+  <line x1="80" y1="37" x2="80" y2="95" stroke="#4A2E10" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  <!-- Subtle wing pattern -->
+  <ellipse cx="66" cy="66" rx="20" ry="26" fill="none" stroke="#9B6A3C" stroke-width="0.8" opacity="0.4"/>
+  <ellipse cx="94" cy="66" rx="20" ry="26" fill="none" stroke="#9B6A3C" stroke-width="0.8" opacity="0.4"/>
+  <!-- Head (round, front) -->
+  <circle cx="36" cy="62" r="24" fill="url(#head-grad)"/>
+  <!-- Eyes -->
+  <circle cx="29" cy="55" r="5" fill="white"/>
+  <circle cx="29" cy="55" r="3" fill="#1A1A1A"/>
+  <circle cx="30.5" cy="53.5" r="1" fill="white"/>
+  <!-- Snout (the defining weevil feature — long curved proboscis) -->
+  <path d="M14 62 Q4 60 2 64 Q4 68 14 66 Z" fill="#6B3D1A"/>
+  <ellipse cx="8" cy="64" rx="10" ry="3.5" fill="#7A4525" transform="rotate(-8 8 64)"/>
+  <!-- Antennae -->
+  <path d="M30 38 Q24 22 16 14" stroke="#7A4525" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M42 36 Q40 18 42 8" stroke="#7A4525" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <circle cx="16" cy="14" r="3" fill="#E07B5A"/>
+  <circle cx="42" cy="8" r="3" fill="#E07B5A"/>
+  <!-- Legs (3 pairs) -->
+  <line x1="58" y1="90" x2="44" y2="112" stroke="#5C3A1E" stroke-width="3" stroke-linecap="round"/>
+  <line x1="72" y1="94" x2="64" y2="118" stroke="#5C3A1E" stroke-width="3" stroke-linecap="round"/>
+  <line x1="88" y1="92" x2="96" y2="116" stroke="#5C3A1E" stroke-width="3" stroke-linecap="round"/>
+  <line x1="58" y1="42" x2="44" y2="20" stroke="#5C3A1E" stroke-width="3" stroke-linecap="round"/>
+  <line x1="72" y1="38" x2="64" y2="14" stroke="#5C3A1E" stroke-width="3" stroke-linecap="round"/>
+  <line x1="88" y1="40" x2="96" y2="16" stroke="#5C3A1E" stroke-width="3" stroke-linecap="round"/>
+  <!-- Brand coral dot (nostril accent) -->
+  <circle cx="4" cy="64" r="2.5" fill="#E07B5A"/>
+</svg>

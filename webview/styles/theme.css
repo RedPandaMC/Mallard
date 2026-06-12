@@ -1,0 +1,54 @@
+:root {
+  /* Surface tokens */
+  --w-bg: var(--vscode-editor-background);
+  --w-bg-card: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  --w-bg-hover: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
+  --w-bg-active: var(--vscode-list-activeSelectionBackground, rgba(255, 255, 255, 0.1));
+
+  /* Text tokens */
+  --w-fg: var(--vscode-foreground);
+  --w-fg-muted: var(--vscode-descriptionForeground);
+  --w-fg-subtle: var(--vscode-disabledForeground, #606060);
+
+  /* Border */
+  --w-border: var(--vscode-panel-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.25)));
+
+  /* Input */
+  --w-input-bg: var(--vscode-input-background);
+  --w-input-fg: var(--vscode-input-foreground);
+  --w-input-border: var(--vscode-input-border, var(--w-border));
+
+  /* Typography */
+  --w-font: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  --w-font-size: var(--vscode-font-size, 13px);
+  --w-font-mono: var(--vscode-editor-font-family, 'Cascadia Code', 'Fira Code', monospace);
+
+  /* Brand accent (Anthropic warm coral) */
+  --w-brand: #e07b5a;
+  --w-brand-dim: rgba(224, 123, 90, 0.12);
+  --w-brand-hover: rgba(224, 123, 90, 0.2);
+
+  /* Status */
+  --w-ok: var(--vscode-charts-green, #4caf50);
+  --w-warn: var(--vscode-charts-orange, #ff9800);
+  --w-err: var(--vscode-charts-red, #f44336);
+
+  /* Spacing scale */
+  --w-s0: 2px;
+  --w-s1: 4px;
+  --w-s2: 8px;
+  --w-s3: 12px;
+  --w-s4: 16px;
+  --w-s5: 20px;
+  --w-s6: 24px;
+  --w-s8: 32px;
+
+  /* Radius */
+  --w-r1: 4px;
+  --w-r2: 6px;
+  --w-r3: 10px;
+
+  /* Chart dimensions */
+  --w-chart-main: 280px;
+  --w-chart-mini: 200px;
+}

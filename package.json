@@ -1,0 +1,373 @@
+{
+  "name": "weevil",
+  "displayName": "Weevil",
+  "description": "A little nosey about your Copilot spend — token, credit & cost tracking with forecasting for GitHub Copilot.",
+  "version": "0.1.0",
+  "publisher": "jurreandenys",
+  "license": "MIT",
+  "author": {
+    "name": "Jurrean De Nys"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RedPandaMC/weevil.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RedPandaMC/weevil/issues"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Visualization",
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "copilot",
+    "usage",
+    "tokens",
+    "credits",
+    "cost",
+    "forecasting",
+    "dashboard"
+  ],
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#1B1B1F",
+    "theme": "dark"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "weevil",
+          "title": "Weevil",
+          "icon": "media/weevil-activitybar.svg"
+        }
+      ]
+    },
+    "views": {
+      "weevil": [
+        {
+          "type": "webview",
+          "id": "weevil.sidebar",
+          "name": "Usage"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "weevil.openDashboard",
+        "title": "Open Dashboard",
+        "category": "Weevil",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "weevil.refresh",
+        "title": "Refresh Usage",
+        "category": "Weevil",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "weevil.showBreakdown",
+        "title": "Show Spend Breakdown",
+        "category": "Weevil"
+      },
+      {
+        "command": "weevil.setScope",
+        "title": "Set Status Bar Scope",
+        "category": "Weevil"
+      },
+      {
+        "command": "weevil.setBudget",
+        "title": "Set Monthly Budget",
+        "category": "Weevil"
+      },
+      {
+        "command": "weevil.configureNotifications",
+        "title": "Configure Notifications",
+        "category": "Weevil"
+      },
+      {
+        "command": "weevil.signIn",
+        "title": "Connect GitHub (calibrate usage)",
+        "category": "Weevil"
+      },
+      {
+        "command": "weevil.signOut",
+        "title": "Disconnect GitHub",
+        "category": "Weevil"
+      },
+      {
+        "command": "weevil.exportData",
+        "title": "Export Usage Data",
+        "category": "Weevil"
+      },
+      {
+        "command": "weevil.clearData",
+        "title": "Clear Usage Data",
+        "category": "Weevil"
+      },
+      {
+        "command": "weevil.showTips",
+        "title": "Show a Cost-Saving Tip",
+        "category": "Weevil"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "weevil.refresh",
+          "when": "view == weevil.sidebar",
+          "group": "navigation@1"
+        },
+        {
+          "command": "weevil.openDashboard",
+          "when": "view == weevil.sidebar",
+          "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "weevil.signOut",
+          "when": "weevil.signedIn"
+        }
+      ]
+    },
+    "chatParticipants": [
+      {
+        "id": "weevil.chat",
+        "name": "weevil",
+        "fullName": "Weevil",
+        "description": "Ask about your Copilot usage, cost, and trends.",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "today",
+            "description": "Spend & usage so far today"
+          },
+          {
+            "name": "forecast",
+            "description": "Projected spend for this month"
+          },
+          {
+            "name": "models",
+            "description": "Breakdown by model"
+          },
+          {
+            "name": "repos",
+            "description": "Breakdown by repository"
+          },
+          {
+            "name": "tips",
+            "description": "Tips to reduce Copilot spend"
+          }
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "Weevil",
+      "properties": {
+        "weevil.dataSource": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "sample",
+            "local"
+          ],
+          "enumDescriptions": [
+            "Use local Copilot logs if found, otherwise sample data.",
+            "Always use generated sample data (for demos).",
+            "Only use parsed local Copilot logs (no sample fallback)."
+          ],
+          "default": "auto",
+          "description": "Where Weevil gets usage data from."
+        },
+        "weevil.monthlyBudget": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "Monthly Copilot budget in your currency (0 = no budget)."
+        },
+        "weevil.currency": {
+          "type": "string",
+          "default": "USD",
+          "description": "Currency code used to display costs."
+        },
+        "weevil.pricePerCredit": {
+          "type": "number",
+          "default": 0.04,
+          "description": "Cost of one premium request / credit, in your currency."
+        },
+        "weevil.includedCredits": {
+          "type": "number",
+          "default": 300,
+          "description": "Monthly included premium requests for your Copilot plan."
+        },
+        "weevil.tokenPricing": {
+          "type": "object",
+          "default": {},
+          "description": "Optional per-model overrides: { \"<modelId>\": { \"creditMultiplier\": number } }.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "creditMultiplier": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "weevil.copilotLogPath": {
+          "type": "string",
+          "default": "",
+          "description": "Override path to Copilot debug/OTel logs (blank = auto-detect)."
+        },
+        "weevil.refreshIntervalMinutes": {
+          "type": "number",
+          "default": 15,
+          "minimum": 1,
+          "description": "How often Weevil re-reads usage data, in minutes."
+        },
+        "weevil.statusBar.metric": {
+          "type": "string",
+          "enum": [
+            "cost",
+            "credits",
+            "tokens"
+          ],
+          "default": "cost",
+          "description": "Which metric the status bar indicator shows."
+        },
+        "weevil.statusBar.scope": {
+          "type": "string",
+          "enum": [
+            "session",
+            "today",
+            "workspace",
+            "repo"
+          ],
+          "default": "today",
+          "description": "Which scope the status bar indicator reflects."
+        },
+        "weevil.pet.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Weevil mascot in the dashboard header."
+        },
+        "weevil.notifications": {
+          "type": "array",
+          "default": [
+            {
+              "id": "daily-cost",
+              "type": "threshold",
+              "metric": "cost",
+              "scope": "day",
+              "value": 5,
+              "channel": "toast"
+            },
+            {
+              "id": "burn-rate",
+              "type": "velocity",
+              "metric": "credits",
+              "window": "1h",
+              "value": 50,
+              "channel": "toast"
+            }
+          ],
+          "description": "Extensible spend alert rules. See the README for the rule schema.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "type",
+              "metric",
+              "value"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "threshold",
+                  "velocity"
+                ]
+              },
+              "metric": {
+                "type": "string",
+                "enum": [
+                  "cost",
+                  "credits",
+                  "tokens"
+                ]
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "hour",
+                  "day",
+                  "week",
+                  "month"
+                ]
+              },
+              "window": {
+                "type": "string"
+              },
+              "value": {
+                "type": "number"
+              },
+              "filter": {
+                "type": "object"
+              },
+              "channel": {
+                "type": "string",
+                "enum": [
+                  "toast",
+                  "status-only"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "package": "node esbuild.mjs --production",
+    "check-types": "tsc -p tsconfig.host.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
+    "lint": "eslint src webview test",
+    "test:unit": "mocha",
+    "compile-tests": "tsc -p tsconfig.host.json --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run check-types && npm run lint",
+    "test": "vscode-test",
+    "vscode:prepublish": "npm run package",
+    "vsce:package": "vsce package"
+  },
+  "dependencies": {
+    "echarts": "^5.5.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.0",
+    "@types/mocha": "^10.0.7",
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.95.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^2.32.0",
+    "esbuild": "^0.23.0",
+    "eslint": "^9.9.0",
+    "mocha": "^10.7.0",
+    "prettier": "^3.3.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.0.0"
+  }
+}

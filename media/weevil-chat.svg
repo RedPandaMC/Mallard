@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
+  <!-- Body -->
+  <ellipse cx="10.5" cy="8" rx="4.5" ry="3.5"/>
+  <!-- Head -->
+  <circle cx="5" cy="7.5" r="3"/>
+  <!-- Snout -->
+  <ellipse cx="1.2" cy="7.5" rx="2" ry="0.75"/>
+</svg>
