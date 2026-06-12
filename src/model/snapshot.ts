@@ -35,8 +35,8 @@ function computeRange(events: UsageEvent[], now: number): { start: number; end: 
   if (events.length === 0) {
     return { start: startOf(now - 29 * DAY_MS, 'day'), end: now };
   }
-  let min = events[0].ts;
-  let max = events[0].ts;
+  let min = events[0]!.ts;
+  let max = events[0]!.ts;
   for (const e of events) {
     if (e.ts < min) min = e.ts;
     if (e.ts > max) max = e.ts;

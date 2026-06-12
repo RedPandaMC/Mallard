@@ -78,7 +78,7 @@ export function parseOtelContent(content: string, ctx: ParseContext): UsageEvent
     const { credits, cost } = priceRequest(String(model), {
       pricePerCredit: ctx.pricePerCredit,
       currency: 'USD',
-      manifest: ctx.manifest,
+      ...(ctx.manifest !== undefined ? { manifest: ctx.manifest } : {}),
     });
     events.push({
       id: `local:${ts}:${i++}:${model}`,
@@ -86,8 +86,8 @@ export function parseOtelContent(content: string, ctx: ParseContext): UsageEvent
       modelId: String(model),
       surface: toSurface(pick(attrs, ['gen_ai.operation.surface', 'surface'])),
       source: 'local',
-      promptTokens: prompt,
-      completionTokens: completion,
+      ...(prompt !== undefined ? { promptTokens: prompt } : {}),
+      ...(completion !== undefined ? { completionTokens: completion } : {}),
       credits,
       cost,
       estimated: true,

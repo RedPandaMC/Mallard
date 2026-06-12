@@ -23,7 +23,7 @@ describe('parseOtelContent', () => {
 
     const events = parseOtelContent(content, ctx);
     assert.strictEqual(events.length, 1);
-    const e = events[0];
+    const e = events[0]!;
     assert.strictEqual(e.modelId, 'gpt-4o');
     assert.strictEqual(e.promptTokens, 1200);
     assert.strictEqual(e.completionTokens, 300);
@@ -43,11 +43,11 @@ describe('parseOtelContent', () => {
     });
     const events = parseOtelContent(content, ctx);
     assert.strictEqual(events.length, 1);
-    assert.strictEqual(events[0].modelId, 'claude-sonnet-4');
-    assert.strictEqual(events[0].promptTokens, 500);
-    assert.strictEqual(events[0].completionTokens, 120);
-    assert.strictEqual(events[0].surface, 'inline');
-    assert.strictEqual(events[0].ts, 1_700_000_500_000);
+    assert.strictEqual(events[0]!.modelId, 'claude-sonnet-4');
+    assert.strictEqual(events[0]!.promptTokens, 500);
+    assert.strictEqual(events[0]!.completionTokens, 120);
+    assert.strictEqual(events[0]!.surface, 'inline');
+    assert.strictEqual(events[0]!.ts, 1_700_000_500_000);
   });
 
   it('skips malformed lines and non-JSON noise', () => {
@@ -61,7 +61,7 @@ describe('parseOtelContent', () => {
     ].join('\n');
     const events = parseOtelContent(content, ctx);
     assert.strictEqual(events.length, 1);
-    assert.strictEqual(events[0].modelId, 'gpt-4o');
+    assert.strictEqual(events[0]!.modelId, 'gpt-4o');
   });
 
   it('ignores records without a model', () => {
@@ -76,7 +76,7 @@ describe('parseOtelContent', () => {
     const content = JSON.stringify({ model: 'gpt-4o', timestamp: 'not-a-date' });
     const events = parseOtelContent(content, ctx);
     assert.strictEqual(events.length, 1);
-    assert.strictEqual(events[0].ts, ctx.now);
+    assert.strictEqual(events[0]!.ts, ctx.now);
   });
 
   it('produces stable, unique ids per record', () => {
@@ -86,7 +86,7 @@ describe('parseOtelContent', () => {
     ].join('\n');
     const events = parseOtelContent(content, ctx);
     assert.strictEqual(events.length, 2);
-    assert.notStrictEqual(events[0].id, events[1].id);
+    assert.notStrictEqual(events[0]!.id, events[1]!.id);
   });
 
   it('returns an empty array for empty content', () => {

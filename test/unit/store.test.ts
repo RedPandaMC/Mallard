@@ -63,7 +63,7 @@ describe('EventStore', () => {
     ]);
     const onlyGpt = store.query({ models: ['gpt-4o'] });
     assert.strictEqual(onlyGpt.length, 1);
-    assert.strictEqual(onlyGpt[0].id, 'a');
+    assert.strictEqual(onlyGpt[0]!.id, 'a');
   });
 
   it('clears all events and truncates the file', async () => {

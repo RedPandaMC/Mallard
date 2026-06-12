@@ -55,10 +55,10 @@ function buildFilter(
   const now = Date.now();
   const range = presetToRange(preset, now);
   return {
-    range,
-    models: models.length ? models : undefined,
-    surfaces: surface ? [surface] : undefined,
-  };
+    ...(range !== undefined ? { range } : {}),
+    ...(models.length ? { models } : {}),
+    ...(surface ? { surfaces: [surface] } : {}),
+  } as Filter;
 }
 
 export function mountFilterBar(el: HTMLElement): FilterBarHandle {
@@ -144,7 +144,7 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
     if (activeModels.length === 0) {
       modelLabel.textContent = 'All models';
     } else if (activeModels.length === 1) {
-      modelLabel.textContent = activeModels[0].slice(0, 24);
+      modelLabel.textContent = activeModels[0]!.slice(0, 24);
     } else {
       modelLabel.textContent = `${activeModels.length} models`;
     }

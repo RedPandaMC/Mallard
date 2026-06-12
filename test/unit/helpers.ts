@@ -6,17 +6,20 @@ let counter = 0;
 export function makeEvent(partial: Partial<UsageEvent> & { ts: number }): UsageEvent {
   counter += 1;
   const credits = partial.credits ?? 1;
-  return {
+  const base: UsageEvent = {
     id: partial.id ?? `e${counter}`,
     ts: partial.ts,
     modelId: partial.modelId ?? 'gpt-4o',
     surface: (partial.surface ?? 'chat') as Surface,
     source: (partial.source ?? 'local') as SourceKind,
-    promptTokens: partial.promptTokens,
-    completionTokens: partial.completionTokens,
     credits,
     cost: partial.cost ?? credits * 0.04,
     estimated: partial.estimated ?? false,
-    repo: partial.repo,
+  };
+  return {
+    ...base,
+    ...(partial.promptTokens !== undefined ? { promptTokens: partial.promptTokens } : {}),
+    ...(partial.completionTokens !== undefined ? { completionTokens: partial.completionTokens } : {}),
+    ...(partial.repo !== undefined ? { repo: partial.repo } : {}),
   };
 }

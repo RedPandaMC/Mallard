@@ -56,7 +56,7 @@ export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
       const series: echarts.SeriesOption[] = [
         {
           type: 'bar',
-          data: values.map((v, i) => ({ value: v, itemStyle: { color: colors[i] } })),
+          data: values.map((v, i) => ({ value: v, itemStyle: { color: colors[i]! } })),
           name: 'Credits',
           emphasis: { itemStyle: { opacity: 0.85 } },
         },

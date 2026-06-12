@@ -136,7 +136,8 @@ export function sankeyLinksFor(events: UsageEvent[], f?: Filter): SankeyLink[] {
     .map(([key, value]) => {
       const [source, target] = key.split('|||');
       return { source, target, value };
-    });
+    })
+    .filter((l): l is SankeyLink => l.source !== undefined && l.target !== undefined);
 }
 
 /** All distinct model IDs in the filtered event set. */

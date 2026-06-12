@@ -80,7 +80,7 @@ export function mountKpiCards(el: HTMLElement): KpiCardsHandle {
 
       // Top model
       if (topModels.length) {
-        const m = topModels[0];
+        const m = topModels[0]!;
         modelVal.textContent = m.key;
         modelSub.textContent = formatMetric(
           metric === 'cost' ? m.cost : metric === 'credits' ? m.credits : m.tokens,

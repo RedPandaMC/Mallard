@@ -68,7 +68,7 @@ export function resolveMultiplier(
   if (overrides) {
     const keys = Object.keys(overrides).sort((a, b) => b.length - a.length);
     for (const key of keys) {
-      if (id.includes(key.toLowerCase())) return overrides[key];
+      if (id.includes(key.toLowerCase())) return overrides[key]!;
     }
   }
 
@@ -77,9 +77,9 @@ export function resolveMultiplier(
     .filter((k) => k !== 'unknown')
     .sort((a, b) => b.length - a.length);
   for (const key of keys) {
-    if (id.includes(key)) return source[key];
+    if (id.includes(key)) return source[key]!;
   }
-  return source['unknown'] ?? DEFAULT_MULTIPLIERS.unknown;
+  return source['unknown'] ?? DEFAULT_MULTIPLIERS['unknown']!;
 }
 
 export function costForCredits(credits: number, pricePerCredit: number): number {
