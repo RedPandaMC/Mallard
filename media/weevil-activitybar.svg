@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+  <!-- Weevil body (oval, main mass) -->
+  <ellipse cx="15" cy="12" rx="7.5" ry="5.5"/>
+  <!-- Weevil head (rounder, to the left) -->
+  <circle cx="7" cy="11.5" r="4"/>
+  <!-- Snout — the defining weevil feature: long curved proboscis -->
+  <ellipse cx="1.8" cy="11.5" rx="3" ry="1" transform="rotate(-5 1.8 11.5)"/>
+</svg>
