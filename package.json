@@ -32,7 +32,7 @@
     "forecasting",
     "dashboard"
   ],
-  "icon": "media/icon.png",
+  "icon": "media/weevil-icon.svg",
   "galleryBanner": {
     "color": "#1B1B1F",
     "theme": "dark"
