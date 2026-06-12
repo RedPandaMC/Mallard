@@ -4,8 +4,14 @@
  * ignored. Token counts and credits are flagged `estimated`.
  */
 import { priceRequest } from '../../../model/pricing';
+import { PricingManifest } from '../../../model/pricing';
 import { Surface, UsageEvent } from '../../../model/types';
-import { ProviderContext } from '../../UsageProvider';
+
+export interface ParseContext {
+  pricePerCredit: number;
+  manifest?: PricingManifest;
+  now: number;
+}
 
 type AnyRecord = Record<string, unknown>;
 
@@ -30,7 +36,7 @@ function toSurface(v: unknown): Surface {
   return 'unknown';
 }
 
-export function parseOtelContent(content: string, ctx: ProviderContext): UsageEvent[] {
+export function parseOtelContent(content: string, ctx: ParseContext): UsageEvent[] {
   const events: UsageEvent[] = [];
   let i = 0;
 
@@ -69,7 +75,11 @@ export function parseOtelContent(content: string, ctx: ProviderContext): UsageEv
           : ctx.now;
     if (Number.isNaN(ts)) ts = ctx.now;
 
-    const { credits, cost } = priceRequest(String(model), ctx);
+    const { credits, cost } = priceRequest(String(model), {
+      pricePerCredit: ctx.pricePerCredit,
+      currency: 'USD',
+      manifest: ctx.manifest,
+    });
     events.push({
       id: `local:${ts}:${i++}:${model}`,
       ts,

@@ -1,16 +1,20 @@
 /**
- * Pure assembly of a UsageSnapshot from raw events + options. Kept free of
- * `vscode` so it can be unit-tested directly; UsageService just feeds it data.
+ * Pure assembly of a UsageSnapshot from raw events + options.
  */
-import { aggregateAll, sumEvents, topBy } from './aggregate';
+import {
+  aggregateAll,
+  distinctModels,
+  distinctSurfaces,
+  sankeyLinksFor,
+  sumEvents,
+  topBy,
+} from './aggregate';
 import { computeBudget } from './budget';
 import { forecastMonth } from './forecast';
 import {
-  CurrentScopeTotals,
   Filter,
   ProviderStatus,
   SourceKind,
-  StatusBarScope,
   UsageEvent,
   UsageSnapshot,
 } from './types';
@@ -25,55 +29,6 @@ export interface SnapshotOptions {
   filter: Filter;
   source: SourceKind;
   status: ProviderStatus;
-  statusBarScope: StatusBarScope;
-  activeRepo?: string;
-  activeWorkspace?: string;
-  sessionStart: number;
-}
-
-function withRange(f: Filter, range: { start: number; end: number }): Filter {
-  return { ...f, range };
-}
-
-function computeCurrent(events: UsageEvent[], o: SnapshotOptions): CurrentScopeTotals {
-  const todayStart = startOf(o.now, 'day');
-  const todayEnd = nextBucketStart(o.now, 'day');
-  const monthStart = startOf(o.now, 'month');
-  const monthEnd = nextBucketStart(o.now, 'month');
-
-  let f: Filter;
-  let label: string;
-  switch (o.statusBarScope) {
-    case 'session':
-      f = { range: { start: o.sessionStart, end: o.now + 1 } };
-      label = 'This session';
-      break;
-    case 'today':
-      f = { range: { start: todayStart, end: todayEnd } };
-      label = 'Today';
-      break;
-    case 'workspace':
-      f = {
-        range: { start: monthStart, end: monthEnd },
-        workspaces: o.activeWorkspace ? [o.activeWorkspace] : undefined,
-      };
-      label = o.activeWorkspace ? `${o.activeWorkspace} · MTD` : 'Workspace · MTD';
-      break;
-    case 'repo':
-      f = {
-        range: { start: monthStart, end: monthEnd },
-        repos: o.activeRepo ? [o.activeRepo] : undefined,
-      };
-      label = o.activeRepo ? `${o.activeRepo} · MTD` : 'Repo · MTD';
-      break;
-    default: {
-      const _exhaustive: never = o.statusBarScope;
-      throw new Error(`Unknown scope: ${_exhaustive}`);
-    }
-  }
-
-  const s = sumEvents(events, f);
-  return { scope: o.statusBarScope, label, credits: s.credits, tokens: s.tokens, cost: s.cost };
 }
 
 function computeRange(events: UsageEvent[], now: number): { start: number; end: number } {
@@ -95,7 +50,13 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
 
   const monthStart = startOf(o.now, 'month');
   const monthEnd = nextBucketStart(o.now, 'month');
-  const mtd = sumEvents(events, withRange(o.filter, { start: monthStart, end: monthEnd }));
+  const mtdFilter: Filter = { ...o.filter, range: { start: monthStart, end: monthEnd } };
+  const mtd = sumEvents(events, mtdFilter);
+
+  const todayStart = startOf(o.now, 'day');
+  const todayEnd = nextBucketStart(o.now, 'day');
+  const todayFilter: Filter = { ...o.filter, range: { start: todayStart, end: todayEnd } };
+  const todayTotals = sumEvents(events, todayFilter);
 
   const budget = computeBudget({
     monthlyBudget: o.monthlyBudget,
@@ -117,7 +78,9 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
     forecast,
     budget,
     topModels: topBy(events, 'model', o.filter),
-    topRepos: topBy(events, 'repo', o.filter),
-    current: computeCurrent(events, o),
+    today: { credits: todayTotals.credits, cost: todayTotals.cost, tokens: todayTotals.tokens },
+    allModels: distinctModels(events),
+    allSurfaces: distinctSurfaces(events),
+    sankeyLinks: sankeyLinksFor(events, o.filter),
   };
 }

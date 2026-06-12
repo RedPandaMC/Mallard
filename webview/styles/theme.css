@@ -3,7 +3,6 @@
   --w-bg: var(--vscode-editor-background);
   --w-bg-card: var(--vscode-sideBar-background, var(--vscode-editor-background));
   --w-bg-hover: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
-  --w-bg-active: var(--vscode-list-activeSelectionBackground, rgba(255, 255, 255, 0.1));
 
   /* Text tokens */
   --w-fg: var(--vscode-foreground);
@@ -23,10 +22,11 @@
   --w-font-size: var(--vscode-font-size, 13px);
   --w-font-mono: var(--vscode-editor-font-family, 'Cascadia Code', 'Fira Code', monospace);
 
-  /* Brand accent (Anthropic warm coral) */
-  --w-brand: #e07b5a;
-  --w-brand-dim: rgba(224, 123, 90, 0.12);
-  --w-brand-hover: rgba(224, 123, 90, 0.2);
+  /* Brand accent — derived from VS Code button colour for full theme compatibility */
+  --w-brand: var(--vscode-button-background, #0e639c);
+  --w-brand-fg: var(--vscode-button-foreground, #ffffff);
+  --w-brand-dim: color-mix(in srgb, var(--vscode-button-background, #0e639c) 12%, transparent);
+  --w-brand-hover: color-mix(in srgb, var(--vscode-button-background, #0e639c) 22%, transparent);
 
   /* Status */
   --w-ok: var(--vscode-charts-green, #4caf50);
@@ -49,6 +49,6 @@
   --w-r3: 10px;
 
   /* Chart dimensions */
-  --w-chart-main: 280px;
+  --w-chart-main: 260px;
   --w-chart-mini: 200px;
 }

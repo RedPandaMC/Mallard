@@ -1,8 +1,8 @@
 {
   "name": "weevil",
   "displayName": "Weevil",
-  "description": "A little nosey about your Copilot spend — token, credit & cost tracking with forecasting for GitHub Copilot.",
-  "version": "0.1.0",
+  "description": "Real-time Copilot cost and credit tracker — parses local OTel logs to show exactly what you're spending.",
+  "version": "0.2.0",
   "publisher": "jurreandenys",
   "license": "MIT",
   "author": {
@@ -69,53 +69,18 @@
       },
       {
         "command": "weevil.refresh",
-        "title": "Refresh Usage",
+        "title": "Refresh Now",
         "category": "Weevil",
         "icon": "$(refresh)"
       },
       {
-        "command": "weevil.showBreakdown",
-        "title": "Show Spend Breakdown",
-        "category": "Weevil"
-      },
-      {
-        "command": "weevil.setScope",
-        "title": "Set Status Bar Scope",
-        "category": "Weevil"
-      },
-      {
-        "command": "weevil.setBudget",
-        "title": "Set Monthly Budget",
-        "category": "Weevil"
-      },
-      {
-        "command": "weevil.configureNotifications",
-        "title": "Configure Notifications",
-        "category": "Weevil"
-      },
-      {
-        "command": "weevil.signIn",
-        "title": "Connect GitHub (calibrate usage)",
-        "category": "Weevil"
-      },
-      {
-        "command": "weevil.signOut",
-        "title": "Disconnect GitHub",
-        "category": "Weevil"
-      },
-      {
-        "command": "weevil.exportData",
-        "title": "Export Usage Data",
-        "category": "Weevil"
-      },
-      {
         "command": "weevil.clearData",
-        "title": "Clear Usage Data",
+        "title": "Clear All Data",
         "category": "Weevil"
       },
       {
-        "command": "weevil.showTips",
-        "title": "Show a Cost-Saving Tip",
+        "command": "weevil.showLogPath",
+        "title": "Show Detected Log Path",
         "category": "Weevil"
       }
     ],
@@ -132,208 +97,38 @@
           "group": "navigation@2"
         }
       ],
-      "commandPalette": [
-        {
-          "command": "weevil.signOut",
-          "when": "weevil.signedIn"
-        }
-      ]
+      "commandPalette": []
     },
-    "chatParticipants": [
-      {
-        "id": "weevil.chat",
-        "name": "weevil",
-        "fullName": "Weevil",
-        "description": "Ask about your Copilot usage, cost, and trends.",
-        "isSticky": true,
-        "commands": [
-          {
-            "name": "today",
-            "description": "Spend & usage so far today"
-          },
-          {
-            "name": "forecast",
-            "description": "Projected spend for this month"
-          },
-          {
-            "name": "models",
-            "description": "Breakdown by model"
-          },
-          {
-            "name": "repos",
-            "description": "Breakdown by repository"
-          },
-          {
-            "name": "tips",
-            "description": "Tips to reduce Copilot spend"
-          }
-        ]
-      }
-    ],
     "configuration": {
       "title": "Weevil",
       "properties": {
-        "weevil.dataSource": {
+        "weevil.copilotLogPath": {
           "type": "string",
-          "enum": [
-            "auto",
-            "sample",
-            "local"
-          ],
-          "enumDescriptions": [
-            "Use local Copilot logs if found, otherwise sample data.",
-            "Always use generated sample data (for demos).",
-            "Only use parsed local Copilot logs (no sample fallback)."
-          ],
-          "default": "auto",
-          "description": "Where Weevil gets usage data from."
+          "default": "",
+          "description": "Override path to the Copilot log directory (blank = auto-detect via VS Code logUri)."
+        },
+        "weevil.includedCredits": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "description": "Monthly included premium requests for your Copilot plan. Used to colour the spend gauge."
         },
         "weevil.monthlyBudget": {
           "type": "number",
           "default": 0,
           "minimum": 0,
-          "description": "Monthly Copilot budget in your currency (0 = no budget)."
+          "description": "Monthly USD spend alert threshold. Weevil notifies you at 80% and 100%. Set to 0 to disable."
         },
-        "weevil.currency": {
-          "type": "string",
-          "default": "USD",
-          "description": "Currency code used to display costs."
-        },
-        "weevil.pricePerCredit": {
+        "weevil.alert.dailyCredits": {
           "type": "number",
-          "default": 0.04,
-          "description": "Cost of one premium request / credit, in your currency."
+          "default": 0,
+          "minimum": 0,
+          "description": "Alert when daily credit usage exceeds this value. Set to 0 to disable."
         },
-        "weevil.includedCredits": {
-          "type": "number",
-          "default": 300,
-          "description": "Monthly included premium requests for your Copilot plan."
-        },
-        "weevil.tokenPricing": {
-          "type": "object",
-          "default": {},
-          "description": "Optional per-model overrides: { \"<modelId>\": { \"creditMultiplier\": number } }.",
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "creditMultiplier": {
-                "type": "number"
-              }
-            }
-          }
-        },
-        "weevil.copilotLogPath": {
+        "weevil.pricingManifestUrl": {
           "type": "string",
           "default": "",
-          "description": "Override path to Copilot debug/OTel logs (blank = auto-detect)."
-        },
-        "weevil.refreshIntervalMinutes": {
-          "type": "number",
-          "default": 15,
-          "minimum": 1,
-          "description": "How often Weevil re-reads usage data, in minutes."
-        },
-        "weevil.statusBar.metric": {
-          "type": "string",
-          "enum": [
-            "cost",
-            "credits",
-            "tokens"
-          ],
-          "default": "cost",
-          "description": "Which metric the status bar indicator shows."
-        },
-        "weevil.statusBar.scope": {
-          "type": "string",
-          "enum": [
-            "session",
-            "today",
-            "workspace",
-            "repo"
-          ],
-          "default": "today",
-          "description": "Which scope the status bar indicator reflects."
-        },
-        "weevil.pet.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show the Weevil mascot in the dashboard header."
-        },
-        "weevil.notifications": {
-          "type": "array",
-          "default": [
-            {
-              "id": "daily-cost",
-              "type": "threshold",
-              "metric": "cost",
-              "scope": "day",
-              "value": 5,
-              "channel": "toast"
-            },
-            {
-              "id": "burn-rate",
-              "type": "velocity",
-              "metric": "credits",
-              "window": "1h",
-              "value": 50,
-              "channel": "toast"
-            }
-          ],
-          "description": "Extensible spend alert rules. See the README for the rule schema.",
-          "items": {
-            "type": "object",
-            "required": [
-              "id",
-              "type",
-              "metric",
-              "value"
-            ],
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "threshold",
-                  "velocity"
-                ]
-              },
-              "metric": {
-                "type": "string",
-                "enum": [
-                  "cost",
-                  "credits",
-                  "tokens"
-                ]
-              },
-              "scope": {
-                "type": "string",
-                "enum": [
-                  "hour",
-                  "day",
-                  "week",
-                  "month"
-                ]
-              },
-              "window": {
-                "type": "string"
-              },
-              "value": {
-                "type": "number"
-              },
-              "filter": {
-                "type": "object"
-              },
-              "channel": {
-                "type": "string",
-                "enum": [
-                  "toast",
-                  "status-only"
-                ]
-              }
-            }
-          }
+          "description": "Override URL for the pricing manifest JSON. Leave blank to use the auto-refreshed default."
         }
       }
     }
@@ -359,6 +154,7 @@
     "@types/mocha": "^10.0.7",
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.95.0",
+    "@vscode/codicons": "^0.0.45",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
     "@vscode/vsce": "^2.32.0",
@@ -368,6 +164,7 @@
     "prettier": "^3.3.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.4",
-    "typescript-eslint": "^8.0.0"
+    "typescript-eslint": "^8.0.0",
+    "vitepress": "^1.6.4"
   }
 }

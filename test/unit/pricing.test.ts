@@ -3,6 +3,7 @@ import {
   costForCredits,
   priceRequest,
   resolveMultiplier,
+  PricingManifest,
 } from '../../src/model/pricing';
 
 describe('pricing', () => {
@@ -21,6 +22,17 @@ describe('pricing', () => {
 
   it('honours overrides ahead of defaults', () => {
     assert.equal(resolveMultiplier('gpt-4o', { 'gpt-4o': 2.5 }), 2.5);
+  });
+
+  it('uses manifest models when provided', () => {
+    const manifest: PricingManifest = {
+      version: 1,
+      pricePerCredit: 0.05,
+      updatedAt: '2025-01-01',
+      models: { 'future-model': 3, 'gpt-4o': 2, unknown: 1 },
+    };
+    assert.equal(resolveMultiplier('future-model', undefined, manifest), 3);
+    assert.equal(resolveMultiplier('gpt-4o', undefined, manifest), 2);
   });
 
   it('computes cost from credits', () => {

@@ -1,10 +1,9 @@
 /**
- * Compact activity-bar view — shares the webview bundle but renders a condensed
- * layout. "Open full dashboard" lives here too.
+ * Compact activity-bar sidebar — uses the shared webview bundle in compact
+ * mode. Pushes snapshots on change; handles open-dashboard commands.
  */
 import * as vscode from 'vscode';
 import { UsageService } from '../data/UsageService';
-import { runWebviewCommand } from './commandBridge';
 import { isHostBoundMsg } from './messaging';
 import { renderHtml } from './webviewHtml';
 
@@ -26,6 +25,7 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [
         vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview'),
         vscode.Uri.joinPath(this.context.extensionUri, 'media'),
+        vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', '@vscode', 'codicons', 'dist'),
       ],
     };
     view.webview.html = renderHtml(view.webview, this.context.extensionUri, { compact: true });
@@ -55,7 +55,11 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
         void this.usage.refresh();
         break;
       case 'command':
-        runWebviewCommand(raw.id);
+        if (raw.id === 'openDashboard') {
+          void vscode.commands.executeCommand('weevil.openDashboard');
+        } else if (raw.id === 'openSettings') {
+          void vscode.commands.executeCommand('workbench.action.openSettings', 'weevil');
+        }
         break;
       default:
         break;
@@ -65,12 +69,7 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
   private push(): void {
     const s = this.usage.current;
     if (s && this.view) {
-      void this.view.webview.postMessage({
-        type: 'snapshot',
-        payload: s,
-        compact: true,
-        granularity: 'day',
-      });
+      void this.view.webview.postMessage({ type: 'snapshot', payload: s, compact: true });
     }
   }
 }

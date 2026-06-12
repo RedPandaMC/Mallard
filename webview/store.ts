@@ -1,12 +1,11 @@
-import { Filter, Granularity, Metric, Tip, UsageSnapshot } from '../src/model/types';
+import { DatePreset, Filter, Metric, UsageSnapshot } from '../src/model/types';
 
 export interface AppState {
   snapshot: UsageSnapshot | null;
-  granularity: Granularity;
+  compact: boolean;
   metric: Metric;
   filter: Filter;
-  compact: boolean;
-  tip: Tip | null;
+  datePreset: DatePreset;
 }
 
 type Listener = (state: AppState) => void;
@@ -14,11 +13,10 @@ const _listeners: Listener[] = [];
 
 export const state: AppState = {
   snapshot: null,
-  granularity: 'day',
+  compact: false,
   metric: 'cost',
   filter: {},
-  compact: false,
-  tip: null,
+  datePreset: 'month',
 };
 
 export function setState(patch: Partial<AppState>): void {

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "pricePerCredit": 0.04,
+  "updatedAt": "2025-06-01",
+  "models": {
+    "gpt-4o-mini": 0,
+    "gpt-4.1-mini": 0,
+    "gpt-4.1-nano": 0,
+    "gpt-4.1": 0,
+    "gpt-4o": 1,
+    "gpt-5": 1,
+    "o4-mini": 0.33,
+    "o3-mini": 0.33,
+    "o3": 10,
+    "claude-3.5-haiku": 0.33,
+    "claude-haiku": 0.33,
+    "claude-3.5-sonnet": 1,
+    "claude-3.7-sonnet": 1.25,
+    "claude-sonnet-4": 1,
+    "claude-opus-4": 10,
+    "claude-opus": 10,
+    "gemini-2.0-flash": 0.25,
+    "gemini-2.5-flash": 0.25,
+    "gemini-2.5-pro": 1,
+    "unknown": 1
+  }
+}

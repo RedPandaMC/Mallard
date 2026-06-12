@@ -16,24 +16,18 @@ export function mountStatusBanner(el: HTMLElement): StatusBannerHandle {
 
   return {
     update(s: UsageSnapshot) {
-      const { source, status } = s;
-      let kind: 'ok' | 'warn' | 'sample' = 'ok';
+      const { status } = s;
+      let kind: 'ok' | 'warn' | 'empty' = 'ok';
       let msg = '';
 
-      if (source === 'sample') {
-        kind = 'sample';
-        msg = 'Sample data — usage estimates from synthetic events';
-      } else if (source === 'local') {
-        msg = 'Local estimates — install GitHub Copilot to improve accuracy';
-      } else if (source === 'lm') {
-        msg = 'Tracking @weevil conversations — accurate counts';
-      } else {
-        msg = 'Connected';
-      }
-
-      if (status.kind === 'degraded') {
+      if (status.kind === 'empty') {
+        kind = 'empty';
+        msg = status.reason ?? 'No usage data found';
+      } else if (status.kind === 'degraded') {
         kind = 'warn';
-        msg += ` (degraded: ${status.reason ?? ''})`;
+        msg = `Degraded: ${status.reason ?? 'parse errors in log files'}`;
+      } else {
+        msg = status.reason ?? 'Tracking from local Copilot logs';
       }
 
       banner.dataset.kind = kind;

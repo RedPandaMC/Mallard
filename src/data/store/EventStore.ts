@@ -26,7 +26,7 @@ export function rollupEvents(old: UsageEvent[]): UsageEvent[] {
       existing.promptTokens = (existing.promptTokens ?? 0) + (e.promptTokens ?? 0);
       existing.completionTokens = (existing.completionTokens ?? 0) + (e.completionTokens ?? 0);
     } else {
-      map.set(key, { ...e, id: key, ts: day, estimated: true, chatId: undefined });
+      map.set(key, { ...e, id: key, ts: day, estimated: true });
     }
   }
   return [...map.values()].sort((a, b) => a.ts - b.ts);

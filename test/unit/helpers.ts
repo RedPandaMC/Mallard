@@ -11,14 +11,12 @@ export function makeEvent(partial: Partial<UsageEvent> & { ts: number }): UsageE
     ts: partial.ts,
     modelId: partial.modelId ?? 'gpt-4o',
     surface: (partial.surface ?? 'chat') as Surface,
-    source: (partial.source ?? 'sample') as SourceKind,
+    source: (partial.source ?? 'local') as SourceKind,
     promptTokens: partial.promptTokens,
     completionTokens: partial.completionTokens,
     credits,
     cost: partial.cost ?? credits * 0.04,
     estimated: partial.estimated ?? false,
     repo: partial.repo,
-    workspaceFolder: partial.workspaceFolder,
-    chatId: partial.chatId,
   };
 }

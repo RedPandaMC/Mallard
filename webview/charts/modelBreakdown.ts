@@ -1,65 +1,67 @@
-import type { ECharts } from 'echarts';
+/**
+ * Horizontal bar chart — top models by credits/cost/tokens.
+ */
+import { echarts, initChart } from './echarts';
 import { Metric, UsageSnapshot } from '../../src/model/types';
-import { formatMetric } from '../../src/model/format';
-import { initChart } from './echarts';
+import { formatCredits, formatMoney, formatTokens } from '../../src/model/format';
 
 export interface ModelBreakdownHandle {
   update(snapshot: UsageSnapshot, metric: Metric): void;
   resize(): void;
-  dispose(): void;
 }
 
 export function mountModelBreakdown(el: HTMLElement): ModelBreakdownHandle {
-  let chart: ECharts | null = null;
-
-  function getChart(): ECharts {
-    if (!chart) chart = initChart(el);
-    return chart;
-  }
+  const chart = initChart(el);
 
   return {
     update(s: UsageSnapshot, metric: Metric) {
-      const c = getChart();
       if (!s.topModels.length) {
-        c.setOption({ series: [{ type: 'pie', data: [] }] }, true);
+        chart.clear();
         return;
       }
 
-      const data = s.topModels.slice(0, 8).map((m) => ({
-        name: m.key,
-        value: metric === 'cost' ? m.cost : metric === 'credits' ? m.credits : m.tokens,
-      }));
+      const top = s.topModels.slice(0, 8);
+      const labels = top.map((m) =>
+        m.key.replace(/^(models\/|openai\/|anthropic\/|google\/)/, '').slice(0, 32),
+      );
+      const values = top.map((m) =>
+        metric === 'cost' ? m.cost : metric === 'credits' ? m.credits : m.tokens,
+      );
 
-      c.setOption(
+      function fmt(v: number) {
+        if (metric === 'cost') return formatMoney(v, s.currency);
+        if (metric === 'credits') return `${formatCredits(v)} cr`;
+        return `${formatTokens(v)} tok`;
+      }
+
+      chart.setOption(
         {
-          animation: true,
+          animation: false,
           tooltip: {
-            trigger: 'item',
-            formatter(p: any) {
-              return `${p.name}<br/>${formatMetric(p.value as number, metric, s.currency)} (${(p.percent as number).toFixed(1)}%)`;
+            trigger: 'axis',
+            axisPointer: { type: 'none' },
+            formatter(params: echarts.TooltipComponentOption) {
+              const p = (params as unknown as Array<{ name: string; value: number }>)[0];
+              return p ? `${p.name}: ${fmt(p.value)}` : '';
             },
           },
-          legend: {
-            orient: 'vertical',
-            right: 4,
-            top: 'middle',
-            type: 'scroll',
-            textStyle: { fontSize: 11 },
-            itemWidth: 10,
-            itemHeight: 10,
+          grid: { left: 120, right: 48, top: 8, bottom: 8, containLabel: false },
+          xAxis: { type: 'value', axisLabel: { formatter: (v: number) => fmt(v), fontSize: 10 } },
+          yAxis: {
+            type: 'category',
+            data: [...labels].reverse(),
+            axisLabel: { fontSize: 11 },
           },
           series: [
             {
-              type: 'pie',
-              radius: ['38%', '68%'],
-              center: ['38%', '50%'],
-              avoidLabelOverlap: true,
-              label: { show: false },
-              emphasis: {
-                label: { show: true, fontSize: 12, fontWeight: 'bold' },
-                itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.4)' },
+              type: 'bar',
+              data: [...values].reverse(),
+              label: {
+                show: true,
+                position: 'right',
+                formatter: (p: { value: number }) => fmt(p.value),
+                fontSize: 10,
               },
-              data,
             },
           ],
         },
@@ -68,12 +70,7 @@ export function mountModelBreakdown(el: HTMLElement): ModelBreakdownHandle {
     },
 
     resize() {
-      chart?.resize();
-    },
-
-    dispose() {
-      chart?.dispose();
-      chart = null;
+      chart.resize();
     },
   };
 }

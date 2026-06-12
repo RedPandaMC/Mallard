@@ -1,12 +1,10 @@
 /**
- * The full GitKraken-style dashboard webview panel. A pure render target: it
- * pushes snapshots and reacts to typed, validated inbound messages.
+ * Full dashboard webview panel. A pure render target: pushes snapshots and
+ * reacts to typed, validated inbound messages.
  */
 import * as vscode from 'vscode';
 import { UsageService } from '../data/UsageService';
-import { Granularity } from '../model/types';
-import { pickTip } from '../tips/tips';
-import { runWebviewCommand } from './commandBridge';
+import { Filter } from '../model/types';
 import { isHostBoundMsg, WebviewBoundMsg } from './messaging';
 import { renderHtml } from './webviewHtml';
 
@@ -15,7 +13,6 @@ export class DashboardPanel {
   private static readonly viewType = 'weevil.dashboard';
 
   private readonly disposables: vscode.Disposable[] = [];
-  private granularity: Granularity;
 
   static show(context: vscode.ExtensionContext, usage: UsageService): void {
     if (DashboardPanel.current) {
@@ -32,6 +29,7 @@ export class DashboardPanel {
         localResourceRoots: [
           vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview'),
           vscode.Uri.joinPath(context.extensionUri, 'media'),
+          vscode.Uri.joinPath(context.extensionUri, 'node_modules', '@vscode', 'codicons', 'dist'),
         ],
       },
     );
@@ -41,16 +39,15 @@ export class DashboardPanel {
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
-    private readonly context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     private readonly usage: UsageService,
   ) {
-    this.granularity = context.workspaceState.get<Granularity>('weevil.granularity', 'day');
     panel.webview.html = renderHtml(panel.webview, context.extensionUri, { compact: false });
 
     this.disposables.push(
       panel.webview.onDidReceiveMessage((m) => void this.onMessage(m)),
       usage.onDidChangeSnapshot((s) =>
-        this.post({ type: 'snapshot', payload: s, compact: false, granularity: this.granularity }),
+        this.post({ type: 'snapshot', payload: s, compact: false }),
       ),
       vscode.window.onDidChangeActiveColorTheme(() => this.post({ type: 'theme' })),
       panel.onDidDispose(() => this.dispose()),
@@ -62,31 +59,21 @@ export class DashboardPanel {
     switch (raw.type) {
       case 'ready': {
         const s = this.usage.current;
-        if (s) {
-          this.post({ type: 'snapshot', payload: s, compact: false, granularity: this.granularity });
-        }
+        if (s) this.post({ type: 'snapshot', payload: s, compact: false });
         break;
       }
       case 'refresh':
         await this.usage.refresh();
         break;
-      case 'setGranularity':
-        this.granularity = raw.value;
-        await this.context.workspaceState.update('weevil.granularity', raw.value);
-        break;
-      case 'setMetric':
-        await vscode.workspace
-          .getConfiguration('weevil')
-          .update('statusBar.metric', raw.value, vscode.ConfigurationTarget.Global);
-        break;
       case 'setFilter':
-        await this.usage.setFilter(raw.value);
+        await this.usage.setFilter(raw.value as Filter);
         break;
       case 'command':
-        runWebviewCommand(raw.id);
-        break;
-      case 'requestTip':
-        this.post({ type: 'tip', payload: pickTip(this.usage.current) });
+        if (raw.id === 'openDashboard') {
+          this.panel.reveal();
+        } else if (raw.id === 'openSettings') {
+          void vscode.commands.executeCommand('workbench.action.openSettings', 'weevil');
+        }
         break;
     }
   }

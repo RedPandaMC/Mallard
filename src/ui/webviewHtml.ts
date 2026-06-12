@@ -1,9 +1,7 @@
 /**
- * Builds the webview HTML with a strict, per-load CSP. Scripts are locked to a
- * single nonce; styles allow `unsafe-inline` (ECharts sets inline style
- * attributes on its canvas container — a style nonce would block those, so we
- * deliberately do not add one). No script nonce is ever derived from message
- * content.
+ * Builds the webview HTML with a strict, per-load CSP.
+ * Scripts locked to a single nonce; styles allow the bundled CSS and the
+ * codicon font via vscode-resource (required for ECharts canvas styling).
  */
 import * as vscode from 'vscode';
 import { getNonce } from '../util/nonce';
@@ -17,6 +15,15 @@ export function renderHtml(
   const base = vscode.Uri.joinPath(extensionUri, 'dist', 'webview');
   const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(base, 'main.js'));
   const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(base, 'main.css'));
+  const codiconsUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(
+      extensionUri,
+      'node_modules',
+      '@vscode/codicons',
+      'dist',
+      'codicon.css',
+    ),
+  );
 
   const csp = [
     `default-src 'none'`,
@@ -32,6 +39,7 @@ export function renderHtml(
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="${csp}" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="${codiconsUri}" rel="stylesheet" />
     <link href="${styleUri}" rel="stylesheet" />
     <title>Weevil</title>
   </head>
