@@ -1,7 +1,7 @@
 {
   "name": "weevil",
   "displayName": "Weevil",
-  "description": "Real-time Copilot cost and credit tracker — parses local OTel logs to show exactly what you're spending.",
+  "description": "Real-time Copilot cost and credit tracker. Parses local OTel logs to show exactly what you're spending.",
   "version": "0.2.0",
   "publisher": "jurreandenys",
   "license": "MIT",

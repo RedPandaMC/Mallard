@@ -1,61 +1,54 @@
 # Commands
 
-All commands are available via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`). Type "Weevil" to filter.
+All commands are available from the Command Palette (`Ctrl+Shift+P` or
+`Cmd+Shift+P`). Type "Weevil" to filter.
 
-## `Weevil: Open Dashboard`
+## Weevil: Open Dashboard
 
-**ID:** `weevil.openDashboard`
+ID `weevil.openDashboard`. Opens or focuses the full dashboard panel, the same
+action as clicking the status bar chip. The dashboard shows:
 
-Opens (or focuses) the full Weevil dashboard panel. This is the same action triggered by clicking the status bar chip.
+- KPI cards: today, month-to-date, projected month-end, top model
+- A spend gauge: credits used against your included allowance
+- A 30-day bar chart with a projected-pace line
+- A model breakdown (top eight by credits)
+- A flow chart of model to surface
+- A spend-by-cost-type chart (input and output), shown when that detail is
+  available
+- A repo selector, shown when more than one repo is present, so you can attribute
+  usage per workspace
 
-The dashboard shows:
-- KPI cards — today, month-to-date, projected month-end, top model
-- Spend gauge — credits used vs. your included allowance
-- 30-day bar chart with a projected-pace line
-- Model breakdown (horizontal bars, top 8 by credits)
-- Sankey chart — model → surface flow (shown when ≥2 models and ≥2 surfaces are present)
+## Weevil: Refresh Now
 
-## `Weevil: Refresh Now`
+ID `weevil.refresh`. Re-scans discovered log files and recomputes the dashboard.
+You rarely need this: Weevil watches the log files and updates within a second or
+two of new entries. Use it after switching machines or if a view looks stale.
 
-**ID:** `weevil.refresh`
+## Weevil: Clear All Data
 
-Re-scans all discovered log files and recomputes the dashboard. Use this after switching machines or if the dashboard seems stale.
+ID `weevil.clearData`. Asks for confirmation, then wipes all stored events from
+the local event store in VS Code's global storage. Use it to start fresh, for
+example after changing plans. Cleared data cannot be recovered.
 
-Under normal conditions this is not needed — Weevil watches log files in real time using `fs.watch` and updates automatically within a second or two of new log entries being written.
+## Weevil: Show Detected Log Path
 
-## `Weevil: Clear All Data`
+ID `weevil.showLogPath`. Lists the log directories Weevil is watching and how
+many files it found. Useful when the dashboard shows the empty state. If the path
+is wrong, set `weevil.copilotLogPath`.
 
-**ID:** `weevil.clearData`
+## Weevil: Export Monthly Report
 
-Shows a confirmation modal, then wipes all stored events from the local event store. The store lives in VS Code's global storage directory and persists across restarts; this command resets it to zero.
+ID `weevil.exportReport`. Generates a standalone HTML file from your current
+snapshot and asks where to save it (the default is
+`~/Downloads/weevil-report-YYYY-MM.html`). Open it in any browser and print to
+PDF. The report includes the summary KPIs, a 30-day daily table, a model
+breakdown with percentage share, and GitHub billing detail when signed in. It
+contains no external requests.
 
-Use this to start fresh (e.g. after changing Copilot plans) or to free up disk space. Data cannot be recovered after clearing.
+## Weevil: Sign In to GitHub
 
-## `Weevil: Show Detected Log Path`
-
-**ID:** `weevil.showLogPath`
-
-Shows an information notification listing the log directory paths Weevil is currently watching, plus how many log files it found there. Useful for diagnosing the "nothing tracked yet" empty state.
-
-If the path is wrong, set `weevil.copilotLogPath` to override it.
-
-## `Weevil: Export Monthly Report`
-
-**ID:** `weevil.exportReport`
-
-Generates a standalone HTML file summarising your current usage snapshot, then prompts you to choose where to save it (defaults to `~/Downloads/weevil-report-YYYY-MM.html`). After saving, you can open it directly in your browser and print to PDF.
-
-The report includes:
-- Summary KPI cards — today, MTD, projected, budget status
-- Daily usage table — 30 days of credits and cost
-- Model breakdown table with percentage share
-- GitHub billing detail (if signed in)
-- Model-switching suggestions (if applicable)
-
-## `Weevil: Sign In to GitHub`
-
-**ID:** `weevil.signIn`
-
-Initiates a GitHub authentication session so Weevil can fetch authoritative billing data from the GitHub API. If you are already signed into GitHub in VS Code, this may succeed silently.
-
-Once signed in, the dashboard shows a "Verified by GitHub" badge alongside the actual charges reported by the API. If the local estimate and the API total differ by more than 10%, a divergence warning appears — this usually means usage from other devices or VS Code instances is included in the API total.
+ID `weevil.signIn`. Starts a GitHub session so Weevil can fetch authoritative
+billing data. If you are already signed in to GitHub in VS Code this usually
+succeeds without a prompt. Once connected, the dashboard shows a connected status
+with the actual charge reported by GitHub, which aggregates usage across every
+machine you use.

@@ -3,194 +3,111 @@
 
 # Weevil
 
-**A little nosey about your Copilot spend.**
-
-Token, credit, and cost tracking for GitHub Copilot — right inside VS Code.
+**Real-time GitHub Copilot cost tracking for VS Code.**
 
 </div>
 
 ---
 
-Weevil watches how you use GitHub Copilot and turns it into an at-a-glance
-picture of your spend: hourly, daily, weekly, monthly, quarterly, and yearly —
-broken down by model and by repository, with a month-end forecast so overage
-never surprises you.
+Weevil reads the OpenTelemetry log files GitHub Copilot writes to VS Code's log
+directory and turns them into a live picture of your spend: today, month-to-date,
+and a projected month-end total, broken down by model, surface, cost type, and
+repository. The core features need no sign-in and make no network calls. You can
+optionally connect to GitHub's billing API for the authoritative charge.
 
 ## Features
 
-- **Always-on status bar indicator** — a circular `$(circle-filled)` spend chip
-  that tints from normal → warning → over as you approach your budget. The
-  number is always shown (never color-only), and a click opens a full
-  breakdown.
-- **Full dashboard** — a GitKraken-style webview with:
-  - Usage-over-time chart with a granularity switcher (hour → year)
-  - Spend-by-model donut and spend-by-repository bar chart
-  - KPI cards: current scope, month-to-date, projected month-end (with a
-    confidence band), budget pace, top model, top repo
-  - A metric toggle (cost / credits / tokens) and per-repo filter
-- **`@weevil` chat participant** — ask `@weevil today`, `/forecast`, `/models`,
-  `/repos`, or `/tips` for exact numbers. Because Weevil owns these requests, the
-  per-conversation token counts are **exact**, not estimated.
-- **Configurable notifications** — extensible threshold and velocity rules that
-  can be scoped/filtered to a specific model, repo, or surface; debounced so you
-  get one toast per rule per cooldown, never spam.
-- **Multi-repo aware** — open a `.code-workspace` with several repositories and
-  Weevil attributes every event to the right repo (via the built-in Git
-  extension), so you can view totals globally or filter to one repo.
-- **Cost-saving tips** — contextual nudges (right-size the model, prefer inline
-  for one-liners, watch agent loops) surfaced in the dashboard and via
-  `@weevil /tips`.
+- **Status bar chip.** Always-on indicator of today's credits and cost that tints
+  from normal to warning to over as you approach your budget. The number is always
+  shown, never colour alone. Clicking it opens the dashboard.
+- **Dashboard.** A webview with KPI cards (today, month-to-date, projected, top
+  model), a spend gauge, a 30-day bar chart with a projected-pace line, a model
+  breakdown, a model-to-surface flow chart, and a spend-by-cost-type chart. All
+  aggregation happens in the extension host; the webview only paints, and charts
+  below the fold initialise lazily.
+- **Budget and alerts, in the UI.** Set a monthly budget, an included-credit
+  allowance, a daily credit threshold, and a spending-velocity alert from the
+  dashboard. They are stored per user and follow you across machines.
+- **Automatic pricing.** Credit multipliers ship with the extension and refresh
+  once a day from a known URL, validated before use, with the bundled copy as a
+  fallback. A pricing change is a one-line repo update, no user action needed.
+- **Workspace aware.** When several repositories are open, Weevil attributes usage
+  to the active workspace repo and lets you filter the dashboard per repo.
+- **Optional GitHub reconciliation.** Connect with VS Code's built-in GitHub
+  session to show the authoritative charge, which aggregates usage across every
+  machine you use. Entirely opt-in.
+- **Exportable report.** Save a standalone, printable HTML report from the current
+  snapshot. It contains no external requests, so it prints to PDF from any
+  browser.
 
-## Quick Start
+## Quick start
 
-1. **Install** — Search "Weevil" in the VS Code Extensions view or install via:
+1. Install from the Extensions view, or:
 
    ```bash
-   code --install-extension jurreandenys.weevil
+   code --install-extension RedPandaMC.weevil
    ```
 
-2. **Open the dashboard** — Run `Weevil: Open Dashboard` from the Command Palette
-   (`Ctrl+Shift+P` / `Cmd+Shift+P`), or click the Weevil icon in the Activity Bar.
+2. Use Copilot as normal. Weevil starts collecting immediately, no sign-in
+   required.
 
-3. **Set a budget** (optional) — Run `Weevil: Set Monthly Budget` to get warning
-   notifications as you approach your limit.
+3. Open the dashboard from the Weevil icon in the activity bar, or run
+   "Weevil: Open Dashboard" from the Command Palette.
 
-4. **Configure notifications** — Run `Weevil: Configure Notifications` to set up
-   threshold/velocity alerts.
+If the dashboard shows "not enough data", Copilot has not written logs yet, or
+Weevil cannot find them. Run "Weevil: Show Detected Log Path" to check, and set
+`weevil.copilotLogPath` if needed.
 
-That's it! Weevil starts collecting usage data immediately. No sign-in
-required.
+## How it works
 
-## Data Sources
+Copilot writes JSON-lines OTel logs containing the model, input and output token
+counts, the surface (chat, inline, agent, edit), and a timestamp. Weevil watches
+those files, stores events in a local SQLite database (recent events at full
+detail, older ones rolled up to daily rows), and computes a render-ready snapshot
+that the status bar, sidebar, and dashboard all consume.
 
-Copilot's native usage is **not observable** to third-party extensions, so
-Weevil combines what _is_ available and always falls back gracefully:
-
-| Source                  | Accuracy                                           | When it's used                                               |
-| ----------------------- | -------------------------------------------------- | ------------------------------------------------------------ |
-| `@weevil` conversations | **Exact** (counted with the model's own tokenizer) | Whenever you talk to `@weevil`                               |
-| Local Copilot OTel logs | Estimated                                          | When the logs are present on disk                            |
-| Sample data             | Synthetic                                          | Fallback so the dashboard always renders                     |
-| GitHub billing          | —                                                  | Designed and stubbed; no stable per-user endpoint exists yet |
-
-This keeps Weevil fully functional with **no sign-in required**. Optional GitHub
-sign-in is wired for future calibration; your token is stored only in the OS
-keychain (`SecretStorage`), never in settings or on disk.
-
-## Privacy & Security
-
-- Usage data lives in your per-user global storage — never written to settings
-  or committed to git. `Weevil: Export Data` and `Weevil: Clear Data` give you
-  full control.
-- The webview uses a strict Content-Security-Policy with a per-load nonce; no
-  inline scripts, no `eval`, and messages are validated by typed guards in both
-  directions.
-- Secrets (if you sign in) live only in `SecretStorage` (the OS keychain).
-
-## Accessibility
-
-- Granularity tabs are a real `role="tablist"` with arrow-key navigation and
-  visible focus rings.
-- Charts carry `role="img"` with descriptive labels.
-- Meaning is never color-only — the status bar always shows the number and
-  budget pace is labeled in text.
-- `prefers-reduced-motion` disables animations; all colors derive from
-  `--vscode-*` theme tokens for contrast across light, dark, and high-contrast.
+Token counts are estimates, so costs are estimates. For the authoritative number,
+connect GitHub billing.
 
 ## Settings
 
-| Setting                         | Default | Description                                |
-| ------------------------------- | ------- | ------------------------------------------ |
-| `weevil.dataSource`             | `auto`  | `auto`, `sample`, or `local`               |
-| `weevil.monthlyBudget`          | `0`     | Monthly budget in your currency (0 = off)  |
-| `weevil.currency`               | `USD`   | Currency code for cost formatting          |
-| `weevil.pricePerCredit`         | `0.04`  | Price of one premium request credit        |
-| `weevil.includedCredits`        | `300`   | Premium requests included in your plan     |
-| `weevil.tokenPricing`           | `{}`    | Per-model credit-multiplier overrides      |
-| `weevil.refreshIntervalMinutes` | `15`    | How often to re-ingest local logs          |
-| `weevil.statusBar.metric`       | `cost`  | `cost`, `credits`, or `tokens`             |
-| `weevil.statusBar.scope`        | `today` | `session`, `today`, `workspace`, or `repo` |
-| `weevil.notifications`          | `[]`    | Array of threshold/velocity rules          |
+Weevil reads two settings. Budget, included credits, and alert thresholds are
+edited in the dashboard, not here.
 
-### Notification Rules
-
-```jsonc
-"weevil.notifications": [
-  { "id": "daily-cost", "type": "threshold", "metric": "cost",    "scope": "day",  "value": 5,  "channel": "toast" },
-  { "id": "burn-rate",  "type": "velocity",  "metric": "credits", "window": "1h",  "value": 50, "filter": { "models": ["o3"] } }
-]
-```
-
-`type` is `threshold` (a metric crosses `value` within a `scope`) or `velocity`
-(a metric exceeds `value` within a rolling `window`). `filter` reuses Weevil's
-standard filter so an alert can target a model, repo, or surface.
+| Setting | Default | Description |
+| --- | --- | --- |
+| `weevil.copilotLogPath` | `""` | Override the log directory. Blank means auto-detect via `vscode.env.logUri`. |
+| `weevil.pricingManifestUrl` | `""` | Override the pricing manifest URL. Blank means use the built-in URL. |
 
 ## Commands
 
-`Weevil: Open Dashboard`, `Refresh`, `Spend Breakdown`, `Set Budget`, `Set
-Status Bar Scope`, `Configure Notifications`, `Connect GitHub`, `Disconnect`,
-`Export Data`, `Clear Data`, `Show Tips`.
+`Weevil: Open Dashboard`, `Refresh Now`, `Clear All Data`, `Show Detected Log
+Path`, `Sign In to GitHub`, `Export Monthly Report`.
 
-## Troubleshooting
+## Privacy and security
 
-### Dashboard shows "No data yet"
-
-Weevil needs a moment to ingest available logs. If you're in `local` mode and no
-Copilot OTel logs are present, it falls back to sample data automatically. Try:
-
-1. Run `Weevil: Refresh`
-2. Check `weevil.dataSource` is set to `auto` (default)
-3. Verify Copilot logs exist at the auto-detected path
-
-### Status bar shows "--"
-
-This means Weevil hasn't recorded any usage events yet. Ingested events appear
-within 15 minutes (or on the next `Weevil: Refresh`). If you're using `local`
-mode with no logs found, Weevil will switch to sample data.
-
-### Costs seem higher than GitHub's billing page
-
-Weevil estimates costs from token counts and credit multipliers, which may not
-exactly match GitHub's rounding. For precise billing amounts, check your GitHub
-invoice directly.
-
-### Chat participant not responding
-
-The `@weevil` chat participant requires VS Code's built-in GitHub authentication
-to be active. Run `Weevil: Sign In` to connect your GitHub account.
-
-### Notifications not firing
-
-- Ensure the rule's `channel` is set to `"toast"` (not `"status-only"`)
-- Check that the rule's `metric` and `scope`/`window` match your usage patterns
-- Rules are debounced — you won't see duplicate toasts for the same rule
-
-### High memory usage
-
-Weevil aggregates events older than 90 days into daily buckets to bound storage
-size. If memory is still high, run `Weevil: Clear Data` to reset and start fresh.
+- Usage data lives in your per-user global storage, never in settings or in git.
+  "Clear All Data" resets it.
+- The webview uses a strict Content-Security-Policy with a per-load nonce: no
+  inline scripts, no inline styles, no eval, and no external origins. Messages are
+  validated by typed guards in both directions.
+- The pricing manifest is fetched with a timeout, validated, and never executed.
+- Log paths are validated against known roots; paths containing `..` are rejected.
+- No credentials are stored. GitHub sign-in uses VS Code's session API.
 
 ## Development
 
 ```bash
-npm ci
-npm run compile        # build host + webview bundles
-npm run check-types    # type-check both tsconfigs
-npm run lint
-npm run test:unit      # pure logic tests (mocha + ts-node)
-npm test               # integration tests (real VS Code host)
+bun install
+bun run compile        # build host and webview bundles
+bun run check-types    # type-check both tsconfigs
+bun run lint
+bun run test:unit      # pure logic tests
+bun test               # integration tests in a real VS Code host
 ```
 
-Press **F5** to launch an Extension Development Host. The status bar chip
-appears within ~1s on sample data; `Weevil: Open Dashboard` opens the full view.
-
-## Contributing
-
-Contributions are welcome! Please see our [GitHub repository][] for the full
-development setup and coding conventions.
+Press F5 to launch an Extension Development Host.
 
 ## License
 
-MIT © Jurrean De Nys
-
-[GitHub repository]: https://github.com/RedPandaMC/weevil
+MIT, Jurrean De Nys
