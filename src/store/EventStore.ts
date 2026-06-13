@@ -33,7 +33,7 @@ export function rollupEvents(old: UsageEvent[]): UsageEvent[] {
   const map = new Map<string, UsageEvent>();
   for (const e of old) {
     const day = startOf(e.ts, 'day');
-    const key = `roll:${day}:${e.modelId}:${e.repo ?? 'unknown'}:${e.surface}`;
+    const key = `roll:${day}:${e.modelId}:${e.repo ?? UNATTRIBUTED_REPO}:${e.surface}`;
     const existing = map.get(key);
     if (existing) {
       existing.credits += e.credits;

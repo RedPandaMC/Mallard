@@ -150,6 +150,7 @@ function mountDashboard(root: HTMLElement): void {
       heatmap.resize();
       models.resize();
       sankey.resize();
+      category.resize();
     });
   });
   ro.observe(root);

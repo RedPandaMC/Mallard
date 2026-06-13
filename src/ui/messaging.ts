@@ -42,5 +42,14 @@ export function isHostBoundMsg(m: unknown): m is HostBoundMsg {
 
 export function isWebviewBoundMsg(m: unknown): m is WebviewBoundMsg {
   if (!isObject(m) || typeof m.type !== 'string') return false;
-  return m.type === 'snapshot' || m.type === 'config' || m.type === 'theme';
+  switch (m.type) {
+    case 'theme':
+      return true;
+    case 'snapshot':
+      return isObject(m.payload);
+    case 'config':
+      return isObject(m.value);
+    default:
+      return false;
+  }
 }

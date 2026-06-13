@@ -4,6 +4,7 @@
  * all subscribe to.
  */
 import * as vscode from 'vscode';
+import { matchesFilter } from '../domain/aggregate';
 import { evaluateAlerts, SnapshotSample } from '../domain/alerts';
 import { buildSnapshot, SnapshotOptions } from '../domain/snapshot';
 import { AuthStatus, Filter, GitHubBillingData, UsageSnapshot } from '../domain/types';
@@ -110,13 +111,15 @@ export class UsageService implements vscode.Disposable {
   private compute(): void {
     const uc = this.userConfig.get();
     const now = Date.now();
-    const events = this.store.query(this.filter);
 
+    // Query by date range only, then apply the model/surface/repo selection in
+    // memory. `universe` (range-only) drives the filter dropdowns so selecting a
+    // value never collapses the list of choices; `filteredEvents` drives totals.
     const rangeStart = startOf(now - 365 * DAY_MS, 'day');
-    const filteredEvents =
-      this.filter.range
-        ? events
-        : events.filter((e) => e.ts >= rangeStart);
+    const rangeFilter: Filter = this.filter.range ? { range: this.filter.range } : {};
+    let universe = this.store.query(rangeFilter);
+    if (!this.filter.range) universe = universe.filter((e) => e.ts >= rangeStart);
+    const filteredEvents = universe.filter((e) => matchesFilter(e, this.filter));
 
     const source =
       filteredEvents.length > 0
@@ -134,7 +137,7 @@ export class UsageService implements vscode.Disposable {
       status: filteredEvents.length === 0 ? this.watcher.getStatus() : { kind: 'ok' },
       authStatus: this.authStatus,
       ...(this.githubBilling !== undefined ? { githubBilling: this.githubBilling } : {}),
-      manifest: this.pricing.currentManifest,
+      dimensionEvents: universe,
     };
 
     this.snapshot = buildSnapshot(filteredEvents, options);

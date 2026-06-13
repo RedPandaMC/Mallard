@@ -23,7 +23,9 @@ export interface Container {
 }
 
 export async function buildContainer(context: vscode.ExtensionContext): Promise<Container> {
-  await initRepoAttribution();
+  // Best-effort and non-essential to first paint; don't block activation on the
+  // Git extension. Until it resolves, attribution falls back to folder names.
+  void initRepoAttribution();
   const bundledManifest = await loadBundledManifest(context);
 
   const cfg = readConfig();
