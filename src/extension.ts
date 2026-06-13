@@ -1,103 +1,96 @@
 import * as vscode from 'vscode';
-import { GitHubAuth } from './auth/GitHubAuth';
-import { ChatCapture } from './capture/ChatCapture';
-import { registerChatParticipant } from './chat/participant';
 import { readConfig, RELEVANT_CONFIG_KEYS } from './config';
-import { UsageService } from './data/UsageService';
+import { GitHubSession } from './auth/GitHubSession';
+import { GitHubUsageService } from './data/GitHubUsageService';
+import { LogWatcher } from './data/LogWatcher';
+import { PricingService } from './data/PricingService';
 import { EventStore } from './data/store/EventStore';
-import { formatCredits, formatMoney, formatTokens } from './model/format';
-import { NotificationEngine } from './notify/NotificationEngine';
-import { pickTip } from './tips/tips';
+import { UsageService } from './data/UsageService';
+import { defaultReportPath, generateReport } from './data/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
 import { SidebarViewProvider } from './ui/SidebarViewProvider';
 import { StatusBarController } from './ui/StatusBarController';
-import { initRepoAttribution } from './util/repo';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  const store = new EventStore(context.globalStorageUri.fsPath);
-  const auth = new GitHubAuth(context);
-  const usage = new UsageService(store, () => auth.getToken());
-  const statusBar = new StatusBarController();
-  const notifications = new NotificationEngine(usage);
-  const capture = new ChatCapture(usage);
+  // Load the bundled pricing manifest.
+  const bundledManifestPath = vscode.Uri.joinPath(
+    context.extensionUri,
+    'media',
+    'pricing-manifest.json',
+  ).fsPath;
+  const bundledManifest = await (async () => {
+    try {
+      const raw = await vscode.workspace.fs.readFile(
+        vscode.Uri.file(bundledManifestPath),
+      );
+      return JSON.parse(Buffer.from(raw).toString('utf8'));
+    } catch {
+      return { version: 1, pricePerCredit: 0.04, updatedAt: '', models: {} };
+    }
+  })();
 
-  context.subscriptions.push(auth, usage, statusBar, notifications);
-  context.subscriptions.push(usage.onDidChangeSnapshot((s) => statusBar.update(s)));
+  const cfg = readConfig();
+  const storageDir = context.globalStorageUri.fsPath;
+  const pricing = new PricingService(storageDir, bundledManifest, cfg.pricingManifestUrl || '');
+  await pricing.load();
+  pricing.startDailyRefresh();
+
+  const store = new EventStore(storageDir);
+  const logUriPath = context.logUri?.fsPath;
+  const watcher = new LogWatcher(
+    store,
+    pricing,
+    logUriPath,
+    cfg.copilotLogPath || undefined,
+  );
+
+  const githubSession = new GitHubSession();
+  const github = new GitHubUsageService(githubSession);
+  const usage = new UsageService(store, pricing, watcher, github);
+  const statusBar = new StatusBarController();
+
+  context.subscriptions.push(
+    { dispose: () => pricing.dispose() },
+    { dispose: () => githubSession.dispose() },
+    usage,
+    statusBar,
+    usage.onDidChangeSnapshot((s) => statusBar.update(s)),
+  );
 
   const sidebar = new SidebarViewProvider(context, usage);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(SidebarViewProvider.viewType, sidebar),
   );
 
-  context.subscriptions.push(registerChatParticipant(context, usage, capture));
-
-  registerCommands(context, usage, auth, store);
+  registerCommands(context, usage, store);
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (RELEVANT_CONFIG_KEYS.some((k) => e.affectsConfiguration(k))) usage.onConfigChanged();
+      if (RELEVANT_CONFIG_KEYS.some((k) => e.affectsConfiguration(k))) {
+        usage.onConfigChanged();
+      }
     }),
-    auth.onDidChange(() => void usage.refresh()),
   );
 
-  await initRepoAttribution();
-  await auth.init();
   await usage.start();
 }
 
 export function deactivate(): void {
-  // disposables are cleaned up via context.subscriptions
+  // disposables cleaned up via context.subscriptions
 }
 
 function registerCommands(
   context: vscode.ExtensionContext,
   usage: UsageService,
-  auth: GitHubAuth,
   store: EventStore,
 ): void {
   const reg = (id: string, fn: (...args: unknown[]) => unknown) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
-  const config = () => vscode.workspace.getConfiguration('weevil');
 
   reg('weevil.openDashboard', () => DashboardPanel.show(context, usage));
-  reg('weevil.refresh', () => usage.refresh());
-  reg('weevil.showBreakdown', () => showBreakdown(usage));
 
-  reg('weevil.setScope', async () => {
-    const pick = await vscode.window.showQuickPick(['session', 'today', 'workspace', 'repo'], {
-      placeHolder: 'What should the status bar reflect?',
-    });
-    if (pick) await config().update('statusBar.scope', pick, vscode.ConfigurationTarget.Global);
-  });
-
-  reg('weevil.setBudget', async () => {
-    const current = readConfig().monthlyBudget;
-    const input = await vscode.window.showInputBox({
-      prompt: 'Monthly Copilot budget (0 = none)',
-      value: String(current),
-      validateInput: (v) => (Number.isNaN(Number(v)) ? 'Enter a number' : undefined),
-    });
-    if (input != null) {
-      await config().update('monthlyBudget', Number(input), vscode.ConfigurationTarget.Global);
-    }
-  });
-
-  reg('weevil.configureNotifications', () =>
-    vscode.commands.executeCommand('workbench.action.openSettings', 'weevil.notifications'),
-  );
-
-  reg('weevil.signIn', async () => {
-    if (await auth.signIn()) await usage.refresh();
-  });
-  reg('weevil.signOut', async () => {
-    await auth.signOut();
+  reg('weevil.refresh', async () => {
     await usage.refresh();
-  });
-
-  reg('weevil.exportData', async () => {
-    const json = await store.export();
-    const doc = await vscode.workspace.openTextDocument({ language: 'json', content: json });
-    await vscode.window.showTextDocument(doc);
   });
 
   reg('weevil.clearData', async () => {
@@ -112,39 +105,45 @@ function registerCommands(
     }
   });
 
-  reg('weevil.showTips', () => {
-    const tip = pickTip(usage.current);
-    void vscode.window.showInformationMessage(`Weevil tip — ${tip.title}: ${tip.body}`);
+  reg('weevil.signIn', async () => {
+    await usage.signInGitHub();
   });
-}
 
-async function showBreakdown(usage: UsageService): Promise<void> {
-  const s = usage.current;
-  if (!s) {
-    void vscode.window.showInformationMessage('Weevil is still gathering your usage.');
-    return;
-  }
-  const items: vscode.QuickPickItem[] = [
-    {
-      label: `$(calendar) ${s.current.label}`,
-      detail: `${formatMoney(s.current.cost, s.currency)} · ${formatCredits(
-        s.current.credits,
-      )} cr · ${formatTokens(s.current.tokens)} tokens`,
-    },
-    {
-      label: `$(graph) Projected month-end`,
-      detail: formatMoney(s.forecast.projectedCost, s.currency),
-    },
-    ...s.topModels.map((m) => ({
-      label: `$(symbol-method) ${m.key}`,
-      detail: `${formatMoney(m.cost, s.currency)} · ${formatCredits(m.credits)} cr`,
-    })),
-    { label: '$(dashboard) Open full dashboard…', detail: 'Charts, filters and forecast' },
-  ];
-  const choice = await vscode.window.showQuickPick(items, {
-    placeHolder: 'Weevil — Copilot spend breakdown',
+  reg('weevil.exportReport', async () => {
+    const snapshot = usage.current;
+    if (!snapshot) {
+      void vscode.window.showWarningMessage('Weevil: No data available to export.');
+      return;
+    }
+    const defaultUri = vscode.Uri.file(defaultReportPath());
+    const saveUri = await vscode.window.showSaveDialog({
+      defaultUri,
+      filters: { 'HTML Report': ['html'] },
+      title: 'Save Weevil Usage Report',
+    });
+    if (!saveUri) return;
+    const html = generateReport(snapshot);
+    await vscode.workspace.fs.writeFile(saveUri, Buffer.from(html, 'utf8'));
+    const open = await vscode.window.showInformationMessage(
+      `Report saved to ${saveUri.fsPath}`,
+      'Open in Browser',
+    );
+    if (open === 'Open in Browser') {
+      await vscode.env.openExternal(saveUri);
+    }
   });
-  if (choice?.label.includes('Open full dashboard')) {
-    void vscode.commands.executeCommand('weevil.openDashboard');
-  }
+
+  reg('weevil.showLogPath', () => {
+    const paths = usage.getLogPaths();
+    if (paths.length === 0) {
+      void vscode.window.showInformationMessage(
+        'Weevil: No Copilot log files detected. Make sure Copilot is installed and has been used. ' +
+        'You can override the path via the weevil.copilotLogPath setting.',
+      );
+    } else {
+      void vscode.window.showInformationMessage(
+        `Weevil: Watching ${paths.length} log file(s): ${paths.join(', ')}`,
+      );
+    }
+  });
 }

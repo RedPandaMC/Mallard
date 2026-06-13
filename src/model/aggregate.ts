@@ -1,12 +1,14 @@
 /**
  * Pure aggregation: turn a flat list of UsageEvents into per-granularity
- * buckets (with per-model and per-repo breakdowns) and ranked top lists.
+ * buckets (with per-model breakdowns) and ranked top lists.
  */
 import {
   Bucket,
   Filter,
   Granularity,
   GRANULARITIES,
+  SankeyLink,
+  Surface,
   TopEntry,
   UsageAggregate,
   UsageEvent,
@@ -20,11 +22,8 @@ export function tokensOf(e: UsageEvent): number {
 export function matchesFilter(e: UsageEvent, f?: Filter): boolean {
   if (!f) return true;
   if (f.range && (e.ts < f.range.start || e.ts >= f.range.end)) return false;
-  if (f.repos?.length && !f.repos.includes(e.repo ?? 'unknown')) return false;
-  if (f.workspaces?.length && !f.workspaces.includes(e.workspaceFolder ?? 'unknown')) return false;
   if (f.models?.length && !f.models.includes(e.modelId)) return false;
   if (f.surfaces?.length && !f.surfaces.includes(e.surface)) return false;
-  if (f.sources?.length && !f.sources.includes(e.source)) return false;
   return true;
 }
 
@@ -55,7 +54,6 @@ export function aggregateBy(
         cost: 0,
         tokens: 0,
         byModel: {},
-        byRepo: {},
         eventCount: 0,
         estimated: false,
       };
@@ -68,7 +66,6 @@ export function aggregateBy(
     agg.eventCount += 1;
     agg.estimated = agg.estimated || e.estimated;
     addTo(agg.byModel, e.modelId, e, tk);
-    addTo(agg.byRepo, e.repo ?? 'unknown', e, tk);
   }
   return [...map.values()].sort((a, b) => a.start - b.start);
 }
@@ -84,14 +81,14 @@ export function aggregateAll(
 
 export function topBy(
   events: UsageEvent[],
-  dimension: 'model' | 'repo',
+  dimension: 'model' | 'surface',
   f?: Filter,
-  limit = 5,
+  limit = 8,
 ): TopEntry[] {
   const map = new Map<string, TopEntry>();
   for (const e of events) {
     if (!matchesFilter(e, f)) continue;
-    const key = dimension === 'model' ? e.modelId : e.repo ?? 'unknown';
+    const key = dimension === 'model' ? e.modelId : e.surface;
     const t = map.get(key) ?? { key, credits: 0, cost: 0, tokens: 0 };
     t.credits += e.credits;
     t.cost += e.cost;
@@ -99,7 +96,7 @@ export function topBy(
     map.set(key, t);
   }
   return [...map.values()]
-    .sort((a, b) => b.credits - a.credits || b.cost - a.cost || b.tokens - a.tokens)
+    .sort((a, b) => b.credits - a.credits || b.cost - a.cost)
     .slice(0, limit);
 }
 
@@ -120,4 +117,46 @@ export function sumEvents(
     count += 1;
   }
   return { credits, cost, tokens, count };
+}
+
+/**
+ * Build Sankey links for the model → surface flow chart.
+ * Only includes links with value > 0.
+ */
+export function sankeyLinksFor(events: UsageEvent[], f?: Filter): SankeyLink[] {
+  const map = new Map<string, number>();
+  for (const e of events) {
+    if (!matchesFilter(e, f)) continue;
+    if (e.credits <= 0) continue;
+    const key = `${e.modelId}|||${e.surface}`;
+    map.set(key, (map.get(key) ?? 0) + e.credits);
+  }
+  return [...map.entries()]
+    .filter(([, v]) => v > 0)
+    .map(([key, value]) => {
+      const [source, target] = key.split('|||');
+      return { source, target, value };
+    })
+    .filter((l): l is SankeyLink => l.source !== undefined && l.target !== undefined);
+}
+
+/** All distinct model IDs in the filtered event set. */
+export function distinctModels(events: UsageEvent[], f?: Filter): string[] {
+  const set = new Set<string>();
+  for (const e of events) {
+    if (!matchesFilter(e, f)) continue;
+    set.add(e.modelId);
+  }
+  return [...set].sort();
+}
+
+/** All distinct surfaces in the filtered event set. */
+export function distinctSurfaces(events: UsageEvent[], f?: Filter): Surface[] {
+  const set = new Set<Surface>();
+  for (const e of events) {
+    if (!matchesFilter(e, f)) continue;
+    set.add(e.surface);
+  }
+  const order: Surface[] = ['chat', 'inline', 'agent', 'edit', 'unknown'];
+  return order.filter((s) => set.has(s));
 }

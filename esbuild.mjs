@@ -10,7 +10,7 @@ const hostConfig = {
   format: 'cjs',
   platform: 'node',
   target: 'node20',
-  external: ['vscode'],
+  external: ['vscode', 'better-sqlite3'],
   outfile: 'dist/extension.js',
   sourcemap: !production,
   minify: production,

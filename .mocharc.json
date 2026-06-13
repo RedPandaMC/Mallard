@@ -1,5 +1,5 @@
 {
-  "require": "ts-node/register",
+  "require": "tsx/cjs",
   "spec": "test/unit/**/*.test.ts",
   "extension": ["ts"],
   "timeout": 10000

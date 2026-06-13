@@ -1,20 +1,13 @@
 /**
  * Shared, pure data model for Weevil. Imported by BOTH the extension host and
- * the webview bundle, so it must never import `vscode` or any Node/DOM API.
+ * the webview bundle — must never import `vscode` or any Node/DOM API.
  */
 
-export type Granularity = 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
+export type Granularity = 'day' | 'week' | 'month';
 
-export const GRANULARITIES: readonly Granularity[] = [
-  'hour',
-  'day',
-  'week',
-  'month',
-  'quarter',
-  'year',
-];
+export const GRANULARITIES: readonly Granularity[] = ['day', 'week', 'month'];
 
-/** Where a usage event came from. `lm` = accurate (our own @weevil request). */
+/** Where a usage event came from (kept broad for backward-compat with stored events). */
 export type SourceKind = 'lm' | 'local' | 'github' | 'sample';
 
 /** Which Copilot surface produced the event. */
@@ -22,9 +15,12 @@ export type Surface = 'chat' | 'inline' | 'agent' | 'edit' | 'unknown';
 
 export type Metric = 'cost' | 'credits' | 'tokens';
 
+/** Quick-select date presets for the filter bar. */
+export type DatePreset = 'today' | '7d' | '30d' | 'month' | 'all';
+
 /**
- * A single normalized unit of Copilot usage. Costs are plain numbers in the
- * snapshot's currency; `credits` are normalized premium-request weights.
+ * A single normalized unit of Copilot usage. Costs are plain numbers in USD;
+ * `credits` are normalized premium-request weights.
  */
 export interface UsageEvent {
   id: string;
@@ -37,21 +33,15 @@ export interface UsageEvent {
   credits: number;
   cost: number;
   estimated: boolean;
-  /** git remote slug or folder name — the multi-repo attribution tag. */
+  /** Kept for backward-compat with stored events; not used in current UI. */
   repo?: string;
-  workspaceFolder?: string;
-  /** set for conversations captured through the @weevil participant. */
-  chatId?: string;
 }
 
-/** A reusable filter, applied identically by the store, aggregator, UI and notifier. */
+/** Active filter applied to build the current snapshot. */
 export interface Filter {
   range?: { start: number; end: number };
-  repos?: string[];
-  workspaces?: string[];
   models?: string[];
   surfaces?: Surface[];
-  sources?: SourceKind[];
 }
 
 export interface Bucket {
@@ -69,7 +59,6 @@ export interface UsageAggregate {
   cost: number;
   tokens: number;
   byModel: Record<string, Bucket>;
-  byRepo: Record<string, Bucket>;
   eventCount: number;
   estimated: boolean;
 }
@@ -99,7 +88,8 @@ export interface BudgetState {
   pace: PaceStatus;
 }
 
-export type ProviderStatusKind = 'ok' | 'degraded' | 'unavailable';
+/** `'empty'` = no logs found or no events at all. */
+export type ProviderStatusKind = 'ok' | 'degraded' | 'empty';
 
 export interface ProviderStatus {
   kind: ProviderStatusKind;
@@ -113,20 +103,88 @@ export interface TopEntry {
   tokens: number;
 }
 
-export interface Tip {
-  id: string;
-  title: string;
-  body: string;
+/** One directed edge in the model → surface Sankey chart. */
+export interface SankeyLink {
+  source: string;
+  target: string;
+  value: number; // credits
 }
 
-export type StatusBarScope = 'session' | 'today' | 'workspace' | 'repo';
-
-export interface CurrentScopeTotals {
-  scope: StatusBarScope;
-  label: string;
+/** Today's spend totals — always computed for the status bar. */
+export interface TodayTotals {
   credits: number;
-  tokens: number;
   cost: number;
+  tokens: number;
+}
+
+// ─── Model suggestions ────────────────────────────────────────────────────────
+
+export interface ModelSuggestion {
+  currentModel: string;
+  suggestedModel: string;
+  surface: Surface;
+  estimatedMonthlySaving: number;
+  basis: string;
+}
+
+// ─── GitHub billing ──────────────────────────────────────────────────────────
+
+export type AuthStatus = 'loading' | 'signed-in' | 'signed-out' | 'error';
+
+export interface GitHubBillingItem {
+  model: string;
+  sku: string;
+  grossAmount: number;
+  netAmount: number;
+  grossQuantity: number;
+}
+
+export interface GitHubQuota {
+  plan: string;
+  entitlement: number;
+  used: number;
+  resetDate: number | null;
+  unlimited: boolean;
+}
+
+export interface GitHubBillingData {
+  quota: GitHubQuota | null;
+  items: GitHubBillingItem[];
+  fetchedAt: number;
+  totalNetAmount: number;
+}
+
+// ─── Pre-computed chart payloads (assembled on host, consumed by webview) ────
+
+export interface DailyBarPoint {
+  date: string;       // MM-DD
+  credits: number;
+  cost: number;
+  colorIndex: number; // 0 = blue (<70%), 1 = amber (70–100%), 2 = red (≥100%)
+}
+
+export interface DailyBarsData {
+  points: DailyBarPoint[];
+  budgetLine: number | null;    // daily included-credits threshold
+  projectedLine: number | null; // projected daily pace
+}
+
+export interface ModelBreakdownData {
+  labels: string[];    // display names, provider-prefix stripped, max 32 chars
+  credits: number[];
+  costs: number[];
+  tokens: number[];
+}
+
+export interface HeatmapData {
+  cells: ReadonlyArray<{ date: string; value: number }>; // YYYY-MM-DD, credits
+  max: number;
+}
+
+export interface ChartData {
+  dailyBars: DailyBarsData;
+  modelBreakdown: ModelBreakdownData;
+  heatmap: HeatmapData;
 }
 
 /** The single object every piece of UI consumes. */
@@ -138,10 +196,22 @@ export interface UsageSnapshot {
   pricePerCredit: number;
   filter: Filter;
   range: { start: number; end: number };
-  aggregates: Record<Granularity, UsageAggregate[]>;
   forecast: Forecast;
   budget: BudgetState;
   topModels: TopEntry[];
-  topRepos: TopEntry[];
-  current: CurrentScopeTotals;
+  today: TodayTotals;
+  /** All distinct model IDs in current data (for filter dropdown). */
+  allModels: string[];
+  /** All distinct surfaces in current data (for surface toggle). */
+  allSurfaces: Surface[];
+  /** Model → surface flow for the Sankey chart. */
+  sankeyLinks: SankeyLink[];
+  /** Pre-computed, render-ready data for each chart — assembled on the host. */
+  chartData: ChartData;
+  /** Model-switching suggestions (only populated after 14+ days of data). */
+  suggestions: ModelSuggestion[];
+  /** GitHub auth state for the billing integration panel. */
+  authStatus: AuthStatus;
+  /** Authoritative billing data from the GitHub API, when signed in. */
+  githubBilling?: GitHubBillingData;
 }

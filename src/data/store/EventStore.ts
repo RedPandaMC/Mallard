@@ -1,17 +1,19 @@
 /**
- * Per-user, append-friendly event store backed by JSONL on disk.
+ * Per-user event store backed by SQLite (better-sqlite3).
  *
- * The constructor takes a plain directory path (not a vscode context) so the
- * store can be unit-tested against a temp dir. Raw per-request events are kept
- * for a recent window; older events are rolled up into coarse daily rows to
- * keep the file bounded.
+ * The constructor takes a plain directory path so the store can be unit-tested
+ * against a temp dir. Raw per-request events are kept for a recent window;
+ * older events are rolled up into coarse daily rows to keep the DB bounded.
+ *
+ * On first open, any legacy `events.jsonl` in the same directory is bulk-imported
+ * and renamed to `events.jsonl.migrated` so data is not lost on upgrade.
  */
-import { promises as fs } from 'fs';
+import Database from 'better-sqlite3';
+import { mkdirSync, readFileSync, renameSync } from 'fs';
 import * as path from 'path';
-import { matchesFilter } from '../../model/aggregate';
-import { Filter, UsageEvent } from '../../model/types';
+import { Filter, SourceKind, Surface, UsageEvent } from '../../model/types';
 import { DAY_MS, startOf } from '../../util/time';
-import { MAX_RAW_EVENTS, RAW_WINDOW_DAYS, STORE_SCHEMA_VERSION } from './schema';
+import { MAX_RAW_EVENTS, RAW_WINDOW_DAYS } from './schema';
 
 /** Collapse old per-request events into one row per day/model/repo/surface. */
 export function rollupEvents(old: UsageEvent[]): UsageEvent[] {
@@ -26,112 +28,198 @@ export function rollupEvents(old: UsageEvent[]): UsageEvent[] {
       existing.promptTokens = (existing.promptTokens ?? 0) + (e.promptTokens ?? 0);
       existing.completionTokens = (existing.completionTokens ?? 0) + (e.completionTokens ?? 0);
     } else {
-      map.set(key, { ...e, id: key, ts: day, estimated: true, chatId: undefined });
+      map.set(key, { ...e, id: key, ts: day, estimated: true });
     }
   }
   return [...map.values()].sort((a, b) => a.ts - b.ts);
 }
 
-export class EventStore {
-  private events: UsageEvent[] = [];
-  private ids = new Set<string>();
-  private loaded = false;
-  private readonly file: string;
-  private readonly metaFile: string;
+interface EventRow {
+  id: string;
+  ts: number;
+  modelId: string;
+  surface: string;
+  source: string;
+  credits: number;
+  cost: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  estimated: number;
+  repo: string | null;
+}
 
-  constructor(private readonly dir: string) {
-    this.file = path.join(dir, 'events.jsonl');
-    this.metaFile = path.join(dir, 'meta.json');
+function rowToEvent(row: EventRow): UsageEvent {
+  return {
+    id: row.id,
+    ts: row.ts,
+    modelId: row.modelId,
+    surface: row.surface as Surface,
+    source: row.source as SourceKind,
+    credits: row.credits,
+    cost: row.cost,
+    estimated: row.estimated !== 0,
+    ...(row.promptTokens !== null ? { promptTokens: row.promptTokens } : {}),
+    ...(row.completionTokens !== null ? { completionTokens: row.completionTokens } : {}),
+    ...(row.repo !== null ? { repo: row.repo } : {}),
+  };
+}
+
+function toRow(e: UsageEvent): EventRow {
+  return {
+    id: e.id,
+    ts: e.ts,
+    modelId: e.modelId,
+    surface: e.surface,
+    source: e.source,
+    credits: e.credits,
+    cost: e.cost,
+    promptTokens: e.promptTokens ?? null,
+    completionTokens: e.completionTokens ?? null,
+    estimated: e.estimated ? 1 : 0,
+    repo: e.repo ?? null,
+  };
+}
+
+const CREATE_TABLE = `
+  CREATE TABLE IF NOT EXISTS events (
+    id TEXT PRIMARY KEY,
+    ts INTEGER NOT NULL,
+    modelId TEXT NOT NULL,
+    surface TEXT NOT NULL,
+    source TEXT NOT NULL,
+    credits REAL NOT NULL,
+    cost REAL NOT NULL,
+    promptTokens INTEGER,
+    completionTokens INTEGER,
+    estimated INTEGER NOT NULL DEFAULT 1,
+    repo TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_ts ON events(ts);
+  CREATE INDEX IF NOT EXISTS idx_model ON events(modelId);
+`;
+
+const INSERT_SQL =
+  'INSERT OR IGNORE INTO events ' +
+  '(id, ts, modelId, surface, source, credits, cost, promptTokens, completionTokens, estimated, repo) ' +
+  'VALUES (@id, @ts, @modelId, @surface, @source, @credits, @cost, @promptTokens, @completionTokens, @estimated, @repo)';
+
+export class EventStore {
+  private readonly db: Database.Database;
+  private readonly ins: Database.Statement<[EventRow]>;
+  private readonly legacyFile: string;
+
+  constructor(dir: string) {
+    mkdirSync(dir, { recursive: true });
+    this.legacyFile = path.join(dir, 'events.jsonl');
+    this.db = new Database(path.join(dir, 'events.db'));
+    this.db.pragma('journal_mode = WAL');
+    this.db.exec(CREATE_TABLE);
+    this.ins = this.db.prepare<EventRow>(INSERT_SQL);
+    this.migrateJsonl();
   }
 
-  async load(): Promise<void> {
-    if (this.loaded) return;
-    await fs.mkdir(this.dir, { recursive: true });
+  /** No-op — migration runs synchronously in the constructor. Kept for API compatibility. */
+  async load(): Promise<void> { /* noop */ }
+
+  all(): readonly UsageEvent[] {
+    return this.db
+      .prepare<[], EventRow>('SELECT * FROM events ORDER BY ts')
+      .all()
+      .map(rowToEvent);
+  }
+
+  count(): number {
+    return (this.db.prepare<[], { n: number }>('SELECT COUNT(*) as n FROM events').get()!).n;
+  }
+
+  async append(incoming: UsageEvent[]): Promise<number> {
+    if (incoming.length === 0) return 0;
+    const added = this.bulkInsert(incoming);
+    if (this.count() > MAX_RAW_EVENTS) await this.rollup();
+    return added;
+  }
+
+  query(filter?: Filter): UsageEvent[] {
+    if (!filter) return this.all().slice();
+
+    const clauses: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (filter.range) {
+      clauses.push('ts >= ? AND ts < ?');
+      params.push(filter.range.start, filter.range.end);
+    }
+    const models = filter.models;
+    if (models && models.length > 0) {
+      clauses.push(`modelId IN (${models.map(() => '?').join(',')})`);
+      params.push(...models);
+    }
+    const surfaces = filter.surfaces;
+    if (surfaces && surfaces.length > 0) {
+      clauses.push(`surface IN (${surfaces.map(() => '?').join(',')})`);
+      params.push(...surfaces);
+    }
+
+    if (clauses.length === 0) return this.all().slice();
+
+    const sql = `SELECT * FROM events WHERE ${clauses.join(' AND ')} ORDER BY ts`;
+    return (this.db.prepare(sql).all(...params) as EventRow[]).map(rowToEvent);
+  }
+
+  async rollup(now = Date.now()): Promise<void> {
+    const cutoff = startOf(now - RAW_WINDOW_DAYS * DAY_MS, 'day');
+    const old = this.db
+      .prepare<[number], EventRow>('SELECT * FROM events WHERE ts < ? ORDER BY ts')
+      .all(cutoff)
+      .map(rowToEvent);
+    if (old.length === 0) return;
+    const rolled = rollupEvents(old);
+    const del = this.db.prepare<[number]>('DELETE FROM events WHERE ts < ?');
+    const ins = this.ins;
+    this.db.transaction(() => {
+      del.run(cutoff);
+      for (const e of rolled) ins.run(toRow(e));
+    })();
+  }
+
+  async clear(): Promise<void> {
+    this.db.prepare('DELETE FROM events').run();
+  }
+
+  async export(): Promise<string> {
+    return JSON.stringify(this.all(), null, 2);
+  }
+
+  dispose(): void {
+    this.db.close();
+  }
+
+  private bulkInsert(events: UsageEvent[]): number {
+    const ins = this.ins;
+    let added = 0;
+    this.db.transaction(() => {
+      for (const e of events) {
+        const result = ins.run(toRow(e));
+        added += result.changes;
+      }
+    })();
+    return added;
+  }
+
+  private migrateJsonl(): void {
     try {
-      const raw = await fs.readFile(this.file, 'utf8');
+      const raw = readFileSync(this.legacyFile, 'utf8');
+      const events: UsageEvent[] = [];
       for (const line of raw.split('\n')) {
         const trimmed = line.trim();
         if (!trimmed) continue;
         try {
           const e = JSON.parse(trimmed) as UsageEvent;
-          if (e && e.id && !this.ids.has(e.id)) {
-            this.ids.add(e.id);
-            this.events.push(e);
-          }
-        } catch {
-          // skip malformed line
-        }
+          if (e?.id) events.push(e);
+        } catch { /* skip malformed line */ }
       }
-    } catch {
-      // no file yet — start empty
-    }
-    this.events.sort((a, b) => a.ts - b.ts);
-    this.loaded = true;
-  }
-
-  /** All loaded events (read-only view). */
-  all(): readonly UsageEvent[] {
-    return this.events;
-  }
-
-  count(): number {
-    return this.events.length;
-  }
-
-  /** Append new events (deduped by id). Returns how many were actually added. */
-  async append(incoming: UsageEvent[]): Promise<number> {
-    await this.load();
-    const fresh = incoming.filter((e) => e && e.id && !this.ids.has(e.id));
-    if (fresh.length === 0) return 0;
-    for (const e of fresh) {
-      this.ids.add(e.id);
-      this.events.push(e);
-    }
-    this.events.sort((a, b) => a.ts - b.ts);
-    await fs.appendFile(this.file, fresh.map((e) => JSON.stringify(e)).join('\n') + '\n', 'utf8');
-    if (this.events.length > MAX_RAW_EVENTS) {
-      await this.rollup();
-    }
-    return fresh.length;
-  }
-
-  query(filter?: Filter): UsageEvent[] {
-    return filter ? this.events.filter((e) => matchesFilter(e, filter)) : this.events.slice();
-  }
-
-  async rollup(now = Date.now()): Promise<void> {
-    await this.load();
-    const cutoff = startOf(now - RAW_WINDOW_DAYS * DAY_MS, 'day');
-    const recent = this.events.filter((e) => e.ts >= cutoff);
-    const old = this.events.filter((e) => e.ts < cutoff);
-    if (old.length === 0) return;
-    this.events = [...rollupEvents(old), ...recent].sort((a, b) => a.ts - b.ts);
-    this.ids = new Set(this.events.map((e) => e.id));
-    await this.rewrite();
-  }
-
-  async clear(): Promise<void> {
-    await this.load();
-    this.events = [];
-    this.ids.clear();
-    await this.rewrite();
-  }
-
-  async export(): Promise<string> {
-    await this.load();
-    return JSON.stringify(this.events, null, 2);
-  }
-
-  private async rewrite(): Promise<void> {
-    await fs.mkdir(this.dir, { recursive: true });
-    const body = this.events.length
-      ? this.events.map((e) => JSON.stringify(e)).join('\n') + '\n'
-      : '';
-    await fs.writeFile(this.file, body, 'utf8');
-    await fs.writeFile(
-      this.metaFile,
-      JSON.stringify({ version: STORE_SCHEMA_VERSION, updated: Date.now() }),
-      'utf8',
-    );
+      if (events.length > 0) this.bulkInsert(events);
+      renameSync(this.legacyFile, this.legacyFile + '.migrated');
+    } catch { /* no legacy file or already migrated */ }
   }
 }

@@ -58,12 +58,12 @@ describe('EventStore', () => {
     const dir = await tmpDir();
     const store = new EventStore(dir);
     await store.append([
-      makeEvent({ id: 'a', ts: 1000, repo: 'alpha' }),
-      makeEvent({ id: 'b', ts: 2000, repo: 'beta' }),
+      makeEvent({ id: 'a', ts: 1000, modelId: 'gpt-4o' }),
+      makeEvent({ id: 'b', ts: 2000, modelId: 'claude-sonnet-4' }),
     ]);
-    const onlyAlpha = store.query({ repos: ['alpha'] });
-    assert.strictEqual(onlyAlpha.length, 1);
-    assert.strictEqual(onlyAlpha[0].id, 'a');
+    const onlyGpt = store.query({ models: ['gpt-4o'] });
+    assert.strictEqual(onlyGpt.length, 1);
+    assert.strictEqual(onlyGpt[0]!.id, 'a');
   });
 
   it('clears all events and truncates the file', async () => {

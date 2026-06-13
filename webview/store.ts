@@ -1,35 +1,36 @@
-import { Filter, Granularity, Metric, Tip, UsageSnapshot } from '../src/model/types';
+import { createStore } from 'zustand/vanilla';
+import { subscribeWithSelector } from 'zustand/middleware';
+import { DatePreset, Filter, Metric, UsageSnapshot } from '../src/model/types';
 
 export interface AppState {
   snapshot: UsageSnapshot | null;
-  granularity: Granularity;
+  compact: boolean;
   metric: Metric;
   filter: Filter;
-  compact: boolean;
-  tip: Tip | null;
+  datePreset: DatePreset;
 }
 
-type Listener = (state: AppState) => void;
-const _listeners: Listener[] = [];
+export const store = createStore<AppState>()(
+  subscribeWithSelector((): AppState => ({
+    snapshot: null,
+    compact: false,
+    metric: 'cost',
+    filter: {},
+    datePreset: 'month',
+  })),
+);
 
-export const state: AppState = {
-  snapshot: null,
-  granularity: 'day',
-  metric: 'cost',
-  filter: {},
-  compact: false,
-  tip: null,
-};
+/** Read current state synchronously. */
+export function state(): AppState {
+  return store.getState();
+}
 
+/** Merge a partial patch and notify all subscribers. */
 export function setState(patch: Partial<AppState>): void {
-  Object.assign(state, patch);
-  for (const l of _listeners) l(state);
+  store.setState(patch);
 }
 
-export function subscribe(listener: Listener): () => void {
-  _listeners.push(listener);
-  return () => {
-    const i = _listeners.indexOf(listener);
-    if (i !== -1) _listeners.splice(i, 1);
-  };
+/** Subscribe to any state change. Returns an unsubscribe function. */
+export function subscribe(listener: (s: AppState) => void): () => void {
+  return store.subscribe(listener);
 }

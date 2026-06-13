@@ -58,7 +58,11 @@ export function attribute(uri: vscode.Uri | undefined): RepoAttribution {
     repo = slugFromRemote(remote?.fetchUrl ?? remote?.pushUrl);
   }
 
-  return { repo: repo ?? workspaceFolder, workspaceFolder };
+  const resolvedRepo = repo ?? workspaceFolder;
+  return {
+    ...(resolvedRepo !== undefined ? { repo: resolvedRepo } : {}),
+    ...(workspaceFolder !== undefined ? { workspaceFolder } : {}),
+  };
 }
 
 /** Attribution for the currently active editor (fallback: first workspace folder). */

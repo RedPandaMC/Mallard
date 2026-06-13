@@ -1,11 +1,10 @@
 /**
- * The always-on "circle + button": a tinted circular status-bar indicator that
- * opens the spend breakdown on click.
+ * The always-on status bar item: credits + cost for today, tinted by spend pace.
+ * Click opens the dashboard.
  */
 import * as vscode from 'vscode';
-import { readConfig } from '../config';
 import { severityFor } from '../model/budget';
-import { formatCredits, formatMetric, formatMoney } from '../model/format';
+import { formatCredits, formatMoney } from '../model/format';
 import { UsageSnapshot } from '../model/types';
 
 export class StatusBarController implements vscode.Disposable {
@@ -18,26 +17,20 @@ export class StatusBarController implements vscode.Disposable {
       100,
     );
     this.item.name = 'Weevil';
-    this.item.command = 'weevil.showBreakdown';
+    this.item.command = 'weevil.openDashboard';
     this.item.text = '$(circle-filled) Weevil';
     this.item.tooltip = 'Weevil — loading usage…';
     this.item.show();
   }
 
   update(snapshot: UsageSnapshot): void {
-    const cfg = readConfig();
-    const metric = cfg.statusBarMetric;
-    const value =
-      metric === 'cost'
-        ? snapshot.current.cost
-        : metric === 'credits'
-          ? snapshot.current.credits
-          : snapshot.current.tokens;
-
-    this.item.text = `$(circle-filled) ${formatMetric(value, metric, snapshot.currency)}`;
+    const { today, currency, budget } = snapshot;
+    const cr = formatCredits(today.credits);
+    const cost = formatMoney(today.cost, currency);
+    this.item.text = `$(circle-filled) ${cr} cr · ${cost}`;
     this.item.tooltip = buildTooltip(snapshot);
 
-    const severity = severityFor(snapshot.budget);
+    const severity = severityFor(budget);
     this.item.backgroundColor =
       severity === 'error'
         ? new vscode.ThemeColor('statusBarItem.errorBackground')
@@ -53,20 +46,19 @@ export class StatusBarController implements vscode.Disposable {
 
 function buildTooltip(s: UsageSnapshot): vscode.MarkdownString {
   const md = new vscode.MarkdownString(undefined, true);
-  md.appendMarkdown(`**Weevil** — a little nosey about your Copilot spend\n\n`);
+  md.appendMarkdown(`**Weevil** — Copilot usage tracker\n\n`);
   md.appendMarkdown(
-    `- **${s.current.label}:** ${formatMoney(s.current.cost, s.currency)} · ${formatCredits(
-      s.current.credits,
-    )} cr\n`,
+    `- **Today:** ${formatMoney(s.today.cost, s.currency)} · ${formatCredits(s.today.credits)} cr\n`,
   );
   md.appendMarkdown(
-    `- **Projected month:** ${formatMoney(s.forecast.projectedCost, s.currency)}\n`,
+    `- **Month-to-date:** ${formatMoney(s.budget.usedCost, s.currency)} · ${formatCredits(s.budget.usedCredits)} cr\n`,
   );
-  if (s.budget.monthly) {
-    md.appendMarkdown(`- **Budget:** ${formatMoney(s.budget.monthly, s.currency)} (${s.budget.pace})\n`);
+  if (s.forecast.basis !== 'insufficient-data') {
+    md.appendMarkdown(
+      `- **Projected:** ${formatMoney(s.forecast.projectedCost, s.currency)}\n`,
+    );
   }
   if (s.topModels[0]) md.appendMarkdown(`- **Top model:** ${s.topModels[0].key}\n`);
-  if (s.topRepos[0]) md.appendMarkdown(`- **Top repo:** ${s.topRepos[0].key}\n`);
-  md.appendMarkdown(`\n_Click to open the breakdown._`);
+  md.appendMarkdown(`\n_Click to open dashboard._`);
   return md;
 }

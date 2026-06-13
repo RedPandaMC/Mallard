@@ -5,19 +5,22 @@ import './styles/dashboard.css';
 import { onMessage, post } from './api';
 import { state, setState, subscribe } from './store';
 import { applyTheme } from './charts/echarts';
-import { mountUsageOverTime } from './charts/usageOverTime';
+import { mountDailyBars } from './charts/dailyBars';
+import { mountHeatmap } from './charts/heatmap';
 import { mountModelBreakdown } from './charts/modelBreakdown';
-import { mountRepoBreakdown } from './charts/repoBreakdown';
+import { mountSankey } from './charts/sankey';
 import { mountKpiCards } from './components/KpiCards';
-import { mountGranularityTabs } from './components/GranularityTabs';
 import { mountFilterBar } from './components/FilterBar';
+import { mountGitHubBillingStrip } from './components/GitHubBillingStrip';
 import { mountStatusBanner } from './components/StatusBanner';
-import { mountTipsPanel } from './components/TipsPanel';
+import { mountEmptyState } from './components/EmptyState';
+import { mountSpendGauge } from './components/SpendGauge';
+import { mountSuggestionsPanel } from './components/SuggestionsPanel';
 
-const WEEVIL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" fill="currentColor" aria-hidden="true" class="wv-brand-logo">
-  <ellipse cx="17.5" cy="14" rx="9" ry="6.5"/>
-  <circle cx="8" cy="13.5" r="4.5"/>
-  <ellipse cx="2.2" cy="13.5" rx="3.2" ry="1.1"/>
+const WEEVIL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" fill="currentColor" aria-hidden="true" class="wv-brand-logo">
+  <path d="M30 28 C18 28 8 37 8 48 C8 59 18 68 30 68 C36 68 41 65 45 61 L52 61 C55 66 61 70 68 70 C80 70 90 62 90 52 C90 46 87 40 82 36 C83 34 84 32 84 30 C84 20 76 12 66 12 C60 12 55 15 52 19 L48 19 C45 16 41 14 36 13 C34 28 30 28 30 28Z"/>
+  <ellipse cx="25" cy="48" rx="12" ry="8"/>
+  <ellipse cx="72" cy="50" rx="14" ry="10"/>
 </svg>`;
 
 const compact = document.body.dataset.compact === '1';
@@ -32,24 +35,20 @@ if (compact) {
   mountDashboard(app);
 }
 
-// ── Message routing ────────────────────────────────────────────────────────
+// ── Message routing ─────────────────────────────────────────────────────────
 
 onMessage((msg) => {
   if (msg.type === 'snapshot') {
-    setState({ snapshot: msg.payload, granularity: msg.granularity, compact: msg.compact });
+    setState({ snapshot: msg.payload, compact: msg.compact });
   } else if (msg.type === 'theme') {
     applyTheme();
-    // charts pick up new theme on next update via setOption; force redraw if snapshot ready
-    if (state.snapshot) setState({ snapshot: state.snapshot });
-  } else if (msg.type === 'tip') {
-    setState({ tip: msg.payload });
+    if (state().snapshot) setState({ snapshot: state().snapshot });
   }
 });
 
-// Signal that the webview is ready
 post({ type: 'ready' });
 
-// ── Full dashboard ─────────────────────────────────────────────────────────
+// ── Full dashboard ──────────────────────────────────────────────────────────
 
 function mountDashboard(root: HTMLElement): void {
   root.innerHTML = `
@@ -65,68 +64,101 @@ function mountDashboard(root: HTMLElement): void {
         <div id="status-banner"></div>
       </header>
       <div id="filter-bar"></div>
-      <div id="kpi-cards"></div>
-      <section class="wv-chart-section" aria-label="Usage over time">
-        <div class="wv-chart-header">
-          <span class="wv-chart-title">Usage over time</span>
-          <div id="gran-tabs"></div>
+      <div id="empty-state"></div>
+      <div id="content" style="display:none">
+        <div id="kpi-cards"></div>
+        <div id="gh-billing-strip"></div>
+        <div id="spend-gauge"></div>
+        <section class="wv-chart-section" aria-label="Daily usage">
+          <div class="wv-chart-header">
+            <span class="wv-chart-title">
+              <i class="codicon codicon-graph"></i> Daily usage — last 30 days
+            </span>
+          </div>
+          <div class="wv-chart-body" id="chart-daily" role="img" aria-label="Daily usage bar chart"></div>
+        </section>
+        <section class="wv-chart-section" id="heatmap-section" aria-label="Activity heatmap" style="display:none">
+          <div class="wv-chart-header">
+            <span class="wv-chart-title">
+              <i class="codicon codicon-calendar"></i> Activity — last 12 weeks
+            </span>
+          </div>
+          <div class="wv-chart-body heatmap" id="chart-heatmap" role="img" aria-label="Activity heatmap"></div>
+        </section>
+        <div class="wv-chart-row">
+          <section class="wv-chart-section" aria-label="Model breakdown">
+            <div class="wv-chart-header">
+              <span class="wv-chart-title">
+                <i class="codicon codicon-symbol-method"></i> By model
+              </span>
+            </div>
+            <div class="wv-chart-body mini" id="chart-models" role="img" aria-label="Usage by model"></div>
+          </section>
+          <section class="wv-chart-section wv-sankey-section" id="sankey-section" aria-label="Flow breakdown">
+            <div class="wv-chart-header">
+              <span class="wv-chart-title">
+                <i class="codicon codicon-type-hierarchy-sub"></i> Flow breakdown
+              </span>
+            </div>
+            <div class="wv-chart-body mini" id="chart-sankey" role="img" aria-label="Model to surface flow"></div>
+          </section>
         </div>
-        <div class="wv-chart-body" id="chart-over-time" role="img" aria-label="Usage over time area chart"></div>
-      </section>
-      <div class="wv-chart-row">
-        <section class="wv-chart-section" aria-label="Model breakdown">
-          <div class="wv-chart-header">
-            <span class="wv-chart-title">By model</span>
-          </div>
-          <div class="wv-chart-body mini" id="chart-models" role="img" aria-label="Usage by model donut chart"></div>
-        </section>
-        <section class="wv-chart-section" aria-label="Repository breakdown">
-          <div class="wv-chart-header">
-            <span class="wv-chart-title">By repo</span>
-          </div>
-          <div class="wv-chart-body mini" id="chart-repos" role="img" aria-label="Usage by repository bar chart"></div>
-        </section>
+        <div id="suggestions-panel"></div>
       </div>
-      <div id="tips-panel"></div>
     </div>`;
 
   const banner = mountStatusBanner(document.getElementById('status-banner')!);
   const filterBar = mountFilterBar(document.getElementById('filter-bar')!);
+  const emptyState = mountEmptyState(document.getElementById('empty-state')!);
   const kpis = mountKpiCards(document.getElementById('kpi-cards')!);
-  const tabs = mountGranularityTabs(document.getElementById('gran-tabs')!, (g) => {
-    setState({ granularity: g });
-  });
-  const overTime = mountUsageOverTime(document.getElementById('chart-over-time')!);
+  const ghStrip = mountGitHubBillingStrip(document.getElementById('gh-billing-strip')!);
+  const gauge = mountSpendGauge(document.getElementById('spend-gauge')!);
+  const daily = mountDailyBars(document.getElementById('chart-daily')!);
+  const heatmap = mountHeatmap(document.getElementById('chart-heatmap')!);
   const models = mountModelBreakdown(document.getElementById('chart-models')!);
-  const repos = mountRepoBreakdown(document.getElementById('chart-repos')!);
-  const tips = mountTipsPanel(document.getElementById('tips-panel')!);
+  const sankey = mountSankey(document.getElementById('chart-sankey')!);
+  const suggestionsPanel = mountSuggestionsPanel(document.getElementById('suggestions-panel')!);
+  const heatmapSection = document.getElementById('heatmap-section')!;
+  const content = document.getElementById('content')!;
 
-  // Wire ResizeObserver for charts
+  let resizeFrame: number | undefined;
   const ro = new ResizeObserver(() => {
-    overTime.resize();
-    models.resize();
-    repos.resize();
+    if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => {
+      daily.resize();
+      heatmap.resize();
+      models.resize();
+      sankey.resize();
+    });
   });
   ro.observe(root);
 
-  subscribe((s) => {
-    if (s.snapshot) {
-      banner.update(s.snapshot);
-      filterBar.update(s.snapshot, s.metric);
-      kpis.update(s.snapshot, s.metric);
-      tabs.update(s.granularity);
-      overTime.update(s.snapshot, s.granularity, s.metric);
-      models.update(s.snapshot, s.metric);
-      repos.update(s.snapshot, s.metric);
-    }
-    tips.update(s.tip);
-  });
+  emptyState.update(false);
 
-  // Seed tip request
-  post({ type: 'requestTip' });
+  subscribe((s) => {
+    if (!s.snapshot) return;
+    const isEmpty = s.snapshot.status.kind === 'empty';
+    emptyState.update(isEmpty, s.snapshot.status.reason);
+    content.style.display = isEmpty ? 'none' : '';
+
+    banner.update(s.snapshot);
+    filterBar.update(s.snapshot, s.metric);
+
+    if (!isEmpty) {
+      kpis.update(s.snapshot, s.metric);
+      ghStrip.update(s.snapshot);
+      gauge.update(s.snapshot.budget, s.snapshot.currency);
+      daily.update(s.snapshot);
+      heatmap.update(s.snapshot);
+      heatmapSection.style.display = s.snapshot.chartData.heatmap.max > 0 ? '' : 'none';
+      models.update(s.snapshot, s.metric);
+      sankey.update(s.snapshot);
+      suggestionsPanel.update(s.snapshot);
+    }
+  });
 }
 
-// ── Compact sidebar ────────────────────────────────────────────────────────
+// ── Compact sidebar ─────────────────────────────────────────────────────────
 
 function mountCompact(root: HTMLElement): void {
   root.innerHTML = `
@@ -136,12 +168,16 @@ function mountCompact(root: HTMLElement): void {
         <div class="wv-brand-name">Weevil</div>
       </div>
       <div id="status-banner"></div>
-      <div class="wv-compact-summary" id="kpi-compact" aria-label="Usage summary"></div>
-      <button class="wv-open-btn" id="open-dashboard">Open Dashboard</button>
+      <div id="compact-gauge"></div>
+      <div class="wv-compact-summary" id="compact-summary" aria-label="Usage summary"></div>
+      <button class="wv-open-btn" id="open-dashboard">
+        <i class="codicon codicon-graph"></i> Open dashboard
+      </button>
     </div>`;
 
   const banner = mountStatusBanner(document.getElementById('status-banner')!);
-  const summary = document.getElementById('kpi-compact')!;
+  const gauge = mountSpendGauge(document.getElementById('compact-gauge')!);
+  const summary = document.getElementById('compact-summary')!;
   const openBtn = document.getElementById('open-dashboard')!;
 
   openBtn.addEventListener('click', () => {
@@ -151,15 +187,15 @@ function mountCompact(root: HTMLElement): void {
   subscribe((s) => {
     if (!s.snapshot) return;
     banner.update(s.snapshot);
-    const { current, budget, forecast, currency } = s.snapshot;
+    gauge.update(s.snapshot.budget, s.snapshot.currency);
 
+    const { today, budget, forecast, currency } = s.snapshot;
     const rows: [string, string][] = [
-      [current.label, formatVal(current, s.metric, currency)],
-      ['Month-to-date', new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(budget.usedCost)],
+      ['Today', fmtCost(today.cost, currency)],
+      ['Month-to-date', fmtCost(budget.usedCost, currency)],
     ];
-
     if (forecast.basis !== 'insufficient-data') {
-      rows.push(['Projected', new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(forecast.projectedCost)]);
+      rows.push(['Projected', fmtCost(forecast.projectedCost, currency)]);
     }
 
     summary.innerHTML = '';
@@ -179,15 +215,10 @@ function mountCompact(root: HTMLElement): void {
   });
 }
 
-function formatVal(
-  current: { cost: number; credits: number; tokens: number },
-  metric: string,
-  currency: string,
-): string {
-  if (metric === 'credits') return `${Math.round(current.credits)} cr`;
-  if (metric === 'tokens') {
-    const n = current.tokens;
-    return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M tok` : n >= 1000 ? `${(n / 1000).toFixed(1)}k tok` : `${n} tok`;
+function fmtCost(cost: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(cost);
+  } catch {
+    return `${currency} ${cost.toFixed(2)}`;
   }
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(current.cost);
 }
