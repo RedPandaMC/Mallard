@@ -13,6 +13,14 @@ export interface ParseContext {
   now: number;
   /** Repo to attribute these events to (active workspace repo at parse time). */
   repo?: string;
+  /** Stable per-file key so ids are unique across log files. */
+  fileKey?: string;
+  /**
+   * Absolute character offset where `content` begins in the source file. With a
+   * per-line offset this yields ids that are stable whether the file is parsed
+   * in full or incrementally, so re-parsing never duplicates or drops events.
+   */
+  baseOffset?: number;
 }
 
 type AnyRecord = Record<string, unknown>;
@@ -53,9 +61,13 @@ function toSurface(v: unknown): Surface {
 
 export function parseOtelContent(content: string, ctx: ParseContext): UsageEvent[] {
   const events: UsageEvent[] = [];
-  let i = 0;
+  const fileKey = ctx.fileKey ?? 'f';
+  let offset = ctx.baseOffset ?? 0;
 
   for (const line of content.split('\n')) {
+    const lineStart = offset;
+    offset += line.length + 1; // +1 for the consumed '\n'
+
     const trimmed = line.trim();
     if (!trimmed || (trimmed[0] !== '{' && trimmed[0] !== '[')) continue;
 
@@ -97,17 +109,23 @@ export function parseOtelContent(content: string, ctx: ParseContext): UsageEvent
     });
 
     // Split cost into input/output categories by token ratio when both are
-    // known. The OTel logs do not (yet) expose tool/thinking token counts; if
-    // they appear later, add them here. Absent token data -> no breakdown.
+    // known. Copilot's local OTel logs only expose input/output token counts
+    // (no cached/reasoning/tool/cost attributes), so tool and thinking stay
+    // unpopulated until a richer source is available. Absent tokens -> no split.
     const totalTok = (prompt ?? 0) + (completion ?? 0);
     const costByCategory =
       cost > 0 && totalTok > 0 ? splitCost(cost, prompt ?? 0, totalTok) : undefined;
 
+    // Surface comes from an explicit attribute when present, else the span name
+    // (e.g. "chat", "invoke_agent").
+    const surfaceHint =
+      pick(attrs, ['gen_ai.operation.surface', 'surface', 'gen_ai.operation.name']) ?? rec['name'];
+
     events.push({
-      id: `local:${ts}:${i++}:${model}`,
+      id: `local:${fileKey}:${lineStart}`,
       ts,
       modelId: String(model),
-      surface: toSurface(pick(attrs, ['gen_ai.operation.surface', 'surface'])),
+      surface: toSurface(surfaceHint),
       source: 'local',
       ...(prompt !== undefined ? { promptTokens: prompt } : {}),
       ...(completion !== undefined ? { completionTokens: completion } : {}),

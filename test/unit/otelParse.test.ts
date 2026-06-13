@@ -119,4 +119,35 @@ describe('parseOtelContent', () => {
     const e = parseOtelContent(JSON.stringify({ model: 'gpt-4o' }), ctx)[0]!;
     assert.strictEqual(e.costByCategory, undefined);
   });
+
+  it('produces ids stable across full and incremental re-parses of the same file', () => {
+    const l0 = JSON.stringify({ model: 'gpt-4o', input_tokens: 10 });
+    const l1 = JSON.stringify({ model: 'gpt-4o', input_tokens: 20 });
+    const full = `${l0}\n${l1}\n`;
+    const fileKey = 'abc';
+
+    // Full parse from offset 0.
+    const fullEvents = parseOtelContent(full, { ...ctx, fileKey, baseOffset: 0 });
+    // Incremental parse of just the appended second line, with its byte offset.
+    const incOffset = l0.length + 1;
+    const incEvents = parseOtelContent(full.slice(incOffset), {
+      ...ctx,
+      fileKey,
+      baseOffset: incOffset,
+    });
+
+    assert.strictEqual(fullEvents.length, 2);
+    assert.strictEqual(incEvents.length, 1);
+    // The second event gets the SAME id whether reached via full or incremental
+    // parse, so INSERT OR IGNORE dedups instead of double-counting.
+    assert.strictEqual(incEvents[0]!.id, fullEvents[1]!.id);
+  });
+
+  it('infers surface from the span name when no surface attribute is present', () => {
+    const agent = parseOtelContent(
+      JSON.stringify({ name: 'invoke_agent', attributes: { model: 'gpt-4o' } }),
+      ctx,
+    )[0]!;
+    assert.strictEqual(agent.surface, 'agent');
+  });
 });

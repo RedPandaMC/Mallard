@@ -19,6 +19,13 @@ import { EventStore } from '../store/EventStore';
 
 const DEBOUNCE_MS = 1_500;
 
+/** Short, stable key for a file path (djb2) used to namespace event ids. */
+function fileKeyOf(filePath: string): string {
+  let h = 5381;
+  for (let i = 0; i < filePath.length; i++) h = ((h << 5) + h + filePath.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
 export class LogWatcher implements vscode.Disposable {
   private watchers: FSWatcher[] = [];
   private debounceTimer?: ReturnType<typeof setTimeout>;
@@ -95,7 +102,7 @@ export class LogWatcher implements vscode.Disposable {
 
   private async parseAll(files: string[], full: boolean): Promise<void> {
     const repo = currentRepo();
-    const ctx: ParseContext = {
+    const baseCtx: ParseContext = {
       pricePerCredit: this.pricing.pricePerCredit,
       manifest: this.pricing.currentManifest,
       now: Date.now(),
@@ -113,10 +120,14 @@ export class LogWatcher implements vscode.Disposable {
         if (!full && stat.size <= offset) continue;
 
         const content = await fs.readFile(file, 'utf8');
-        const events = parseOtelContent(
-          full ? content : content.slice(offset),
-          ctx,
-        );
+        // Per-line offsets keyed by file make event ids stable across full and
+        // incremental re-parses, so INSERT OR IGNORE dedups instead of
+        // re-inserting the same event under a new id.
+        const events = parseOtelContent(full ? content : content.slice(offset), {
+          ...baseCtx,
+          fileKey: fileKeyOf(file),
+          baseOffset: full ? 0 : offset,
+        });
         if (events.length > 0) {
           const added = await this.store.append(events);
           totalAdded += added;

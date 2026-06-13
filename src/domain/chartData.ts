@@ -77,12 +77,15 @@ export function buildModelBreakdownData(topModels: TopEntry[]): ModelBreakdownDa
 
 export function buildHeatmapData(dayAggregates: UsageAggregate[], now: number): HeatmapData {
   const today = startOf(now, 'day');
-  const start = today - HEATMAP_WEEKS * 7 * DAY_MS;
   const byStart = new Map<number, number>(dayAggregates.map((a) => [a.start, a.credits]));
+  const days = HEATMAP_WEEKS * 7;
 
   const cells: Array<{ date: string; value: number }> = [];
   let max = 0;
-  for (let d = start; d <= today; d += DAY_MS) {
+  // Re-snap each day with startOf instead of adding a fixed DAY_MS, so DST
+  // transitions don't drift the keys off the local-midnight aggregate starts.
+  for (let i = days; i >= 0; i--) {
+    const d = startOf(today - i * DAY_MS + DAY_MS / 2, 'day');
     const value = byStart.get(d) ?? 0;
     const date = new Date(d).toISOString().slice(0, 10);
     cells.push({ date, value });
