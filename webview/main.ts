@@ -4,6 +4,7 @@ import './styles/dashboard.css';
 
 import { onMessage, post } from './api';
 import { state, setState, subscribe } from './store';
+import { lazyChart } from './lazyMount';
 import { applyTheme } from './charts/echarts';
 import { mountDailyBars } from './charts/dailyBars';
 import { mountHeatmap } from './charts/heatmap';
@@ -115,10 +116,14 @@ function mountDashboard(root: HTMLElement): void {
   const kpis = mountKpiCards(document.getElementById('kpi-cards')!);
   const ghStrip = mountGitHubBillingStrip(document.getElementById('gh-billing-strip')!);
   const gauge = mountSpendGauge(document.getElementById('spend-gauge')!);
-  const daily = mountDailyBars(document.getElementById('chart-daily')!);
-  const heatmap = mountHeatmap(document.getElementById('chart-heatmap')!);
-  const models = mountModelBreakdown(document.getElementById('chart-models')!);
-  const sankey = mountSankey(document.getElementById('chart-sankey')!);
+  const dailyEl = document.getElementById('chart-daily')!;
+  const heatmapEl = document.getElementById('chart-heatmap')!;
+  const modelsEl = document.getElementById('chart-models')!;
+  const sankeyEl = document.getElementById('chart-sankey')!;
+  const daily = lazyChart(dailyEl, () => mountDailyBars(dailyEl));
+  const heatmap = lazyChart(heatmapEl, () => mountHeatmap(heatmapEl));
+  const models = lazyChart(modelsEl, () => mountModelBreakdown(modelsEl));
+  const sankey = lazyChart(sankeyEl, () => mountSankey(sankeyEl));
   const alertConfig = mountAlertConfigPanel(document.getElementById('alert-config')!);
   const heatmapSection = document.getElementById('heatmap-section')!;
   const content = document.getElementById('content')!;
@@ -150,14 +155,16 @@ function mountDashboard(root: HTMLElement): void {
     filterBar.update(s.snapshot, s.metric);
 
     if (!isEmpty) {
-      kpis.update(s.snapshot, s.metric);
-      ghStrip.update(s.snapshot);
-      gauge.update(s.snapshot.budget, s.snapshot.currency);
-      daily.update(s.snapshot);
-      heatmap.update(s.snapshot);
-      heatmapSection.hidden = s.snapshot.chartData.heatmap.max <= 0;
-      models.update(s.snapshot, s.metric);
-      sankey.update(s.snapshot);
+      const snapshot = s.snapshot;
+      const metric = s.metric;
+      kpis.update(snapshot, metric);
+      ghStrip.update(snapshot);
+      gauge.update(snapshot.budget, snapshot.currency);
+      daily.render((c) => c.update(snapshot));
+      heatmapSection.hidden = snapshot.chartData.heatmap.max <= 0;
+      heatmap.render((c) => c.update(snapshot));
+      models.render((c) => c.update(snapshot, metric));
+      sankey.render((c) => c.update(snapshot));
     }
   });
 }

@@ -70,7 +70,7 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
         `).join('')}
       </div>
       <div class="wv-filter-spacer"></div>
-      <div class="wv-model-filter" id="model-filter" style="display:none">
+      <div class="wv-model-filter" id="model-filter" hidden>
         <button class="wv-filter-btn" id="model-filter-btn" aria-haspopup="listbox" aria-expanded="false">
           <i class="codicon codicon-symbol-method"></i>
           <span id="model-filter-label">All models</span>
@@ -84,7 +84,7 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
         `).join('')}
       </div>
     </div>
-    <div class="wv-surface-chips" id="surface-chips" style="display:none" role="group" aria-label="Surface"></div>`;
+    <div class="wv-surface-chips" id="surface-chips" hidden role="group" aria-label="Surface"></div>`;
 
   let activePreset: DatePreset = state().datePreset;
   let activeModels: string[] = [];
@@ -211,15 +211,15 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
       updateMetricUI(metric);
 
       if (s.allModels.length > 1) {
-        modelFilterEl.style.display = '';
+        modelFilterEl.hidden = false;
         rebuildModelDropdown(s.allModels);
       } else {
-        modelFilterEl.style.display = 'none';
+        modelFilterEl.hidden = true;
         activeModels = [];
       }
 
       if (s.allSurfaces.length > 1) {
-        surfaceChips.style.display = '';
+        surfaceChips.hidden = false;
         surfaceChips.innerHTML = '';
 
         const allChip = document.createElement('button');
@@ -248,7 +248,7 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
           surfaceChips.appendChild(chip);
         }
       } else {
-        surfaceChips.style.display = 'none';
+        surfaceChips.hidden = true;
         activeSurface = null;
       }
     },

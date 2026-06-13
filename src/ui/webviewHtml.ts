@@ -1,7 +1,10 @@
 /**
  * Builds the webview HTML with a strict, per-load CSP.
- * Scripts locked to a single nonce; styles allow the bundled CSS and the
- * codicon font via vscode-resource (required for ECharts canvas styling).
+ * Scripts are locked to a single nonce; styles are limited to bundled CSS and
+ * the codicon font served from the extension (no inline styles, no eval, no
+ * external origins). ECharts uses the canvas renderer, which paints into a
+ * <canvas> and needs no inline <style>; runtime layout uses the CSSOM
+ * (element.style.*), which CSP does not restrict.
  */
 import * as vscode from 'vscode';
 import { getNonce } from '../util/nonce';
@@ -29,7 +32,7 @@ export function renderHtml(
     `default-src 'none'`,
     `img-src ${webview.cspSource} data:`,
     `font-src ${webview.cspSource}`,
-    `style-src ${webview.cspSource} 'unsafe-inline'`,
+    `style-src ${webview.cspSource}`,
     `script-src 'nonce-${nonce}'`,
   ].join('; ');
 
