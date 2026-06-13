@@ -1,5 +1,6 @@
 /**
  * Horizontal bar chart — top models by credits/cost/tokens.
+ * Consumes pre-computed ModelBreakdownData from the host.
  */
 import { echarts, initChart } from './echarts';
 import { Metric, UsageSnapshot } from '../../src/model/types';
@@ -15,21 +16,17 @@ export function mountModelBreakdown(el: HTMLElement): ModelBreakdownHandle {
 
   return {
     update(s: UsageSnapshot, metric: Metric) {
-      if (!s.topModels.length) {
+      const { labels, credits, costs, tokens } = s.chartData.modelBreakdown;
+      if (labels.length === 0) {
         chart.clear();
         return;
       }
 
-      const top = s.topModels.slice(0, 8);
-      const labels = top.map((m) =>
-        m.key.replace(/^(models\/|openai\/|anthropic\/|google\/)/, '').slice(0, 32),
-      );
-      const values = top.map((m) =>
-        metric === 'cost' ? m.cost : metric === 'credits' ? m.credits : m.tokens,
-      );
+      const values = metric === 'cost' ? costs : metric === 'tokens' ? tokens : credits;
+      const currency = s.currency;
 
       function fmt(v: number) {
-        if (metric === 'cost') return formatMoney(v, s.currency);
+        if (metric === 'cost') return formatMoney(v, currency);
         if (metric === 'credits') return `${formatCredits(v)} cr`;
         return `${formatTokens(v)} tok`;
       }
@@ -65,7 +62,7 @@ export function mountModelBreakdown(el: HTMLElement): ModelBreakdownHandle {
             },
           ],
         },
-        true,
+        { notMerge: false, lazyUpdate: true },
       );
     },
 

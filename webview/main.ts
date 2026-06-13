@@ -6,6 +6,7 @@ import { onMessage, post } from './api';
 import { state, setState, subscribe } from './store';
 import { applyTheme } from './charts/echarts';
 import { mountDailyBars } from './charts/dailyBars';
+import { mountHeatmap } from './charts/heatmap';
 import { mountModelBreakdown } from './charts/modelBreakdown';
 import { mountSankey } from './charts/sankey';
 import { mountKpiCards } from './components/KpiCards';
@@ -73,6 +74,14 @@ function mountDashboard(root: HTMLElement): void {
           </div>
           <div class="wv-chart-body" id="chart-daily" role="img" aria-label="Daily usage bar chart"></div>
         </section>
+        <section class="wv-chart-section" id="heatmap-section" aria-label="Activity heatmap" style="display:none">
+          <div class="wv-chart-header">
+            <span class="wv-chart-title">
+              <i class="codicon codicon-calendar"></i> Activity — last 12 weeks
+            </span>
+          </div>
+          <div class="wv-chart-body heatmap" id="chart-heatmap" role="img" aria-label="Activity heatmap"></div>
+        </section>
         <div class="wv-chart-row">
           <section class="wv-chart-section" aria-label="Model breakdown">
             <div class="wv-chart-header">
@@ -100,12 +109,15 @@ function mountDashboard(root: HTMLElement): void {
   const kpis = mountKpiCards(document.getElementById('kpi-cards')!);
   const gauge = mountSpendGauge(document.getElementById('spend-gauge')!);
   const daily = mountDailyBars(document.getElementById('chart-daily')!);
+  const heatmap = mountHeatmap(document.getElementById('chart-heatmap')!);
   const models = mountModelBreakdown(document.getElementById('chart-models')!);
   const sankey = mountSankey(document.getElementById('chart-sankey')!);
+  const heatmapSection = document.getElementById('heatmap-section')!;
   const content = document.getElementById('content')!;
 
   const ro = new ResizeObserver(() => {
     daily.resize();
+    heatmap.resize();
     models.resize();
     sankey.resize();
   });
@@ -126,6 +138,8 @@ function mountDashboard(root: HTMLElement): void {
       kpis.update(s.snapshot, s.metric);
       gauge.update(s.snapshot.budget, s.snapshot.currency);
       daily.update(s.snapshot);
+      heatmap.update(s.snapshot);
+      heatmapSection.style.display = s.snapshot.chartData.heatmap.max > 0 ? '' : 'none';
       models.update(s.snapshot, s.metric);
       sankey.update(s.snapshot);
     }

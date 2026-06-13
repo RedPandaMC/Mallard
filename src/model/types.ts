@@ -117,6 +117,39 @@ export interface TodayTotals {
   tokens: number;
 }
 
+// ─── Pre-computed chart payloads (assembled on host, consumed by webview) ────
+
+export interface DailyBarPoint {
+  date: string;       // MM-DD
+  credits: number;
+  cost: number;
+  colorIndex: number; // 0 = blue (<70%), 1 = amber (70–100%), 2 = red (≥100%)
+}
+
+export interface DailyBarsData {
+  points: DailyBarPoint[];
+  budgetLine: number | null;    // daily included-credits threshold
+  projectedLine: number | null; // projected daily pace
+}
+
+export interface ModelBreakdownData {
+  labels: string[];    // display names, provider-prefix stripped, max 32 chars
+  credits: number[];
+  costs: number[];
+  tokens: number[];
+}
+
+export interface HeatmapData {
+  cells: ReadonlyArray<{ date: string; value: number }>; // YYYY-MM-DD, credits
+  max: number;
+}
+
+export interface ChartData {
+  dailyBars: DailyBarsData;
+  modelBreakdown: ModelBreakdownData;
+  heatmap: HeatmapData;
+}
+
 /** The single object every piece of UI consumes. */
 export interface UsageSnapshot {
   generatedAt: number;
@@ -137,4 +170,6 @@ export interface UsageSnapshot {
   allSurfaces: Surface[];
   /** Model → surface flow for the Sankey chart. */
   sankeyLinks: SankeyLink[];
+  /** Pre-computed, render-ready data for each chart — assembled on the host. */
+  chartData: ChartData;
 }

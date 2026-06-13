@@ -10,6 +10,7 @@ import {
   topBy,
 } from './aggregate';
 import { computeBudget } from './budget';
+import { buildChartData } from './chartData';
 import { forecastMonth } from './forecast';
 import {
   Filter,
@@ -66,6 +67,8 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
     forecast,
   });
 
+  const topModels = topBy(events, 'model', o.filter);
+
   return {
     generatedAt: o.now,
     source: o.source,
@@ -77,10 +80,11 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
     aggregates,
     forecast,
     budget,
-    topModels: topBy(events, 'model', o.filter),
+    topModels,
     today: { credits: todayTotals.credits, cost: todayTotals.cost, tokens: todayTotals.tokens },
     allModels: distinctModels(events),
     allSurfaces: distinctSurfaces(events),
     sankeyLinks: sankeyLinksFor(events, o.filter),
+    chartData: buildChartData(aggregates.day, topModels, budget, forecast, o.now),
   };
 }
