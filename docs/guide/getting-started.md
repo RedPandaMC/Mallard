@@ -47,4 +47,17 @@ Weevil reads Copilot's local [OpenTelemetry](https://opentelemetry.io/) log file
 
 From tokens, Weevil computes credit usage using the same multiplier table Copilot publishes (bundled in the extension and refreshed daily).
 
-Weevil does **not** contact GitHub's API, does not read your code, and does not transmit anything off your machine.
+## Optional: GitHub billing verification
+
+Weevil can optionally connect to GitHub's billing API to show authoritative per-model cost data alongside the local estimate.
+
+To enable it, run **Weevil: Sign In to GitHub** from the command palette (or click "Sign in to verify spend" in the dashboard). If you are already signed into GitHub in VS Code, this often succeeds without any prompt.
+
+Once connected:
+- A "✓ Verified by GitHub" badge appears next to the KPI cards with the actual charge
+- The quota reset date appears below the spend gauge
+- If the local estimate and the API total differ by more than 10%, a yellow warning banner explains why (typically usage from other devices)
+
+The GitHub integration is entirely **opt-in** and **silent by default** — Weevil never shows a sign-in modal at startup. It reads only your credit usage and billing totals; it does not access your code, repositories, or organisation data.
+
+To sign out, simply revoke the VS Code GitHub session from **Accounts** in the activity bar.
