@@ -117,6 +117,33 @@ export interface TodayTotals {
   tokens: number;
 }
 
+// ─── GitHub billing ──────────────────────────────────────────────────────────
+
+export type AuthStatus = 'loading' | 'signed-in' | 'signed-out' | 'error';
+
+export interface GitHubBillingItem {
+  model: string;
+  sku: string;
+  grossAmount: number;
+  netAmount: number;
+  grossQuantity: number;
+}
+
+export interface GitHubQuota {
+  plan: string;
+  entitlement: number;
+  used: number;
+  resetDate: number | null;
+  unlimited: boolean;
+}
+
+export interface GitHubBillingData {
+  quota: GitHubQuota | null;
+  items: GitHubBillingItem[];
+  fetchedAt: number;
+  totalNetAmount: number;
+}
+
 // ─── Pre-computed chart payloads (assembled on host, consumed by webview) ────
 
 export interface DailyBarPoint {
@@ -171,4 +198,8 @@ export interface UsageSnapshot {
   sankeyLinks: SankeyLink[];
   /** Pre-computed, render-ready data for each chart — assembled on the host. */
   chartData: ChartData;
+  /** GitHub auth state for the billing integration panel. */
+  authStatus: AuthStatus;
+  /** Authoritative billing data from the GitHub API, when signed in. */
+  githubBilling?: GitHubBillingData;
 }

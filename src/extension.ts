@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { readConfig, RELEVANT_CONFIG_KEYS } from './config';
+import { GitHubSession } from './auth/GitHubSession';
+import { GitHubUsageService } from './data/GitHubUsageService';
 import { LogWatcher } from './data/LogWatcher';
 import { PricingService } from './data/PricingService';
 import { EventStore } from './data/store/EventStore';
@@ -41,11 +43,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     cfg.copilotLogPath || undefined,
   );
 
-  const usage = new UsageService(store, pricing, watcher);
+  const githubSession = new GitHubSession();
+  const github = new GitHubUsageService(githubSession);
+  const usage = new UsageService(store, pricing, watcher, github);
   const statusBar = new StatusBarController();
 
   context.subscriptions.push(
     { dispose: () => pricing.dispose() },
+    { dispose: () => githubSession.dispose() },
     usage,
     statusBar,
     usage.onDidChangeSnapshot((s) => statusBar.update(s)),
@@ -97,6 +102,10 @@ function registerCommands(
       await store.clear();
       await usage.refresh();
     }
+  });
+
+  reg('weevil.signIn', async () => {
+    await usage.signInGitHub();
   });
 
   reg('weevil.showLogPath', () => {

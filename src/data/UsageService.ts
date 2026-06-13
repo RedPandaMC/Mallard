@@ -6,8 +6,9 @@
 import * as vscode from 'vscode';
 import { readConfig } from '../config';
 import { buildSnapshot, SnapshotOptions } from '../model/snapshot';
-import { Filter, UsageSnapshot } from '../model/types';
+import { AuthStatus, Filter, GitHubBillingData, UsageSnapshot } from '../model/types';
 import { DAY_MS, startOf } from '../util/time';
+import { GitHubUsageService } from './GitHubUsageService';
 import { LogWatcher } from './LogWatcher';
 import { PricingService } from './PricingService';
 import { EventStore } from './store/EventStore';
@@ -23,12 +24,21 @@ export class UsageService implements vscode.Disposable {
   private filter: Filter = {};
   private timer?: ReturnType<typeof setInterval>;
   private readonly alertFired = new Map<string, number>();
+  private authStatus: AuthStatus = 'signed-out';
+  private githubBilling: GitHubBillingData | undefined = undefined;
+  private readonly ghSub: vscode.Disposable | undefined;
 
   constructor(
     private readonly store: EventStore,
     private readonly pricing: PricingService,
     private readonly watcher: LogWatcher,
-  ) {}
+    private readonly github?: GitHubUsageService,
+  ) {
+    if (github) {
+      // Re-fetch billing whenever the GitHub session changes.
+      this.ghSub = github.session.onDidChange(() => void this.refreshGitHub());
+    }
+  }
 
   get current(): UsageSnapshot | undefined {
     return this.snapshot;
@@ -56,6 +66,8 @@ export class UsageService implements vscode.Disposable {
     await this.watcher.start();
     this.compute();
     this.scheduleTimer();
+    // Silent background fetch — does not block startup.
+    void this.refreshGitHub();
   }
 
   onConfigChanged(): void {
@@ -65,6 +77,28 @@ export class UsageService implements vscode.Disposable {
 
   async refresh(): Promise<void> {
     await this.watcher.start();
+    this.compute();
+    void this.refreshGitHub();
+  }
+
+  /** Trigger explicit GitHub sign-in (shows a prompt). */
+  async signInGitHub(): Promise<void> {
+    if (!this.github) return;
+    await this.github.session.get(true);
+    await this.refreshGitHub();
+  }
+
+  private async refreshGitHub(): Promise<void> {
+    if (!this.github) return;
+    const result = await this.github.fetch();
+    if (result.isOk()) {
+      this.authStatus = 'signed-in';
+      this.githubBilling = result.value;
+    } else {
+      const msg = result.error.message;
+      this.authStatus = msg.includes('Not signed in') ? 'signed-out' : 'error';
+      this.githubBilling = undefined;
+    }
     this.compute();
   }
 
@@ -93,6 +127,8 @@ export class UsageService implements vscode.Disposable {
       filter: this.filter,
       source,
       status: filteredEvents.length === 0 ? this.watcher.getStatus() : { kind: 'ok' },
+      authStatus: this.authStatus,
+      ...(this.githubBilling !== undefined ? { githubBilling: this.githubBilling } : {}),
     };
 
     this.snapshot = buildSnapshot(filteredEvents, options);
@@ -156,5 +192,7 @@ export class UsageService implements vscode.Disposable {
     if (this.timer) clearInterval(this.timer);
     this.watcher.dispose();
     this._onDidChange.dispose();
+    this.ghSub?.dispose();
+    this.github?.dispose();
   }
 }

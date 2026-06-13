@@ -82,6 +82,12 @@
         "command": "weevil.showLogPath",
         "title": "Show Detected Log Path",
         "category": "Weevil"
+      },
+      {
+        "command": "weevil.signIn",
+        "title": "Sign In to GitHub",
+        "category": "Weevil",
+        "icon": "$(account)"
       }
     ],
     "menus": {
