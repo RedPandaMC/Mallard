@@ -86,7 +86,7 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
     </div>
     <div class="wv-surface-chips" id="surface-chips" style="display:none" role="group" aria-label="Surface"></div>`;
 
-  let activePreset: DatePreset = state.datePreset;
+  let activePreset: DatePreset = state().datePreset;
   let activeModels: string[] = [];
   let activeSurface: Surface | null = null;
 

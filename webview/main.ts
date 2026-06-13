@@ -40,7 +40,7 @@ onMessage((msg) => {
     setState({ snapshot: msg.payload, compact: msg.compact });
   } else if (msg.type === 'theme') {
     applyTheme();
-    if (state.snapshot) setState({ snapshot: state.snapshot });
+    if (state().snapshot) setState({ snapshot: state().snapshot });
   }
 });
 
@@ -115,11 +115,15 @@ function mountDashboard(root: HTMLElement): void {
   const heatmapSection = document.getElementById('heatmap-section')!;
   const content = document.getElementById('content')!;
 
+  let resizeFrame: number | undefined;
   const ro = new ResizeObserver(() => {
-    daily.resize();
-    heatmap.resize();
-    models.resize();
-    sankey.resize();
+    if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => {
+      daily.resize();
+      heatmap.resize();
+      models.resize();
+      sankey.resize();
+    });
   });
   ro.observe(root);
 

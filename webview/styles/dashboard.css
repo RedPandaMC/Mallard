@@ -432,6 +432,7 @@ body {
   border: 1px solid var(--w-border);
   border-radius: var(--w-r2);
   overflow: hidden;
+  contain: layout paint;
 }
 
 .wv-chart-header {
@@ -459,6 +460,7 @@ body {
 }
 
 .wv-chart-body.mini { height: var(--w-chart-mini); }
+.wv-chart-body.heatmap { height: 120px; }
 
 .wv-chart-row {
   display: grid;

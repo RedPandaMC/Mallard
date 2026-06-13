@@ -47,7 +47,8 @@ function computeRange(events: UsageEvent[], now: number): { start: number; end: 
 
 export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSnapshot {
   const aggregates = aggregateAll(events, o.filter);
-  const forecast = forecastMonth(aggregates.day, o.now, o.pricePerCredit);
+  const dayAggregates = aggregates.day;
+  const forecast = forecastMonth(dayAggregates, o.now, o.pricePerCredit);
 
   const monthStart = startOf(o.now, 'month');
   const monthEnd = nextBucketStart(o.now, 'month');
@@ -77,7 +78,6 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
     pricePerCredit: o.pricePerCredit,
     filter: o.filter,
     range: computeRange(events, o.now),
-    aggregates,
     forecast,
     budget,
     topModels,
@@ -85,6 +85,6 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
     allModels: distinctModels(events),
     allSurfaces: distinctSurfaces(events),
     sankeyLinks: sankeyLinksFor(events, o.filter),
-    chartData: buildChartData(aggregates.day, topModels, budget, forecast, o.now),
+    chartData: buildChartData(dayAggregates, topModels, budget, forecast, o.now),
   };
 }

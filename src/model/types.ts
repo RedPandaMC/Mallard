@@ -159,7 +159,6 @@ export interface UsageSnapshot {
   pricePerCredit: number;
   filter: Filter;
   range: { start: number; end: number };
-  aggregates: Record<Granularity, UsageAggregate[]>;
   forecast: Forecast;
   budget: BudgetState;
   topModels: TopEntry[];
