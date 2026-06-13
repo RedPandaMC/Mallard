@@ -1,11 +1,12 @@
 import { strict as assert } from 'assert';
-import { aggregateBy } from '../../src/model/aggregate';
+import { aggregateBy } from '../../src/domain/aggregate';
 import {
+  buildCategoryBreakdownData,
   buildDailyBarsData,
   buildHeatmapData,
   buildModelBreakdownData,
-} from '../../src/model/chartData';
-import { BudgetState, Forecast, TopEntry } from '../../src/model/types';
+} from '../../src/domain/chartData';
+import { BudgetState, Forecast, TopEntry } from '../../src/domain/types';
 import { DAY_MS, startOf } from '../../src/util/time';
 import { makeEvent } from './helpers';
 
@@ -100,6 +101,26 @@ describe('buildModelBreakdownData', () => {
     }));
     const data = buildModelBreakdownData(tops);
     assert.strictEqual(data.labels.length, 8);
+  });
+});
+
+describe('buildCategoryBreakdownData', () => {
+  it('reports unavailable when no event carries a breakdown', () => {
+    const data = buildCategoryBreakdownData([makeEvent({ ts: 1000, cost: 0.04 })]);
+    assert.strictEqual(data.available, false);
+    assert.deepStrictEqual(data.categories, []);
+  });
+
+  it('sums per-category cost in canonical order, dropping zero buckets', () => {
+    const events = [
+      makeEvent({ ts: 1000, cost: 0.1, costByCategory: { input: 0.06, output: 0.04 } }),
+      makeEvent({ ts: 2000, cost: 0.05, costByCategory: { output: 0.05, tool: 0 } }),
+    ];
+    const data = buildCategoryBreakdownData(events);
+    assert.strictEqual(data.available, true);
+    assert.deepStrictEqual(data.categories, ['input', 'output']);
+    assert.ok(Math.abs(data.costs[0]! - 0.06) < 1e-9);
+    assert.ok(Math.abs(data.costs[1]! - 0.09) < 1e-9);
   });
 });
 

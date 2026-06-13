@@ -1,11 +1,12 @@
 # Settings Reference
 
+Weevil reads only two VS Code settings. Budget, included credits, and alert
+thresholds are not settings; you edit them in the dashboard (see
+[Configuration](/guide/configuration)) and they are stored per user.
+
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `weevil.copilotLogPath` | `string` | `""` | Override log directory (blank = auto via `vscode.env.logUri`) |
-| `weevil.includedCredits` | `number` | `300` | Monthly included premium requests (for gauge colouring) |
-| `weevil.monthlyBudget` | `number` | `0` | USD monthly alert threshold (0 = off) |
-| `weevil.alert.dailyCredits` | `number` | `0` | Daily credit alert threshold (0 = off) |
-| `weevil.pricingManifestUrl` | `string` | `""` | Override URL for pricing manifest (blank = built-in) |
+| `weevil.copilotLogPath` | `string` | `""` | Override the log directory. Blank means auto-detect via `vscode.env.logUri`. |
+| `weevil.pricingManifestUrl` | `string` | `""` | Override the pricing manifest URL. Blank means use the built-in URL. |
 
 See [Configuration](/guide/configuration) for full descriptions and examples.

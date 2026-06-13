@@ -7,7 +7,7 @@
  */
 import { post } from '../api';
 import { setState, state } from '../store';
-import { DatePreset, Filter, Metric, Surface, UsageSnapshot } from '../../src/model/types';
+import { DatePreset, Filter, Metric, Surface, UsageSnapshot } from '../../src/domain/types';
 import { DAY_MS, nextBucketStart, startOf } from '../../src/util/time';
 
 export interface FilterBarHandle {
@@ -51,6 +51,7 @@ function buildFilter(
   preset: DatePreset,
   models: string[],
   surface: Surface | null,
+  repos: string[],
 ): Filter {
   const now = Date.now();
   const range = presetToRange(preset, now);
@@ -58,6 +59,7 @@ function buildFilter(
     ...(range !== undefined ? { range } : {}),
     ...(models.length ? { models } : {}),
     ...(surface ? { surfaces: [surface] } : {}),
+    ...(repos.length ? { repos } : {}),
   } as Filter;
 }
 
@@ -70,7 +72,8 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
         `).join('')}
       </div>
       <div class="wv-filter-spacer"></div>
-      <div class="wv-model-filter" id="model-filter" style="display:none">
+      <select class="wv-repo-select" id="repo-select" aria-label="Repository" hidden></select>
+      <div class="wv-model-filter" id="model-filter" hidden>
         <button class="wv-filter-btn" id="model-filter-btn" aria-haspopup="listbox" aria-expanded="false">
           <i class="codicon codicon-symbol-method"></i>
           <span id="model-filter-label">All models</span>
@@ -84,11 +87,12 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
         `).join('')}
       </div>
     </div>
-    <div class="wv-surface-chips" id="surface-chips" style="display:none" role="group" aria-label="Surface"></div>`;
+    <div class="wv-surface-chips" id="surface-chips" hidden role="group" aria-label="Surface"></div>`;
 
   let activePreset: DatePreset = state().datePreset;
   let activeModels: string[] = [];
   let activeSurface: Surface | null = null;
+  let activeRepos: string[] = [];
 
   function updatePresetUI() {
     el.querySelectorAll<HTMLElement>('[data-preset]').forEach((btn) => {
@@ -103,9 +107,27 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
   }
 
   function dispatchFilter() {
-    const filter = buildFilter(activePreset, activeModels, activeSurface);
+    const filter = buildFilter(activePreset, activeModels, activeSurface, activeRepos);
     setState({ filter, datePreset: activePreset });
     post({ type: 'setFilter', value: filter });
+  }
+
+  const repoSelect = el.querySelector<HTMLSelectElement>('#repo-select')!;
+  repoSelect.addEventListener('change', () => {
+    activeRepos = repoSelect.value === '__all__' ? [] : [repoSelect.value];
+    dispatchFilter();
+  });
+
+  function rebuildRepoSelect(allRepos: string[]) {
+    const selected = activeRepos[0] ?? '__all__';
+    repoSelect.innerHTML = '';
+    for (const r of ['__all__', ...allRepos]) {
+      const opt = document.createElement('option');
+      opt.value = r;
+      opt.textContent = r === '__all__' ? 'All repos' : r;
+      opt.selected = r === selected;
+      repoSelect.appendChild(opt);
+    }
   }
 
   el.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((btn) => {
@@ -210,16 +232,24 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
     update(s: UsageSnapshot, metric: Metric) {
       updateMetricUI(metric);
 
+      if (s.allRepos.length > 1) {
+        repoSelect.hidden = false;
+        rebuildRepoSelect(s.allRepos);
+      } else {
+        repoSelect.hidden = true;
+        activeRepos = [];
+      }
+
       if (s.allModels.length > 1) {
-        modelFilterEl.style.display = '';
+        modelFilterEl.hidden = false;
         rebuildModelDropdown(s.allModels);
       } else {
-        modelFilterEl.style.display = 'none';
+        modelFilterEl.hidden = true;
         activeModels = [];
       }
 
       if (s.allSurfaces.length > 1) {
-        surfaceChips.style.display = '';
+        surfaceChips.hidden = false;
         surfaceChips.innerHTML = '';
 
         const allChip = document.createElement('button');
@@ -248,7 +278,7 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
           surfaceChips.appendChild(chip);
         }
       } else {
-        surfaceChips.style.display = 'none';
+        surfaceChips.hidden = true;
         activeSurface = null;
       }
     },

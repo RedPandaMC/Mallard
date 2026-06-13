@@ -4,15 +4,15 @@
 import {
   aggregateAll,
   distinctModels,
+  distinctRepos,
   distinctSurfaces,
   sankeyLinksFor,
   sumEvents,
   topBy,
 } from './aggregate';
 import { computeBudget } from './budget';
-import { buildChartData } from './chartData';
+import { buildCategoryBreakdownData, buildChartData } from './chartData';
 import { forecastMonth } from './forecast';
-import { computeSuggestions } from './suggestions';
 import {
   AuthStatus,
   Filter,
@@ -35,7 +35,12 @@ export interface SnapshotOptions {
   status: ProviderStatus;
   authStatus: AuthStatus;
   githubBilling?: GitHubBillingData;
-  manifest?: import('./pricing').PricingManifest;
+  /**
+   * Events for the current date range ignoring the model/surface/repo selection.
+   * Drives the filter dropdowns so selecting a value never collapses the choices.
+   * Defaults to the filtered events when omitted.
+   */
+  dimensionEvents?: UsageEvent[];
 }
 
 function computeRange(events: UsageEvent[], now: number): { start: number; end: number } {
@@ -75,6 +80,7 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
   });
 
   const topModels = topBy(events, 'model', o.filter);
+  const dim = o.dimensionEvents ?? events;
 
   return {
     generatedAt: o.now,
@@ -88,11 +94,19 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
     budget,
     topModels,
     today: { credits: todayTotals.credits, cost: todayTotals.cost, tokens: todayTotals.tokens },
-    allModels: distinctModels(events),
-    allSurfaces: distinctSurfaces(events),
+    allModels: distinctModels(dim),
+    allSurfaces: distinctSurfaces(dim),
     sankeyLinks: sankeyLinksFor(events, o.filter),
-    chartData: buildChartData(dayAggregates, topModels, budget, forecast, o.now),
-    suggestions: o.manifest ? computeSuggestions(events, o.manifest, o.now) : [],
+    allRepos: distinctRepos(dim),
+    byRepo: topBy(events, 'repo', o.filter),
+    chartData: buildChartData(
+      dayAggregates,
+      topModels,
+      budget,
+      forecast,
+      o.now,
+      buildCategoryBreakdownData(events, o.filter),
+    ),
     authStatus: o.authStatus,
     ...(o.githubBilling !== undefined ? { githubBilling: o.githubBilling } : {}),
   };

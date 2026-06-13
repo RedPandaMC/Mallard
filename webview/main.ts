@@ -4,18 +4,22 @@ import './styles/dashboard.css';
 
 import { onMessage, post } from './api';
 import { state, setState, subscribe } from './store';
+import { lazyChart } from './lazyMount';
+import { mountLayout } from './layout';
+import { DashboardLayout, DEFAULT_DASHBOARD_LAYOUT } from '../src/domain/types';
 import { applyTheme } from './charts/echarts';
 import { mountDailyBars } from './charts/dailyBars';
 import { mountHeatmap } from './charts/heatmap';
 import { mountModelBreakdown } from './charts/modelBreakdown';
 import { mountSankey } from './charts/sankey';
+import { mountCategoryBreakdown } from './charts/categoryBreakdown';
 import { mountKpiCards } from './components/KpiCards';
 import { mountFilterBar } from './components/FilterBar';
 import { mountGitHubBillingStrip } from './components/GitHubBillingStrip';
 import { mountStatusBanner } from './components/StatusBanner';
 import { mountEmptyState } from './components/EmptyState';
 import { mountSpendGauge } from './components/SpendGauge';
-import { mountSuggestionsPanel } from './components/SuggestionsPanel';
+import { mountAlertConfigPanel } from './components/AlertConfigPanel';
 
 const WEEVIL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" fill="currentColor" aria-hidden="true" class="wv-brand-logo">
   <path d="M30 28 C18 28 8 37 8 48 C8 59 18 68 30 68 C36 68 41 65 45 61 L52 61 C55 66 61 70 68 70 C80 70 90 62 90 52 C90 46 87 40 82 36 C83 34 84 32 84 30 C84 20 76 12 66 12 C60 12 55 15 52 19 L48 19 C45 16 41 14 36 13 C34 28 30 28 30 28Z"/>
@@ -40,6 +44,10 @@ if (compact) {
 onMessage((msg) => {
   if (msg.type === 'snapshot') {
     setState({ snapshot: msg.payload, compact: msg.compact });
+  } else if (msg.type === 'config') {
+    setState({ config: msg.value });
+  } else if (msg.type === 'layout') {
+    setState({ layout: msg.value });
   } else if (msg.type === 'theme') {
     applyTheme();
     if (state().snapshot) setState({ snapshot: state().snapshot });
@@ -49,6 +57,23 @@ onMessage((msg) => {
 post({ type: 'ready' });
 
 // ── Full dashboard ──────────────────────────────────────────────────────────
+
+function panelHtml(
+  id: string,
+  icon: string,
+  title: string,
+  bodyId: string,
+  ariaLabel: string,
+  bodyClass = '',
+): string {
+  return `
+    <section class="wv-chart-section" data-panel="${id}" aria-label="${title}">
+      <div class="wv-chart-header">
+        <span class="wv-chart-title"><i class="codicon ${icon}"></i> ${title}</span>
+      </div>
+      <div class="wv-chart-body ${bodyClass}" id="${bodyId}" role="img" aria-label="${ariaLabel}"></div>
+    </section>`;
+}
 
 function mountDashboard(root: HTMLElement): void {
   root.innerHTML = `
@@ -64,46 +89,30 @@ function mountDashboard(root: HTMLElement): void {
         <div id="status-banner"></div>
       </header>
       <div id="filter-bar"></div>
+      <div id="alert-config"></div>
       <div id="empty-state"></div>
-      <div id="content" style="display:none">
+      <div id="content" hidden>
         <div id="kpi-cards"></div>
         <div id="gh-billing-strip"></div>
         <div id="spend-gauge"></div>
-        <section class="wv-chart-section" aria-label="Daily usage">
-          <div class="wv-chart-header">
-            <span class="wv-chart-title">
-              <i class="codicon codicon-graph"></i> Daily usage — last 30 days
-            </span>
-          </div>
-          <div class="wv-chart-body" id="chart-daily" role="img" aria-label="Daily usage bar chart"></div>
-        </section>
-        <section class="wv-chart-section" id="heatmap-section" aria-label="Activity heatmap" style="display:none">
-          <div class="wv-chart-header">
-            <span class="wv-chart-title">
-              <i class="codicon codicon-calendar"></i> Activity — last 12 weeks
-            </span>
-          </div>
-          <div class="wv-chart-body heatmap" id="chart-heatmap" role="img" aria-label="Activity heatmap"></div>
-        </section>
-        <div class="wv-chart-row">
-          <section class="wv-chart-section" aria-label="Model breakdown">
-            <div class="wv-chart-header">
-              <span class="wv-chart-title">
-                <i class="codicon codicon-symbol-method"></i> By model
-              </span>
-            </div>
-            <div class="wv-chart-body mini" id="chart-models" role="img" aria-label="Usage by model"></div>
-          </section>
-          <section class="wv-chart-section wv-sankey-section" id="sankey-section" aria-label="Flow breakdown">
-            <div class="wv-chart-header">
-              <span class="wv-chart-title">
-                <i class="codicon codicon-type-hierarchy-sub"></i> Flow breakdown
-              </span>
-            </div>
-            <div class="wv-chart-body mini" id="chart-sankey" role="img" aria-label="Model to surface flow"></div>
-          </section>
+        <div class="wv-analysis-bar">
+          <span class="wv-analysis-title">Analysis</span>
+          <span class="wv-analysis-actions">
+            <button class="wv-btn wv-btn--sm" id="layout-reset" hidden>
+              <i class="codicon codicon-discard"></i> Reset layout
+            </button>
+            <button class="wv-btn wv-btn--sm" id="layout-edit" aria-pressed="false">
+              <i class="codicon codicon-edit"></i> Edit layout
+            </button>
+          </span>
         </div>
-        <div id="suggestions-panel"></div>
+        <div class="wv-charts-grid" id="charts-grid">
+          ${panelHtml('daily', 'codicon-graph', 'Daily usage (last 30 days)', 'chart-daily', 'Daily usage bar chart')}
+          ${panelHtml('heatmap', 'codicon-calendar', 'Activity (last 12 weeks)', 'chart-heatmap', 'Activity heatmap', 'heatmap')}
+          ${panelHtml('models', 'codicon-symbol-method', 'By model', 'chart-models', 'Usage by model', 'mini')}
+          ${panelHtml('sankey', 'codicon-type-hierarchy-sub', 'Flow breakdown', 'chart-sankey', 'Model to surface flow', 'mini')}
+          ${panelHtml('category', 'codicon-pie-chart', 'Spend by cost type', 'chart-category', 'Spend by cost type', 'mini')}
+        </div>
       </div>
     </div>`;
 
@@ -113,47 +122,105 @@ function mountDashboard(root: HTMLElement): void {
   const kpis = mountKpiCards(document.getElementById('kpi-cards')!);
   const ghStrip = mountGitHubBillingStrip(document.getElementById('gh-billing-strip')!);
   const gauge = mountSpendGauge(document.getElementById('spend-gauge')!);
-  const daily = mountDailyBars(document.getElementById('chart-daily')!);
-  const heatmap = mountHeatmap(document.getElementById('chart-heatmap')!);
-  const models = mountModelBreakdown(document.getElementById('chart-models')!);
-  const sankey = mountSankey(document.getElementById('chart-sankey')!);
-  const suggestionsPanel = mountSuggestionsPanel(document.getElementById('suggestions-panel')!);
-  const heatmapSection = document.getElementById('heatmap-section')!;
+  const dailyEl = document.getElementById('chart-daily')!;
+  const heatmapEl = document.getElementById('chart-heatmap')!;
+  const modelsEl = document.getElementById('chart-models')!;
+  const sankeyEl = document.getElementById('chart-sankey')!;
+  const categoryEl = document.getElementById('chart-category')!;
+  const daily = lazyChart(dailyEl, () => mountDailyBars(dailyEl));
+  const heatmap = lazyChart(heatmapEl, () => mountHeatmap(heatmapEl));
+  const models = lazyChart(modelsEl, () => mountModelBreakdown(modelsEl));
+  const sankey = lazyChart(sankeyEl, () => mountSankey(sankeyEl));
+  const category = lazyChart(categoryEl, () => mountCategoryBreakdown(categoryEl));
+  const alertConfig = mountAlertConfigPanel(document.getElementById('alert-config')!);
   const content = document.getElementById('content')!;
+
+  // Section elements (the dockable/resizable panels) keyed by panel id.
+  const section = (id: string) =>
+    document.querySelector<HTMLElement>(`.wv-chart-section[data-panel="${id}"]`)!;
+  const sections: Record<string, HTMLElement> = {
+    daily: section('daily'),
+    heatmap: section('heatmap'),
+    models: section('models'),
+    sankey: section('sankey'),
+    category: section('category'),
+  };
+
+  const resizeAll = () => {
+    daily.resize();
+    heatmap.resize();
+    models.resize();
+    sankey.resize();
+    category.resize();
+  };
+
+  // Dynamic scaling + docking: the layout manager reorders, resizes (span), and
+  // shows/hides panels; every change is persisted via setLayout.
+  const layoutMgr = mountLayout(document.getElementById('charts-grid')!, sections, (next) => {
+    post({ type: 'setLayout', value: next });
+    requestAnimationFrame(resizeAll);
+  });
+  layoutMgr.apply(state().layout);
+
+  let editing = false;
+  const editBtn = document.getElementById('layout-edit')!;
+  const resetBtn = document.getElementById('layout-reset')!;
+  editBtn.addEventListener('click', () => {
+    editing = !editing;
+    layoutMgr.setEditMode(editing);
+    editBtn.setAttribute('aria-pressed', String(editing));
+    resetBtn.hidden = !editing;
+    requestAnimationFrame(resizeAll);
+  });
+  resetBtn.addEventListener('click', () => {
+    post({ type: 'setLayout', value: DEFAULT_DASHBOARD_LAYOUT });
+  });
+
+  alertConfig.update(state().config);
 
   let resizeFrame: number | undefined;
   const ro = new ResizeObserver(() => {
     if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
-    resizeFrame = requestAnimationFrame(() => {
-      daily.resize();
-      heatmap.resize();
-      models.resize();
-      sankey.resize();
-    });
+    resizeFrame = requestAnimationFrame(resizeAll);
   });
-  ro.observe(root);
+  for (const el of Object.values(sections)) ro.observe(el);
 
   emptyState.update(false);
 
+  let appliedLayout: DashboardLayout | null = null;
+
   subscribe((s) => {
+    alertConfig.update(s.config);
+    if (s.layout !== appliedLayout) {
+      appliedLayout = s.layout;
+      layoutMgr.apply(s.layout);
+      requestAnimationFrame(resizeAll);
+    }
     if (!s.snapshot) return;
     const isEmpty = s.snapshot.status.kind === 'empty';
     emptyState.update(isEmpty, s.snapshot.status.reason);
-    content.style.display = isEmpty ? 'none' : '';
+    content.hidden = isEmpty;
 
     banner.update(s.snapshot);
     filterBar.update(s.snapshot, s.metric);
 
     if (!isEmpty) {
-      kpis.update(s.snapshot, s.metric);
-      ghStrip.update(s.snapshot);
-      gauge.update(s.snapshot.budget, s.snapshot.currency);
-      daily.update(s.snapshot);
-      heatmap.update(s.snapshot);
-      heatmapSection.style.display = s.snapshot.chartData.heatmap.max > 0 ? '' : 'none';
-      models.update(s.snapshot, s.metric);
-      sankey.update(s.snapshot);
-      suggestionsPanel.update(s.snapshot);
+      const snapshot = s.snapshot;
+      const metric = s.metric;
+      kpis.update(snapshot, metric);
+      ghStrip.update(snapshot);
+      gauge.update(snapshot.budget, snapshot.currency);
+      daily.render((c) => c.update(snapshot));
+      // Data-availability hiding is independent of the user's layout choice.
+      sections['heatmap']!.classList.toggle('wv-no-data', snapshot.chartData.heatmap.max <= 0);
+      heatmap.render((c) => c.update(snapshot));
+      models.render((c) => c.update(snapshot, metric));
+      sankey.render((c) => c.update(snapshot));
+      sections['category']!.classList.toggle(
+        'wv-no-data',
+        !snapshot.chartData.categoryBreakdown.available,
+      );
+      category.render((c) => c.update(snapshot));
     }
   });
 }

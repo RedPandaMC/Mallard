@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
-import { computeBudget, severityFor } from '../../src/model/budget';
-import { Forecast } from '../../src/model/types';
+import { computeBudget, severityFor } from '../../src/domain/budget';
+import { Forecast } from '../../src/domain/types';
 
 function forecastWithCost(projectedCost: number): Forecast {
   return {

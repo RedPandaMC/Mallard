@@ -3,7 +3,8 @@
  * mode. Pushes snapshots on change; handles open-dashboard commands.
  */
 import * as vscode from 'vscode';
-import { UsageService } from '../data/UsageService';
+import { UsageService } from '../app/UsageService';
+import { UserConfigStore } from '../app/UserConfigStore';
 import { isHostBoundMsg } from './messaging';
 import { renderHtml } from './webviewHtml';
 
@@ -16,6 +17,7 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly usage: UsageService,
+    private readonly userConfig: UserConfigStore,
   ) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -33,6 +35,9 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
     this.disposables.push(
       view.webview.onDidReceiveMessage((m) => this.onMessage(m)),
       this.usage.onDidChangeSnapshot(() => this.push()),
+      this.userConfig.onDidChange((value) =>
+        this.view?.webview.postMessage({ type: 'config', value }),
+      ),
       vscode.window.onDidChangeActiveColorTheme(() =>
         this.view?.webview.postMessage({ type: 'theme' }),
       ),
@@ -54,11 +59,14 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
       case 'refresh':
         void this.usage.refresh();
         break;
+      case 'setConfig':
+        void this.userConfig.set(raw.value);
+        break;
       case 'command':
         if (raw.id === 'openDashboard') {
           void vscode.commands.executeCommand('weevil.openDashboard');
-        } else if (raw.id === 'openSettings') {
-          void vscode.commands.executeCommand('workbench.action.openSettings', 'weevil');
+        } else if (raw.id === 'signIn') {
+          void this.usage.signInGitHub();
         }
         break;
       default:
@@ -67,9 +75,9 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
   }
 
   private push(): void {
+    if (!this.view) return;
     const s = this.usage.current;
-    if (s && this.view) {
-      void this.view.webview.postMessage({ type: 'snapshot', payload: s, compact: true });
-    }
+    if (s) void this.view.webview.postMessage({ type: 'snapshot', payload: s, compact: true });
+    void this.view.webview.postMessage({ type: 'config', value: this.userConfig.get() });
   }
 }

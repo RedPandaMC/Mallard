@@ -6,15 +6,10 @@ const EXT_ID = 'jurreandenys.weevil';
 const EXPECTED_COMMANDS = [
   'weevil.openDashboard',
   'weevil.refresh',
-  'weevil.showBreakdown',
-  'weevil.setScope',
-  'weevil.setBudget',
-  'weevil.configureNotifications',
-  'weevil.signIn',
-  'weevil.signOut',
-  'weevil.exportData',
   'weevil.clearData',
-  'weevil.showTips',
+  'weevil.showLogPath',
+  'weevil.signIn',
+  'weevil.exportReport',
 ];
 
 describe('Weevil extension (integration)', () => {
@@ -25,20 +20,30 @@ describe('Weevil extension (integration)', () => {
     assert.strictEqual(ext!.isActive, true);
   });
 
-  it('registers all weevil.* commands', async () => {
+  it('registers exactly the six contributed weevil.* commands', async () => {
     const ext = vscode.extensions.getExtension(EXT_ID);
     await ext!.activate();
     const all = await vscode.commands.getCommands(true);
     for (const cmd of EXPECTED_COMMANDS) {
       assert.ok(all.includes(cmd), `command ${cmd} should be registered`);
     }
+    // VS Code auto-generates per-view commands (weevil.sidebar.open, .focus,
+    // .resetViewLocation, .toggleVisibility, .removeView) for our webview view;
+    // those are framework-owned, so exclude them when checking our own set.
+    const contributed = all
+      .filter((c) => c.startsWith('weevil.') && !c.startsWith('weevil.sidebar.'))
+      .sort();
+    assert.deepStrictEqual(
+      contributed,
+      [...EXPECTED_COMMANDS].sort(),
+      `unexpected weevil commands: ${contributed.join(', ')}`,
+    );
   });
 
   it('opens the dashboard without throwing', async () => {
     const ext = vscode.extensions.getExtension(EXT_ID);
     await ext!.activate();
     await vscode.commands.executeCommand('weevil.openDashboard');
-    // The command resolves once the panel is created; a throw would fail the test.
     assert.ok(true);
   });
 
@@ -47,13 +52,12 @@ describe('Weevil extension (integration)', () => {
     assert.ok(true);
   });
 
-  it('exports data to a JSON document', async () => {
-    await vscode.commands.executeCommand('weevil.exportData');
-    const doc = vscode.window.activeTextEditor?.document;
-    assert.ok(doc, 'an editor should be active after export');
-    assert.strictEqual(doc!.languageId, 'json');
-    // Body should be valid JSON (an array of events, possibly empty).
-    const parsed = JSON.parse(doc!.getText());
-    assert.ok(Array.isArray(parsed));
+  it('exposes only the two documented settings', () => {
+    const ext = vscode.extensions.getExtension(EXT_ID)!;
+    const props = ext.packageJSON.contributes.configuration.properties as Record<string, unknown>;
+    assert.deepStrictEqual(Object.keys(props).sort(), [
+      'weevil.copilotLogPath',
+      'weevil.pricingManifestUrl',
+    ]);
   });
 });

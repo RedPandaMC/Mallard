@@ -1,4 +1,4 @@
-import { SourceKind, Surface, UsageEvent } from '../../src/model/types';
+import { SourceKind, Surface, UsageEvent } from '../../src/domain/types';
 
 let counter = 0;
 
@@ -21,5 +21,6 @@ export function makeEvent(partial: Partial<UsageEvent> & { ts: number }): UsageE
     ...(partial.promptTokens !== undefined ? { promptTokens: partial.promptTokens } : {}),
     ...(partial.completionTokens !== undefined ? { completionTokens: partial.completionTokens } : {}),
     ...(partial.repo !== undefined ? { repo: partial.repo } : {}),
+    ...(partial.costByCategory !== undefined ? { costByCategory: partial.costByCategory } : {}),
   };
 }

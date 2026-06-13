@@ -3,8 +3,8 @@
  * Consumes pre-computed ModelBreakdownData from the host.
  */
 import { echarts, initChart } from './echarts';
-import { Metric, UsageSnapshot } from '../../src/model/types';
-import { formatCredits, formatMoney, formatTokens } from '../../src/model/format';
+import { Metric, UsageSnapshot } from '../../src/domain/types';
+import { formatCredits, formatMoney, formatTokens } from '../../src/domain/format';
 
 export interface ModelBreakdownHandle {
   update(snapshot: UsageSnapshot, metric: Metric): void;

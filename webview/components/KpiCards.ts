@@ -1,5 +1,5 @@
-import { Metric, UsageSnapshot } from '../../src/model/types';
-import { formatCredits, formatMetric, formatMoney, formatTokens } from '../../src/model/format';
+import { Metric, UsageSnapshot } from '../../src/domain/types';
+import { formatCredits, formatMetric, formatMoney, formatTokens } from '../../src/domain/format';
 
 export interface KpiCardsHandle {
   update(snapshot: UsageSnapshot, metric: Metric): void;

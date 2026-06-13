@@ -2,10 +2,12 @@ import { strict as assert } from 'assert';
 import {
   aggregateAll,
   aggregateBy,
+  distinctRepos,
   sankeyLinksFor,
   sumEvents,
   topBy,
-} from '../../src/model/aggregate';
+  UNATTRIBUTED_REPO,
+} from '../../src/domain/aggregate';
 import { makeEvent } from './helpers';
 
 describe('aggregate', () => {
@@ -32,6 +34,23 @@ describe('aggregate', () => {
     const days = aggregateBy(events, 'day');
     assert.equal(days[0]!.byModel['gpt-4o']!.credits, 2);
     assert.equal(days[0]!.byModel['claude-sonnet-4']!.credits, 1);
+  });
+
+  it('attributes and filters by repo, treating missing repo as unattributed', () => {
+    const repoEvents = [
+      makeEvent({ ts: d1, credits: 2, repo: 'octo/a' }),
+      makeEvent({ ts: d2, credits: 3, repo: 'octo/b' }),
+      makeEvent({ ts: d2, credits: 1 }), // no repo
+    ];
+    assert.deepEqual(distinctRepos(repoEvents), ['octo/a', 'octo/b', UNATTRIBUTED_REPO]);
+
+    const byRepo = topBy(repoEvents, 'repo');
+    assert.equal(byRepo.find((r) => r.key === 'octo/b')!.credits, 3);
+
+    const onlyA = sumEvents(repoEvents, { repos: ['octo/a'] });
+    assert.equal(onlyA.credits, 2);
+    const unattributed = sumEvents(repoEvents, { repos: [UNATTRIBUTED_REPO] });
+    assert.equal(unattributed.credits, 1);
   });
 
   it('produces day, week, month granularities', () => {

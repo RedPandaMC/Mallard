@@ -24,8 +24,12 @@ export function matchesFilter(e: UsageEvent, f?: Filter): boolean {
   if (f.range && (e.ts < f.range.start || e.ts >= f.range.end)) return false;
   if (f.models?.length && !f.models.includes(e.modelId)) return false;
   if (f.surfaces?.length && !f.surfaces.includes(e.surface)) return false;
+  if (f.repos?.length && !f.repos.includes(e.repo ?? UNATTRIBUTED_REPO)) return false;
   return true;
 }
+
+/** Key used for events that could not be attributed to a workspace repo. */
+export const UNATTRIBUTED_REPO = 'unattributed';
 
 function addTo(rec: Record<string, Bucket>, key: string, e: UsageEvent, tk: number): void {
   const b = rec[key] ?? (rec[key] = { credits: 0, cost: 0, tokens: 0 });
@@ -81,14 +85,19 @@ export function aggregateAll(
 
 export function topBy(
   events: UsageEvent[],
-  dimension: 'model' | 'surface',
+  dimension: 'model' | 'surface' | 'repo',
   f?: Filter,
   limit = 8,
 ): TopEntry[] {
   const map = new Map<string, TopEntry>();
   for (const e of events) {
     if (!matchesFilter(e, f)) continue;
-    const key = dimension === 'model' ? e.modelId : e.surface;
+    const key =
+      dimension === 'model'
+        ? e.modelId
+        : dimension === 'surface'
+          ? e.surface
+          : (e.repo ?? UNATTRIBUTED_REPO);
     const t = map.get(key) ?? { key, credits: 0, cost: 0, tokens: 0 };
     t.credits += e.credits;
     t.cost += e.cost;
@@ -146,6 +155,16 @@ export function distinctModels(events: UsageEvent[], f?: Filter): string[] {
   for (const e of events) {
     if (!matchesFilter(e, f)) continue;
     set.add(e.modelId);
+  }
+  return [...set].sort();
+}
+
+/** All distinct repos in the filtered event set. */
+export function distinctRepos(events: UsageEvent[], f?: Filter): string[] {
+  const set = new Set<string>();
+  for (const e of events) {
+    if (!matchesFilter(e, f)) continue;
+    set.add(e.repo ?? UNATTRIBUTED_REPO);
   }
   return [...set].sort();
 }

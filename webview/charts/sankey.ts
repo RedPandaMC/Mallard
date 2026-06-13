@@ -6,8 +6,8 @@
  * (IntersectionObserver).
  */
 import { echarts, initChart } from './echarts';
-import { UsageSnapshot } from '../../src/model/types';
-import { formatCredits } from '../../src/model/format';
+import { UsageSnapshot } from '../../src/domain/types';
+import { formatCredits } from '../../src/domain/format';
 
 export interface SankeyHandle {
   update(snapshot: UsageSnapshot): void;

@@ -6,38 +6,41 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+This release refocuses Weevil on its core: parse Copilot's local OTel logs for
+real-time per-model cost, with optional GitHub billing reconciliation.
+
 ### Added
 
-- **Status bar spend indicator** — circular, budget-tinted chip showing
-  cost/credits/tokens for the configured scope, with a click-through breakdown.
-- **Dashboard webview** — usage-over-time chart with hour→year granularity tabs,
-  spend-by-model donut, spend-by-repository bar chart, KPI cards (scope, MTD,
-  projected month-end with confidence band, budget pace, top model, top repo),
-  metric toggle, and per-repo filter. Built with ECharts under a strict CSP.
-- **Compact sidebar** — activity-bar view with a quick usage summary and a
-  shortcut to the full dashboard.
-- **`@weevil` chat participant** — `today`, `forecast`, `models`, `repos`, and
-  `tips` commands plus natural-language intent parsing; records its own turns
-  with exact token counts.
-- **Event store** — JSONL-backed, append-friendly, per-user storage with dedup,
-  filtered queries, and automatic rollup/compaction of events past a 90-day raw
-  window.
-- **Capture pipeline** — accurate `@weevil` capture, best-effort local Copilot
-  OTel log parsing, deterministic sample-data fallback, and a stubbed GitHub
-  billing provider wired for future calibration.
-- **Notifications** — extensible threshold and velocity rules with filter
-  targeting and per-rule debounce.
-- **Multi-repo attribution** — every event is tagged with its repository (via
-  the built-in Git extension) and workspace folder, so totals aggregate across a
-  `.code-workspace` and can be filtered per repo.
-- **Forecasting** — linear month-end projection with a confidence band and an
-  `insufficient-data` state for early in the month.
-- **Budget & pace** — month-to-date usage, percent of budget/included credits,
-  projected overage, and a pace status that drives status-bar tinting.
-- **GitHub auth** — optional, consent-gated sign-in storing tokens only in
-  `SecretStorage`.
-- **Cost-saving tips** — curated, partly contextual catalog.
-- **Accessibility** — ARIA tablist with keyboard navigation, chart labels,
-  reduced-motion support, and no color-only meaning.
+- Status bar chip showing today's credits and cost, tinted by budget pace.
+- Dashboard with KPI cards, a spend gauge, a 30-day bar chart, a model
+  breakdown, a model-to-surface flow chart, and a spend-by-cost-type chart. All
+  aggregation runs in the extension host; charts below the fold initialise lazily.
+- Budget, included credits, daily-credit alert, and spending-velocity alert,
+  edited in the dashboard and stored per user.
+- Cost-category breakdown: each request's cost is split into input and output by
+  token ratio, stored on the event for future tool and thinking categories.
+- Workspace-aware repo attribution and a per-repo filter.
+- Linear month-end forecast behind a pluggable forecaster seam.
+- Optional GitHub billing reconciliation through VS Code's session API.
+- Exportable, standalone, printable HTML report.
+- Embedded DuckDB event store (via the N-API bindings, which are ABI-stable
+  across Node and Electron, so there is no native module to rebuild). Persists to
+  a single file with a recent-raw window and daily rollup, and persists log read
+  offsets so startup never re-scans logs.
+- Pricing manifest bundled and refreshed daily, validated before use.
+
+### Changed
+
+- Reorganised the source into concern-based modules (ingest, store, pricing,
+  billing, domain, app, ui).
+- Reduced VS Code settings to two (`copilotLogPath`, `pricingManifestUrl`);
+  budget and alert config moved into the dashboard.
+- Tightened the webview CSP to allow no inline styles and no external origins.
+
+### Removed
+
+- Model-switching suggestions.
+- Sample and synthetic data; the dashboard now degrades to "not enough data".
+- The `@weevil` chat participant and JSON notification rule schemas.
 
 [Unreleased]: https://github.com/RedPandaMC/Weevil/commits/main

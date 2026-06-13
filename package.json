@@ -1,7 +1,7 @@
 {
   "name": "weevil",
   "displayName": "Weevil",
-  "description": "Real-time Copilot cost and credit tracker — parses local OTel logs to show exactly what you're spending.",
+  "description": "Real-time Copilot cost and credit tracker. Parses local OTel logs to show exactly what you're spending.",
   "version": "0.2.0",
   "publisher": "jurreandenys",
   "license": "MIT",
@@ -119,24 +119,6 @@
           "default": "",
           "description": "Override path to the Copilot log directory (blank = auto-detect via VS Code logUri)."
         },
-        "weevil.includedCredits": {
-          "type": "number",
-          "default": 300,
-          "minimum": 0,
-          "description": "Monthly included premium requests for your Copilot plan. Used to colour the spend gauge."
-        },
-        "weevil.monthlyBudget": {
-          "type": "number",
-          "default": 0,
-          "minimum": 0,
-          "description": "Monthly USD spend alert threshold. Weevil notifies you at 80% and 100%. Set to 0 to disable."
-        },
-        "weevil.alert.dailyCredits": {
-          "type": "number",
-          "default": 0,
-          "minimum": 0,
-          "description": "Alert when daily credit usage exceeds this value. Set to 0 to disable."
-        },
         "weevil.pricingManifestUrl": {
           "type": "string",
           "default": "",
@@ -160,7 +142,7 @@
     "docs:build": "vitepress build docs"
   },
   "dependencies": {
-    "better-sqlite3": "^12.10.0",
+    "@duckdb/node-api": "^1.5.3-r.3",
     "echarts": "^5.5.1",
     "neverthrow": "^8.2.0",
     "p-retry": "^8.0.0",
@@ -169,7 +151,6 @@
   "devDependencies": {
     "@eslint/js": "^9.9.0",
     "@preact/signals-core": "^1.14.2",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/mocha": "^10.0.7",
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.95.0",

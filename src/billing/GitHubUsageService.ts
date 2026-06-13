@@ -12,8 +12,8 @@ import pRetry from 'p-retry';
 import { err, ok, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 import * as vscode from 'vscode';
-import { GitHubSession } from '../auth/GitHubSession';
-import { GitHubBillingData, GitHubBillingItem, GitHubQuota } from '../model/types';
+import { GitHubSession } from './GitHubSession';
+import { GitHubBillingData, GitHubBillingItem, GitHubQuota } from '../domain/types';
 
 const CACHE_TTL = 5 * 60 * 1000;
 const FETCH_TIMEOUT = 5_000;

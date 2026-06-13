@@ -7,7 +7,7 @@
 import { promises as fs } from 'fs';
 import * as https from 'https';
 import * as path from 'path';
-import { PricingManifest } from '../model/pricing';
+import { PricingManifest } from '../domain/pricing';
 
 const CACHE_FILE = 'pricing-manifest.json';
 const REMOTE_URL =
@@ -92,6 +92,15 @@ export class PricingService {
 
   dispose(): void {
     if (this.refreshTimer) clearInterval(this.refreshTimer);
+  }
+
+  /** Delete the cached manifest from disk (used by the full-reset command). */
+  async clearCache(): Promise<void> {
+    try {
+      await fs.rm(path.join(this.storageDir, CACHE_FILE), { force: true });
+    } catch {
+      // Nothing cached, or already gone.
+    }
   }
 
   private async loadCached(): Promise<PricingManifest | null> {

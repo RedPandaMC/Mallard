@@ -1,5 +1,5 @@
-import { BudgetState } from '../../src/model/types';
-import { formatCredits, formatMoney } from '../../src/model/format';
+import { BudgetState } from '../../src/domain/types';
+import { formatCredits, formatMoney } from '../../src/domain/format';
 
 export interface SpendGaugeHandle {
   update(budget: BudgetState, currency: string): void;
@@ -40,10 +40,10 @@ export function mountSpendGauge(el: HTMLElement): SpendGaugeHandle {
       let severity = 'ok';
       if (pct >= 100) {
         severity = 'err';
-        pace = `Over — ${formatMoney(budget.usedCost, currency)} spent`;
+        pace = `Over: ${formatMoney(budget.usedCost, currency)} spent`;
       } else if (pct >= 80) {
         severity = 'warn';
-        pace = `${pctDisplay}% — watch spend`;
+        pace = `${pctDisplay}% used, watch spend`;
       } else {
         pace = `${pctDisplay}%`;
       }

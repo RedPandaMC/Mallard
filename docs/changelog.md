@@ -1,45 +1,43 @@
 # Changelog
 
-## 0.2.0 — 2025-06-12
+## Unreleased
 
-### What changed
+This release refocuses Weevil on its core: parse Copilot's local OTel logs for
+real-time per-model cost, with optional GitHub billing reconciliation.
 
-This release is a focused redesign. The core promise is unchanged — parse Copilot's local OTel logs and give you a clear picture of what you're spending — but everything that wasn't earning its place has been cut.
+### Added
 
-**Removed:**
-- `@weevil` chat participant (low value, high VS Code API surface)
-- Sample data provider (fake data actively misleads)
-- GitHub Billing API stub (added zero value, created security surface)
-- Complex JSON notification rules engine (replaced with two plain settings)
-- Tips panel
-- Hour / quarter / year granularity tabs (kept day / week / month)
-- Repo breakdown chart (unreliable without solid git attribution)
-- `weevil.setScope` command and status bar scope selector
-- `weevil.showBreakdown` QuickPick
+- Status bar chip showing today's credits and cost, tinted by budget pace.
+- Dashboard with KPI cards, a spend gauge, a 30-day bar chart, a model
+  breakdown, a model-to-surface flow chart, and a spend-by-cost-type chart. All
+  aggregation runs in the extension host; charts below the fold initialise lazily.
+- Budget, included credits, daily-credit alert, and spending-velocity alert,
+  edited in the dashboard and stored per user.
+- Cost-category breakdown: each request's cost is split into input and output by
+  token ratio, stored on the event so tool and thinking categories can follow.
+- Workspace-aware repo attribution and a per-repo filter.
+- Linear month-end forecast behind a pluggable forecaster seam.
+- Optional GitHub billing reconciliation through VS Code's session API.
+- Exportable, standalone, printable HTML report.
+- Embedded DuckDB event store (via the N-API bindings, which are ABI-stable
+  across Node and Electron, so there is no native module to rebuild). Persists to
+  a single file with a recent-raw window and daily rollup, and persists log read
+  offsets so startup never re-scans logs.
+- Pricing manifest bundled and refreshed daily, validated before use.
 
-**Added:**
-- Sankey chart — model → surface flow (visible when ≥2 models and ≥2 surfaces)
-- Empty state with setup guide (instead of confusing silence)
-- SpendGauge — horizontal CSS progress bar in sidebar and dashboard
-- Automatic pricing discovery — bundled manifest refreshed daily, no settings change needed when GitHub updates prices
-- `LogWatcher` — `fs.watch`-based incremental log parsing (replaces polling interval)
-- Path-traversal guard on all log file reads
-- 30-day bar chart with projected-pace line and optional budget line
+### Changed
 
-**Changed:**
-- Filter redesigned: date-range preset buttons + model multi-select + surface toggle chips
-- Status bar click goes directly to dashboard (no QuickPick)
-- KPI cards: today / MTD / projected / top model (4 cards, no clutter)
-- All UI icons use `@vscode/codicons`; no bespoke SVGs except the Weevil logo
-- Brand colour tokens replaced with VS Code theme tokens (`--vscode-button-background`)
-- Alerting: two plain number settings (`weevil.monthlyBudget`, `weevil.alert.dailyCredits`)
+- Reorganised the source into concern-based modules.
+- Reduced VS Code settings to two; budget and alert config moved into the
+  dashboard.
+- Tightened the webview CSP to allow no inline styles and no external origins.
 
-**Commands (4):** openDashboard, refresh, clearData, showLogPath
+### Removed
 
-**Settings (5):** copilotLogPath, includedCredits, monthlyBudget, alert.dailyCredits, pricingManifestUrl
+- Model-switching suggestions.
+- Sample and synthetic data; the dashboard degrades to "not enough data".
+- The `@weevil` chat participant and JSON notification rule schemas.
 
----
+## 0.1.x
 
-## 0.1.x — earlier
-
-Initial release. Included sample data, GitHub Billing stub, chat participant, complex notification rules, and many settings. Superseded by 0.2.0.
+Initial releases. Superseded by the refocus above.

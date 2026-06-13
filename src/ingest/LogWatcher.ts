@@ -10,13 +10,21 @@
 import { promises as fs, watch as fsWatch, FSWatcher } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { ProviderStatus } from '../model/types';
-import { PricingService } from './PricingService';
-import { findLogFiles, isPathSafe, locateCopilotLogDirs } from './providers/logparse/locate';
-import { parseOtelContent } from './providers/logparse/otelParse';
-import { EventStore } from './store/EventStore';
+import { ProviderStatus } from '../domain/types';
+import { PricingService } from '../pricing/PricingService';
+import { findLogFiles, isPathSafe, locateCopilotLogDirs } from './locate';
+import { parseOtelContent, ParseContext } from './otelParse';
+import { currentRepo } from './repoResolver';
+import { EventStore } from '../store/EventStore';
 
 const DEBOUNCE_MS = 1_500;
+
+/** Short, stable key for a file path (djb2) used to namespace event ids. */
+function fileKeyOf(filePath: string): string {
+  let h = 5381;
+  for (let i = 0; i < filePath.length; i++) h = ((h << 5) + h + filePath.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
 
 export class LogWatcher implements vscode.Disposable {
   private watchers: FSWatcher[] = [];
@@ -58,8 +66,9 @@ export class LogWatcher implements vscode.Disposable {
       return;
     }
 
-    // Full initial parse.
-    await this.parseAll(files, true);
+    // Resume from persisted read offsets so startup only parses new log bytes.
+    await this.loadOffsets();
+    await this.parseAll(files);
 
     // Watch each log directory (not individual files — Copilot rotates logs).
     const watchedDirs = new Set(files.map((f) => path.dirname(f)));
@@ -89,42 +98,49 @@ export class LogWatcher implements vscode.Disposable {
       files.push(...found);
     }
     this.logPaths = files;
-    await this.parseAll(files, false);
+    await this.parseAll(files);
   }
 
-  private async parseAll(files: string[], full: boolean): Promise<void> {
-    const ctx = {
+  private async parseAll(files: string[]): Promise<void> {
+    const repo = currentRepo();
+    const baseCtx: ParseContext = {
       pricePerCredit: this.pricing.pricePerCredit,
       manifest: this.pricing.currentManifest,
       now: Date.now(),
+      ...(repo !== undefined ? { repo } : {}),
     };
 
-    let totalAdded = 0;
     let parseError = false;
+    let changed = false;
 
     for (const file of files) {
       if (!isPathSafe(file, this.allowedRoots)) continue;
       try {
         const stat = await fs.stat(file);
-        const offset = full ? 0 : (this.fileOffsets.get(file) ?? 0);
-        if (!full && stat.size <= offset) continue;
+        let offset = this.fileOffsets.get(file) ?? 0;
+        if (stat.size < offset) offset = 0; // file was rotated/truncated; re-read
+        if (stat.size <= offset) continue; // nothing new
 
         const content = await fs.readFile(file, 'utf8');
-        const events = parseOtelContent(
-          full ? content : content.slice(offset),
-          ctx,
-        );
-        if (events.length > 0) {
-          const added = await this.store.append(events);
-          totalAdded += added;
-        }
+        // Per-line offsets keyed by file make event ids stable across full and
+        // incremental re-parses, so INSERT OR IGNORE dedups instead of
+        // re-inserting the same event under a new id.
+        const events = parseOtelContent(content.slice(offset), {
+          ...baseCtx,
+          fileKey: fileKeyOf(file),
+          baseOffset: offset,
+        });
+        if (events.length > 0) await this.store.append(events);
         this.fileOffsets.set(file, stat.size);
+        changed = true;
       } catch {
         parseError = true;
       }
     }
 
-    const total = this.store.count();
+    if (changed) await this.saveOffsets();
+
+    const total = await this.store.count();
     if (total > 0) {
       this.status = { kind: 'ok', reason: `Tracking from ${files.length} log file(s)` };
     } else if (parseError) {
@@ -132,8 +148,24 @@ export class LogWatcher implements vscode.Disposable {
     } else {
       this.status = { kind: 'empty', reason: 'Log files found but no usage events yet' };
     }
+  }
 
-    void totalAdded; // suppress unused warning — side effects are in the store
+  /** Restore persisted per-file read offsets so a restart resumes incrementally. */
+  private async loadOffsets(): Promise<void> {
+    try {
+      const raw = await this.store.getMeta('fileOffsets');
+      this.fileOffsets = raw ? new Map(JSON.parse(raw) as [string, number][]) : new Map();
+    } catch {
+      this.fileOffsets = new Map();
+    }
+  }
+
+  private async saveOffsets(): Promise<void> {
+    try {
+      await this.store.setMeta('fileOffsets', JSON.stringify([...this.fileOffsets]));
+    } catch {
+      /* best-effort */
+    }
   }
 
   dispose(): void {

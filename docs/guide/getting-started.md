@@ -3,20 +3,22 @@
 ## Prerequisites
 
 - VS Code 1.95 or later
-- [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) installed and activated
+- [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot)
+  installed and in use
 
-Weevil does **not** require a GitHub sign-in or any API tokens. It reads the OTel log files that Copilot writes to VS Code's own log directory.
+Weevil does not require a GitHub sign-in or any API token for its core features.
+It reads the OTel log files Copilot writes to VS Code's own log directory.
 
 ## Installation
 
-Install from the VS Code Marketplace:
+From the Marketplace:
 
 1. Open VS Code
-2. Press `Ctrl+Shift+X` (or `Cmd+Shift+X` on Mac) to open Extensions
-3. Search for **Weevil**
-4. Click **Install**
+2. Press `Ctrl+Shift+X` (or `Cmd+Shift+X`) to open Extensions
+3. Search for Weevil
+4. Click Install
 
-Alternatively, install via the CLI:
+Or from the CLI:
 
 ```bash
 code --install-extension RedPandaMC.weevil
@@ -24,40 +26,47 @@ code --install-extension RedPandaMC.weevil
 
 ## First run
 
-Once installed, Weevil activates automatically:
+Weevil activates automatically:
 
-1. A small chip appears in the status bar: `● 0 cr · $0.00`
-2. Click the Weevil icon in the activity bar (left sidebar) to open the compact gauge
-3. Run **Weevil: Open Dashboard** (`Ctrl+Shift+P` → type "Weevil") for the full view
+1. A small chip appears in the status bar showing today's credits and cost
+2. Click the Weevil icon in the activity bar for the compact view
+3. Run "Weevil: Open Dashboard" for the full view
 
-### Nothing showing up?
-
-If the dashboard shows the empty state ("Nothing tracked yet"), Copilot may not have written any logs yet. Use Copilot normally for a few minutes, then click **Refresh now** inside the dashboard.
-
-To check where Weevil is looking for logs, run **Weevil: Show Detected Log Path** from the command palette. If the path looks wrong, set `weevil.copilotLogPath` to override it.
+If the dashboard shows the empty state, Copilot may not have written logs yet.
+Use Copilot for a few minutes, then click Refresh in the dashboard. To see where
+Weevil is looking, run "Weevil: Show Detected Log Path". If the path is wrong,
+set `weevil.copilotLogPath`.
 
 ## What Weevil tracks
 
-Weevil reads Copilot's local [OpenTelemetry](https://opentelemetry.io/) log files. Each log entry contains:
+Each Copilot OTel log entry contains:
 
-- **Model** — e.g. `gpt-4o`, `claude-sonnet-4`, `o3`
-- **Tokens** — input and output token counts
-- **Surface** — `chat`, `inline`, `agent`, `edit`
-- **Timestamp**
+- Model, for example `gpt-4o`, `claude-sonnet-4`, `o3`
+- Input and output token counts
+- Surface: chat, inline, agent, or edit
+- Timestamp
 
-From tokens, Weevil computes credit usage using the same multiplier table Copilot publishes (bundled in the extension and refreshed daily).
+From tokens Weevil computes credit usage with the same multiplier table Copilot
+publishes, bundled in the extension and refreshed daily. Where both token counts
+are present it also splits each request's cost into input and output so the
+dashboard can show spend by cost type.
 
-## Optional: GitHub billing verification
+When more than one repository is open, Weevil attributes usage to the active
+workspace repo at the time it reads each batch of log entries, so you can filter
+the dashboard per repo.
 
-Weevil can optionally connect to GitHub's billing API to show authoritative per-model cost data alongside the local estimate.
+## Optional: GitHub billing reconciliation
 
-To enable it, run **Weevil: Sign In to GitHub** from the command palette (or click "Sign in to verify spend" in the dashboard). If you are already signed into GitHub in VS Code, this often succeeds without any prompt.
+Weevil can connect to GitHub's billing API to show the authoritative charge next
+to the local estimate. Run "Weevil: Sign In to GitHub" or use the button in the
+dashboard. If you are already signed in to GitHub in VS Code this often succeeds
+without a prompt.
 
-Once connected:
-- A "✓ Verified by GitHub" badge appears next to the KPI cards with the actual charge
-- The quota reset date appears below the spend gauge
-- If the local estimate and the API total differ by more than 10%, a yellow warning banner explains why (typically usage from other devices)
+Once connected, the dashboard shows a connected status with the actual charge and
+the quota reset date. Because GitHub bills across every machine you use, the API
+total can be higher than a single machine's local estimate.
 
-The GitHub integration is entirely **opt-in** and **silent by default** — Weevil never shows a sign-in modal at startup. It reads only your credit usage and billing totals; it does not access your code, repositories, or organisation data.
-
-To sign out, simply revoke the VS Code GitHub session from **Accounts** in the activity bar.
+The integration is opt-in and quiet by default; Weevil never shows a sign-in
+modal at startup. It reads only your credit usage and billing totals, not your
+code or repositories. To sign out, revoke the VS Code GitHub session from
+Accounts in the activity bar.

@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
-import { aggregateBy } from '../../src/model/aggregate';
-import { forecastMonth } from '../../src/model/forecast';
+import { aggregateBy } from '../../src/domain/aggregate';
+import { forecastMonth } from '../../src/domain/forecast';
 import { makeEvent } from './helpers';
 
 describe('forecast', () => {

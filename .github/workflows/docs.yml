@@ -23,15 +23,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: 22
 
-      - run: npm ci
+      - run: bun install --frozen-lockfile
 
       - name: Build VitePress docs
-        run: npx vitepress build docs
+        run: bun run docs:build
 
       - uses: actions/upload-pages-artifact@v3
         with:

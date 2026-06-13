@@ -5,8 +5,8 @@
  * - signed-in   → "✓ Verified by GitHub · $X.XX actual"
  * - divergence  → yellow warning when local estimate differs from API by >10%
  */
-import { AuthStatus, UsageSnapshot } from '../../src/model/types';
-import { formatMoney } from '../../src/model/format';
+import { AuthStatus, UsageSnapshot } from '../../src/domain/types';
+import { formatMoney } from '../../src/domain/format';
 import { post } from '../api';
 
 export interface GitHubBillingStripHandle {
@@ -67,7 +67,7 @@ export function mountGitHubBillingStrip(el: HTMLElement): GitHubBillingStripHand
             warn.innerHTML =
               `<i class="codicon codicon-warning"></i> ` +
               `Local estimate (${formatMoney(localCost, currency)}) differs from API ` +
-              `(${formatMoney(totalNetAmount, currency)}) — other devices may account for the difference.`;
+              `(${formatMoney(totalNetAmount, currency)}). Other devices may account for the difference.`;
             el.appendChild(warn);
           }
         }

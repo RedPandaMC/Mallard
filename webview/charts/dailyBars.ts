@@ -2,8 +2,8 @@
  * 30-day daily bar chart — consumes pre-computed DailyBarsData from the host.
  */
 import { echarts, initChart } from './echarts';
-import { UsageSnapshot } from '../../src/model/types';
-import { formatMoney, formatCredits } from '../../src/model/format';
+import { UsageSnapshot } from '../../src/domain/types';
+import { formatMoney, formatCredits } from '../../src/domain/format';
 
 export interface DailyBarsHandle {
   update(snapshot: UsageSnapshot): void;
