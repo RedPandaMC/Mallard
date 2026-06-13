@@ -6,6 +6,7 @@ import { LogWatcher } from './data/LogWatcher';
 import { PricingService } from './data/PricingService';
 import { EventStore } from './data/store/EventStore';
 import { UsageService } from './data/UsageService';
+import { defaultReportPath, generateReport } from './data/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
 import { SidebarViewProvider } from './ui/SidebarViewProvider';
 import { StatusBarController } from './ui/StatusBarController';
@@ -106,6 +107,30 @@ function registerCommands(
 
   reg('weevil.signIn', async () => {
     await usage.signInGitHub();
+  });
+
+  reg('weevil.exportReport', async () => {
+    const snapshot = usage.current;
+    if (!snapshot) {
+      void vscode.window.showWarningMessage('Weevil: No data available to export.');
+      return;
+    }
+    const defaultUri = vscode.Uri.file(defaultReportPath());
+    const saveUri = await vscode.window.showSaveDialog({
+      defaultUri,
+      filters: { 'HTML Report': ['html'] },
+      title: 'Save Weevil Usage Report',
+    });
+    if (!saveUri) return;
+    const html = generateReport(snapshot);
+    await vscode.workspace.fs.writeFile(saveUri, Buffer.from(html, 'utf8'));
+    const open = await vscode.window.showInformationMessage(
+      `Report saved to ${saveUri.fsPath}`,
+      'Open in Browser',
+    );
+    if (open === 'Open in Browser') {
+      await vscode.env.openExternal(saveUri);
+    }
   });
 
   reg('weevil.showLogPath', () => {

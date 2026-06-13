@@ -73,6 +73,8 @@ export class DashboardPanel {
           this.panel.reveal();
         } else if (raw.id === 'openSettings') {
           void vscode.commands.executeCommand('workbench.action.openSettings', 'weevil');
+        } else if (raw.id === 'signIn') {
+          void this.usage.signInGitHub();
         }
         break;
     }

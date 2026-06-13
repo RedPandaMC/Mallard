@@ -117,6 +117,16 @@ export interface TodayTotals {
   tokens: number;
 }
 
+// ─── Model suggestions ────────────────────────────────────────────────────────
+
+export interface ModelSuggestion {
+  currentModel: string;
+  suggestedModel: string;
+  surface: Surface;
+  estimatedMonthlySaving: number;
+  basis: string;
+}
+
 // ─── GitHub billing ──────────────────────────────────────────────────────────
 
 export type AuthStatus = 'loading' | 'signed-in' | 'signed-out' | 'error';
@@ -198,6 +208,8 @@ export interface UsageSnapshot {
   sankeyLinks: SankeyLink[];
   /** Pre-computed, render-ready data for each chart — assembled on the host. */
   chartData: ChartData;
+  /** Model-switching suggestions (only populated after 14+ days of data). */
+  suggestions: ModelSuggestion[];
   /** GitHub auth state for the billing integration panel. */
   authStatus: AuthStatus;
   /** Authoritative billing data from the GitHub API, when signed in. */

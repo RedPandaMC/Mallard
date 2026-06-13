@@ -88,6 +88,12 @@
         "title": "Sign In to GitHub",
         "category": "Weevil",
         "icon": "$(account)"
+      },
+      {
+        "command": "weevil.exportReport",
+        "title": "Export Monthly Report",
+        "category": "Weevil",
+        "icon": "$(export)"
       }
     ],
     "menus": {

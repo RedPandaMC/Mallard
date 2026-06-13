@@ -12,6 +12,7 @@ import {
 import { computeBudget } from './budget';
 import { buildChartData } from './chartData';
 import { forecastMonth } from './forecast';
+import { computeSuggestions } from './suggestions';
 import {
   AuthStatus,
   Filter,
@@ -34,6 +35,7 @@ export interface SnapshotOptions {
   status: ProviderStatus;
   authStatus: AuthStatus;
   githubBilling?: GitHubBillingData;
+  manifest?: import('./pricing').PricingManifest;
 }
 
 function computeRange(events: UsageEvent[], now: number): { start: number; end: number } {
@@ -90,6 +92,7 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
     allSurfaces: distinctSurfaces(events),
     sankeyLinks: sankeyLinksFor(events, o.filter),
     chartData: buildChartData(dayAggregates, topModels, budget, forecast, o.now),
+    suggestions: o.manifest ? computeSuggestions(events, o.manifest, o.now) : [],
     authStatus: o.authStatus,
     ...(o.githubBilling !== undefined ? { githubBilling: o.githubBilling } : {}),
   };

@@ -11,9 +11,11 @@ import { mountModelBreakdown } from './charts/modelBreakdown';
 import { mountSankey } from './charts/sankey';
 import { mountKpiCards } from './components/KpiCards';
 import { mountFilterBar } from './components/FilterBar';
+import { mountGitHubBillingStrip } from './components/GitHubBillingStrip';
 import { mountStatusBanner } from './components/StatusBanner';
 import { mountEmptyState } from './components/EmptyState';
 import { mountSpendGauge } from './components/SpendGauge';
+import { mountSuggestionsPanel } from './components/SuggestionsPanel';
 
 const WEEVIL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" fill="currentColor" aria-hidden="true" class="wv-brand-logo">
   <path d="M30 28 C18 28 8 37 8 48 C8 59 18 68 30 68 C36 68 41 65 45 61 L52 61 C55 66 61 70 68 70 C80 70 90 62 90 52 C90 46 87 40 82 36 C83 34 84 32 84 30 C84 20 76 12 66 12 C60 12 55 15 52 19 L48 19 C45 16 41 14 36 13 C34 28 30 28 30 28Z"/>
@@ -65,6 +67,7 @@ function mountDashboard(root: HTMLElement): void {
       <div id="empty-state"></div>
       <div id="content" style="display:none">
         <div id="kpi-cards"></div>
+        <div id="gh-billing-strip"></div>
         <div id="spend-gauge"></div>
         <section class="wv-chart-section" aria-label="Daily usage">
           <div class="wv-chart-header">
@@ -100,6 +103,7 @@ function mountDashboard(root: HTMLElement): void {
             <div class="wv-chart-body mini" id="chart-sankey" role="img" aria-label="Model to surface flow"></div>
           </section>
         </div>
+        <div id="suggestions-panel"></div>
       </div>
     </div>`;
 
@@ -107,11 +111,13 @@ function mountDashboard(root: HTMLElement): void {
   const filterBar = mountFilterBar(document.getElementById('filter-bar')!);
   const emptyState = mountEmptyState(document.getElementById('empty-state')!);
   const kpis = mountKpiCards(document.getElementById('kpi-cards')!);
+  const ghStrip = mountGitHubBillingStrip(document.getElementById('gh-billing-strip')!);
   const gauge = mountSpendGauge(document.getElementById('spend-gauge')!);
   const daily = mountDailyBars(document.getElementById('chart-daily')!);
   const heatmap = mountHeatmap(document.getElementById('chart-heatmap')!);
   const models = mountModelBreakdown(document.getElementById('chart-models')!);
   const sankey = mountSankey(document.getElementById('chart-sankey')!);
+  const suggestionsPanel = mountSuggestionsPanel(document.getElementById('suggestions-panel')!);
   const heatmapSection = document.getElementById('heatmap-section')!;
   const content = document.getElementById('content')!;
 
@@ -140,12 +146,14 @@ function mountDashboard(root: HTMLElement): void {
 
     if (!isEmpty) {
       kpis.update(s.snapshot, s.metric);
+      ghStrip.update(s.snapshot);
       gauge.update(s.snapshot.budget, s.snapshot.currency);
       daily.update(s.snapshot);
       heatmap.update(s.snapshot);
       heatmapSection.style.display = s.snapshot.chartData.heatmap.max > 0 ? '' : 'none';
       models.update(s.snapshot, s.metric);
       sankey.update(s.snapshot);
+      suggestionsPanel.update(s.snapshot);
     }
   });
 }

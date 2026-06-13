@@ -129,6 +129,7 @@ export class UsageService implements vscode.Disposable {
       status: filteredEvents.length === 0 ? this.watcher.getStatus() : { kind: 'ok' },
       authStatus: this.authStatus,
       ...(this.githubBilling !== undefined ? { githubBilling: this.githubBilling } : {}),
+      manifest: this.pricing.currentManifest,
     };
 
     this.snapshot = buildSnapshot(filteredEvents, options);

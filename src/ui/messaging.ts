@@ -4,7 +4,7 @@
  */
 import { Filter, UsageSnapshot } from '../model/types';
 
-export type CommandId = 'openDashboard' | 'openSettings';
+export type CommandId = 'openDashboard' | 'openSettings' | 'signIn';
 
 export type WebviewBoundMsg =
   | { type: 'snapshot'; payload: UsageSnapshot; compact: boolean }
@@ -16,7 +16,7 @@ export type HostBoundMsg =
   | { type: 'setFilter'; value: Filter }
   | { type: 'command'; id: CommandId };
 
-const COMMAND_IDS: CommandId[] = ['openDashboard', 'openSettings'];
+const COMMAND_IDS: CommandId[] = ['openDashboard', 'openSettings', 'signIn'];
 
 function isObject(m: unknown): m is Record<string, unknown> {
   return typeof m === 'object' && m !== null;
