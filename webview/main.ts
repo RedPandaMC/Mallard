@@ -15,6 +15,7 @@ import { mountGitHubBillingStrip } from './components/GitHubBillingStrip';
 import { mountStatusBanner } from './components/StatusBanner';
 import { mountEmptyState } from './components/EmptyState';
 import { mountSpendGauge } from './components/SpendGauge';
+import { mountAlertConfigPanel } from './components/AlertConfigPanel';
 
 const WEEVIL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" fill="currentColor" aria-hidden="true" class="wv-brand-logo">
   <path d="M30 28 C18 28 8 37 8 48 C8 59 18 68 30 68 C36 68 41 65 45 61 L52 61 C55 66 61 70 68 70 C80 70 90 62 90 52 C90 46 87 40 82 36 C83 34 84 32 84 30 C84 20 76 12 66 12 C60 12 55 15 52 19 L48 19 C45 16 41 14 36 13 C34 28 30 28 30 28Z"/>
@@ -39,6 +40,8 @@ if (compact) {
 onMessage((msg) => {
   if (msg.type === 'snapshot') {
     setState({ snapshot: msg.payload, compact: msg.compact });
+  } else if (msg.type === 'config') {
+    setState({ config: msg.value });
   } else if (msg.type === 'theme') {
     applyTheme();
     if (state().snapshot) setState({ snapshot: state().snapshot });
@@ -63,8 +66,9 @@ function mountDashboard(root: HTMLElement): void {
         <div id="status-banner"></div>
       </header>
       <div id="filter-bar"></div>
+      <div id="alert-config"></div>
       <div id="empty-state"></div>
-      <div id="content" style="display:none">
+      <div id="content" hidden>
         <div id="kpi-cards"></div>
         <div id="gh-billing-strip"></div>
         <div id="spend-gauge"></div>
@@ -76,7 +80,7 @@ function mountDashboard(root: HTMLElement): void {
           </div>
           <div class="wv-chart-body" id="chart-daily" role="img" aria-label="Daily usage bar chart"></div>
         </section>
-        <section class="wv-chart-section" id="heatmap-section" aria-label="Activity heatmap" style="display:none">
+        <section class="wv-chart-section" id="heatmap-section" aria-label="Activity heatmap" hidden>
           <div class="wv-chart-header">
             <span class="wv-chart-title">
               <i class="codicon codicon-calendar"></i> Activity — last 12 weeks
@@ -115,8 +119,11 @@ function mountDashboard(root: HTMLElement): void {
   const heatmap = mountHeatmap(document.getElementById('chart-heatmap')!);
   const models = mountModelBreakdown(document.getElementById('chart-models')!);
   const sankey = mountSankey(document.getElementById('chart-sankey')!);
+  const alertConfig = mountAlertConfigPanel(document.getElementById('alert-config')!);
   const heatmapSection = document.getElementById('heatmap-section')!;
   const content = document.getElementById('content')!;
+
+  alertConfig.update(state().config);
 
   let resizeFrame: number | undefined;
   const ro = new ResizeObserver(() => {
@@ -133,10 +140,11 @@ function mountDashboard(root: HTMLElement): void {
   emptyState.update(false);
 
   subscribe((s) => {
+    alertConfig.update(s.config);
     if (!s.snapshot) return;
     const isEmpty = s.snapshot.status.kind === 'empty';
     emptyState.update(isEmpty, s.snapshot.status.reason);
-    content.style.display = isEmpty ? 'none' : '';
+    content.hidden = isEmpty;
 
     banner.update(s.snapshot);
     filterBar.update(s.snapshot, s.metric);
@@ -147,7 +155,7 @@ function mountDashboard(root: HTMLElement): void {
       gauge.update(s.snapshot.budget, s.snapshot.currency);
       daily.update(s.snapshot);
       heatmap.update(s.snapshot);
-      heatmapSection.style.display = s.snapshot.chartData.heatmap.max > 0 ? '' : 'none';
+      heatmapSection.hidden = s.snapshot.chartData.heatmap.max <= 0;
       models.update(s.snapshot, s.metric);
       sankey.update(s.snapshot);
     }

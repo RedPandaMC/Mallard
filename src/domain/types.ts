@@ -62,6 +62,33 @@ export interface UsageEvent {
   costByCategory?: Partial<Record<CostCategory, number>>;
 }
 
+/**
+ * User-editable config that lives in extension globalState (NOT settings.json)
+ * and is edited from the webview. Shared so both host and webview are typed.
+ */
+export interface AlertConfig {
+  /** Warn when the recent spending rate exceeds the credits/hour threshold. */
+  velocityEnabled: boolean;
+  velocityCreditsPerHour: number;
+}
+
+export interface UserConfig {
+  /** Monthly USD budget; 0 = no budget set. */
+  monthlyBudget: number;
+  /** Premium requests included in the plan; colours the spend gauge. */
+  includedCredits: number;
+  /** Warn once a day when daily credits exceed this; 0 = off. */
+  dailyCreditAlert: number;
+  alerts: AlertConfig;
+}
+
+export const DEFAULT_USER_CONFIG: UserConfig = {
+  monthlyBudget: 0,
+  includedCredits: 300,
+  dailyCreditAlert: 0,
+  alerts: { velocityEnabled: false, velocityCreditsPerHour: 0 },
+};
+
 /** Active filter applied to build the current snapshot. */
 export interface Filter {
   range?: { start: number; end: number };

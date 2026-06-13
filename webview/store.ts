@@ -1,9 +1,17 @@
 import { createStore } from 'zustand/vanilla';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { DatePreset, Filter, Metric, UsageSnapshot } from '../src/domain/types';
+import {
+  DatePreset,
+  DEFAULT_USER_CONFIG,
+  Filter,
+  Metric,
+  UsageSnapshot,
+  UserConfig,
+} from '../src/domain/types';
 
 export interface AppState {
   snapshot: UsageSnapshot | null;
+  config: UserConfig;
   compact: boolean;
   metric: Metric;
   filter: Filter;
@@ -13,6 +21,7 @@ export interface AppState {
 export const store = createStore<AppState>()(
   subscribeWithSelector((): AppState => ({
     snapshot: null,
+    config: DEFAULT_USER_CONFIG,
     compact: false,
     metric: 'cost',
     filter: {},

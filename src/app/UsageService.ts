@@ -4,7 +4,7 @@
  * all subscribe to.
  */
 import * as vscode from 'vscode';
-import { readConfig } from '../config';
+import { evaluateAlerts, SnapshotSample } from '../domain/alerts';
 import { buildSnapshot, SnapshotOptions } from '../domain/snapshot';
 import { AuthStatus, Filter, GitHubBillingData, UsageSnapshot } from '../domain/types';
 import { DAY_MS, startOf } from '../util/time';
@@ -12,9 +12,10 @@ import { GitHubUsageService } from '../billing/GitHubUsageService';
 import { LogWatcher } from '../ingest/LogWatcher';
 import { PricingService } from '../pricing/PricingService';
 import { EventStore } from '../store/EventStore';
+import { UserConfigStore } from './UserConfigStore';
 
-const ALERT_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours
-const ALERT_DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+/** Keep ~1h of recent samples for velocity alerting. */
+const HISTORY_WINDOW_MS = 60 * 60 * 1000;
 
 export class UsageService implements vscode.Disposable {
   private readonly _onDidChange = new vscode.EventEmitter<UsageSnapshot>();
@@ -24,20 +25,24 @@ export class UsageService implements vscode.Disposable {
   private filter: Filter = {};
   private timer?: ReturnType<typeof setInterval>;
   private readonly alertFired = new Map<string, number>();
+  private readonly history: SnapshotSample[] = [];
   private authStatus: AuthStatus = 'signed-out';
   private githubBilling: GitHubBillingData | undefined = undefined;
-  private readonly ghSub: vscode.Disposable | undefined;
+  private readonly subs: vscode.Disposable[] = [];
 
   constructor(
     private readonly store: EventStore,
     private readonly pricing: PricingService,
     private readonly watcher: LogWatcher,
+    private readonly userConfig: UserConfigStore,
     private readonly github?: GitHubUsageService,
   ) {
     if (github) {
       // Re-fetch billing whenever the GitHub session changes.
-      this.ghSub = github.session.onDidChange(() => void this.refreshGitHub());
+      this.subs.push(github.session.onDidChange(() => void this.refreshGitHub()));
     }
+    // Budget/included credits feed the snapshot, so recompute on config change.
+    this.subs.push(userConfig.onDidChange(() => this.compute()));
   }
 
   get current(): UsageSnapshot | undefined {
@@ -103,7 +108,7 @@ export class UsageService implements vscode.Disposable {
   }
 
   private compute(): void {
-    const cfg = readConfig();
+    const uc = this.userConfig.get();
     const now = Date.now();
     const events = this.store.query(this.filter);
 
@@ -122,8 +127,8 @@ export class UsageService implements vscode.Disposable {
       now,
       currency: 'USD',
       pricePerCredit: this.pricing.pricePerCredit,
-      monthlyBudget: cfg.monthlyBudget > 0 ? cfg.monthlyBudget : null,
-      includedCredits: cfg.includedCredits,
+      monthlyBudget: uc.monthlyBudget > 0 ? uc.monthlyBudget : null,
+      includedCredits: uc.includedCredits,
       filter: this.filter,
       source,
       status: filteredEvents.length === 0 ? this.watcher.getStatus() : { kind: 'ok' },
@@ -133,54 +138,23 @@ export class UsageService implements vscode.Disposable {
     };
 
     this.snapshot = buildSnapshot(filteredEvents, options);
-    this.checkAlerts(this.snapshot, cfg);
+    this.recordSample(now, this.snapshot);
+    this.fireAlerts(this.snapshot, uc, now);
     this._onDidChange.fire(this.snapshot);
   }
 
-  private checkAlerts(s: UsageSnapshot, cfg: ReturnType<typeof readConfig>): void {
-    const now = Date.now();
-
-    if (cfg.monthlyBudget > 0) {
-      const at80 = `budget-80-${new Date().getMonth()}`;
-      const at100 = `budget-100-${new Date().getMonth()}`;
-      if (
-        s.budget.percentOfBudget >= 0.8 &&
-        s.budget.percentOfBudget < 1.0 &&
-        this.canFireAlert(at80, ALERT_COOLDOWN_MS, now)
-      ) {
-        void vscode.window.showWarningMessage(
-          `Weevil: You've used 80% of your $${cfg.monthlyBudget} monthly budget.`,
-        );
-        this.alertFired.set(at80, now);
-      }
-      if (
-        s.budget.percentOfBudget >= 1.0 &&
-        this.canFireAlert(at100, ALERT_COOLDOWN_MS, now)
-      ) {
-        void vscode.window.showWarningMessage(
-          `Weevil: Monthly budget of $${cfg.monthlyBudget} exceeded.`,
-        );
-        this.alertFired.set(at100, now);
-      }
-    }
-
-    if (cfg.alertDailyCredits > 0) {
-      const key = `daily-${new Date().toDateString()}`;
-      if (
-        s.today.credits >= cfg.alertDailyCredits &&
-        this.canFireAlert(key, ALERT_DAILY_COOLDOWN_MS, now)
-      ) {
-        void vscode.window.showWarningMessage(
-          `Weevil: Daily credit usage (${Math.round(s.today.credits)}) exceeded your threshold of ${cfg.alertDailyCredits}.`,
-        );
-        this.alertFired.set(key, now);
-      }
-    }
+  private recordSample(now: number, s: UsageSnapshot): void {
+    this.history.push({ ts: now, todayCredits: s.today.credits });
+    const cutoff = now - HISTORY_WINDOW_MS;
+    while (this.history.length > 0 && this.history[0]!.ts < cutoff) this.history.shift();
   }
 
-  private canFireAlert(key: string, cooldown: number, now: number): boolean {
-    const last = this.alertFired.get(key);
-    return last === undefined || now - last > cooldown;
+  private fireAlerts(s: UsageSnapshot, uc: ReturnType<UserConfigStore['get']>, now: number): void {
+    const alerts = evaluateAlerts(s, this.history, uc, this.alertFired, now);
+    for (const a of alerts) {
+      void vscode.window.showWarningMessage(a.message);
+      this.alertFired.set(a.key, now);
+    }
   }
 
   private scheduleTimer(): void {
@@ -193,7 +167,7 @@ export class UsageService implements vscode.Disposable {
     if (this.timer) clearInterval(this.timer);
     this.watcher.dispose();
     this._onDidChange.dispose();
-    this.ghSub?.dispose();
+    this.subs.forEach((d) => d.dispose());
     this.github?.dispose();
   }
 }

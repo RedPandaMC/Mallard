@@ -119,24 +119,6 @@
           "default": "",
           "description": "Override path to the Copilot log directory (blank = auto-detect via VS Code logUri)."
         },
-        "weevil.includedCredits": {
-          "type": "number",
-          "default": 300,
-          "minimum": 0,
-          "description": "Monthly included premium requests for your Copilot plan. Used to colour the spend gauge."
-        },
-        "weevil.monthlyBudget": {
-          "type": "number",
-          "default": 0,
-          "minimum": 0,
-          "description": "Monthly USD spend alert threshold. Weevil notifies you at 80% and 100%. Set to 0 to disable."
-        },
-        "weevil.alert.dailyCredits": {
-          "type": "number",
-          "default": 0,
-          "minimum": 0,
-          "description": "Alert when daily credit usage exceeds this value. Set to 0 to disable."
-        },
         "weevil.pricingManifestUrl": {
           "type": "string",
           "default": "",

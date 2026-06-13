@@ -4,6 +4,7 @@
  */
 import * as vscode from 'vscode';
 import { UsageService } from '../app/UsageService';
+import { UserConfigStore } from '../app/UserConfigStore';
 import { Filter } from '../domain/types';
 import { isHostBoundMsg, WebviewBoundMsg } from './messaging';
 import { renderHtml } from './webviewHtml';
@@ -14,7 +15,11 @@ export class DashboardPanel {
 
   private readonly disposables: vscode.Disposable[] = [];
 
-  static show(context: vscode.ExtensionContext, usage: UsageService): void {
+  static show(
+    context: vscode.ExtensionContext,
+    usage: UsageService,
+    userConfig: UserConfigStore,
+  ): void {
     if (DashboardPanel.current) {
       DashboardPanel.current.panel.reveal();
       return;
@@ -34,13 +39,14 @@ export class DashboardPanel {
       },
     );
     panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'weevil-activitybar.svg');
-    DashboardPanel.current = new DashboardPanel(panel, context, usage);
+    DashboardPanel.current = new DashboardPanel(panel, context, usage, userConfig);
   }
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
     context: vscode.ExtensionContext,
     private readonly usage: UsageService,
+    private readonly userConfig: UserConfigStore,
   ) {
     panel.webview.html = renderHtml(panel.webview, context.extensionUri, { compact: false });
 
@@ -49,6 +55,7 @@ export class DashboardPanel {
       usage.onDidChangeSnapshot((s) =>
         this.post({ type: 'snapshot', payload: s, compact: false }),
       ),
+      userConfig.onDidChange((value) => this.post({ type: 'config', value })),
       vscode.window.onDidChangeActiveColorTheme(() => this.post({ type: 'theme' })),
       panel.onDidDispose(() => this.dispose()),
     );
@@ -60,6 +67,7 @@ export class DashboardPanel {
       case 'ready': {
         const s = this.usage.current;
         if (s) this.post({ type: 'snapshot', payload: s, compact: false });
+        this.post({ type: 'config', value: this.userConfig.get() });
         break;
       }
       case 'refresh':
@@ -68,11 +76,12 @@ export class DashboardPanel {
       case 'setFilter':
         await this.usage.setFilter(raw.value as Filter);
         break;
+      case 'setConfig':
+        await this.userConfig.set(raw.value);
+        break;
       case 'command':
         if (raw.id === 'openDashboard') {
           this.panel.reveal();
-        } else if (raw.id === 'openSettings') {
-          void vscode.commands.executeCommand('workbench.action.openSettings', 'weevil');
         } else if (raw.id === 'signIn') {
           void this.usage.signInGitHub();
         }

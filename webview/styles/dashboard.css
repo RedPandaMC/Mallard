@@ -584,16 +584,16 @@ body {
 }
 
 /* ─────────────────────────────────────────
-   Model suggestions
+   Budget & alerts config
 ───────────────────────────────────────── */
-.wv-suggestions {
+.wv-config {
   background: var(--w-bg-card);
   border: 1px solid var(--w-border);
   border-radius: var(--w-r2);
   overflow: hidden;
 }
 
-.wv-suggestions-summary {
+.wv-config-summary {
   display: flex;
   align-items: center;
   gap: var(--w-s2);
@@ -608,8 +608,8 @@ body {
   user-select: none;
 }
 
-.wv-suggestions-summary::-webkit-details-marker { display: none; }
-.wv-suggestions-summary::before {
+.wv-config-summary::-webkit-details-marker { display: none; }
+.wv-config-summary::before {
   content: '';
   display: inline-block;
   width: 0;
@@ -619,47 +619,40 @@ body {
   border-color: transparent transparent transparent currentColor;
   transition: transform 0.15s;
 }
-.wv-suggestions[open] .wv-suggestions-summary::before { transform: rotate(90deg); }
+.wv-config[open] .wv-config-summary::before { transform: rotate(90deg); }
 
-.wv-suggestions-body {
+.wv-config-body {
   border-top: 1px solid var(--w-border);
   padding: var(--w-s3) var(--w-s4);
   display: flex;
   flex-direction: column;
-  gap: var(--w-s3);
+  gap: var(--w-s2);
 }
 
-.wv-suggestion {
-  background: var(--w-bg);
-  border: 1px solid var(--w-border);
-  border-radius: var(--w-r1);
-  padding: var(--w-s3) var(--w-s4);
-}
-
-.wv-suggestion-header {
+.wv-config-row {
   display: flex;
   align-items: center;
-  gap: var(--w-s2);
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--w-s3);
   font-size: 12px;
+  color: var(--w-fg);
 }
 
-.wv-suggestion-model { font-weight: 600; color: var(--w-fg); }
-.wv-suggestion-alt   { font-weight: 600; color: var(--w-brand); }
-.wv-suggestion-surface {
-  font-size: 11px;
-  color: var(--w-fg-muted);
+.wv-config-row input[type='number'] {
+  width: 96px;
+  padding: 2px 6px;
+  font: inherit;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--w-border));
+  border-radius: var(--w-r1);
 }
 
-.wv-suggestion-saving {
-  margin-left: auto;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--vscode-charts-green, #81C784);
-  white-space: nowrap;
+.wv-config-check {
+  justify-content: flex-start;
 }
 
-.wv-suggestion-basis {
+.wv-config-note {
   font-size: 11px;
   color: var(--w-fg-muted);
   margin-top: var(--w-s1);
