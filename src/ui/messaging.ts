@@ -2,13 +2,14 @@
  * Typed, validated message envelopes for host <-> webview traffic.
  * Pure — no `vscode`, no DOM — so it can be bundled into both sides.
  */
-import { Filter, UsageSnapshot, UserConfig } from '../domain/types';
+import { DashboardLayout, Filter, UsageSnapshot, UserConfig } from '../domain/types';
 
 export type CommandId = 'openDashboard' | 'signIn';
 
 export type WebviewBoundMsg =
   | { type: 'snapshot'; payload: UsageSnapshot; compact: boolean }
   | { type: 'config'; value: UserConfig }
+  | { type: 'layout'; value: DashboardLayout }
   | { type: 'theme' };
 
 export type HostBoundMsg =
@@ -16,6 +17,7 @@ export type HostBoundMsg =
   | { type: 'refresh' }
   | { type: 'setFilter'; value: Filter }
   | { type: 'setConfig'; value: Partial<UserConfig> }
+  | { type: 'setLayout'; value: DashboardLayout }
   | { type: 'command'; id: CommandId };
 
 const COMMAND_IDS: CommandId[] = ['openDashboard', 'signIn'];
@@ -33,6 +35,8 @@ export function isHostBoundMsg(m: unknown): m is HostBoundMsg {
     case 'setFilter':
     case 'setConfig':
       return isObject(m.value);
+    case 'setLayout':
+      return Array.isArray(m.value);
     case 'command':
       return COMMAND_IDS.includes(m.id as CommandId);
     default:
@@ -49,6 +53,8 @@ export function isWebviewBoundMsg(m: unknown): m is WebviewBoundMsg {
       return isObject(m.payload);
     case 'config':
       return isObject(m.value);
+    case 'layout':
+      return Array.isArray(m.value);
     default:
       return false;
   }

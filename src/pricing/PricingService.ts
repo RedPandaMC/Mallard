@@ -94,6 +94,15 @@ export class PricingService {
     if (this.refreshTimer) clearInterval(this.refreshTimer);
   }
 
+  /** Delete the cached manifest from disk (used by the full-reset command). */
+  async clearCache(): Promise<void> {
+    try {
+      await fs.rm(path.join(this.storageDir, CACHE_FILE), { force: true });
+    } catch {
+      // Nothing cached, or already gone.
+    }
+  }
+
   private async loadCached(): Promise<PricingManifest | null> {
     const file = path.join(this.storageDir, CACHE_FILE);
     try {

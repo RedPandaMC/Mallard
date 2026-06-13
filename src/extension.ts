@@ -1,22 +1,20 @@
 import * as vscode from 'vscode';
 import { RELEVANT_CONFIG_KEYS } from './config';
-import { buildContainer } from './container';
-import { UsageService } from './app/UsageService';
-import { UserConfigStore } from './app/UserConfigStore';
-import { EventStore } from './store/EventStore';
+import { buildContainer, Container } from './container';
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
 import { SidebarViewProvider } from './ui/SidebarViewProvider';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  const { usage, store, userConfig } = await buildContainer(context);
+  const container = await buildContainer(context);
+  const { usage, userConfig } = container;
 
   const sidebar = new SidebarViewProvider(context, usage, userConfig);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(SidebarViewProvider.viewType, sidebar),
   );
 
-  registerCommands(context, usage, store, userConfig);
+  registerCommands(context, container);
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
@@ -33,16 +31,12 @@ export function deactivate(): void {
   // disposables cleaned up via context.subscriptions
 }
 
-function registerCommands(
-  context: vscode.ExtensionContext,
-  usage: UsageService,
-  store: EventStore,
-  userConfig: UserConfigStore,
-): void {
+function registerCommands(context: vscode.ExtensionContext, c: Container): void {
+  const { usage, store, userConfig, layout, pricing } = c;
   const reg = (id: string, fn: (...args: unknown[]) => unknown) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
 
-  reg('weevil.openDashboard', () => DashboardPanel.show(context, usage, userConfig));
+  reg('weevil.openDashboard', () => DashboardPanel.show(context, usage, userConfig, layout));
 
   reg('weevil.refresh', async () => {
     await usage.refresh();
@@ -50,12 +44,17 @@ function registerCommands(
 
   reg('weevil.clearData', async () => {
     const ok = await vscode.window.showWarningMessage(
-      'Clear all recorded Weevil usage data? This cannot be undone.',
+      'Clear all Weevil data? This wipes recorded usage, your budget and alert ' +
+        'settings, the saved dashboard layout, and the cached pricing manifest. ' +
+        'It cannot be undone. Run this before uninstalling to leave nothing behind.',
       { modal: true },
-      'Clear',
+      'Clear everything',
     );
-    if (ok === 'Clear') {
+    if (ok === 'Clear everything') {
       await store.clear();
+      await userConfig.reset();
+      await layout.reset();
+      await pricing.clearCache();
       await usage.refresh();
     }
   });

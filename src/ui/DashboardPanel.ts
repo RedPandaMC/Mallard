@@ -5,6 +5,7 @@
 import * as vscode from 'vscode';
 import { UsageService } from '../app/UsageService';
 import { UserConfigStore } from '../app/UserConfigStore';
+import { LayoutStore } from '../app/LayoutStore';
 import { Filter } from '../domain/types';
 import { isHostBoundMsg, WebviewBoundMsg } from './messaging';
 import { renderHtml } from './webviewHtml';
@@ -19,6 +20,7 @@ export class DashboardPanel {
     context: vscode.ExtensionContext,
     usage: UsageService,
     userConfig: UserConfigStore,
+    layout: LayoutStore,
   ): void {
     if (DashboardPanel.current) {
       DashboardPanel.current.panel.reveal();
@@ -39,7 +41,7 @@ export class DashboardPanel {
       },
     );
     panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'weevil-activitybar.svg');
-    DashboardPanel.current = new DashboardPanel(panel, context, usage, userConfig);
+    DashboardPanel.current = new DashboardPanel(panel, context, usage, userConfig, layout);
   }
 
   private constructor(
@@ -47,6 +49,7 @@ export class DashboardPanel {
     context: vscode.ExtensionContext,
     private readonly usage: UsageService,
     private readonly userConfig: UserConfigStore,
+    private readonly layout: LayoutStore,
   ) {
     panel.webview.html = renderHtml(panel.webview, context.extensionUri, { compact: false });
 
@@ -56,6 +59,7 @@ export class DashboardPanel {
         this.post({ type: 'snapshot', payload: s, compact: false }),
       ),
       userConfig.onDidChange((value) => this.post({ type: 'config', value })),
+      layout.onDidChange((value) => this.post({ type: 'layout', value })),
       vscode.window.onDidChangeActiveColorTheme(() => this.post({ type: 'theme' })),
       panel.onDidDispose(() => this.dispose()),
     );
@@ -68,6 +72,7 @@ export class DashboardPanel {
         const s = this.usage.current;
         if (s) this.post({ type: 'snapshot', payload: s, compact: false });
         this.post({ type: 'config', value: this.userConfig.get() });
+        this.post({ type: 'layout', value: this.layout.get() });
         break;
       }
       case 'refresh':
@@ -78,6 +83,9 @@ export class DashboardPanel {
         break;
       case 'setConfig':
         await this.userConfig.set(raw.value);
+        break;
+      case 'setLayout':
+        await this.layout.set(raw.value);
         break;
       case 'command':
         if (raw.id === 'openDashboard') {

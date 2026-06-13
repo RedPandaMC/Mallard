@@ -5,6 +5,8 @@ import './styles/dashboard.css';
 import { onMessage, post } from './api';
 import { state, setState, subscribe } from './store';
 import { lazyChart } from './lazyMount';
+import { mountLayout } from './layout';
+import { DashboardLayout, DEFAULT_DASHBOARD_LAYOUT } from '../src/domain/types';
 import { applyTheme } from './charts/echarts';
 import { mountDailyBars } from './charts/dailyBars';
 import { mountHeatmap } from './charts/heatmap';
@@ -44,6 +46,8 @@ onMessage((msg) => {
     setState({ snapshot: msg.payload, compact: msg.compact });
   } else if (msg.type === 'config') {
     setState({ config: msg.value });
+  } else if (msg.type === 'layout') {
+    setState({ layout: msg.value });
   } else if (msg.type === 'theme') {
     applyTheme();
     if (state().snapshot) setState({ snapshot: state().snapshot });
@@ -53,6 +57,23 @@ onMessage((msg) => {
 post({ type: 'ready' });
 
 // ── Full dashboard ──────────────────────────────────────────────────────────
+
+function panelHtml(
+  id: string,
+  icon: string,
+  title: string,
+  bodyId: string,
+  ariaLabel: string,
+  bodyClass = '',
+): string {
+  return `
+    <section class="wv-chart-section" data-panel="${id}" aria-label="${title}">
+      <div class="wv-chart-header">
+        <span class="wv-chart-title"><i class="codicon ${icon}"></i> ${title}</span>
+      </div>
+      <div class="wv-chart-body ${bodyClass}" id="${bodyId}" role="img" aria-label="${ariaLabel}"></div>
+    </section>`;
+}
 
 function mountDashboard(root: HTMLElement): void {
   root.innerHTML = `
@@ -74,48 +95,24 @@ function mountDashboard(root: HTMLElement): void {
         <div id="kpi-cards"></div>
         <div id="gh-billing-strip"></div>
         <div id="spend-gauge"></div>
-        <section class="wv-chart-section" aria-label="Daily usage">
-          <div class="wv-chart-header">
-            <span class="wv-chart-title">
-              <i class="codicon codicon-graph"></i> Daily usage — last 30 days
-            </span>
-          </div>
-          <div class="wv-chart-body" id="chart-daily" role="img" aria-label="Daily usage bar chart"></div>
-        </section>
-        <section class="wv-chart-section" id="heatmap-section" aria-label="Activity heatmap" hidden>
-          <div class="wv-chart-header">
-            <span class="wv-chart-title">
-              <i class="codicon codicon-calendar"></i> Activity — last 12 weeks
-            </span>
-          </div>
-          <div class="wv-chart-body heatmap" id="chart-heatmap" role="img" aria-label="Activity heatmap"></div>
-        </section>
-        <div class="wv-chart-row">
-          <section class="wv-chart-section" aria-label="Model breakdown">
-            <div class="wv-chart-header">
-              <span class="wv-chart-title">
-                <i class="codicon codicon-symbol-method"></i> By model
-              </span>
-            </div>
-            <div class="wv-chart-body mini" id="chart-models" role="img" aria-label="Usage by model"></div>
-          </section>
-          <section class="wv-chart-section wv-sankey-section" id="sankey-section" aria-label="Flow breakdown">
-            <div class="wv-chart-header">
-              <span class="wv-chart-title">
-                <i class="codicon codicon-type-hierarchy-sub"></i> Flow breakdown
-              </span>
-            </div>
-            <div class="wv-chart-body mini" id="chart-sankey" role="img" aria-label="Model to surface flow"></div>
-          </section>
+        <div class="wv-analysis-bar">
+          <span class="wv-analysis-title">Analysis</span>
+          <span class="wv-analysis-actions">
+            <button class="wv-btn wv-btn--sm" id="layout-reset" hidden>
+              <i class="codicon codicon-discard"></i> Reset layout
+            </button>
+            <button class="wv-btn wv-btn--sm" id="layout-edit" aria-pressed="false">
+              <i class="codicon codicon-edit"></i> Edit layout
+            </button>
+          </span>
         </div>
-        <section class="wv-chart-section" id="category-section" aria-label="Spend by cost type" hidden>
-          <div class="wv-chart-header">
-            <span class="wv-chart-title">
-              <i class="codicon codicon-pie-chart"></i> Spend by cost type
-            </span>
-          </div>
-          <div class="wv-chart-body mini" id="chart-category" role="img" aria-label="Spend by cost type"></div>
-        </section>
+        <div class="wv-charts-grid" id="charts-grid">
+          ${panelHtml('daily', 'codicon-graph', 'Daily usage (last 30 days)', 'chart-daily', 'Daily usage bar chart')}
+          ${panelHtml('heatmap', 'codicon-calendar', 'Activity (last 12 weeks)', 'chart-heatmap', 'Activity heatmap', 'heatmap')}
+          ${panelHtml('models', 'codicon-symbol-method', 'By model', 'chart-models', 'Usage by model', 'mini')}
+          ${panelHtml('sankey', 'codicon-type-hierarchy-sub', 'Flow breakdown', 'chart-sankey', 'Model to surface flow', 'mini')}
+          ${panelHtml('category', 'codicon-pie-chart', 'Spend by cost type', 'chart-category', 'Spend by cost type', 'mini')}
+        </div>
       </div>
     </div>`;
 
@@ -135,30 +132,70 @@ function mountDashboard(root: HTMLElement): void {
   const models = lazyChart(modelsEl, () => mountModelBreakdown(modelsEl));
   const sankey = lazyChart(sankeyEl, () => mountSankey(sankeyEl));
   const category = lazyChart(categoryEl, () => mountCategoryBreakdown(categoryEl));
-  const categorySection = document.getElementById('category-section')!;
   const alertConfig = mountAlertConfigPanel(document.getElementById('alert-config')!);
-  const heatmapSection = document.getElementById('heatmap-section')!;
   const content = document.getElementById('content')!;
+
+  // Section elements (the dockable/resizable panels) keyed by panel id.
+  const section = (id: string) =>
+    document.querySelector<HTMLElement>(`.wv-chart-section[data-panel="${id}"]`)!;
+  const sections: Record<string, HTMLElement> = {
+    daily: section('daily'),
+    heatmap: section('heatmap'),
+    models: section('models'),
+    sankey: section('sankey'),
+    category: section('category'),
+  };
+
+  const resizeAll = () => {
+    daily.resize();
+    heatmap.resize();
+    models.resize();
+    sankey.resize();
+    category.resize();
+  };
+
+  // Dynamic scaling + docking: the layout manager reorders, resizes (span), and
+  // shows/hides panels; every change is persisted via setLayout.
+  const layoutMgr = mountLayout(document.getElementById('charts-grid')!, sections, (next) => {
+    post({ type: 'setLayout', value: next });
+    requestAnimationFrame(resizeAll);
+  });
+  layoutMgr.apply(state().layout);
+
+  let editing = false;
+  const editBtn = document.getElementById('layout-edit')!;
+  const resetBtn = document.getElementById('layout-reset')!;
+  editBtn.addEventListener('click', () => {
+    editing = !editing;
+    layoutMgr.setEditMode(editing);
+    editBtn.setAttribute('aria-pressed', String(editing));
+    resetBtn.hidden = !editing;
+    requestAnimationFrame(resizeAll);
+  });
+  resetBtn.addEventListener('click', () => {
+    post({ type: 'setLayout', value: DEFAULT_DASHBOARD_LAYOUT });
+  });
 
   alertConfig.update(state().config);
 
   let resizeFrame: number | undefined;
   const ro = new ResizeObserver(() => {
     if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
-    resizeFrame = requestAnimationFrame(() => {
-      daily.resize();
-      heatmap.resize();
-      models.resize();
-      sankey.resize();
-      category.resize();
-    });
+    resizeFrame = requestAnimationFrame(resizeAll);
   });
-  ro.observe(root);
+  for (const el of Object.values(sections)) ro.observe(el);
 
   emptyState.update(false);
 
+  let appliedLayout: DashboardLayout | null = null;
+
   subscribe((s) => {
     alertConfig.update(s.config);
+    if (s.layout !== appliedLayout) {
+      appliedLayout = s.layout;
+      layoutMgr.apply(s.layout);
+      requestAnimationFrame(resizeAll);
+    }
     if (!s.snapshot) return;
     const isEmpty = s.snapshot.status.kind === 'empty';
     emptyState.update(isEmpty, s.snapshot.status.reason);
@@ -174,11 +211,15 @@ function mountDashboard(root: HTMLElement): void {
       ghStrip.update(snapshot);
       gauge.update(snapshot.budget, snapshot.currency);
       daily.render((c) => c.update(snapshot));
-      heatmapSection.hidden = snapshot.chartData.heatmap.max <= 0;
+      // Data-availability hiding is independent of the user's layout choice.
+      sections['heatmap']!.classList.toggle('wv-no-data', snapshot.chartData.heatmap.max <= 0);
       heatmap.render((c) => c.update(snapshot));
       models.render((c) => c.update(snapshot, metric));
       sankey.render((c) => c.update(snapshot));
-      categorySection.hidden = !snapshot.chartData.categoryBreakdown.available;
+      sections['category']!.classList.toggle(
+        'wv-no-data',
+        !snapshot.chartData.categoryBreakdown.available,
+      );
       category.render((c) => c.update(snapshot));
     }
   });

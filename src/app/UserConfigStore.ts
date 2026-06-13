@@ -27,6 +27,12 @@ export class UserConfigStore implements vscode.Disposable {
     this._onDidChange.fire(next);
   }
 
+  /** Remove the stored config so the defaults apply (used by the full reset). */
+  async reset(): Promise<void> {
+    await this.memento.update(STORAGE_KEY, undefined);
+    this._onDidChange.fire(this.get());
+  }
+
   /**
    * One-time seed: if nothing is stored yet but the user still has non-default
    * values in the legacy settings keys, carry them over so upgrades are seamless.

@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { readConfig } from './config';
 import { UsageService } from './app/UsageService';
 import { UserConfigStore } from './app/UserConfigStore';
+import { LayoutStore } from './app/LayoutStore';
 import { GitHubSession } from './billing/GitHubSession';
 import { GitHubUsageService } from './billing/GitHubUsageService';
 import { PricingManifest } from './domain/pricing';
@@ -20,6 +21,8 @@ export interface Container {
   usage: UsageService;
   store: EventStore;
   userConfig: UserConfigStore;
+  layout: LayoutStore;
+  pricing: PricingService;
 }
 
 export async function buildContainer(context: vscode.ExtensionContext): Promise<Container> {
@@ -46,19 +49,22 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const githubSession = new GitHubSession();
   const github = new GitHubUsageService(githubSession);
   const userConfig = new UserConfigStore(context.globalState);
+  const layout = new LayoutStore(context.globalState);
   const usage = new UsageService(store, pricing, watcher, userConfig, github);
   const statusBar = new StatusBarController();
 
   context.subscriptions.push(
     { dispose: () => pricing.dispose() },
     { dispose: () => githubSession.dispose() },
+    { dispose: () => store.dispose() },
     userConfig,
+    layout,
     usage,
     statusBar,
     usage.onDidChangeSnapshot((s) => statusBar.update(s)),
   );
 
-  return { usage, store, userConfig };
+  return { usage, store, userConfig, layout, pricing };
 }
 
 async function loadBundledManifest(
