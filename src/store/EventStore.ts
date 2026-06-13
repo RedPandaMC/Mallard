@@ -11,10 +11,22 @@
 import Database from 'better-sqlite3';
 import { mkdirSync, readFileSync, renameSync } from 'fs';
 import * as path from 'path';
-import { Filter, SourceKind, Surface, UsageEvent } from '../domain/types';
+import { CostCategory, Filter, SourceKind, Surface, UsageEvent } from '../domain/types';
 import { UNATTRIBUTED_REPO } from '../domain/aggregate';
 import { DAY_MS, startOf } from '../util/time';
 import { MAX_RAW_EVENTS, RAW_WINDOW_DAYS } from './schema';
+
+type Categories = Partial<Record<CostCategory, number>>;
+
+/** Sum two optional category maps; returns undefined when both are absent. */
+function addCategories(a?: Categories, b?: Categories): Categories | undefined {
+  if (!a && !b) return undefined;
+  const out: Categories = { ...(a ?? {}) };
+  for (const [k, v] of Object.entries(b ?? {})) {
+    out[k as CostCategory] = (out[k as CostCategory] ?? 0) + (v ?? 0);
+  }
+  return out;
+}
 
 /** Collapse old per-request events into one row per day/model/repo/surface. */
 export function rollupEvents(old: UsageEvent[]): UsageEvent[] {
@@ -28,6 +40,8 @@ export function rollupEvents(old: UsageEvent[]): UsageEvent[] {
       existing.cost += e.cost;
       existing.promptTokens = (existing.promptTokens ?? 0) + (e.promptTokens ?? 0);
       existing.completionTokens = (existing.completionTokens ?? 0) + (e.completionTokens ?? 0);
+      const merged = addCategories(existing.costByCategory, e.costByCategory);
+      if (merged) existing.costByCategory = merged;
     } else {
       map.set(key, { ...e, id: key, ts: day, estimated: true });
     }
@@ -47,9 +61,18 @@ interface EventRow {
   completionTokens: number | null;
   estimated: number;
   repo: string | null;
+  costByCategory: string | null;
 }
 
 function rowToEvent(row: EventRow): UsageEvent {
+  let costByCategory: Categories | undefined;
+  if (row.costByCategory) {
+    try {
+      costByCategory = JSON.parse(row.costByCategory) as Categories;
+    } catch {
+      costByCategory = undefined;
+    }
+  }
   return {
     id: row.id,
     ts: row.ts,
@@ -62,6 +85,7 @@ function rowToEvent(row: EventRow): UsageEvent {
     ...(row.promptTokens !== null ? { promptTokens: row.promptTokens } : {}),
     ...(row.completionTokens !== null ? { completionTokens: row.completionTokens } : {}),
     ...(row.repo !== null ? { repo: row.repo } : {}),
+    ...(costByCategory !== undefined ? { costByCategory } : {}),
   };
 }
 
@@ -78,6 +102,7 @@ function toRow(e: UsageEvent): EventRow {
     completionTokens: e.completionTokens ?? null,
     estimated: e.estimated ? 1 : 0,
     repo: e.repo ?? null,
+    costByCategory: e.costByCategory ? JSON.stringify(e.costByCategory) : null,
   };
 }
 
@@ -93,7 +118,8 @@ const CREATE_TABLE = `
     promptTokens INTEGER,
     completionTokens INTEGER,
     estimated INTEGER NOT NULL DEFAULT 1,
-    repo TEXT
+    repo TEXT,
+    costByCategory TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_ts ON events(ts);
   CREATE INDEX IF NOT EXISTS idx_model ON events(modelId);
@@ -101,8 +127,8 @@ const CREATE_TABLE = `
 
 const INSERT_SQL =
   'INSERT OR IGNORE INTO events ' +
-  '(id, ts, modelId, surface, source, credits, cost, promptTokens, completionTokens, estimated, repo) ' +
-  'VALUES (@id, @ts, @modelId, @surface, @source, @credits, @cost, @promptTokens, @completionTokens, @estimated, @repo)';
+  '(id, ts, modelId, surface, source, credits, cost, promptTokens, completionTokens, estimated, repo, costByCategory) ' +
+  'VALUES (@id, @ts, @modelId, @surface, @source, @credits, @cost, @promptTokens, @completionTokens, @estimated, @repo, @costByCategory)';
 
 export class EventStore {
   private readonly db: Database.Database;
@@ -115,8 +141,20 @@ export class EventStore {
     this.db = new Database(path.join(dir, 'events.db'));
     this.db.pragma('journal_mode = WAL');
     this.db.exec(CREATE_TABLE);
+    this.migrateSchema();
     this.ins = this.db.prepare<EventRow>(INSERT_SQL);
     this.migrateJsonl();
+  }
+
+  /** Additive column migrations for DBs created by an earlier schema version. */
+  private migrateSchema(): void {
+    const cols = this.db
+      .prepare<[], { name: string }>('PRAGMA table_info(events)')
+      .all()
+      .map((c) => c.name);
+    if (!cols.includes('costByCategory')) {
+      this.db.exec('ALTER TABLE events ADD COLUMN costByCategory TEXT');
+    }
   }
 
   /** No-op — migration runs synchronously in the constructor. Kept for API compatibility. */

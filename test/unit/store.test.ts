@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import Database from 'better-sqlite3';
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -64,6 +65,46 @@ describe('EventStore', () => {
     const onlyGpt = store.query({ models: ['gpt-4o'] });
     assert.strictEqual(onlyGpt.length, 1);
     assert.strictEqual(onlyGpt[0]!.id, 'a');
+  });
+
+  it('persists and reads back the per-category cost breakdown', async () => {
+    const dir = await tmpDir();
+    const store = new EventStore(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, cost: 0.1, costByCategory: { input: 0.06, output: 0.04 } }),
+    ]);
+    const reloaded = new EventStore(dir);
+    assert.deepStrictEqual(reloaded.all()[0]!.costByCategory, { input: 0.06, output: 0.04 });
+  });
+
+  it('migrates a v1 DB (no costByCategory column) without data loss', async () => {
+    const dir = await tmpDir();
+    // Simulate a pre-v2 database: events table without the costByCategory column.
+    const db = new Database(path.join(dir, 'events.db'));
+    db.exec(`CREATE TABLE events (
+      id TEXT PRIMARY KEY, ts INTEGER NOT NULL, modelId TEXT NOT NULL,
+      surface TEXT NOT NULL, source TEXT NOT NULL, credits REAL NOT NULL,
+      cost REAL NOT NULL, promptTokens INTEGER, completionTokens INTEGER,
+      estimated INTEGER NOT NULL DEFAULT 1, repo TEXT);`);
+    db.prepare(
+      'INSERT INTO events (id, ts, modelId, surface, source, credits, cost, estimated) ' +
+        "VALUES ('old', 1000, 'gpt-4o', 'chat', 'local', 1, 0.04, 1)",
+    ).run();
+    db.close();
+
+    const store = new EventStore(dir);
+    const rows = store.all();
+    assert.strictEqual(rows.length, 1);
+    assert.strictEqual(rows[0]!.id, 'old');
+    assert.strictEqual(rows[0]!.costByCategory, undefined);
+
+    // New writes with a breakdown work after migration.
+    await store.append([
+      makeEvent({ id: 'new', ts: 2000, costByCategory: { input: 0.04 } }),
+    ]);
+    assert.deepStrictEqual(store.query({})!.find((e) => e.id === 'new')!.costByCategory, {
+      input: 0.04,
+    });
   });
 
   it('filters by repo, matching NULL repo via the unattributed sentinel', async () => {

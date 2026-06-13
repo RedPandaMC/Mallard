@@ -1,4 +1,4 @@
-export const STORE_SCHEMA_VERSION = 1;
+export const STORE_SCHEMA_VERSION = 2;
 
 /** Keep this many days of raw, per-request events before rolling up. */
 export const RAW_WINDOW_DAYS = 90;

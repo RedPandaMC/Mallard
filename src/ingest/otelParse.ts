@@ -5,7 +5,7 @@
  */
 import { priceRequest } from '../domain/pricing';
 import { PricingManifest } from '../domain/pricing';
-import { Surface, UsageEvent } from '../domain/types';
+import { CostCategory, Surface, UsageEvent } from '../domain/types';
 
 export interface ParseContext {
   pricePerCredit: number;
@@ -27,6 +27,19 @@ function pick(attrs: AnyRecord, keys: string[]): unknown {
     if (attrs[k] != null) return attrs[k];
   }
   return undefined;
+}
+
+function splitCost(
+  cost: number,
+  prompt: number,
+  total: number,
+): Partial<Record<CostCategory, number>> {
+  const inputCost = (cost * prompt) / total;
+  const out: Partial<Record<CostCategory, number>> = {};
+  if (inputCost > 0) out.input = inputCost;
+  const outputCost = cost - inputCost;
+  if (outputCost > 0) out.output = outputCost;
+  return out;
 }
 
 function toSurface(v: unknown): Surface {
@@ -82,6 +95,14 @@ export function parseOtelContent(content: string, ctx: ParseContext): UsageEvent
       currency: 'USD',
       ...(ctx.manifest !== undefined ? { manifest: ctx.manifest } : {}),
     });
+
+    // Split cost into input/output categories by token ratio when both are
+    // known. The OTel logs do not (yet) expose tool/thinking token counts; if
+    // they appear later, add them here. Absent token data -> no breakdown.
+    const totalTok = (prompt ?? 0) + (completion ?? 0);
+    const costByCategory =
+      cost > 0 && totalTok > 0 ? splitCost(cost, prompt ?? 0, totalTok) : undefined;
+
     events.push({
       id: `local:${ts}:${i++}:${model}`,
       ts,
@@ -94,6 +115,7 @@ export function parseOtelContent(content: string, ctx: ParseContext): UsageEvent
       cost,
       estimated: true,
       ...(ctx.repo !== undefined ? { repo: ctx.repo } : {}),
+      ...(costByCategory !== undefined ? { costByCategory } : {}),
     });
   }
 

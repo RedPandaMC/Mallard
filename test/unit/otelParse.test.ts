@@ -100,4 +100,23 @@ describe('parseOtelContent', () => {
     const withoutRepo = parseOtelContent(line, ctx);
     assert.strictEqual(withoutRepo[0]!.repo, undefined);
   });
+
+  it('splits cost into input/output categories by token ratio', () => {
+    const line = JSON.stringify({
+      model: 'gpt-4o',
+      input_tokens: 300,
+      output_tokens: 100,
+    });
+    const e = parseOtelContent(line, ctx)[0]!;
+    assert.ok(e.costByCategory, 'expected a category breakdown');
+    const sum = (e.costByCategory!.input ?? 0) + (e.costByCategory!.output ?? 0);
+    assert.ok(Math.abs(sum - e.cost) < 1e-9, 'categories sum to total cost');
+    // input is 75% of tokens -> 75% of cost
+    assert.ok(Math.abs((e.costByCategory!.input ?? 0) - e.cost * 0.75) < 1e-9);
+  });
+
+  it('omits the breakdown when token counts are missing', () => {
+    const e = parseOtelContent(JSON.stringify({ model: 'gpt-4o' }), ctx)[0]!;
+    assert.strictEqual(e.costByCategory, undefined);
+  });
 });

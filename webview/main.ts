@@ -10,6 +10,7 @@ import { mountDailyBars } from './charts/dailyBars';
 import { mountHeatmap } from './charts/heatmap';
 import { mountModelBreakdown } from './charts/modelBreakdown';
 import { mountSankey } from './charts/sankey';
+import { mountCategoryBreakdown } from './charts/categoryBreakdown';
 import { mountKpiCards } from './components/KpiCards';
 import { mountFilterBar } from './components/FilterBar';
 import { mountGitHubBillingStrip } from './components/GitHubBillingStrip';
@@ -107,6 +108,14 @@ function mountDashboard(root: HTMLElement): void {
             <div class="wv-chart-body mini" id="chart-sankey" role="img" aria-label="Model to surface flow"></div>
           </section>
         </div>
+        <section class="wv-chart-section" id="category-section" aria-label="Spend by cost type" hidden>
+          <div class="wv-chart-header">
+            <span class="wv-chart-title">
+              <i class="codicon codicon-pie-chart"></i> Spend by cost type
+            </span>
+          </div>
+          <div class="wv-chart-body mini" id="chart-category" role="img" aria-label="Spend by cost type"></div>
+        </section>
       </div>
     </div>`;
 
@@ -120,10 +129,13 @@ function mountDashboard(root: HTMLElement): void {
   const heatmapEl = document.getElementById('chart-heatmap')!;
   const modelsEl = document.getElementById('chart-models')!;
   const sankeyEl = document.getElementById('chart-sankey')!;
+  const categoryEl = document.getElementById('chart-category')!;
   const daily = lazyChart(dailyEl, () => mountDailyBars(dailyEl));
   const heatmap = lazyChart(heatmapEl, () => mountHeatmap(heatmapEl));
   const models = lazyChart(modelsEl, () => mountModelBreakdown(modelsEl));
   const sankey = lazyChart(sankeyEl, () => mountSankey(sankeyEl));
+  const category = lazyChart(categoryEl, () => mountCategoryBreakdown(categoryEl));
+  const categorySection = document.getElementById('category-section')!;
   const alertConfig = mountAlertConfigPanel(document.getElementById('alert-config')!);
   const heatmapSection = document.getElementById('heatmap-section')!;
   const content = document.getElementById('content')!;
@@ -165,6 +177,8 @@ function mountDashboard(root: HTMLElement): void {
       heatmap.render((c) => c.update(snapshot));
       models.render((c) => c.update(snapshot, metric));
       sankey.render((c) => c.update(snapshot));
+      categorySection.hidden = !snapshot.chartData.categoryBreakdown.available;
+      category.render((c) => c.update(snapshot));
     }
   });
 }
