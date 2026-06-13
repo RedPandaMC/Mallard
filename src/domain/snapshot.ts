@@ -4,15 +4,15 @@
 import {
   aggregateAll,
   distinctModels,
+  distinctRepos,
   distinctSurfaces,
   sankeyLinksFor,
   sumEvents,
   topBy,
 } from './aggregate';
 import { computeBudget } from './budget';
-import { buildChartData } from './chartData';
+import { buildCategoryBreakdownData, buildChartData } from './chartData';
 import { forecastMonth } from './forecast';
-import { computeSuggestions } from './suggestions';
 import {
   AuthStatus,
   Filter,
@@ -91,8 +91,16 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
     allModels: distinctModels(events),
     allSurfaces: distinctSurfaces(events),
     sankeyLinks: sankeyLinksFor(events, o.filter),
-    chartData: buildChartData(dayAggregates, topModels, budget, forecast, o.now),
-    suggestions: o.manifest ? computeSuggestions(events, o.manifest, o.now) : [],
+    allRepos: distinctRepos(events),
+    byRepo: topBy(events, 'repo', o.filter),
+    chartData: buildChartData(
+      dayAggregates,
+      topModels,
+      budget,
+      forecast,
+      o.now,
+      buildCategoryBreakdownData(events, o.filter),
+    ),
     authStatus: o.authStatus,
     ...(o.githubBilling !== undefined ? { githubBilling: o.githubBilling } : {}),
   };

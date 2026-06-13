@@ -1,6 +1,6 @@
 import * as assert from 'assert';
-import { parseOtelContent } from '../../src/data/providers/logparse/otelParse';
-import { ParseContext } from '../../src/data/providers/logparse/otelParse';
+import { parseOtelContent } from '../../src/ingest/otelParse';
+import { ParseContext } from '../../src/ingest/otelParse';
 
 const ctx: ParseContext = {
   pricePerCredit: 0.04,

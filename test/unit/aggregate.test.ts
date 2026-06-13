@@ -5,7 +5,7 @@ import {
   sankeyLinksFor,
   sumEvents,
   topBy,
-} from '../../src/model/aggregate';
+} from '../../src/domain/aggregate';
 import { makeEvent } from './helpers';
 
 describe('aggregate', () => {

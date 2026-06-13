@@ -1,11 +1,11 @@
 import { strict as assert } from 'assert';
-import { aggregateBy } from '../../src/model/aggregate';
+import { aggregateBy } from '../../src/domain/aggregate';
 import {
   buildDailyBarsData,
   buildHeatmapData,
   buildModelBreakdownData,
-} from '../../src/model/chartData';
-import { BudgetState, Forecast, TopEntry } from '../../src/model/types';
+} from '../../src/domain/chartData';
+import { BudgetState, Forecast, TopEntry } from '../../src/domain/types';
 import { DAY_MS, startOf } from '../../src/util/time';
 import { makeEvent } from './helpers';
 

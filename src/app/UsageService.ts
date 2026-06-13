@@ -5,13 +5,13 @@
  */
 import * as vscode from 'vscode';
 import { readConfig } from '../config';
-import { buildSnapshot, SnapshotOptions } from '../model/snapshot';
-import { AuthStatus, Filter, GitHubBillingData, UsageSnapshot } from '../model/types';
+import { buildSnapshot, SnapshotOptions } from '../domain/snapshot';
+import { AuthStatus, Filter, GitHubBillingData, UsageSnapshot } from '../domain/types';
 import { DAY_MS, startOf } from '../util/time';
-import { GitHubUsageService } from './GitHubUsageService';
-import { LogWatcher } from './LogWatcher';
-import { PricingService } from './PricingService';
-import { EventStore } from './store/EventStore';
+import { GitHubUsageService } from '../billing/GitHubUsageService';
+import { LogWatcher } from '../ingest/LogWatcher';
+import { PricingService } from '../pricing/PricingService';
+import { EventStore } from '../store/EventStore';
 
 const ALERT_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours
 const ALERT_DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000;

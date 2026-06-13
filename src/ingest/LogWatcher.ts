@@ -10,11 +10,11 @@
 import { promises as fs, watch as fsWatch, FSWatcher } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { ProviderStatus } from '../model/types';
-import { PricingService } from './PricingService';
-import { findLogFiles, isPathSafe, locateCopilotLogDirs } from './providers/logparse/locate';
-import { parseOtelContent } from './providers/logparse/otelParse';
-import { EventStore } from './store/EventStore';
+import { ProviderStatus } from '../domain/types';
+import { PricingService } from '../pricing/PricingService';
+import { findLogFiles, isPathSafe, locateCopilotLogDirs } from './locate';
+import { parseOtelContent } from './otelParse';
+import { EventStore } from '../store/EventStore';
 
 const DEBOUNCE_MS = 1_500;
 

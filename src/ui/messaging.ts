@@ -2,7 +2,7 @@
  * Typed, validated message envelopes for host <-> webview traffic.
  * Pure — no `vscode`, no DOM — so it can be bundled into both sides.
  */
-import { Filter, UsageSnapshot } from '../model/types';
+import { Filter, UsageSnapshot } from '../domain/types';
 
 export type CommandId = 'openDashboard' | 'openSettings' | 'signIn';
 

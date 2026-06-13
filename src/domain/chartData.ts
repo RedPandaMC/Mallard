@@ -4,15 +4,21 @@
  */
 import {
   BudgetState,
+  CategoryBreakdownData,
   ChartData,
+  COST_CATEGORIES,
+  CostCategory,
   DailyBarsData,
   DailyBarPoint,
+  Filter,
   Forecast,
   HeatmapData,
   ModelBreakdownData,
   TopEntry,
   UsageAggregate,
+  UsageEvent,
 } from './types';
+import { matchesFilter } from './aggregate';
 import { bucketKey, DAY_MS, startOf } from '../util/time';
 
 const DAILY_BARS_WINDOW = 30;
@@ -86,16 +92,47 @@ export function buildHeatmapData(dayAggregates: UsageAggregate[], now: number): 
   return { cells, max };
 }
 
+/**
+ * Spend split by cost category, summed from each event's `costByCategory`.
+ * When no event carries a breakdown, returns `available: false` so the UI
+ * hides the chart rather than showing a misleading single bucket.
+ */
+export function buildCategoryBreakdownData(
+  events: UsageEvent[],
+  f?: Filter,
+): CategoryBreakdownData {
+  const totals = new Map<CostCategory, number>();
+  let any = false;
+  for (const e of events) {
+    if (!matchesFilter(e, f)) continue;
+    if (!e.costByCategory) continue;
+    for (const [cat, val] of Object.entries(e.costByCategory)) {
+      if (val == null || val <= 0) continue;
+      any = true;
+      totals.set(cat as CostCategory, (totals.get(cat as CostCategory) ?? 0) + val);
+    }
+  }
+  if (!any) return { categories: [], costs: [], available: false };
+  const categories = COST_CATEGORIES.filter((c) => (totals.get(c) ?? 0) > 0);
+  return {
+    categories,
+    costs: categories.map((c) => totals.get(c) ?? 0),
+    available: categories.length > 0,
+  };
+}
+
 export function buildChartData(
   dayAggregates: UsageAggregate[],
   topModels: TopEntry[],
   budget: BudgetState,
   forecast: Forecast,
   now: number,
+  categoryBreakdown: CategoryBreakdownData,
 ): ChartData {
   return {
     dailyBars: buildDailyBarsData(dayAggregates, budget, forecast, now),
     modelBreakdown: buildModelBreakdownData(topModels),
     heatmap: buildHeatmapData(dayAggregates, now),
+    categoryBreakdown,
   };
 }

@@ -1,4 +1,4 @@
-import { SourceKind, Surface, UsageEvent } from '../../src/model/types';
+import { SourceKind, Surface, UsageEvent } from '../../src/domain/types';
 
 let counter = 0;
 

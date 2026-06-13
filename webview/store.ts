@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { DatePreset, Filter, Metric, UsageSnapshot } from '../src/model/types';
+import { DatePreset, Filter, Metric, UsageSnapshot } from '../src/domain/types';
 
 export interface AppState {
   snapshot: UsageSnapshot | null;

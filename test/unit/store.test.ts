@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { EventStore, rollupEvents } from '../../src/data/store/EventStore';
+import { EventStore, rollupEvents } from '../../src/store/EventStore';
 import { DAY_MS, startOf } from '../../src/util/time';
 import { makeEvent } from './helpers';
 

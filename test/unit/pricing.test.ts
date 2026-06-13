@@ -4,7 +4,7 @@ import {
   priceRequest,
   resolveMultiplier,
   PricingManifest,
-} from '../../src/model/pricing';
+} from '../../src/domain/pricing';
 
 describe('pricing', () => {
   it('resolves known model multipliers (longest match wins)', () => {

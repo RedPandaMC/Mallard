@@ -2,7 +2,7 @@
  * Local-timezone bucketing helpers. Bucketing uses local Date component methods
  * so "today"/"this month" match the user's clock.
  */
-import { Granularity } from '../model/types';
+import { Granularity } from '../domain/types';
 
 export const DAY_MS = 86_400_000;
 

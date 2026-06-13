@@ -7,7 +7,7 @@
 import { promises as fs } from 'fs';
 import * as https from 'https';
 import * as path from 'path';
-import { PricingManifest } from '../model/pricing';
+import { PricingManifest } from '../domain/pricing';
 
 const CACHE_FILE = 'pricing-manifest.json';
 const REMOTE_URL =

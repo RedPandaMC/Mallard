@@ -3,9 +3,9 @@
  * Click opens the dashboard.
  */
 import * as vscode from 'vscode';
-import { severityFor } from '../model/budget';
-import { formatCredits, formatMoney } from '../model/format';
-import { UsageSnapshot } from '../model/types';
+import { severityFor } from '../domain/budget';
+import { formatCredits, formatMoney } from '../domain/format';
+import { UsageSnapshot } from '../domain/types';
 
 export class StatusBarController implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;

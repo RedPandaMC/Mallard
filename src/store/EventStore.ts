@@ -11,8 +11,8 @@
 import Database from 'better-sqlite3';
 import { mkdirSync, readFileSync, renameSync } from 'fs';
 import * as path from 'path';
-import { Filter, SourceKind, Surface, UsageEvent } from '../../model/types';
-import { DAY_MS, startOf } from '../../util/time';
+import { Filter, SourceKind, Surface, UsageEvent } from '../domain/types';
+import { DAY_MS, startOf } from '../util/time';
 import { MAX_RAW_EVENTS, RAW_WINDOW_DAYS } from './schema';
 
 /** Collapse old per-request events into one row per day/model/repo/surface. */

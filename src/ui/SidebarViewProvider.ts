@@ -3,7 +3,7 @@
  * mode. Pushes snapshots on change; handles open-dashboard commands.
  */
 import * as vscode from 'vscode';
-import { UsageService } from '../data/UsageService';
+import { UsageService } from '../app/UsageService';
 import { isHostBoundMsg } from './messaging';
 import { renderHtml } from './webviewHtml';
 

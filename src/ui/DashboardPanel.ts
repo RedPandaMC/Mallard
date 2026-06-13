@@ -3,8 +3,8 @@
  * reacts to typed, validated inbound messages.
  */
 import * as vscode from 'vscode';
-import { UsageService } from '../data/UsageService';
-import { Filter } from '../model/types';
+import { UsageService } from '../app/UsageService';
+import { Filter } from '../domain/types';
 import { isHostBoundMsg, WebviewBoundMsg } from './messaging';
 import { renderHtml } from './webviewHtml';
 

@@ -3,9 +3,9 @@
  * by design: unknown/malformed lines are skipped; records without a model are
  * ignored. Token counts and credits are flagged `estimated`.
  */
-import { priceRequest } from '../../../model/pricing';
-import { PricingManifest } from '../../../model/pricing';
-import { Surface, UsageEvent } from '../../../model/types';
+import { priceRequest } from '../domain/pricing';
+import { PricingManifest } from '../domain/pricing';
+import { Surface, UsageEvent } from '../domain/types';
 
 export interface ParseContext {
   pricePerCredit: number;
