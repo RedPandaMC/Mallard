@@ -65,8 +65,9 @@ Weevil cannot find them. Run "Weevil: Show Detected Log Path" to check, and set
 
 Copilot writes JSON-lines OTel logs containing the model, input and output token
 counts, the surface (chat, inline, agent, edit), and a timestamp. Weevil watches
-those files, stores events in a local SQLite database (recent events at full
-detail, older ones rolled up to daily rows), and computes a render-ready snapshot
+those files, stores events in a local embedded database (DuckDB; recent events
+at full detail, older ones rolled up to daily rows), and computes a render-ready
+snapshot
 that the status bar, sidebar, and dashboard all consume.
 
 Token counts are estimates, so costs are estimates. For the authoritative number,

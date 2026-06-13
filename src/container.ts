@@ -38,7 +38,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   await pricing.load();
   pricing.startDailyRefresh();
 
-  const store = new EventStore(storageDir);
+  const store = await EventStore.open(storageDir);
   const watcher = new LogWatcher(
     store,
     pricing,

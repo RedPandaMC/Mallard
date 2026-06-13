@@ -64,13 +64,13 @@ export class UsageService implements vscode.Disposable {
 
   async setFilter(filter: Filter): Promise<void> {
     this.filter = filter;
-    this.compute();
+    await this.compute();
   }
 
   async start(): Promise<void> {
     await this.store.load();
     await this.watcher.start();
-    this.compute();
+    await this.compute();
     this.scheduleTimer();
     // Silent background fetch — does not block startup.
     void this.refreshGitHub();
@@ -78,12 +78,12 @@ export class UsageService implements vscode.Disposable {
 
   onConfigChanged(): void {
     this.scheduleTimer();
-    this.compute();
+    void this.compute();
   }
 
   async refresh(): Promise<void> {
     await this.watcher.start();
-    this.compute();
+    await this.compute();
     void this.refreshGitHub();
   }
 
@@ -105,10 +105,10 @@ export class UsageService implements vscode.Disposable {
       this.authStatus = msg.includes('Not signed in') ? 'signed-out' : 'error';
       this.githubBilling = undefined;
     }
-    this.compute();
+    await this.compute();
   }
 
-  private compute(): void {
+  private async compute(): Promise<void> {
     const uc = this.userConfig.get();
     const now = Date.now();
 
@@ -117,7 +117,7 @@ export class UsageService implements vscode.Disposable {
     // value never collapses the list of choices; `filteredEvents` drives totals.
     const rangeStart = startOf(now - 365 * DAY_MS, 'day');
     const rangeFilter: Filter = this.filter.range ? { range: this.filter.range } : {};
-    let universe = this.store.query(rangeFilter);
+    let universe = await this.store.query(rangeFilter);
     if (!this.filter.range) universe = universe.filter((e) => e.ts >= rangeStart);
     const filteredEvents = universe.filter((e) => matchesFilter(e, this.filter));
 

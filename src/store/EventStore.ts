@@ -1,16 +1,18 @@
 /**
- * Per-user event store backed by SQLite (better-sqlite3).
+ * Per-user event store backed by DuckDB (embedded, via the N-API bindings).
  *
- * The constructor takes a plain directory path so the store can be unit-tested
- * against a temp dir. Raw per-request events are kept for a recent window;
- * older events are rolled up into coarse daily rows to keep the DB bounded.
+ * DuckDB persists to a single `events.duckdb` file, so history survives restarts
+ * and is loaded instantly without re-ingesting logs. The bindings use N-API,
+ * which is ABI-stable across Node and VS Code's Electron host, so there is no
+ * native module to rebuild. A small `meta` table persists the log read offsets
+ * so the watcher resumes where it left off.
  *
- * On first open, any legacy `events.jsonl` in the same directory is bulk-imported
- * and renamed to `events.jsonl.migrated` so data is not lost on upgrade.
+ * Raw per-request events are kept for a recent window; older events are rolled
+ * up into coarse daily rows to keep the file bounded.
  */
-import Database from 'better-sqlite3';
-import { mkdirSync, readFileSync, renameSync } from 'fs';
+import { mkdirSync } from 'fs';
 import * as path from 'path';
+import { DuckDBConnection, DuckDBInstance, DuckDBPreparedStatement } from '@duckdb/node-api';
 import { CostCategory, Filter, SourceKind, Surface, UsageEvent } from '../domain/types';
 import { UNATTRIBUTED_REPO } from '../domain/aggregate';
 import { DAY_MS, startOf } from '../util/time';
@@ -49,24 +51,35 @@ export function rollupEvents(old: UsageEvent[]): UsageEvent[] {
   return [...map.values()].sort((a, b) => a.ts - b.ts);
 }
 
-interface EventRow {
-  id: string;
-  ts: number;
-  modelId: string;
-  surface: string;
-  source: string;
-  credits: number;
-  cost: number;
-  promptTokens: number | null;
-  completionTokens: number | null;
-  estimated: number;
-  repo: string | null;
-  costByCategory: string | null;
-}
+const CREATE_SQL = `
+  CREATE TABLE IF NOT EXISTS events (
+    id VARCHAR PRIMARY KEY,
+    ts BIGINT NOT NULL,
+    modelId VARCHAR NOT NULL,
+    surface VARCHAR NOT NULL,
+    source VARCHAR NOT NULL,
+    credits DOUBLE NOT NULL,
+    cost DOUBLE NOT NULL,
+    promptTokens INTEGER,
+    completionTokens INTEGER,
+    estimated BOOLEAN NOT NULL DEFAULT TRUE,
+    repo VARCHAR,
+    costByCategory VARCHAR
+  );
+  CREATE INDEX IF NOT EXISTS idx_ts ON events(ts);
+  CREATE INDEX IF NOT EXISTS idx_model ON events(modelId);
+  CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR);
+`;
 
-function rowToEvent(row: EventRow): UsageEvent {
+const INSERT_SQL = `INSERT OR IGNORE INTO events
+  (id, ts, modelId, surface, source, credits, cost, promptTokens, completionTokens, estimated, repo, costByCategory)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`;
+
+type Row = Record<string, unknown>;
+
+function rowToEvent(row: Row): UsageEvent {
   let costByCategory: Categories | undefined;
-  if (row.costByCategory) {
+  if (typeof row.costByCategory === 'string') {
     try {
       costByCategory = JSON.parse(row.costByCategory) as Categories;
     } catch {
@@ -74,203 +87,184 @@ function rowToEvent(row: EventRow): UsageEvent {
     }
   }
   return {
-    id: row.id,
-    ts: row.ts,
-    modelId: row.modelId,
+    id: String(row.id),
+    ts: Number(row.ts),
+    modelId: String(row.modelId),
     surface: row.surface as Surface,
     source: row.source as SourceKind,
-    credits: row.credits,
-    cost: row.cost,
-    estimated: row.estimated !== 0,
-    ...(row.promptTokens !== null ? { promptTokens: row.promptTokens } : {}),
-    ...(row.completionTokens !== null ? { completionTokens: row.completionTokens } : {}),
-    ...(row.repo !== null ? { repo: row.repo } : {}),
+    credits: Number(row.credits),
+    cost: Number(row.cost),
+    estimated: row.estimated !== false,
+    ...(row.promptTokens != null ? { promptTokens: Number(row.promptTokens) } : {}),
+    ...(row.completionTokens != null ? { completionTokens: Number(row.completionTokens) } : {}),
+    ...(typeof row.repo === 'string' ? { repo: row.repo } : {}),
     ...(costByCategory !== undefined ? { costByCategory } : {}),
   };
 }
 
-function toRow(e: UsageEvent): EventRow {
-  return {
-    id: e.id,
-    ts: e.ts,
-    modelId: e.modelId,
-    surface: e.surface,
-    source: e.source,
-    credits: e.credits,
-    cost: e.cost,
-    promptTokens: e.promptTokens ?? null,
-    completionTokens: e.completionTokens ?? null,
-    estimated: e.estimated ? 1 : 0,
-    repo: e.repo ?? null,
-    costByCategory: e.costByCategory ? JSON.stringify(e.costByCategory) : null,
-  };
-}
-
-const CREATE_TABLE = `
-  CREATE TABLE IF NOT EXISTS events (
-    id TEXT PRIMARY KEY,
-    ts INTEGER NOT NULL,
-    modelId TEXT NOT NULL,
-    surface TEXT NOT NULL,
-    source TEXT NOT NULL,
-    credits REAL NOT NULL,
-    cost REAL NOT NULL,
-    promptTokens INTEGER,
-    completionTokens INTEGER,
-    estimated INTEGER NOT NULL DEFAULT 1,
-    repo TEXT,
-    costByCategory TEXT
-  );
-  CREATE INDEX IF NOT EXISTS idx_ts ON events(ts);
-  CREATE INDEX IF NOT EXISTS idx_model ON events(modelId);
-`;
-
-const INSERT_SQL =
-  'INSERT OR IGNORE INTO events ' +
-  '(id, ts, modelId, surface, source, credits, cost, promptTokens, completionTokens, estimated, repo, costByCategory) ' +
-  'VALUES (@id, @ts, @modelId, @surface, @source, @credits, @cost, @promptTokens, @completionTokens, @estimated, @repo, @costByCategory)';
-
 export class EventStore {
-  private readonly db: Database.Database;
-  private readonly ins: Database.Statement<[EventRow]>;
-  private readonly legacyFile: string;
+  private constructor(
+    private readonly instance: DuckDBInstance,
+    private readonly conn: DuckDBConnection,
+  ) {}
 
-  constructor(dir: string) {
+  /** Open (or create) the persistent database. */
+  static async open(dir: string): Promise<EventStore> {
     mkdirSync(dir, { recursive: true });
-    this.legacyFile = path.join(dir, 'events.jsonl');
-    this.db = new Database(path.join(dir, 'events.db'));
-    this.db.pragma('journal_mode = WAL');
-    this.db.exec(CREATE_TABLE);
-    this.migrateSchema();
-    this.ins = this.db.prepare<EventRow>(INSERT_SQL);
-    this.migrateJsonl();
+    const instance = await DuckDBInstance.create(path.join(dir, 'events.duckdb'));
+    const conn = await instance.connect();
+    const store = new EventStore(instance, conn);
+    await conn.run(CREATE_SQL);
+    return store;
   }
 
-  /** Additive column migrations for DBs created by an earlier schema version. */
-  private migrateSchema(): void {
-    const cols = this.db
-      .prepare<[], { name: string }>('PRAGMA table_info(events)')
-      .all()
-      .map((c) => c.name);
-    if (!cols.includes('costByCategory')) {
-      this.db.exec('ALTER TABLE events ADD COLUMN costByCategory TEXT');
-    }
+  /** No-op — opening is done in {@link open}. Kept for API compatibility. */
+  async load(): Promise<void> {
+    /* noop */
   }
 
-  /** No-op — migration runs synchronously in the constructor. Kept for API compatibility. */
-  async load(): Promise<void> { /* noop */ }
-
-  all(): readonly UsageEvent[] {
-    return this.db
-      .prepare<[], EventRow>('SELECT * FROM events ORDER BY ts')
-      .all()
-      .map(rowToEvent);
+  async all(): Promise<UsageEvent[]> {
+    return this.select('SELECT * FROM events ORDER BY ts');
   }
 
-  count(): number {
-    return (this.db.prepare<[], { n: number }>('SELECT COUNT(*) as n FROM events').get()!).n;
+  async count(): Promise<number> {
+    const rows = (await this.conn.runAndReadAll('SELECT count(*) AS c FROM events')).getRowObjects();
+    return Number(rows[0]?.c ?? 0);
   }
 
   async append(incoming: UsageEvent[]): Promise<number> {
     if (incoming.length === 0) return 0;
-    const added = this.bulkInsert(incoming);
-    if (this.count() > MAX_RAW_EVENTS) await this.rollup();
+    const before = await this.count();
+    await this.insertAll(incoming);
+    const added = (await this.count()) - before;
+    if ((await this.count()) > MAX_RAW_EVENTS) await this.rollup();
     return added;
   }
 
-  query(filter?: Filter): UsageEvent[] {
-    if (!filter) return this.all().slice();
+  async query(filter?: Filter): Promise<UsageEvent[]> {
+    if (!filter) return this.select('SELECT * FROM events ORDER BY ts');
 
     const clauses: string[] = [];
-    const params: (string | number)[] = [];
+    const params: unknown[] = [];
 
     if (filter.range) {
       clauses.push('ts >= ? AND ts < ?');
       params.push(filter.range.start, filter.range.end);
     }
-    const models = filter.models;
-    if (models && models.length > 0) {
-      clauses.push(`modelId IN (${models.map(() => '?').join(',')})`);
-      params.push(...models);
+    if (filter.models?.length) {
+      clauses.push(`modelId IN (${filter.models.map(() => '?').join(',')})`);
+      params.push(...filter.models);
     }
-    const surfaces = filter.surfaces;
-    if (surfaces && surfaces.length > 0) {
-      clauses.push(`surface IN (${surfaces.map(() => '?').join(',')})`);
-      params.push(...surfaces);
+    if (filter.surfaces?.length) {
+      clauses.push(`surface IN (${filter.surfaces.map(() => '?').join(',')})`);
+      params.push(...filter.surfaces);
     }
-    const repos = filter.repos;
-    if (repos && repos.length > 0) {
-      // Unattributed events are stored as NULL repo; match them via the sentinel.
-      const named = repos.filter((r) => r !== UNATTRIBUTED_REPO);
+    if (filter.repos?.length) {
+      // Unattributed events store a NULL repo; match them via the sentinel.
+      const named = filter.repos.filter((r) => r !== UNATTRIBUTED_REPO);
       const parts: string[] = [];
-      if (named.length > 0) {
+      if (named.length) {
         parts.push(`repo IN (${named.map(() => '?').join(',')})`);
         params.push(...named);
       }
-      if (repos.includes(UNATTRIBUTED_REPO)) parts.push('repo IS NULL');
-      if (parts.length > 0) clauses.push(`(${parts.join(' OR ')})`);
+      if (filter.repos.includes(UNATTRIBUTED_REPO)) parts.push('repo IS NULL');
+      if (parts.length) clauses.push(`(${parts.join(' OR ')})`);
     }
 
-    if (clauses.length === 0) return this.all().slice();
-
-    const sql = `SELECT * FROM events WHERE ${clauses.join(' AND ')} ORDER BY ts`;
-    return (this.db.prepare(sql).all(...params) as EventRow[]).map(rowToEvent);
+    if (clauses.length === 0) return this.select('SELECT * FROM events ORDER BY ts');
+    return this.select(`SELECT * FROM events WHERE ${clauses.join(' AND ')} ORDER BY ts`, params);
   }
 
   async rollup(now = Date.now()): Promise<void> {
     const cutoff = startOf(now - RAW_WINDOW_DAYS * DAY_MS, 'day');
-    const old = this.db
-      .prepare<[number], EventRow>('SELECT * FROM events WHERE ts < ? ORDER BY ts')
-      .all(cutoff)
-      .map(rowToEvent);
+    const old = await this.select('SELECT * FROM events WHERE ts < ? ORDER BY ts', [cutoff]);
     if (old.length === 0) return;
     const rolled = rollupEvents(old);
-    const del = this.db.prepare<[number]>('DELETE FROM events WHERE ts < ?');
-    const ins = this.ins;
-    this.db.transaction(() => {
-      del.run(cutoff);
-      for (const e of rolled) ins.run(toRow(e));
-    })();
+    const del = await this.conn.prepare('DELETE FROM events WHERE ts < ?');
+    del.bindBigInt(1, BigInt(cutoff));
+    await del.run();
+    await this.insertAll(rolled);
   }
 
   async clear(): Promise<void> {
-    this.db.prepare('DELETE FROM events').run();
+    await this.conn.run('DELETE FROM events');
+    await this.conn.run('DELETE FROM meta');
   }
 
   async export(): Promise<string> {
-    return JSON.stringify(this.all(), null, 2);
+    return JSON.stringify(await this.all(), null, 2);
+  }
+
+  /** Read a persisted meta value (used for log read offsets). */
+  async getMeta(key: string): Promise<string | undefined> {
+    const prep = await this.conn.prepare('SELECT value FROM meta WHERE key = ?');
+    prep.bindVarchar(1, key);
+    const rows = (await prep.runAndReadAll()).getRowObjects();
+    const v = rows[0]?.value;
+    return typeof v === 'string' ? v : undefined;
+  }
+
+  async setMeta(key: string, value: string): Promise<void> {
+    const prep = await this.conn.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)');
+    prep.bindVarchar(1, key);
+    prep.bindVarchar(2, value);
+    await prep.run();
   }
 
   dispose(): void {
-    this.db.close();
+    this.conn.closeSync();
+    this.instance.closeSync();
   }
 
-  private bulkInsert(events: UsageEvent[]): number {
-    const ins = this.ins;
-    let added = 0;
-    this.db.transaction(() => {
-      for (const e of events) {
-        const result = ins.run(toRow(e));
-        added += result.changes;
-      }
-    })();
-    return added;
-  }
-
-  private migrateJsonl(): void {
+  /** Bulk insert with dedup (INSERT OR IGNORE) inside a single transaction. */
+  private async insertAll(events: UsageEvent[]): Promise<void> {
+    if (events.length === 0) return;
+    await this.conn.run('BEGIN');
     try {
-      const raw = readFileSync(this.legacyFile, 'utf8');
-      const events: UsageEvent[] = [];
-      for (const line of raw.split('\n')) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        try {
-          const e = JSON.parse(trimmed) as UsageEvent;
-          if (e?.id) events.push(e);
-        } catch { /* skip malformed line */ }
+      const stmt = await this.conn.prepare(INSERT_SQL);
+      for (const e of events) {
+        bindEvent(stmt, e);
+        await stmt.run();
       }
-      if (events.length > 0) this.bulkInsert(events);
-      renameSync(this.legacyFile, this.legacyFile + '.migrated');
-    } catch { /* no legacy file or already migrated */ }
+      await this.conn.run('COMMIT');
+    } catch (err) {
+      await this.conn.run('ROLLBACK');
+      throw err;
+    }
   }
+
+  private async select(sql: string, params: unknown[] = []): Promise<UsageEvent[]> {
+    if (params.length === 0) {
+      return (await this.conn.runAndReadAll(sql)).getRowObjects().map((r) => rowToEvent(r as Row));
+    }
+    const prep = await this.conn.prepare(sql);
+    params.forEach((p, i) => bindParam(prep, i + 1, p));
+    return (await prep.runAndReadAll()).getRowObjects().map((r) => rowToEvent(r as Row));
+  }
+}
+
+/** Bind one positional parameter, choosing the DuckDB type from the JS value. */
+function bindParam(stmt: DuckDBPreparedStatement, i: number, v: unknown): void {
+  if (v === null || v === undefined) stmt.bindNull(i);
+  else if (typeof v === 'number') stmt.bindBigInt(i, BigInt(Math.trunc(v)));
+  else stmt.bindVarchar(i, String(v));
+}
+
+function bindEvent(stmt: DuckDBPreparedStatement, e: UsageEvent): void {
+  stmt.bindVarchar(1, e.id);
+  stmt.bindBigInt(2, BigInt(e.ts));
+  stmt.bindVarchar(3, e.modelId);
+  stmt.bindVarchar(4, e.surface);
+  stmt.bindVarchar(5, e.source);
+  stmt.bindDouble(6, e.credits);
+  stmt.bindDouble(7, e.cost);
+  if (e.promptTokens != null) stmt.bindInteger(8, e.promptTokens);
+  else stmt.bindNull(8);
+  if (e.completionTokens != null) stmt.bindInteger(9, e.completionTokens);
+  else stmt.bindNull(9);
+  stmt.bindBoolean(10, e.estimated);
+  if (e.repo != null) stmt.bindVarchar(11, e.repo);
+  else stmt.bindNull(11);
+  if (e.costByCategory) stmt.bindVarchar(12, JSON.stringify(e.costByCategory));
+  else stmt.bindNull(12);
 }

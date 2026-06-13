@@ -142,7 +142,7 @@
     "docs:build": "vitepress build docs"
   },
   "dependencies": {
-    "better-sqlite3": "^12.10.0",
+    "@duckdb/node-api": "^1.5.3-r.3",
     "echarts": "^5.5.1",
     "neverthrow": "^8.2.0",
     "p-retry": "^8.0.0",
@@ -151,7 +151,6 @@
   "devDependencies": {
     "@eslint/js": "^9.9.0",
     "@preact/signals-core": "^1.14.2",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/mocha": "^10.0.7",
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.95.0",

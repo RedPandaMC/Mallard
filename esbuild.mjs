@@ -10,7 +10,9 @@ const hostConfig = {
   format: 'cjs',
   platform: 'node',
   target: 'node20',
-  external: ['vscode', 'better-sqlite3'],
+  // DuckDB ships a native (N-API) binding that cannot be bundled; load it from
+  // node_modules at runtime. N-API is ABI-stable across Node and Electron.
+  external: ['vscode', '@duckdb/node-api'],
   outfile: 'dist/extension.js',
   sourcemap: !production,
   minify: production,

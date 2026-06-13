@@ -1,5 +1,4 @@
 import * as assert from 'assert';
-import Database from 'better-sqlite3';
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -14,138 +13,123 @@ async function tmpDir(): Promise<string> {
 describe('EventStore', () => {
   it('appends and persists events across reloads', async () => {
     const dir = await tmpDir();
-    const store = new EventStore(dir);
+    const store = await EventStore.open(dir);
     const added = await store.append([makeEvent({ id: 'a', ts: 1000 }), makeEvent({ id: 'b', ts: 2000 })]);
     assert.strictEqual(added, 2);
-    assert.strictEqual(store.count(), 2);
+    assert.strictEqual(await store.count(), 2);
+    store.dispose(); // release the file lock before reopening
 
-    // A fresh store over the same dir sees the persisted events.
-    const reloaded = new EventStore(dir);
-    await reloaded.load();
-    assert.strictEqual(reloaded.count(), 2);
+    const reloaded = await EventStore.open(dir);
+    assert.strictEqual(await reloaded.count(), 2);
     assert.deepStrictEqual(
-      reloaded.all().map((e) => e.id),
+      (await reloaded.all()).map((e) => e.id),
       ['a', 'b'],
     );
+    reloaded.dispose();
   });
 
   it('dedupes by id within and across appends', async () => {
     const dir = await tmpDir();
-    const store = new EventStore(dir);
+    const store = await EventStore.open(dir);
     await store.append([makeEvent({ id: 'dup', ts: 1000 })]);
     const added = await store.append([
       makeEvent({ id: 'dup', ts: 9999 }),
       makeEvent({ id: 'new', ts: 3000 }),
     ]);
     assert.strictEqual(added, 1);
-    assert.strictEqual(store.count(), 2);
+    assert.strictEqual(await store.count(), 2);
+    store.dispose();
   });
 
   it('keeps events sorted by timestamp', async () => {
     const dir = await tmpDir();
-    const store = new EventStore(dir);
+    const store = await EventStore.open(dir);
     await store.append([
       makeEvent({ id: 'late', ts: 5000 }),
       makeEvent({ id: 'early', ts: 1000 }),
       makeEvent({ id: 'mid', ts: 3000 }),
     ]);
     assert.deepStrictEqual(
-      store.all().map((e) => e.id),
+      (await store.all()).map((e) => e.id),
       ['early', 'mid', 'late'],
     );
+    store.dispose();
   });
 
   it('queries with a filter', async () => {
     const dir = await tmpDir();
-    const store = new EventStore(dir);
+    const store = await EventStore.open(dir);
     await store.append([
       makeEvent({ id: 'a', ts: 1000, modelId: 'gpt-4o' }),
       makeEvent({ id: 'b', ts: 2000, modelId: 'claude-sonnet-4' }),
     ]);
-    const onlyGpt = store.query({ models: ['gpt-4o'] });
+    const onlyGpt = await store.query({ models: ['gpt-4o'] });
     assert.strictEqual(onlyGpt.length, 1);
     assert.strictEqual(onlyGpt[0]!.id, 'a');
+    store.dispose();
   });
 
   it('persists and reads back the per-category cost breakdown', async () => {
     const dir = await tmpDir();
-    const store = new EventStore(dir);
+    const store = await EventStore.open(dir);
     await store.append([
       makeEvent({ id: 'a', ts: 1000, cost: 0.1, costByCategory: { input: 0.06, output: 0.04 } }),
     ]);
-    const reloaded = new EventStore(dir);
-    assert.deepStrictEqual(reloaded.all()[0]!.costByCategory, { input: 0.06, output: 0.04 });
+    store.dispose();
+    const reloaded = await EventStore.open(dir);
+    assert.deepStrictEqual((await reloaded.all())[0]!.costByCategory, { input: 0.06, output: 0.04 });
+    reloaded.dispose();
   });
 
-  it('migrates a v1 DB (no costByCategory column) without data loss', async () => {
+  it('filters by repo, matching missing repo via the unattributed sentinel', async () => {
     const dir = await tmpDir();
-    // Simulate a pre-v2 database: events table without the costByCategory column.
-    const db = new Database(path.join(dir, 'events.db'));
-    db.exec(`CREATE TABLE events (
-      id TEXT PRIMARY KEY, ts INTEGER NOT NULL, modelId TEXT NOT NULL,
-      surface TEXT NOT NULL, source TEXT NOT NULL, credits REAL NOT NULL,
-      cost REAL NOT NULL, promptTokens INTEGER, completionTokens INTEGER,
-      estimated INTEGER NOT NULL DEFAULT 1, repo TEXT);`);
-    db.prepare(
-      'INSERT INTO events (id, ts, modelId, surface, source, credits, cost, estimated) ' +
-        "VALUES ('old', 1000, 'gpt-4o', 'chat', 'local', 1, 0.04, 1)",
-    ).run();
-    db.close();
-
-    const store = new EventStore(dir);
-    const rows = store.all();
-    assert.strictEqual(rows.length, 1);
-    assert.strictEqual(rows[0]!.id, 'old');
-    assert.strictEqual(rows[0]!.costByCategory, undefined);
-
-    // New writes with a breakdown work after migration.
-    await store.append([
-      makeEvent({ id: 'new', ts: 2000, costByCategory: { input: 0.04 } }),
-    ]);
-    assert.deepStrictEqual(store.query({})!.find((e) => e.id === 'new')!.costByCategory, {
-      input: 0.04,
-    });
-  });
-
-  it('filters by repo, matching NULL repo via the unattributed sentinel', async () => {
-    const dir = await tmpDir();
-    const store = new EventStore(dir);
+    const store = await EventStore.open(dir);
     await store.append([
       makeEvent({ id: 'a', ts: 1000, repo: 'octo/a' }),
       makeEvent({ id: 'b', ts: 2000, repo: 'octo/b' }),
       makeEvent({ id: 'c', ts: 3000 }), // no repo -> stored as NULL
     ]);
     assert.deepStrictEqual(
-      store.query({ repos: ['octo/a'] }).map((e) => e.id),
+      (await store.query({ repos: ['octo/a'] })).map((e) => e.id),
       ['a'],
     );
     assert.deepStrictEqual(
-      store.query({ repos: ['unattributed'] }).map((e) => e.id),
+      (await store.query({ repos: ['unattributed'] })).map((e) => e.id),
       ['c'],
     );
     assert.deepStrictEqual(
-      store.query({ repos: ['octo/b', 'unattributed'] }).map((e) => e.id),
+      (await store.query({ repos: ['octo/b', 'unattributed'] })).map((e) => e.id),
       ['b', 'c'],
     );
+    store.dispose();
   });
 
-  it('clears all events and truncates the file', async () => {
+  it('persists log read offsets in the meta table', async () => {
     const dir = await tmpDir();
-    const store = new EventStore(dir);
-    await store.append([makeEvent({ id: 'a', ts: 1000 })]);
-    await store.clear();
-    assert.strictEqual(store.count(), 0);
+    const store = await EventStore.open(dir);
+    await store.setMeta('fileOffsets', JSON.stringify([['/path/a.log', 4096]]));
+    store.dispose();
+    const reopened = await EventStore.open(dir);
+    assert.strictEqual(await reopened.getMeta('fileOffsets'), '[["/path/a.log",4096]]');
+    reopened.dispose();
+  });
 
-    const reloaded = new EventStore(dir);
-    await reloaded.load();
-    assert.strictEqual(reloaded.count(), 0);
+  it('clears all events and read offsets', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([makeEvent({ id: 'a', ts: 1000 })]);
+    await store.setMeta('fileOffsets', '[["x",1]]');
+    await store.clear();
+    assert.strictEqual(await store.count(), 0);
+    assert.strictEqual(await store.getMeta('fileOffsets'), undefined);
+    store.dispose();
   });
 
   it('rolls up events older than the raw window into daily rows', async () => {
     const dir = await tmpDir();
     const now = startOf(Date.now(), 'day');
     const oldTs = now - 200 * DAY_MS; // well beyond the 90-day window
-    const store = new EventStore(dir);
+    const store = await EventStore.open(dir);
     await store.append([
       makeEvent({ id: 'old1', ts: oldTs + 1000, modelId: 'gpt-4o', repo: 'alpha', credits: 2, cost: 0.08 }),
       makeEvent({ id: 'old2', ts: oldTs + 2000, modelId: 'gpt-4o', repo: 'alpha', credits: 3, cost: 0.12 }),
@@ -155,21 +139,23 @@ describe('EventStore', () => {
     await store.rollup(now + DAY_MS);
 
     // The two old events collapse into one rolled row; the recent one survives.
-    assert.strictEqual(store.count(), 2);
-    const rolled = store.all().find((e) => e.id.startsWith('roll:'));
+    assert.strictEqual(await store.count(), 2);
+    const rolled = (await store.all()).find((e) => e.id.startsWith('roll:'));
     assert.ok(rolled, 'expected a rolled-up row');
     assert.strictEqual(rolled!.credits, 5);
     assert.ok(Math.abs(rolled!.cost - 0.2) < 1e-9);
     assert.strictEqual(rolled!.estimated, true);
+    store.dispose();
   });
 
   it('exports a JSON dump of all events', async () => {
     const dir = await tmpDir();
-    const store = new EventStore(dir);
+    const store = await EventStore.open(dir);
     await store.append([makeEvent({ id: 'a', ts: 1000 })]);
     const dump = JSON.parse(await store.export());
     assert.strictEqual(dump.length, 1);
     assert.strictEqual(dump[0].id, 'a');
+    store.dispose();
   });
 });
 

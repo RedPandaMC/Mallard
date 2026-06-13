@@ -23,7 +23,10 @@ real-time per-model cost, with optional GitHub billing reconciliation.
 - Linear month-end forecast behind a pluggable forecaster seam.
 - Optional GitHub billing reconciliation through VS Code's session API.
 - Exportable, standalone, printable HTML report.
-- SQLite event store with a recent-raw window and daily rollup.
+- Embedded DuckDB event store (via the N-API bindings, which are ABI-stable
+  across Node and Electron, so there is no native module to rebuild). Persists to
+  a single file with a recent-raw window and daily rollup, and persists log read
+  offsets so startup never re-scans logs.
 - Pricing manifest bundled and refreshed daily, validated before use.
 
 ### Changed

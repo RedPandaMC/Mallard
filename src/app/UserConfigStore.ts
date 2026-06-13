@@ -12,9 +12,7 @@ export class UserConfigStore implements vscode.Disposable {
   private readonly _onDidChange = new vscode.EventEmitter<UserConfig>();
   readonly onDidChange = this._onDidChange.event;
 
-  constructor(private readonly memento: vscode.Memento) {
-    this.migrateLegacySettings();
-  }
+  constructor(private readonly memento: vscode.Memento) {}
 
   get(): UserConfig {
     const stored = this.memento.get<Partial<UserConfig>>(STORAGE_KEY);
@@ -31,23 +29,6 @@ export class UserConfigStore implements vscode.Disposable {
   async reset(): Promise<void> {
     await this.memento.update(STORAGE_KEY, undefined);
     this._onDidChange.fire(this.get());
-  }
-
-  /**
-   * One-time seed: if nothing is stored yet but the user still has non-default
-   * values in the legacy settings keys, carry them over so upgrades are seamless.
-   */
-  private migrateLegacySettings(): void {
-    if (this.memento.get(STORAGE_KEY) !== undefined) return;
-    const c = vscode.workspace.getConfiguration('weevil');
-    const monthlyBudget = c.get<number>('monthlyBudget', 0);
-    const includedCredits = c.get<number>('includedCredits', 300);
-    const dailyCreditAlert = c.get<number>('alert.dailyCredits', 0);
-    if (monthlyBudget === 0 && includedCredits === 300 && dailyCreditAlert === 0) return;
-    void this.memento.update(
-      STORAGE_KEY,
-      mergeConfig({ monthlyBudget, includedCredits, dailyCreditAlert }),
-    );
   }
 
   dispose(): void {
