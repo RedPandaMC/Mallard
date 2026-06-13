@@ -11,6 +11,8 @@ export interface ParseContext {
   pricePerCredit: number;
   manifest?: PricingManifest;
   now: number;
+  /** Repo to attribute these events to (active workspace repo at parse time). */
+  repo?: string;
 }
 
 type AnyRecord = Record<string, unknown>;
@@ -91,6 +93,7 @@ export function parseOtelContent(content: string, ctx: ParseContext): UsageEvent
       credits,
       cost,
       estimated: true,
+      ...(ctx.repo !== undefined ? { repo: ctx.repo } : {}),
     });
   }
 

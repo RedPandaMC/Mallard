@@ -13,7 +13,8 @@ import * as vscode from 'vscode';
 import { ProviderStatus } from '../domain/types';
 import { PricingService } from '../pricing/PricingService';
 import { findLogFiles, isPathSafe, locateCopilotLogDirs } from './locate';
-import { parseOtelContent } from './otelParse';
+import { parseOtelContent, ParseContext } from './otelParse';
+import { currentRepo } from './repoResolver';
 import { EventStore } from '../store/EventStore';
 
 const DEBOUNCE_MS = 1_500;
@@ -93,10 +94,12 @@ export class LogWatcher implements vscode.Disposable {
   }
 
   private async parseAll(files: string[], full: boolean): Promise<void> {
-    const ctx = {
+    const repo = currentRepo();
+    const ctx: ParseContext = {
       pricePerCredit: this.pricing.pricePerCredit,
       manifest: this.pricing.currentManifest,
       now: Date.now(),
+      ...(repo !== undefined ? { repo } : {}),
     };
 
     let totalAdded = 0;

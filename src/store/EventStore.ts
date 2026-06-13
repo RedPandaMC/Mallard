@@ -12,6 +12,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync, readFileSync, renameSync } from 'fs';
 import * as path from 'path';
 import { Filter, SourceKind, Surface, UsageEvent } from '../domain/types';
+import { UNATTRIBUTED_REPO } from '../domain/aggregate';
 import { DAY_MS, startOf } from '../util/time';
 import { MAX_RAW_EVENTS, RAW_WINDOW_DAYS } from './schema';
 
@@ -158,6 +159,18 @@ export class EventStore {
     if (surfaces && surfaces.length > 0) {
       clauses.push(`surface IN (${surfaces.map(() => '?').join(',')})`);
       params.push(...surfaces);
+    }
+    const repos = filter.repos;
+    if (repos && repos.length > 0) {
+      // Unattributed events are stored as NULL repo; match them via the sentinel.
+      const named = repos.filter((r) => r !== UNATTRIBUTED_REPO);
+      const parts: string[] = [];
+      if (named.length > 0) {
+        parts.push(`repo IN (${named.map(() => '?').join(',')})`);
+        params.push(...named);
+      }
+      if (repos.includes(UNATTRIBUTED_REPO)) parts.push('repo IS NULL');
+      if (parts.length > 0) clauses.push(`(${parts.join(' OR ')})`);
     }
 
     if (clauses.length === 0) return this.all().slice();

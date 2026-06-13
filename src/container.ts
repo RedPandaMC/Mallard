@@ -10,6 +10,7 @@ import { UserConfigStore } from './app/UserConfigStore';
 import { GitHubSession } from './billing/GitHubSession';
 import { GitHubUsageService } from './billing/GitHubUsageService';
 import { PricingManifest } from './domain/pricing';
+import { initRepoAttribution } from './ingest/repoResolver';
 import { LogWatcher } from './ingest/LogWatcher';
 import { PricingService } from './pricing/PricingService';
 import { EventStore } from './store/EventStore';
@@ -22,6 +23,7 @@ export interface Container {
 }
 
 export async function buildContainer(context: vscode.ExtensionContext): Promise<Container> {
+  await initRepoAttribution();
   const bundledManifest = await loadBundledManifest(context);
 
   const cfg = readConfig();

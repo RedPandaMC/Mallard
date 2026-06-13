@@ -143,6 +143,17 @@ body {
 .wv-metric-btn:hover { background: var(--w-bg-hover); color: var(--w-fg); }
 .wv-metric-btn[aria-pressed='true'] { background: var(--w-brand-dim); color: var(--w-brand); }
 
+/* Repo selector */
+.wv-repo-select {
+  padding: var(--w-s1) var(--w-s2);
+  font: inherit;
+  font-size: 11px;
+  color: var(--vscode-dropdown-foreground, var(--w-fg));
+  background: var(--vscode-dropdown-background, var(--w-bg-card));
+  border: 1px solid var(--vscode-dropdown-border, var(--w-border));
+  border-radius: var(--w-r1);
+}
+
 /* Model filter dropdown */
 .wv-model-filter { position: relative; }
 

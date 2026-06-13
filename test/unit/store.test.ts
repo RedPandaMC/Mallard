@@ -66,6 +66,28 @@ describe('EventStore', () => {
     assert.strictEqual(onlyGpt[0]!.id, 'a');
   });
 
+  it('filters by repo, matching NULL repo via the unattributed sentinel', async () => {
+    const dir = await tmpDir();
+    const store = new EventStore(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, repo: 'octo/a' }),
+      makeEvent({ id: 'b', ts: 2000, repo: 'octo/b' }),
+      makeEvent({ id: 'c', ts: 3000 }), // no repo -> stored as NULL
+    ]);
+    assert.deepStrictEqual(
+      store.query({ repos: ['octo/a'] }).map((e) => e.id),
+      ['a'],
+    );
+    assert.deepStrictEqual(
+      store.query({ repos: ['unattributed'] }).map((e) => e.id),
+      ['c'],
+    );
+    assert.deepStrictEqual(
+      store.query({ repos: ['octo/b', 'unattributed'] }).map((e) => e.id),
+      ['b', 'c'],
+    );
+  });
+
   it('clears all events and truncates the file', async () => {
     const dir = await tmpDir();
     const store = new EventStore(dir);
