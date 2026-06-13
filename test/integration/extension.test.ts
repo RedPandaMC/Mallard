@@ -20,18 +20,23 @@ describe('Weevil extension (integration)', () => {
     assert.strictEqual(ext!.isActive, true);
   });
 
-  it('registers exactly the six weevil.* commands', async () => {
+  it('registers exactly the six contributed weevil.* commands', async () => {
     const ext = vscode.extensions.getExtension(EXT_ID);
     await ext!.activate();
     const all = await vscode.commands.getCommands(true);
     for (const cmd of EXPECTED_COMMANDS) {
       assert.ok(all.includes(cmd), `command ${cmd} should be registered`);
     }
-    const weevilCommands = all.filter((c) => c.startsWith('weevil.'));
-    assert.strictEqual(
-      weevilCommands.length,
-      EXPECTED_COMMANDS.length,
-      `unexpected weevil commands: ${weevilCommands.join(', ')}`,
+    // VS Code auto-generates per-view commands (weevil.sidebar.open, .focus,
+    // .resetViewLocation, .toggleVisibility, .removeView) for our webview view;
+    // those are framework-owned, so exclude them when checking our own set.
+    const contributed = all
+      .filter((c) => c.startsWith('weevil.') && !c.startsWith('weevil.sidebar.'))
+      .sort();
+    assert.deepStrictEqual(
+      contributed,
+      [...EXPECTED_COMMANDS].sort(),
+      `unexpected weevil commands: ${contributed.join(', ')}`,
     );
   });
 
