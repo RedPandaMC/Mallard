@@ -40,10 +40,10 @@ export function mountSpendGauge(el: HTMLElement): SpendGaugeHandle {
       let severity = 'ok';
       if (pct >= 100) {
         severity = 'err';
-        pace = `Over — ${formatMoney(budget.usedCost, currency)} spent`;
+        pace = `Over: ${formatMoney(budget.usedCost, currency)} spent`;
       } else if (pct >= 80) {
         severity = 'warn';
-        pace = `${pctDisplay}% — watch spend`;
+        pace = `${pctDisplay}% used, watch spend`;
       } else {
         pace = `${pctDisplay}%`;
       }

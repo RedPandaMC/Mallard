@@ -25,6 +25,9 @@ optionally connect to GitHub's billing API for the authoritative charge.
   breakdown, a model-to-surface flow chart, and a spend-by-cost-type chart. All
   aggregation happens in the extension host; the webview only paints, and charts
   below the fold initialise lazily.
+- **Arrangeable analysis view.** An edit mode lets you drag charts to reorder
+  them, scale each between half and full width, and hide the ones you do not use.
+  The layout is saved and restored automatically.
 - **Budget and alerts, in the UI.** Set a monthly budget, an included-credit
   allowance, a daily credit threshold, and a spending-velocity alert from the
   dashboard. They are stored per user and follow you across machines.
@@ -67,7 +70,9 @@ detail, older ones rolled up to daily rows), and computes a render-ready snapsho
 that the status bar, sidebar, and dashboard all consume.
 
 Token counts are estimates, so costs are estimates. For the authoritative number,
-connect GitHub billing.
+connect GitHub billing. The logs expose only input and output token counts per
+call, so the spend-by-cost-type chart splits cost into input and output; richer
+categories such as tool and reasoning are not available locally.
 
 ## Settings
 
@@ -87,7 +92,9 @@ Path`, `Sign In to GitHub`, `Export Monthly Report`.
 ## Privacy and security
 
 - Usage data lives in your per-user global storage, never in settings or in git.
-  "Clear All Data" resets it.
+  "Clear All Data" wipes events, your budget/alert config, the saved layout, and
+  the cached pricing manifest. VS Code keeps extension storage after uninstall,
+  so run it before removing Weevil to leave nothing behind.
 - The webview uses a strict Content-Security-Policy with a per-load nonce: no
   inline scripts, no inline styles, no eval, and no external origins. Messages are
   validated by typed guards in both directions.

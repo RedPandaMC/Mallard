@@ -26,9 +26,11 @@ two of new entries. Use it after switching machines or if a view looks stale.
 
 ## Weevil: Clear All Data
 
-ID `weevil.clearData`. Asks for confirmation, then wipes all stored events from
-the local event store in VS Code's global storage. Use it to start fresh, for
-example after changing plans. Cleared data cannot be recovered.
+ID `weevil.clearData`. Asks for confirmation, then wipes everything Weevil
+stores: recorded usage events, your budget and alert settings, the saved
+dashboard layout, and the cached pricing manifest. Run it to start fresh or
+before uninstalling, since VS Code keeps an extension's storage after removal.
+Cleared data cannot be recovered.
 
 ## Weevil: Show Detected Log Path
 

@@ -22,6 +22,27 @@ These were previously settings; they moved into the UI so you can adjust them
 without opening `settings.json`, and they follow you across machines through VS
 Code's user storage.
 
+## Arranging the dashboard
+
+Click "Edit layout" above the charts to rearrange the analysis view. While
+editing you can:
+
+- Drag a panel by its handle to reorder it.
+- Toggle a panel between half and full width to scale it.
+- Hide a panel you do not use, or show it again.
+
+Charts always scale to fit their panel. Your arrangement is saved automatically
+and restored on the next launch, on every machine signed in to the same VS Code
+profile. "Reset layout" restores the defaults.
+
+## Removing your data
+
+All of Weevil's data stays on your machine: usage events in the extension's
+global storage, your budget, alert, and layout choices in VS Code's per-user
+state, and a cached pricing manifest. VS Code does not delete this when you
+uninstall an extension, so to remove everything run "Weevil: Clear All Data"
+first, then uninstall.
+
 ## VS Code settings
 
 There are two, for cases where auto-detection does not fit.

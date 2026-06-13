@@ -67,7 +67,7 @@ export function mountGitHubBillingStrip(el: HTMLElement): GitHubBillingStripHand
             warn.innerHTML =
               `<i class="codicon codicon-warning"></i> ` +
               `Local estimate (${formatMoney(localCost, currency)}) differs from API ` +
-              `(${formatMoney(totalNetAmount, currency)}) — other devices may account for the difference.`;
+              `(${formatMoney(totalNetAmount, currency)}). Other devices may account for the difference.`;
             el.appendChild(warn);
           }
         }

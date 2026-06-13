@@ -19,7 +19,7 @@ export class StatusBarController implements vscode.Disposable {
     this.item.name = 'Weevil';
     this.item.command = 'weevil.openDashboard';
     this.item.text = '$(circle-filled) Weevil';
-    this.item.tooltip = 'Weevil — loading usage…';
+    this.item.tooltip = 'Weevil: loading usage';
     this.item.show();
   }
 
@@ -46,7 +46,7 @@ export class StatusBarController implements vscode.Disposable {
 
 function buildTooltip(s: UsageSnapshot): vscode.MarkdownString {
   const md = new vscode.MarkdownString(undefined, true);
-  md.appendMarkdown(`**Weevil** — Copilot usage tracker\n\n`);
+  md.appendMarkdown(`**Weevil**: Copilot usage tracker\n\n`);
   md.appendMarkdown(
     `- **Today:** ${formatMoney(s.today.cost, s.currency)} · ${formatCredits(s.today.credits)} cr\n`,
   );
