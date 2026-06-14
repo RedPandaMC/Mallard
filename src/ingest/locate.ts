@@ -12,7 +12,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 /** Resolve the VS Code log root (the parent of the session-specific folder). */
-export function vscodLogRoot(logUriPath: string): string {
+export function vscodeLogRoot(logUriPath: string): string {
   // logUri typically: .../logs/20260612T123456/window1/exthost
   // Walk up to find the "logs" ancestor.
   let p = logUriPath;
@@ -26,16 +26,43 @@ export function vscodLogRoot(logUriPath: string): string {
   return path.dirname(logUriPath);
 }
 
-/** Platform-default VS Code log directories. */
-function platformDefaults(): string[] {
+/** Platform-default VS Code log directories (desktop installs). */
+function desktopDefaults(): string[] {
   const home = os.homedir();
   if (process.platform === 'darwin') {
-    return [path.join(home, 'Library', 'Application Support', 'Code', 'logs')];
+    return [
+      path.join(home, 'Library', 'Application Support', 'Code', 'logs'),
+      path.join(home, 'Library', 'Application Support', 'Code - Insiders', 'logs'),
+    ];
   }
   if (process.platform === 'win32') {
-    return process.env.APPDATA ? [path.join(process.env.APPDATA, 'Code', 'logs')] : [];
+    if (!process.env.APPDATA) return [];
+    return [
+      path.join(process.env.APPDATA, 'Code', 'logs'),
+      path.join(process.env.APPDATA, 'Code - Insiders', 'logs'),
+    ];
   }
-  return [path.join(home, '.config', 'Code', 'logs')];
+  return [
+    path.join(home, '.config', 'Code', 'logs'),
+    path.join(home, '.config', 'Code - Insiders', 'logs'),
+    path.join(home, '.config', 'VSCodium', 'logs'),
+  ];
+}
+
+/** VS Code Server, OSS, and VSCodium log directories. */
+function serverAndForks(): string[] {
+  const home = os.homedir();
+  return [
+    path.join(home, '.vscode-server', 'data', 'logs'),
+    path.join(home, '.vscode-server-insiders', 'data', 'logs'),
+    path.join(home, '.vscode-oss', 'data', 'logs'),
+    path.join(home, '.vscode-oss-dev', 'data', 'logs'),
+  ];
+}
+
+/** Platform-default VS Code log directories (desktop + server + forks). */
+export function platformDefaults(): string[] {
+  return [...desktopDefaults(), ...serverAndForks()];
 }
 
 export async function locateCopilotLogDirs(
@@ -44,7 +71,7 @@ export async function locateCopilotLogDirs(
 ): Promise<string[]> {
   const candidates: string[] = [];
   if (override) candidates.push(override);
-  if (logUriPath) candidates.push(vscodLogRoot(logUriPath));
+  if (logUriPath) candidates.push(vscodeLogRoot(logUriPath));
   candidates.push(...platformDefaults());
 
   const existing: string[] = [];
@@ -72,6 +99,18 @@ export function isPathSafe(filePath: string, allowedRoots: string[]): boolean {
   });
 }
 
+/** Filename patterns that count as a Copilot log. */
+function isCopilotLogFilename(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (!lower.includes('copilot')) return false;
+  return (
+    lower.endsWith('.log') ||
+    lower.endsWith('.json') ||
+    lower.endsWith('.ndjson') ||
+    lower.endsWith('.otel.json')
+  );
+}
+
 /** Shallow walk for Copilot-ish log files, with depth/count caps to stay cheap. */
 export async function findLogFiles(
   dir: string,
@@ -96,10 +135,7 @@ export async function findLogFiles(
       if (entry.isDirectory()) {
         await walk(full, depth + 1);
       } else if (entry.isFile()) {
-        const lower = full.toLowerCase();
-        if (lower.includes('copilot') && (lower.endsWith('.log') || lower.endsWith('.json'))) {
-          out.push(full);
-        }
+        if (isCopilotLogFilename(full)) out.push(full);
       }
     }
   }

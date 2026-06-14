@@ -12,7 +12,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { ProviderStatus } from '../domain/types';
 import { PricingService } from '../pricing/PricingService';
-import { findLogFiles, isPathSafe, locateCopilotLogDirs } from './locate';
+import { findLogFiles, isPathSafe, locateCopilotLogDirs, platformDefaults } from './locate';
 import { parseOtelContent, ParseContext } from './otelParse';
 import { currentRepo } from './repoResolver';
 import { EventStore } from '../store/EventStore';
@@ -32,6 +32,7 @@ export class LogWatcher implements vscode.Disposable {
   private status: ProviderStatus = { kind: 'empty' };
   private logPaths: string[] = [];
   private allowedRoots: string[] = [];
+  private searchedDirs: string[] = [];
   private fileOffsets = new Map<string, number>();
 
   constructor(
@@ -49,9 +50,50 @@ export class LogWatcher implements vscode.Disposable {
     return this.logPaths.slice();
   }
 
+  /** Candidate directories the watcher looked at on its last start/reparse. */
+  getSearchedDirs(): string[] {
+    return this.searchedDirs.slice();
+  }
+
+  /** All platform-default log roots we know about (for diagnostics). */
+  getKnownDirs(): string[] {
+    return platformDefaults();
+  }
+
+  /** Union of override + VS Code log root + platform defaults (deduped, in order). */
+  private allCandidates(): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    const push = (p: string | undefined) => {
+      if (!p) return;
+      const key = path.resolve(p);
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(key);
+    };
+    push(this.overridePath);
+    if (this.logUriPath) {
+      // mirror locateCopilotLogDirs's logic for the session root
+      const root = (() => {
+        let q = this.logUriPath!;
+        for (let i = 0; i < 4; i++) {
+          const parent = path.dirname(q);
+          if (parent === q) break;
+          if (path.basename(parent).toLowerCase() === 'logs') return parent;
+          q = parent;
+        }
+        return path.dirname(this.logUriPath!);
+      })();
+      push(root);
+    }
+    for (const d of platformDefaults()) push(d);
+    return out;
+  }
+
   async start(): Promise<void> {
     const dirs = await locateCopilotLogDirs(this.logUriPath, this.overridePath || undefined);
     this.allowedRoots = dirs;
+    this.searchedDirs = this.allCandidates();
 
     const files: string[] = [];
     for (const dir of dirs) {
@@ -171,7 +213,11 @@ export class LogWatcher implements vscode.Disposable {
   dispose(): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     for (const w of this.watchers) {
-      try { w.close(); } catch { /* ignore */ }
+      try {
+        w.close();
+      } catch {
+        /* ignore */
+      }
     }
     this.watchers = [];
   }
