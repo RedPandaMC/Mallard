@@ -72,4 +72,25 @@
     color-mix(in srgb, var(--w-fg) 5%, transparent) 0.5px,
     transparent 0.6px
   );
+
+  /* ── Instrument layer (Teenage Engineering OP-Z / Rabbit R1) ──────────
+     The field-guide housing gets OP-Z readouts and controls. One bold
+     action accent (Rabbit R1 cinnabar) for live/interactive elements, a
+     per-metric data palette, and a self-contained dark "LCD" that stays
+     dark on both light and dark editor themes (like the OP-1's white body
+     with a black display). All decorative — surfaces/text stay --vscode-*. */
+  --w-action: #fe5000; /* Rabbit R1 cinnabar — live / primary action */
+  --w-action-fg: #ffffff;
+  --w-te-cyan: #36c5d4;
+  --w-te-green: #74d68a;
+
+  /* data palette, one accent per readout */
+  --w-data-1: var(--w-ink-amber);
+  --w-data-2: var(--w-ink-coral);
+  --w-data-3: var(--w-ink-purple);
+  --w-data-4: var(--w-te-cyan);
+
+  --w-readout-font: var(--w-font-mono);
+  --w-screen: #15131b; /* the OP-Z display glass */
+  --w-screen-grid: radial-gradient(rgba(255, 255, 255, 0.07) 0.5px, transparent 0.6px);
 }

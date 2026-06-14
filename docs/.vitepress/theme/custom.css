@@ -26,6 +26,8 @@
   --wv-amber: #ffb454;
   --wv-coral: #ff6b81;
   --wv-purple: #b45cff;
+  --wv-cyan: #36c5d4;
+  --wv-r1: #fe5000; /* Rabbit R1 cinnabar — the action accent */
   --wv-ink-grad: linear-gradient(100deg, #ffb454 0%, #ff6b81 50%, #b45cff 100%);
 
   --wv-font-display: 'Fraunces', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
@@ -202,12 +204,18 @@ h1.title {
 }
 .VPFeature {
   position: relative;
+  --accent: var(--vp-c-brand-3);
   border: 1px solid var(--vp-c-border);
   background: var(--vp-c-bg-soft);
   border-radius: 10px;
   overflow: hidden;
-  transition: border-color 0.2s, transform 0.2s;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
+/* per-plate data colour, OP-Z parameter coding */
+.VPFeatures .items > div:nth-child(1) .VPFeature { --accent: var(--wv-amber); }
+.VPFeatures .items > div:nth-child(2) .VPFeature { --accent: var(--wv-coral); }
+.VPFeatures .items > div:nth-child(3) .VPFeature { --accent: var(--wv-purple); }
+.VPFeatures .items > div:nth-child(4) .VPFeature { --accent: var(--wv-cyan); }
 .VPFeature::before {
   counter-increment: wv-fig;
   content: 'fig.' counter(wv-fig);
@@ -227,13 +235,19 @@ h1.title {
   bottom: 12px;
   width: 10px;
   height: 10px;
-  border-left: 1px solid var(--vp-c-brand-3);
-  border-bottom: 1px solid var(--vp-c-brand-3);
-  opacity: 0.55;
+  border-left: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  opacity: 0.85;
 }
 .VPFeature:hover {
-  border-color: var(--vp-c-brand-3);
-  transform: translateY(-2px);
+  border-color: var(--accent);
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 40%, transparent);
+}
+/* the icon tile reads like a colour-coded OP-Z chip */
+.VPFeature .icon {
+  background: color-mix(in srgb, var(--accent) 14%, transparent) !important;
+  border-radius: 8px;
 }
 .VPFeature .title {
   font-family: var(--wv-font-display);
@@ -243,14 +257,18 @@ h1.title {
 
 /* --- buttons -------------------------------------------------------------- */
 .VPButton.brand {
-  background: var(--vp-c-brand-3);
-  border-color: var(--vp-c-brand-3);
+  background: var(--wv-r1);
+  border-color: var(--wv-r1);
   color: #fff;
   font-weight: 600;
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--wv-r1) 45%, transparent);
+  transition: transform 0.12s, box-shadow 0.12s;
 }
 .VPButton.brand:hover {
-  background: var(--wv-coral);
-  border-color: var(--wv-coral);
+  background: color-mix(in srgb, var(--wv-r1) 88%, #000);
+  border-color: var(--wv-r1);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--wv-r1) 45%, transparent);
 }
 
 /* --- nav / links ---------------------------------------------------------- */
