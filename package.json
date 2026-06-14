@@ -32,7 +32,7 @@
     "forecasting",
     "dashboard"
   ],
-  "icon": "media/weevil-icon.png",
+  "icon": "media/weevil-icon-128.png",
   "galleryBanner": {
     "color": "#1B1B1F",
     "theme": "dark"
@@ -42,28 +42,10 @@
     "onStartupFinished"
   ],
   "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "weevil",
-          "title": "Weevil",
-          "icon": "media/weevil-activitybar.svg"
-        }
-      ]
-    },
-    "views": {
-      "weevil": [
-        {
-          "type": "webview",
-          "id": "weevil.sidebar",
-          "name": "Usage"
-        }
-      ]
-    },
     "commands": [
       {
         "command": "weevil.openDashboard",
-        "title": "Open Dashboard",
+        "title": "Open Weevil Dashboard",
         "category": "Weevil",
         "icon": "$(graph)"
       },
@@ -94,22 +76,85 @@
         "title": "Export Monthly Report",
         "category": "Weevil",
         "icon": "$(export)"
+      },
+      {
+        "command": "weevil.simulateRestriction",
+        "title": "Simulate Restriction State",
+        "category": "Weevil",
+        "icon": "$(debug-start)"
       }
     ],
     "menus": {
-      "view/title": [
+      "commandPalette": [
         {
-          "command": "weevil.refresh",
-          "when": "view == weevil.sidebar",
-          "group": "navigation@1"
-        },
+          "command": "weevil.simulateRestriction",
+          "when": "false"
+        }
+      ]
+    },
+    "views": {
+      "weevil": [
+        {
+          "type": "webview",
+          "id": "weevil.trigger",
+          "name": "Weevil",
+          "visibility": "hidden"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "weevil.openDashboard",
+        "title": "Open Weevil Dashboard",
+        "category": "Weevil",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "weevil.refresh",
+        "title": "Refresh Now",
+        "category": "Weevil",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "weevil.clearData",
+        "title": "Clear All Data",
+        "category": "Weevil"
+      },
+      {
+        "command": "weevil.showLogPath",
+        "title": "Show Detected Log Path",
+        "category": "Weevil"
+      },
+      {
+        "command": "weevil.signIn",
+        "title": "Sign In to GitHub",
+        "category": "Weevil",
+        "icon": "$(account)"
+      },
+      {
+        "command": "weevil.exportReport",
+        "title": "Export Monthly Report",
+        "category": "Weevil",
+        "icon": "$(export)"
+      },
+      {
+        "command": "weevil.simulateRestriction",
+        "title": "Simulate Restriction State",
+        "category": "Weevil",
+        "icon": "$(debug-start)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
         {
           "command": "weevil.openDashboard",
-          "when": "view == weevil.sidebar",
-          "group": "navigation@2"
+          "when": "false"
+        },
+        {
+          "command": "weevil.simulateRestriction",
+          "when": "false"
         }
-      ],
-      "commandPalette": []
+      ]
     },
     "configuration": {
       "title": "Weevil",
@@ -145,6 +190,7 @@
     "@duckdb/node-api": "^1.5.3-r.3",
     "chalk": "2.4.2",
     "echarts": "^5.5.1",
+    "monaco-editor": "^0.52.0",
     "neverthrow": "^8.2.0",
     "p-retry": "^8.0.0",
     "zod": "^4.4.3"

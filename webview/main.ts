@@ -20,9 +20,9 @@ import { mountStatusBanner } from './components/StatusBanner';
 import { mountEmptyState } from './components/EmptyState';
 import { mountSpendGauge } from './components/SpendGauge';
 import { mountAlertConfigPanel } from './components/AlertConfigPanel';
+import { mountRestrictionBanner } from './components/RestrictionBanner';
 
 const LOGO_SRC = document.body.dataset.logo ?? '';
-const EMBEDDED = document.body.dataset.embedded === '1';
 
 applyTheme();
 mountDashboard(document.getElementById('app')!);
@@ -36,6 +36,8 @@ onMessage((msg) => {
     setState({ config: msg.value });
   } else if (msg.type === 'layout') {
     setState({ layout: msg.value });
+  } else if (msg.type === 'restriction') {
+    setState({ restriction: msg.value });
   } else if (msg.type === 'theme') {
     applyTheme();
     if (state().snapshot) setState({ snapshot: state().snapshot });
@@ -75,11 +77,11 @@ function mountDashboard(root: HTMLElement): void {
           </div>
         </div>
         <div class="wv-header-right">
-          ${EMBEDDED ? `<button class="wv-icon-btn" id="pop-out" title="Open in editor"><i class="codicon codicon-link-external"></i></button>` : ''}
           <div id="status-banner"></div>
         </div>
       </header>
       <div id="filter-bar"></div>
+      <div id="restriction-banner"></div>
       <div id="alert-config"></div>
       <div id="empty-state"></div>
       <div id="content" hidden>
@@ -108,6 +110,7 @@ function mountDashboard(root: HTMLElement): void {
     </div>`;
 
   const banner = mountStatusBanner(document.getElementById('status-banner')!);
+  const restrictBanner = mountRestrictionBanner(document.getElementById('restriction-banner')!);
   const filterBar = mountFilterBar(document.getElementById('filter-bar')!);
   const emptyState = mountEmptyState(document.getElementById('empty-state')!);
   const kpis = mountKpiCards(document.getElementById('kpi-cards')!);
@@ -125,10 +128,6 @@ function mountDashboard(root: HTMLElement): void {
   const category = lazyChart(categoryEl, () => mountCategoryBreakdown(categoryEl));
   const alertConfig = mountAlertConfigPanel(document.getElementById('alert-config')!);
   const content = document.getElementById('content')!;
-
-  document.getElementById('pop-out')?.addEventListener('click', () => {
-    post({ type: 'command', id: 'openDashboard' });
-  });
 
   // Section elements (the dockable/resizable panels) keyed by panel id.
   const section = (id: string) =>
@@ -198,6 +197,11 @@ function mountDashboard(root: HTMLElement): void {
 
     banner.update(s.snapshot);
     filterBar.update(s.snapshot, s.metric);
+    restrictBanner.update(s.restriction);
+
+    // Make the latest snapshot available to the Monaco editor so its live
+    // preview can re-evaluate rules as the user types.
+    (window as unknown as { __wvSnapshot?: typeof s.snapshot }).__wvSnapshot = s.snapshot;
 
     if (!isEmpty) {
       const snapshot = s.snapshot;
