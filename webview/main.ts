@@ -21,29 +21,17 @@ import { mountEmptyState } from './components/EmptyState';
 import { mountSpendGauge } from './components/SpendGauge';
 import { mountAlertConfigPanel } from './components/AlertConfigPanel';
 
-const WEEVIL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" fill="currentColor" aria-hidden="true" class="wv-brand-logo">
-  <path d="M30 28 C18 28 8 37 8 48 C8 59 18 68 30 68 C36 68 41 65 45 61 L52 61 C55 66 61 70 68 70 C80 70 90 62 90 52 C90 46 87 40 82 36 C83 34 84 32 84 30 C84 20 76 12 66 12 C60 12 55 15 52 19 L48 19 C45 16 41 14 36 13 C34 28 30 28 30 28Z"/>
-  <ellipse cx="25" cy="48" rx="12" ry="8"/>
-  <ellipse cx="72" cy="50" rx="14" ry="10"/>
-</svg>`;
+const LOGO_SRC = document.body.dataset.logo ?? '';
+const EMBEDDED = document.body.dataset.embedded === '1';
 
-const compact = document.body.dataset.compact === '1';
-setState({ compact });
 applyTheme();
-
-const app = document.getElementById('app')!;
-
-if (compact) {
-  mountCompact(app);
-} else {
-  mountDashboard(app);
-}
+mountDashboard(document.getElementById('app')!);
 
 // ── Message routing ─────────────────────────────────────────────────────────
 
 onMessage((msg) => {
   if (msg.type === 'snapshot') {
-    setState({ snapshot: msg.payload, compact: msg.compact });
+    setState({ snapshot: msg.payload });
   } else if (msg.type === 'config') {
     setState({ config: msg.value });
   } else if (msg.type === 'layout') {
@@ -80,13 +68,16 @@ function mountDashboard(root: HTMLElement): void {
     <div class="wv-dashboard">
       <header class="wv-header">
         <div class="wv-brand">
-          ${WEEVIL_SVG}
+          <img class="wv-brand-logo" src="${LOGO_SRC}" alt="" aria-hidden="true" />
           <div>
             <div class="wv-brand-name">Weevil</div>
             <div class="wv-brand-tagline">A little nosey about your Copilot spend.</div>
           </div>
         </div>
-        <div id="status-banner"></div>
+        <div class="wv-header-right">
+          ${EMBEDDED ? `<button class="wv-icon-btn" id="pop-out" title="Open in editor"><i class="codicon codicon-link-external"></i></button>` : ''}
+          <div id="status-banner"></div>
+        </div>
       </header>
       <div id="filter-bar"></div>
       <div id="alert-config"></div>
@@ -134,6 +125,10 @@ function mountDashboard(root: HTMLElement): void {
   const category = lazyChart(categoryEl, () => mountCategoryBreakdown(categoryEl));
   const alertConfig = mountAlertConfigPanel(document.getElementById('alert-config')!);
   const content = document.getElementById('content')!;
+
+  document.getElementById('pop-out')?.addEventListener('click', () => {
+    post({ type: 'command', id: 'openDashboard' });
+  });
 
   // Section elements (the dockable/resizable panels) keyed by panel id.
   const section = (id: string) =>
@@ -223,69 +218,4 @@ function mountDashboard(root: HTMLElement): void {
       category.render((c) => c.update(snapshot));
     }
   });
-}
-
-// ── Compact sidebar ─────────────────────────────────────────────────────────
-
-function mountCompact(root: HTMLElement): void {
-  root.innerHTML = `
-    <div class="wv-compact">
-      <div class="wv-brand">
-        ${WEEVIL_SVG}
-        <div class="wv-brand-name">Weevil</div>
-      </div>
-      <div id="status-banner"></div>
-      <div id="compact-gauge"></div>
-      <div class="wv-compact-summary" id="compact-summary" aria-label="Usage summary"></div>
-      <button class="wv-open-btn" id="open-dashboard">
-        <i class="codicon codicon-graph"></i> Open dashboard
-      </button>
-    </div>`;
-
-  const banner = mountStatusBanner(document.getElementById('status-banner')!);
-  const gauge = mountSpendGauge(document.getElementById('compact-gauge')!);
-  const summary = document.getElementById('compact-summary')!;
-  const openBtn = document.getElementById('open-dashboard')!;
-
-  openBtn.addEventListener('click', () => {
-    post({ type: 'command', id: 'openDashboard' });
-  });
-
-  subscribe((s) => {
-    if (!s.snapshot) return;
-    banner.update(s.snapshot);
-    gauge.update(s.snapshot.budget, s.snapshot.currency);
-
-    const { today, budget, forecast, currency } = s.snapshot;
-    const rows: [string, string][] = [
-      ['Today', fmtCost(today.cost, currency)],
-      ['Month-to-date', fmtCost(budget.usedCost, currency)],
-    ];
-    if (forecast.basis !== 'insufficient-data') {
-      rows.push(['Projected', fmtCost(forecast.projectedCost, currency)]);
-    }
-
-    summary.innerHTML = '';
-    for (const [k, v] of rows) {
-      const row = document.createElement('div');
-      row.className = 'wv-compact-row';
-      const keyEl = document.createElement('span');
-      keyEl.className = 'wv-compact-key';
-      keyEl.textContent = k;
-      const valEl = document.createElement('span');
-      valEl.className = 'wv-compact-val';
-      valEl.textContent = v;
-      row.appendChild(keyEl);
-      row.appendChild(valEl);
-      summary.appendChild(row);
-    }
-  });
-}
-
-function fmtCost(cost: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(cost);
-  } catch {
-    return `${currency} ${cost.toFixed(2)}`;
-  }
 }

@@ -7,7 +7,7 @@ import { DashboardLayout, Filter, UsageSnapshot, UserConfig } from '../domain/ty
 export type CommandId = 'openDashboard' | 'signIn';
 
 export type WebviewBoundMsg =
-  | { type: 'snapshot'; payload: UsageSnapshot; compact: boolean }
+  | { type: 'snapshot'; payload: UsageSnapshot }
   | { type: 'config'; value: UserConfig }
   | { type: 'layout'; value: DashboardLayout }
   | { type: 'theme' };
@@ -18,6 +18,7 @@ export type HostBoundMsg =
   | { type: 'setFilter'; value: Filter }
   | { type: 'setConfig'; value: Partial<UserConfig> }
   | { type: 'setLayout'; value: DashboardLayout }
+  | { type: 'openConfig' }
   | { type: 'command'; id: CommandId };
 
 const COMMAND_IDS: CommandId[] = ['openDashboard', 'signIn'];
@@ -31,6 +32,7 @@ export function isHostBoundMsg(m: unknown): m is HostBoundMsg {
   switch (m.type) {
     case 'ready':
     case 'refresh':
+    case 'openConfig':
       return true;
     case 'setFilter':
     case 'setConfig':

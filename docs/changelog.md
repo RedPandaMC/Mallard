@@ -7,7 +7,7 @@ real-time per-model cost, with optional GitHub billing reconciliation.
 
 ### Added
 
-- Status bar chip showing today's credits and cost, tinted by budget pace.
+- Dashboard in the activity-bar view (with a pop-out to an editor tab).
 - Dashboard with KPI cards, a spend gauge, a 30-day bar chart, a model
   breakdown, a model-to-surface flow chart, and a spend-by-cost-type chart. All
   aggregation runs in the extension host; charts below the fold initialise lazily.

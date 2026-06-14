@@ -28,9 +28,9 @@ code --install-extension RedPandaMC.weevil
 
 Weevil activates automatically:
 
-1. A small chip appears in the status bar showing today's credits and cost
-2. Click the Weevil icon in the activity bar for the compact view
-3. Run "Weevil: Open Dashboard" for the full view
+1. Click the Weevil icon in the activity bar to open the dashboard
+2. Use the pop-out button (or run "Weevil: Open Dashboard") to open it in a
+   larger editor tab
 
 If the dashboard shows the empty state, Copilot may not have written logs yet.
 Use Copilot for a few minutes, then click Refresh in the dashboard. To see where

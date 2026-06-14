@@ -1,9 +1,12 @@
 <div align="center">
-  <img src="media/logo.svg" alt="Weevil" width="120" height="120" />
 
-# Weevil
+<img src="media/weevil-banner.svg" alt="Weevil" width="640" />
 
-**Real-time GitHub Copilot cost tracking for VS Code.**
+Real-time GitHub Copilot cost tracking for VS Code.
+
+[![CI](https://github.com/RedPandaMC/Weevil/actions/workflows/ci.yml/badge.svg)](https://github.com/RedPandaMC/Weevil/actions/workflows/ci.yml)
+[![Docs](https://github.com/RedPandaMC/Weevil/actions/workflows/docs.yml/badge.svg)](https://github.com/RedPandaMC/Weevil/actions/workflows/docs.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 </div>
 
@@ -17,20 +20,18 @@ optionally connect to GitHub's billing API for the authoritative charge.
 
 ## Features
 
-- **Status bar chip.** Always-on indicator of today's credits and cost that tints
-  from normal to warning to over as you approach your budget. The number is always
-  shown, never colour alone. Clicking it opens the dashboard.
-- **Dashboard.** A webview with KPI cards (today, month-to-date, projected, top
-  model), a spend gauge, a 30-day bar chart with a projected-pace line, a model
-  breakdown, a model-to-surface flow chart, and a spend-by-cost-type chart. All
-  aggregation happens in the extension host; the webview only paints, and charts
-  below the fold initialise lazily.
+- **Dashboard in the sidebar.** Click the Weevil icon in the activity bar to open
+  the full dashboard: KPI cards (today, month-to-date, projected, top model), a
+  spend gauge, a 30-day bar chart with a projected-pace line, a model breakdown, a
+  model-to-surface flow chart, and a spend-by-cost-type chart. A pop-out button
+  opens the same view in an editor tab. All aggregation happens in the extension
+  host; the webview only paints, and charts below the fold initialise lazily.
 - **Arrangeable analysis view.** An edit mode lets you drag charts to reorder
   them, scale each between half and full width, and hide the ones you do not use.
   The layout is saved and restored automatically.
-- **Budget and alerts, in the UI.** Set a monthly budget, an included-credit
-  allowance, a daily credit threshold, and a spending-velocity alert from the
-  dashboard. They are stored per user and follow you across machines.
+- **Budget and alerts.** Set a monthly budget, an included-credit allowance, a
+  daily credit threshold, and a spending-velocity alert from the dashboard, or by
+  hand-editing a small JSON config file. Either way the change applies live.
 - **Automatic pricing.** Credit multipliers ship with the extension and refresh
   once a day from a known URL, validated before use, with the bundled copy as a
   fallback. A pricing change is a one-line repo update, no user action needed.
@@ -68,7 +69,7 @@ counts, the surface (chat, inline, agent, edit), and a timestamp. Weevil watches
 those files, stores events in a local embedded database (DuckDB; recent events
 at full detail, older ones rolled up to daily rows), and computes a render-ready
 snapshot
-that the status bar, sidebar, and dashboard all consume.
+that the dashboard (in the sidebar and the pop-out panel) consumes.
 
 Token counts are estimates, so costs are estimates. For the authoritative number,
 connect GitHub billing. The logs expose only input and output token counts per

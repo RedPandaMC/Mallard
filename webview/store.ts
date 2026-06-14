@@ -15,7 +15,6 @@ export interface AppState {
   snapshot: UsageSnapshot | null;
   config: UserConfig;
   layout: DashboardLayout;
-  compact: boolean;
   metric: Metric;
   filter: Filter;
   datePreset: DatePreset;
@@ -26,7 +25,6 @@ export const store = createStore<AppState>()(
     snapshot: null,
     config: DEFAULT_USER_CONFIG,
     layout: DEFAULT_DASHBOARD_LAYOUT,
-    compact: false,
     metric: 'cost',
     filter: {},
     datePreset: 'month',

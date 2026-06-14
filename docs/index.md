@@ -4,6 +4,9 @@ layout: home
 hero:
   name: Weevil
   text: Know exactly what GitHub Copilot is costing you.
+  image:
+    src: /logo.svg
+    alt: Weevil
   tagline: Weevil parses Copilot's local OTel logs and shows a live dashboard of spend, model usage, and where it goes. No sign-in required for the core features.
   actions:
     - theme: brand

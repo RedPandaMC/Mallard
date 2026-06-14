@@ -7,9 +7,9 @@ import { SidebarViewProvider } from './ui/SidebarViewProvider';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const container = await buildContainer(context);
-  const { usage, userConfig } = container;
+  const { usage, userConfig, layout } = container;
 
-  const sidebar = new SidebarViewProvider(context, usage, userConfig);
+  const sidebar = new SidebarViewProvider(context, usage, userConfig, layout);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(SidebarViewProvider.viewType, sidebar),
   );

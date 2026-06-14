@@ -3,9 +3,14 @@ import { defineConfig } from 'vitepress';
 export default defineConfig({
   title: 'Weevil',
   description: 'Know exactly what GitHub Copilot is costing you.',
-  base: '/weevil/',
+  // Must match the repository name's case: GitHub Pages serves this project
+  // site at /Weevil/, and asset URLs are case-sensitive.
+  base: '/Weevil/',
 
-  head: [['link', { rel: 'icon', href: '/weevil/favicon.ico' }]],
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/Weevil/logo.svg' }],
+    ['meta', { name: 'theme-color', content: '#B45CFF' }],
+  ],
 
   themeConfig: {
     logo: '/logo.svg',
@@ -33,7 +38,7 @@ export default defineConfig({
       { text: 'Changelog', link: '/changelog' },
     ],
 
-    socialLinks: [{ icon: 'github', link: 'https://github.com/RedPandaMC/weevil' }],
+    socialLinks: [{ icon: 'github', link: 'https://github.com/RedPandaMC/Weevil' }],
 
     footer: {
       message: 'MIT License',
