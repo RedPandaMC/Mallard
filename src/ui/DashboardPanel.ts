@@ -1,13 +1,12 @@
 /**
- * Full dashboard webview panel. A pure render target: pushes snapshots and
- * reacts to typed, validated inbound messages.
+ * Pop-out dashboard panel. A pure render target: the shared dashboard bridge
+ * pushes data and handles inbound messages; this just owns the panel lifecycle.
  */
 import * as vscode from 'vscode';
 import { UsageService } from '../app/UsageService';
 import { UserConfigStore } from '../app/UserConfigStore';
 import { LayoutStore } from '../app/LayoutStore';
-import { Filter } from '../domain/types';
-import { isHostBoundMsg, WebviewBoundMsg } from './messaging';
+import { bindDashboard } from './dashboardBridge';
 import { renderHtml } from './webviewHtml';
 
 export class DashboardPanel {
@@ -41,64 +40,19 @@ export class DashboardPanel {
       },
     );
     panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'weevil-activitybar.svg');
-    DashboardPanel.current = new DashboardPanel(panel, context, usage, userConfig, layout);
+    DashboardPanel.current = new DashboardPanel(panel, context, { usage, userConfig, layout });
   }
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
     context: vscode.ExtensionContext,
-    private readonly usage: UsageService,
-    private readonly userConfig: UserConfigStore,
-    private readonly layout: LayoutStore,
+    deps: { usage: UsageService; userConfig: UserConfigStore; layout: LayoutStore },
   ) {
-    panel.webview.html = renderHtml(panel.webview, context.extensionUri, { compact: false });
-
+    panel.webview.html = renderHtml(panel.webview, context.extensionUri, { embedded: false });
     this.disposables.push(
-      panel.webview.onDidReceiveMessage((m) => void this.onMessage(m)),
-      usage.onDidChangeSnapshot((s) =>
-        this.post({ type: 'snapshot', payload: s, compact: false }),
-      ),
-      userConfig.onDidChange((value) => this.post({ type: 'config', value })),
-      layout.onDidChange((value) => this.post({ type: 'layout', value })),
-      vscode.window.onDidChangeActiveColorTheme(() => this.post({ type: 'theme' })),
+      ...bindDashboard(panel.webview, deps),
       panel.onDidDispose(() => this.dispose()),
     );
-  }
-
-  private async onMessage(raw: unknown): Promise<void> {
-    if (!isHostBoundMsg(raw)) return;
-    switch (raw.type) {
-      case 'ready': {
-        const s = this.usage.current;
-        if (s) this.post({ type: 'snapshot', payload: s, compact: false });
-        this.post({ type: 'config', value: this.userConfig.get() });
-        this.post({ type: 'layout', value: this.layout.get() });
-        break;
-      }
-      case 'refresh':
-        await this.usage.refresh();
-        break;
-      case 'setFilter':
-        await this.usage.setFilter(raw.value as Filter);
-        break;
-      case 'setConfig':
-        await this.userConfig.set(raw.value);
-        break;
-      case 'setLayout':
-        await this.layout.set(raw.value);
-        break;
-      case 'command':
-        if (raw.id === 'openDashboard') {
-          this.panel.reveal();
-        } else if (raw.id === 'signIn') {
-          void this.usage.signInGitHub();
-        }
-        break;
-    }
-  }
-
-  private post(msg: WebviewBoundMsg): void {
-    void this.panel.webview.postMessage(msg);
   }
 
   private dispose(): void {

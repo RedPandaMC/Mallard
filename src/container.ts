@@ -15,7 +15,6 @@ import { initRepoAttribution } from './ingest/repoResolver';
 import { LogWatcher } from './ingest/LogWatcher';
 import { PricingService } from './pricing/PricingService';
 import { EventStore } from './store/EventStore';
-import { StatusBarController } from './ui/StatusBarController';
 
 export interface Container {
   usage: UsageService;
@@ -51,7 +50,6 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const userConfig = new UserConfigStore(context.globalState);
   const layout = new LayoutStore(context.globalState);
   const usage = new UsageService(store, pricing, watcher, userConfig, github);
-  const statusBar = new StatusBarController();
 
   context.subscriptions.push(
     { dispose: () => pricing.dispose() },
@@ -60,8 +58,6 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     userConfig,
     layout,
     usage,
-    statusBar,
-    usage.onDidChangeSnapshot((s) => statusBar.update(s)),
   );
 
   return { usage, store, userConfig, layout, pricing };

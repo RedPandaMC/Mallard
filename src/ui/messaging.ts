@@ -7,7 +7,7 @@ import { DashboardLayout, Filter, UsageSnapshot, UserConfig } from '../domain/ty
 export type CommandId = 'openDashboard' | 'signIn';
 
 export type WebviewBoundMsg =
-  | { type: 'snapshot'; payload: UsageSnapshot; compact: boolean }
+  | { type: 'snapshot'; payload: UsageSnapshot }
   | { type: 'config'; value: UserConfig }
   | { type: 'layout'; value: DashboardLayout }
   | { type: 'theme' };

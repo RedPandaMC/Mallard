@@ -4,16 +4,11 @@ export interface EmptyStateHandle {
   update(visible: boolean, reason?: string): void;
 }
 
-const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" fill="currentColor" aria-hidden="true" class="wv-empty-logo">
-  <path d="M30 28 C18 28 8 37 8 48 C8 59 18 68 30 68 C36 68 41 65 45 61 L52 61 C55 66 61 70 68 70 C80 70 90 62 90 52 C90 46 87 40 82 36 C83 34 84 32 84 30 C84 20 76 12 66 12 C60 12 55 15 52 19 L48 19 C45 16 41 14 36 13 C34 28 30 28 30 28Z"/>
-  <ellipse cx="25" cy="48" rx="12" ry="8"/>
-  <ellipse cx="72" cy="50" rx="14" ry="10"/>
-</svg>`;
-
 export function mountEmptyState(el: HTMLElement): EmptyStateHandle {
+  const logo = document.body.dataset.logo ?? '';
   el.innerHTML = `
     <div class="wv-empty" role="status">
-      ${LOGO_SVG}
+      <img class="wv-empty-logo" src="${logo}" alt="" aria-hidden="true" />
       <h2 class="wv-empty-title">Nothing tracked yet</h2>
       <p class="wv-empty-body">
         Weevil reads Copilot's local OTel log files automatically.<br/>
