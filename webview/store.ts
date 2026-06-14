@@ -4,9 +4,11 @@ import {
   DashboardLayout,
   DatePreset,
   DEFAULT_DASHBOARD_LAYOUT,
+  DEFAULT_RESTRICTION_STATE,
   DEFAULT_USER_CONFIG,
   Filter,
   Metric,
+  RestrictionState,
   UsageSnapshot,
   UserConfig,
 } from '../src/domain/types';
@@ -18,17 +20,21 @@ export interface AppState {
   metric: Metric;
   filter: Filter;
   datePreset: DatePreset;
+  restriction: RestrictionState;
 }
 
 export const store = createStore<AppState>()(
-  subscribeWithSelector((): AppState => ({
-    snapshot: null,
-    config: DEFAULT_USER_CONFIG,
-    layout: DEFAULT_DASHBOARD_LAYOUT,
-    metric: 'cost',
-    filter: {},
-    datePreset: 'month',
-  })),
+  subscribeWithSelector(
+    (): AppState => ({
+      snapshot: null,
+      config: DEFAULT_USER_CONFIG,
+      layout: DEFAULT_DASHBOARD_LAYOUT,
+      metric: 'cost',
+      filter: {},
+      datePreset: 'month',
+      restriction: DEFAULT_RESTRICTION_STATE,
+    }),
+  ),
 );
 
 /** Read current state synchronously. */

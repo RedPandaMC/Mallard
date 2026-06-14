@@ -30,17 +30,35 @@ const webviewConfig = {
   sourcemap: !production,
   minify: production,
   logLevel: 'info',
-  loader: { '.css': 'css' },
+  loader: { '.css': 'css', '.ttf': 'file', '.woff': 'file', '.woff2': 'file' },
+};
+
+/** @type {import('esbuild').BuildOptions} */
+const monacoWorkersConfig = {
+  entryPoints: ['webview/monacoWorkers.ts'],
+  bundle: true,
+  format: 'iife',
+  platform: 'browser',
+  target: 'es2022',
+  outfile: 'dist/webview/monaco.workers.js',
+  sourcemap: !production,
+  minify: production,
+  logLevel: 'info',
 };
 
 async function main() {
   if (watch) {
     const ctxHost = await esbuild.context(hostConfig);
     const ctxWeb = await esbuild.context(webviewConfig);
-    await Promise.all([ctxHost.watch(), ctxWeb.watch()]);
+    const ctxWorkers = await esbuild.context(monacoWorkersConfig);
+    await Promise.all([ctxHost.watch(), ctxWeb.watch(), ctxWorkers.watch()]);
     console.log('[weevil] watching host + webview bundles...');
   } else {
-    await Promise.all([esbuild.build(hostConfig), esbuild.build(webviewConfig)]);
+    await Promise.all([
+      esbuild.build(hostConfig),
+      esbuild.build(webviewConfig),
+      esbuild.build(monacoWorkersConfig),
+    ]);
     console.log('[weevil] build complete.');
   }
 }
