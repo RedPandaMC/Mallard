@@ -3,9 +3,9 @@
 ───────────────────────────────────────── */
 body {
   background-color: var(--w-bg);
-  /* faint halftone overprint — the "risograph" texture */
-  background-image: var(--w-halftone);
-  background-size: 5px 5px;
+  /* fine technical grid — instrument / graph-paper texture */
+  background-image: var(--w-grid);
+  background-size: 40px 40px;
   color: var(--w-fg);
   font-family: var(--w-font);
   font-size: var(--w-font-size);
@@ -96,25 +96,17 @@ body {
 .wv-brand-name {
   font-family: var(--w-font-display);
   font-size: 22px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--w-fg);
-  letter-spacing: -0.01em;
-  line-height: 1.1;
-}
-
-.wv-brand-binomial {
-  font-family: var(--w-font-display);
-  font-style: italic;
-  font-size: 12px;
-  color: var(--w-fg-muted);
-  line-height: 1.3;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
 }
 
 .wv-brand-meta {
-  margin-top: 2px;
+  margin-top: 3px;
   font-family: var(--w-label-font);
   font-size: 10px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--w-fg-subtle);
 }
@@ -347,17 +339,17 @@ body {
   background: linear-gradient(var(--w-bg-card), var(--w-bg-card)) padding-box;
 }
 
-/* catalogue caption on the specimen card */
+/* instrument caption on the panel */
 .wv-empty::before {
-  content: 'FIELD SPECIMEN · No.001 — not yet collected';
+  content: 'NO SIGNAL · AWAITING DATA';
   position: absolute;
   top: 12px;
   left: 16px;
   font-family: var(--w-label-font);
   font-size: 10px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--w-fg-subtle);
+  color: var(--w-action);
 }
 /* corner registration tick */
 .wv-empty::after {
@@ -367,8 +359,8 @@ body {
   bottom: 14px;
   width: 12px;
   height: 12px;
-  border-right: 1px solid var(--w-ink-purple);
-  border-bottom: 1px solid var(--w-ink-purple);
+  border-right: 1px solid var(--w-data-3);
+  border-bottom: 1px solid var(--w-data-3);
   opacity: 0.5;
 }
 
@@ -383,9 +375,9 @@ body {
 .wv-empty-title {
   font-family: var(--w-font-display);
   font-size: 22px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--w-fg);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .wv-empty-body {
@@ -503,16 +495,16 @@ body {
   opacity: 0.85;
 }
 
-/* catalogue figure number */
+/* channel index code */
 .wv-kpi-card::after {
   counter-increment: wv-fig;
-  content: 'fig.' counter(wv-fig);
+  content: counter(wv-fig, decimal-leading-zero);
   position: absolute;
   top: 9px;
   right: 11px;
   font-family: var(--w-label-font);
   font-size: 10px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   color: var(--w-fg-subtle);
 }
 
@@ -604,17 +596,22 @@ body {
   border-radius: var(--w-r1);
 }
 
+/* outlined-label chip (instrument legend style) */
 .wv-gauge-badge {
-  font-size: 11px;
+  font-family: var(--w-label-font);
+  font-size: 10px;
   font-weight: 600;
-  padding: 1px var(--w-s2);
-  border-radius: 9999px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px var(--w-s2);
+  border: 1px solid currentColor;
+  border-radius: var(--w-r1);
   margin-left: auto;
 }
 
-.wv-gauge-badge[data-severity='ok']   { background: rgba(76, 175, 80, 0.15); color: var(--w-ok); }
-.wv-gauge-badge[data-severity='warn'] { background: rgba(255, 152, 0, 0.15); color: var(--w-warn); }
-.wv-gauge-badge[data-severity='err']  { background: rgba(244, 67, 54, 0.15); color: var(--w-err); }
+.wv-gauge-badge[data-severity='ok']   { color: var(--w-ok); }
+.wv-gauge-badge[data-severity='warn'] { color: var(--w-warn); }
+.wv-gauge-badge[data-severity='err']  { color: var(--w-err); }
 
 .wv-gauge-track {
   width: 100%;
@@ -681,14 +678,14 @@ body {
   border-bottom: 1px solid var(--w-border);
 }
 
-/* plate number on the right of each header */
+/* channel index code on the right of each header */
 .wv-charts-grid { counter-reset: wv-plate; }
 .wv-chart-header::after {
   counter-increment: wv-plate;
-  content: 'pl.' counter(wv-plate);
+  content: 'CH ' counter(wv-plate, decimal-leading-zero);
   font-family: var(--w-label-font);
   font-size: 10px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   color: var(--w-fg-subtle);
 }
 
@@ -750,9 +747,8 @@ body {
   color: var(--w-fg-muted);
 }
 .wv-analysis-title::before {
-  content: 'plate · ';
-  color: var(--w-ink-purple);
-  opacity: 0.85;
+  content: '▪ ';
+  color: var(--w-action);
 }
 .wv-analysis-actions { display: flex; gap: var(--w-s2); }
 .wv-btn--sm { padding: var(--w-s1) var(--w-s2); font-size: 11px; }

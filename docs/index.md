@@ -7,7 +7,7 @@ hero:
   image:
     src: /logo.svg
     alt: Weevil
-  tagline: A field guide to your Copilot spend — parsed from local OTel logs into a live dashboard of cost, model usage, and where it all goes. No sign-in required for the core features.
+  tagline: A live instrument for your Copilot spend — parsed from local OTel logs into a dashboard of cost, model usage, and where it all goes. No sign-in required for the core features.
   actions:
     - theme: brand
       text: Get Started
@@ -42,3 +42,18 @@ features:
     title: Stays local
     details: Reads only the log files Copilot already writes to your machine. No network requests for your usage data. GitHub billing reconciliation is optional.
 ---
+
+<div class="wv-palette-wrap">
+
+## Instrument palette
+
+<div class="wv-palette">
+  <div class="wv-swatch" style="--c:#ffb454"><span class="wv-swatch-chip"></span><b>Forage</b><code>#FFB454</code><small>today</small></div>
+  <div class="wv-swatch" style="--c:#ff6b81"><span class="wv-swatch-chip"></span><b>Bore</b><code>#FF6B81</code><small>month-to-date</small></div>
+  <div class="wv-swatch" style="--c:#b45cff"><span class="wv-swatch-chip"></span><b>Elytra</b><code>#B45CFF</code><small>projected</small></div>
+  <div class="wv-swatch" style="--c:#36c5d4"><span class="wv-swatch-chip"></span><b>Probe</b><code>#36C5D4</code><small>top model</small></div>
+  <div class="wv-swatch" style="--c:#74d68a"><span class="wv-swatch-chip"></span><b>Live</b><code>#74D68A</code><small>on track</small></div>
+  <div class="wv-swatch" style="--c:#fe5000"><span class="wv-swatch-chip"></span><b>Alert</b><code>#FE5000</code><small>action</small></div>
+</div>
+
+</div>

@@ -52,33 +52,18 @@
   --w-chart-main: 260px;
   --w-chart-mini: 200px;
 
-  /* ── Field Guide identity layer ───────────────────────────────────
-     Fixed "riso ink" accents (the weevil shell) plus typographic tokens.
-     Used only for decorative accents/series; all surface + text colour
-     still derives from --vscode-* above, so the dashboard stays
+  /* ── Instrument identity layer ────────────────────────────────────
+     Weevil reads as a modern lab instrument. A per-metric data palette,
+     one bold action accent (Rabbit R1 cinnabar), a geometric grotesque
+     display face, monospace readouts, a fine technical grid, and a dark
+     "LCD" glass. Colour here is decorative only — every surface + text
+     colour still derives from --vscode-* above, so the dashboard stays
      theme-compatible on both light and dark editor themes. */
   --w-ink-amber: #ffb454;
   --w-ink-coral: #ff6b81;
   --w-ink-purple: #b45cff;
   --w-ink-grad: linear-gradient(100deg, #ffb454 0%, #ff6b81 50%, #b45cff 100%);
 
-  /* Display serif for specimen titles (system fonts only — CSP-safe). */
-  --w-font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
-  /* Monospace technical labels reuse the editor font. */
-  --w-label-font: var(--w-font-mono);
-
-  /* Halftone overprint — foreground dots at low alpha, adapts per theme. */
-  --w-halftone: radial-gradient(
-    color-mix(in srgb, var(--w-fg) 5%, transparent) 0.5px,
-    transparent 0.6px
-  );
-
-  /* ── Instrument layer (Teenage Engineering OP-Z / Rabbit R1) ──────────
-     The field-guide housing gets OP-Z readouts and controls. One bold
-     action accent (Rabbit R1 cinnabar) for live/interactive elements, a
-     per-metric data palette, and a self-contained dark "LCD" that stays
-     dark on both light and dark editor themes (like the OP-1's white body
-     with a black display). All decorative — surfaces/text stay --vscode-*. */
   --w-action: #fe5000; /* Rabbit R1 cinnabar — live / primary action */
   --w-action-fg: #ffffff;
   --w-te-cyan: #36c5d4;
@@ -90,7 +75,16 @@
   --w-data-3: var(--w-ink-purple);
   --w-data-4: var(--w-te-cyan);
 
+  /* Geometric grotesque display (system fonts only — CSP-safe). */
+  --w-font-display: system-ui, 'Segoe UI', Roboto, var(--w-font), sans-serif;
+  --w-label-font: var(--w-font-mono);
   --w-readout-font: var(--w-font-mono);
-  --w-screen: #15131b; /* the OP-Z display glass */
+
+  --w-screen: #15131b; /* instrument LCD glass */
   --w-screen-grid: radial-gradient(rgba(255, 255, 255, 0.07) 0.5px, transparent 0.6px);
+
+  /* Fine technical grid (graph-paper), adapts per theme. */
+  --w-grid-line: color-mix(in srgb, var(--w-fg) 4%, transparent);
+  --w-grid: linear-gradient(var(--w-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--w-grid-line) 1px, transparent 1px);
 }

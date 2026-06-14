@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <pattern id="pht" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.7" fill="#F3EAD9"/></pattern>
+  </defs>
+  <rect x="6" y="6" width="500" height="500" rx="34" fill="#16140F"/>
+  <rect x="6" y="6" width="500" height="500" rx="34" fill="url(#pht)" opacity="0.05"/>
+  <rect x="18" y="18" width="476" height="476" rx="26" fill="none" stroke="#F3EAD9" stroke-opacity="0.35" stroke-width="2"/>
+  <rect x="28" y="28" width="456" height="456" rx="20" fill="none" stroke="#F3EAD9" stroke-opacity="0.2" stroke-width="1" stroke-dasharray="2 4"/>
+
+  <text x="52" y="74" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="15" letter-spacing="4" fill="rgba(243,234,217,0.45)">FIELD KIT</text>
+  <text x="460" y="74" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="15" letter-spacing="2" fill="rgba(243,234,217,0.45)" text-anchor="end">No.001</text>
+  <text x="52" y="118" font-family="'Space Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="19" letter-spacing="2" fill="rgba(243,234,217,0.7)">x + y</text>
+
+  <!-- axes -->
+  <line x1="120" y1="352" x2="404" y2="352" stroke="rgba(243,234,217,0.7)" stroke-width="2"/>
+  <line x1="132" y1="150" x2="132" y2="352" stroke="rgba(243,234,217,0.7)" stroke-width="2"/>
+  <g fill="none" stroke="#FFB454" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="150" y="288" width="44" height="64"/>
+    <path d="M150 288 L167.28 276 L211.28 276 L194 288 Z"/>
+    <path d="M194 288 L211.28 276 L211.28 340 L194 352 Z"/>
+  </g><g fill="none" stroke="#FF6B81" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="210" y="220" width="44" height="132"/>
+    <path d="M210 220 L227.28 208 L271.28 208 L254 220 Z"/>
+    <path d="M254 220 L271.28 208 L271.28 340 L254 352 Z"/>
+  </g><g fill="none" stroke="#B45CFF" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="270" y="256" width="44" height="96"/>
+    <path d="M270 256 L287.28 244 L331.28 244 L314 256 Z"/>
+    <path d="M314 256 L331.28 244 L331.28 340 L314 352 Z"/>
+  </g><g fill="none" stroke="#36C5D4" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="330" y="304" width="44" height="48"/>
+    <path d="M330 304 L347.28 292 L391.28 292 L374 304 Z"/>
+    <path d="M374 304 L391.28 292 L391.28 340 L374 352 Z"/>
+  </g>
+  <line x1="132" y1="370" x2="132" y2="384" stroke="rgba(243,234,217,0.45)" stroke-width="2"/><line x1="152" y1="370" x2="152" y2="378" stroke="rgba(243,234,217,0.45)" stroke-width="1"/><line x1="172" y1="370" x2="172" y2="378" stroke="rgba(243,234,217,0.45)" stroke-width="1"/><line x1="192" y1="370" x2="192" y2="378" stroke="rgba(243,234,217,0.45)" stroke-width="1"/><line x1="212" y1="370" x2="212" y2="378" stroke="rgba(243,234,217,0.45)" stroke-width="1"/><line x1="232" y1="370" x2="232" y2="384" stroke="rgba(243,234,217,0.45)" stroke-width="2"/><line x1="252" y1="370" x2="252" y2="378" stroke="rgba(243,234,217,0.45)" stroke-width="1"/><line x1="272" y1="370" x2="272" y2="378" stroke="rgba(243,234,217,0.45)" stroke-width="1"/><line x1="292" y1="370" x2="292" y2="378" stroke="rgba(243,234,217,0.45)" stroke-width="1"/><line x1="312" y1="370" x2="312" y2="378" stroke="rgba(243,234,217,0.45)" stroke-width="1"/><line x1="332" y1="370" x2="332" y2="384" stroke="rgba(243,234,217,0.45)" stroke-width="2"/><line x1="352" y1="370" x2="352" y2="378" stroke="rgba(243,234,217,0.45)" stroke-width="1"/><line x1="372" y1="370" x2="372" y2="378" stroke="rgba(243,234,217,0.45)" stroke-width="1"/><line x1="392" y1="370" x2="392" y2="378" stroke="rgba(243,234,217,0.45)" stroke-width="1"/>
+
+  <text x="256" y="472" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="16" letter-spacing="6" fill="#F3EAD9" text-anchor="middle">WEEVIL</text>
+</svg>

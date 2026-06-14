@@ -12,7 +12,7 @@
 [![Docs](https://github.com/RedPandaMC/Weevil/actions/workflows/docs.yml/badge.svg)](https://github.com/RedPandaMC/Weevil/actions/workflows/docs.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-`FIELD SPECIMEN · No.001` — *Curculionoidea copiloti*
+`COPILOT SPEND · INSTRUMENT` — local-first, no sign-in
 
 </div>
 
@@ -24,14 +24,14 @@ and a projected month-end total, broken down by model, surface, cost type, and
 repository. The core features need no sign-in and make no network calls. You can
 optionally connect to GitHub's billing API for the authoritative charge.
 
-### What Weevil inspects
+### What Weevil reads out
 
-| | part | reads from |
+| ch | readout | reads from |
 | :-- | :-- | :-- |
-| `fig.1` | **rostrum** — live readout | today / MTD / projected month-end |
-| `fig.2` | **elytra** — model mix | per-model credits, cost & tokens |
-| `fig.3` | **thorax** — surface flow | chat · inline · agent · edit |
-| `fig.4` | **abdomen** — token cost | input vs. output split |
+| `01` | **live spend** | today / MTD / projected month-end |
+| `02` | **model mix** | per-model credits, cost & tokens |
+| `03` | **surface flow** | chat · inline · agent · edit |
+| `04` | **token cost** | input vs. output split |
 
 ## <img src="media/brand/codicons/graph.svg" width="18" align="top" /> Features
 
@@ -136,3 +136,5 @@ Press F5 to launch an Extension Development Host.
 ## License
 
 MIT, Jurrean De Nys
+
+<div align="center"><br /><img src="media/brand/patch.png" width="170" alt="Weevil field kit" /></div>

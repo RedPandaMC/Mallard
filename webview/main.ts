@@ -73,8 +73,7 @@ function mountDashboard(root: HTMLElement): void {
           <img class="wv-brand-logo" src="${LOGO_SRC}" alt="" aria-hidden="true" />
           <div>
             <div class="wv-brand-name">Weevil</div>
-            <div class="wv-brand-binomial">Curculionoidea copiloti</div>
-            <div class="wv-brand-meta">Field specimen · No.001 · a little nosey about your Copilot spend</div>
+            <div class="wv-brand-meta">Copilot spend · instrument</div>
           </div>
         </div>
         <div class="wv-header-right">

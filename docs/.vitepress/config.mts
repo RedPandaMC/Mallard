@@ -59,7 +59,7 @@ export default defineConfig({
     socialLinks: [{ icon: 'github', link: 'https://github.com/RedPandaMC/Weevil' }],
 
     footer: {
-      message: 'FIELD SPECIMEN · No.001 — Curculionoidea copiloti · MIT License',
+      message: 'Copilot spend · instrument — local-first · MIT License',
       copyright: 'Copyright © 2025 RedPandaMC',
     },
   },

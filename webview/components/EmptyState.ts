@@ -9,7 +9,7 @@ export function mountEmptyState(el: HTMLElement): EmptyStateHandle {
   el.innerHTML = `
     <div class="wv-empty" role="status">
       <img class="wv-empty-logo" src="${logo}" alt="" aria-hidden="true" />
-      <h2 class="wv-empty-title">No specimen collected yet</h2>
+      <h2 class="wv-empty-title">No signal yet</h2>
       <p class="wv-empty-body">
         Weevil reads Copilot's local OTel log files automatically.<br/>
         No log files were found at the expected location.

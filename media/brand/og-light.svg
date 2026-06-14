@@ -1,24 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <defs>
-    <pattern id="ht" width="6" height="6" patternUnits="userSpaceOnUse">
-      <circle cx="1.2" cy="1.2" r="1" fill="#2A241B"/>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="rgba(25,24,15,0.06)" stroke-width="1"/>
     </pattern>
+    <pattern id="scr" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.6" fill="rgba(255,255,255,0.06)"/></pattern>
     <linearGradient id="rule-grad" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#FFB454"/><stop offset="0.5" stop-color="#FF6B81"/><stop offset="1" stop-color="#B45CFF"/>
     </linearGradient>
   </defs>
 
-  <rect width="1200" height="630" fill="#F3EAD9"/>
-  <rect width="1200" height="630" fill="url(#ht)" opacity="0.05"/>
-  <rect x="44" y="44" width="1112" height="542" fill="none" stroke="rgba(42,36,27,0.38)" stroke-width="1.4"/>
-  <path d="M37 44H51M44 37V51" stroke="rgba(42,36,27,0.38)" stroke-width="1.4"/><path d="M1149 44H1163M1156 37V51" stroke="rgba(42,36,27,0.38)" stroke-width="1.4"/><path d="M37 586H51M44 579V593" stroke="rgba(42,36,27,0.38)" stroke-width="1.4"/><path d="M1149 586H1163M1156 579V593" stroke="rgba(42,36,27,0.38)" stroke-width="1.4"/>
+  <rect width="1200" height="630" fill="#ECEAE4"/>
+  <rect width="1200" height="630" fill="url(#grid)" opacity="0.6"/>
+  <rect x="44" y="44" width="1112" height="542" fill="none" stroke="rgba(25,24,15,0.32)" stroke-width="1.4"/>
+  <path d="M37 44H51M44 37V51" stroke="rgba(25,24,15,0.32)" stroke-width="1.4"/><path d="M1149 44H1163M1156 37V51" stroke="rgba(25,24,15,0.32)" stroke-width="1.4"/><path d="M37 586H51M44 579V593" stroke="rgba(25,24,15,0.32)" stroke-width="1.4"/><path d="M1149 586H1163M1156 579V593" stroke="rgba(25,24,15,0.32)" stroke-width="1.4"/>
 
-  <!-- catalogue header -->
-  <text x="70" y="84" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="15" letter-spacing="3.5" fill="#6F6555">FIELD SPECIMEN &#183; No.001</text>
-  <text x="1130" y="84" font-family="Fraunces, 'Liberation Serif', Georgia, serif" font-style="italic" font-size="20" fill="#6F6555" text-anchor="end">Curculionoidea copiloti</text>
+  <!-- header tags -->
+  <text x="70" y="84" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="3.5" fill="#6B675C">COPILOT SPEND &#183; INSTRUMENT</text>
+  <text x="1130" y="84" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="2" fill="#6B675C" text-anchor="end">v0.2 &#183; MIT</text>
 
-  <!-- specimen mark -->
-  <svg x="610" y="150" width="380" height="330" viewBox="0 0 2048 2048">
+  <!-- schematic weevil + technical callouts + bracket -->
+  <svg x="690" y="150" width="360" height="300" viewBox="0 0 2048 2048">
   <defs><linearGradient id="weevil-grad" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#FFB454"/><stop offset="0.5" stop-color="#FF6B81"/><stop offset="1" stop-color="#B45CFF"/>
   </linearGradient></defs>
@@ -30,18 +31,36 @@
   </g>
 
 </svg>
-  <path d="M745 248L690 196" stroke="#6F6555" stroke-width="1" fill="none"/><circle cx="745" cy="248" r="2.2" fill="#2A241B"/><text x="682" y="191" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="15" letter-spacing="1.5" fill="#6F6555" text-anchor="end">rostrum &#183; live readout</text>
-  <path d="M885 295L1000 268" stroke="#6F6555" stroke-width="1" fill="none"/><circle cx="885" cy="295" r="2.2" fill="#2A241B"/><text x="1006" y="273" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="15" letter-spacing="1.5" fill="#6F6555" text-anchor="start">elytra &#183; models</text>
-  <path d="M852 392L1000 430" stroke="#6F6555" stroke-width="1" fill="none"/><circle cx="852" cy="392" r="2.2" fill="#2A241B"/><text x="1006" y="435" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="15" letter-spacing="1.5" fill="#6F6555" text-anchor="start">abdomen &#183; tokens</text>
+  <path d="M676 168 h-14 v14 M1064 168 h14 v14 M676 452 h-14 v-14 M1064 452 h14 v-14" fill="none" stroke="rgba(25,24,15,0.32)" stroke-width="1.4"/>
+  <path d="M810 258L752 198" stroke="#6B675C" stroke-width="1" fill="none"/><circle cx="810" cy="258" r="3" fill="none" stroke="#FFB454" stroke-width="2"/><text x="744" y="193" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="1.2" fill="#6B675C" text-anchor="end">live readout</text>
+  <path d="M958 300L1052 270" stroke="#6B675C" stroke-width="1" fill="none"/><circle cx="958" cy="300" r="3" fill="none" stroke="#B45CFF" stroke-width="2"/><text x="1058" y="275" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="1.2" fill="#6B675C" text-anchor="start">model mix</text>
+  <path d="M922 392L1052 432" stroke="#6B675C" stroke-width="1" fill="none"/><circle cx="922" cy="392" r="3" fill="none" stroke="#FF6B81" stroke-width="2"/><text x="1058" y="437" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="1.2" fill="#6B675C" text-anchor="start">token cost</text>
+  <line x1="700" y1="492" x2="700" y2="504" stroke="#6B675C" stroke-width="1.6"/><line x1="715" y1="492" x2="715" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="730" y1="492" x2="730" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="745" y1="492" x2="745" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="760" y1="492" x2="760" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="775" y1="492" x2="775" y2="504" stroke="#6B675C" stroke-width="1.6"/><line x1="790" y1="492" x2="790" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="805" y1="492" x2="805" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="820" y1="492" x2="820" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="835" y1="492" x2="835" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="850" y1="492" x2="850" y2="504" stroke="#6B675C" stroke-width="1.6"/><line x1="865" y1="492" x2="865" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="880" y1="492" x2="880" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="895" y1="492" x2="895" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="910" y1="492" x2="910" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="925" y1="492" x2="925" y2="504" stroke="#6B675C" stroke-width="1.6"/><line x1="940" y1="492" x2="940" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="955" y1="492" x2="955" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="970" y1="492" x2="970" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="985" y1="492" x2="985" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="1000" y1="492" x2="1000" y2="504" stroke="#6B675C" stroke-width="1.6"/><line x1="1015" y1="492" x2="1015" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="1030" y1="492" x2="1030" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="1045" y1="492" x2="1045" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="1060" y1="492" x2="1060" y2="499" stroke="#6B675C" stroke-width="1"/><line x1="1075" y1="492" x2="1075" y2="504" stroke="#6B675C" stroke-width="1.6"/><line x1="1090" y1="492" x2="1090" y2="499" stroke="#6B675C" stroke-width="1"/>
 
   <!-- wordmark -->
-  <text x="70" y="318" font-family="Fraunces, 'Liberation Serif', Georgia, serif" font-size="168" font-weight="600" letter-spacing="-3" fill="#2A241B">Weevil</text>
-  <rect x="74" y="346" width="120" height="3" fill="url(#rule-grad)"/>
-  <text x="72" y="392" font-family="Fraunces, 'Liberation Serif', Georgia, serif" font-size="30" fill="#2A241B">Know exactly what GitHub Copilot is costing you.</text>
-  <text x="72" y="430" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="15" letter-spacing="0.5" fill="#6F6555">fig.1 &#8212; real-time spend, read from Copilot's local OTel logs &#183; no sign-in</text>
+  <text x="68" y="306" font-family="'Space Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="150" font-weight="700" letter-spacing="-5" fill="#19180F">Weevil</text>
+  <rect x="72" y="338" width="132" height="4" fill="url(#rule-grad)"/>
+  <text x="70" y="384" font-family="'Space Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="28" font-weight="500" fill="#19180F">Know exactly what GitHub Copilot is costing you.</text>
+
+  <!-- readout chips -->
+  
+    <rect x="70" y="414" width="172" height="64" rx="6" fill="#1a1822" stroke="rgba(25,24,15,0.32)"/>
+    <rect x="70" y="414" width="172" height="64" rx="6" fill="url(#scr)"/>
+    <text x="84" y="436" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="11" letter-spacing="2" fill="#6B675C">TODAY</text>
+    <text x="84" y="464" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="24" font-weight="700" fill="#FFB454">$4.20</text>
+  
+    <rect x="258" y="414" width="172" height="64" rx="6" fill="#1a1822" stroke="rgba(25,24,15,0.32)"/>
+    <rect x="258" y="414" width="172" height="64" rx="6" fill="url(#scr)"/>
+    <text x="272" y="436" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="11" letter-spacing="2" fill="#6B675C">THIS MONTH</text>
+    <text x="272" y="464" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="24" font-weight="700" fill="#FF6B81">$12.40</text>
+  
+    <rect x="446" y="414" width="172" height="64" rx="6" fill="#1a1822" stroke="rgba(25,24,15,0.32)"/>
+    <rect x="446" y="414" width="172" height="64" rx="6" fill="url(#scr)"/>
+    <text x="460" y="436" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="11" letter-spacing="2" fill="#6B675C">PROJECTED</text>
+    <text x="460" y="464" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="24" font-weight="700" fill="#B45CFF">$31.00</text>
 
   <!-- footer metadata -->
-  <line x1="70" y1="548" x2="1130" y2="548" stroke="rgba(42,36,27,0.20)" stroke-width="1"/>
-  <text x="70" y="570" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="2" fill="#6F6555">VS&#160;CODE&#160;EXTENSION &#160;&#183;&#160; DUCKDB &#160;&#183;&#160; LOCAL-FIRST &#160;&#183;&#160; MIT</text>
-  <text x="1130" y="570" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="1" fill="#6F6555" text-anchor="end">github.com/RedPandaMC/Weevil</text>
+  <line x1="70" y1="548" x2="1130" y2="548" stroke="rgba(25,24,15,0.06)" stroke-width="1"/>
+  <text x="70" y="570" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="2" fill="#6B675C">VS&#160;CODE &#160;&#183;&#160; DUCKDB &#160;&#183;&#160; LOCAL-FIRST &#160;&#183;&#160; NO&#160;SIGN-IN</text>
+  <text x="1130" y="570" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="1" fill="#6B675C" text-anchor="end">github.com/RedPandaMC/Weevil</text>
 </svg>
