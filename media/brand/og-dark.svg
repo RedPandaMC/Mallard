@@ -1,25 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-  <defs>
-    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M40 0H0V40" fill="none" stroke="rgba(236,234,228,0.06)" stroke-width="1"/>
-    </pattern>
-    <pattern id="scr" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.6" fill="rgba(255,255,255,0.06)"/></pattern>
-    <linearGradient id="rule-grad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#FFB454"/><stop offset="0.5" stop-color="#FF6B81"/><stop offset="1" stop-color="#B45CFF"/>
-    </linearGradient>
-  </defs>
-
-  <rect width="1200" height="630" fill="#100F0C"/>
-  <rect width="1200" height="630" fill="url(#grid)" opacity="0.6"/>
-  <rect x="44" y="44" width="1112" height="542" fill="none" stroke="rgba(236,234,228,0.30)" stroke-width="1.4"/>
-  <path d="M37 44H51M44 37V51" stroke="rgba(236,234,228,0.30)" stroke-width="1.4"/><path d="M1149 44H1163M1156 37V51" stroke="rgba(236,234,228,0.30)" stroke-width="1.4"/><path d="M37 586H51M44 579V593" stroke="rgba(236,234,228,0.30)" stroke-width="1.4"/><path d="M1149 586H1163M1156 579V593" stroke="rgba(236,234,228,0.30)" stroke-width="1.4"/>
+  <rect width="1200" height="630" fill="#000000"/>
+  <rect x="44" y="44" width="1112" height="542" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="1.4"/>
+  <path d="M37 44H51M44 37V51" stroke="rgba(255,255,255,0.16)" stroke-width="1.4"/><path d="M1149 44H1163M1156 37V51" stroke="rgba(255,255,255,0.16)" stroke-width="1.4"/><path d="M37 586H51M44 579V593" stroke="rgba(255,255,255,0.16)" stroke-width="1.4"/><path d="M1149 586H1163M1156 579V593" stroke="rgba(255,255,255,0.16)" stroke-width="1.4"/>
 
   <!-- header tags -->
-  <text x="70" y="84" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="3.5" fill="#8C887E">COPILOT SPEND &#183; INSTRUMENT</text>
-  <text x="1130" y="84" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="2" fill="#8C887E" text-anchor="end">v0.2 &#183; MIT</text>
+  <text x="70" y="82" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="3.5" fill="#7C7C7C">COPILOT SPEND &#183; INSTRUMENT</text>
+  <text x="1130" y="82" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="2" fill="#7C7C7C" text-anchor="end">v0.2 &#183; MIT</text>
 
-  <!-- schematic weevil + technical callouts + bracket -->
-  <svg x="690" y="150" width="360" height="300" viewBox="0 0 2048 2048">
+  <!-- weevil mark (the only gradient) + wordmark -->
+  <svg x="66" y="108" width="58" height="58" viewBox="0 0 2048 2048">
   <defs><linearGradient id="weevil-grad" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#FFB454"/><stop offset="0.5" stop-color="#FF6B81"/><stop offset="1" stop-color="#B45CFF"/>
   </linearGradient></defs>
@@ -31,36 +20,37 @@
   </g>
 
 </svg>
-  <path d="M676 168 h-14 v14 M1064 168 h14 v14 M676 452 h-14 v-14 M1064 452 h14 v-14" fill="none" stroke="rgba(236,234,228,0.30)" stroke-width="1.4"/>
-  <path d="M810 258L752 198" stroke="#8C887E" stroke-width="1" fill="none"/><circle cx="810" cy="258" r="3" fill="none" stroke="#FFB454" stroke-width="2"/><text x="744" y="193" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="1.2" fill="#8C887E" text-anchor="end">live readout</text>
-  <path d="M958 300L1052 270" stroke="#8C887E" stroke-width="1" fill="none"/><circle cx="958" cy="300" r="3" fill="none" stroke="#B45CFF" stroke-width="2"/><text x="1058" y="275" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="1.2" fill="#8C887E" text-anchor="start">model mix</text>
-  <path d="M922 392L1052 432" stroke="#8C887E" stroke-width="1" fill="none"/><circle cx="922" cy="392" r="3" fill="none" stroke="#FF6B81" stroke-width="2"/><text x="1058" y="437" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="1.2" fill="#8C887E" text-anchor="start">token cost</text>
-  <line x1="700" y1="492" x2="700" y2="504" stroke="#8C887E" stroke-width="1.6"/><line x1="715" y1="492" x2="715" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="730" y1="492" x2="730" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="745" y1="492" x2="745" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="760" y1="492" x2="760" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="775" y1="492" x2="775" y2="504" stroke="#8C887E" stroke-width="1.6"/><line x1="790" y1="492" x2="790" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="805" y1="492" x2="805" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="820" y1="492" x2="820" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="835" y1="492" x2="835" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="850" y1="492" x2="850" y2="504" stroke="#8C887E" stroke-width="1.6"/><line x1="865" y1="492" x2="865" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="880" y1="492" x2="880" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="895" y1="492" x2="895" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="910" y1="492" x2="910" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="925" y1="492" x2="925" y2="504" stroke="#8C887E" stroke-width="1.6"/><line x1="940" y1="492" x2="940" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="955" y1="492" x2="955" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="970" y1="492" x2="970" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="985" y1="492" x2="985" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="1000" y1="492" x2="1000" y2="504" stroke="#8C887E" stroke-width="1.6"/><line x1="1015" y1="492" x2="1015" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="1030" y1="492" x2="1030" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="1045" y1="492" x2="1045" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="1060" y1="492" x2="1060" y2="499" stroke="#8C887E" stroke-width="1"/><line x1="1075" y1="492" x2="1075" y2="504" stroke="#8C887E" stroke-width="1.6"/><line x1="1090" y1="492" x2="1090" y2="499" stroke="#8C887E" stroke-width="1"/>
+  <text x="66" y="270" font-family="'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="118" font-weight="700" letter-spacing="-4" fill="#ECEAE4">Weevil</text>
+  <rect x="72" y="298" width="38" height="4" fill="#2F9BE8"/><rect x="110" y="298" width="38" height="4" fill="#4FC23A"/><rect x="148" y="298" width="38" height="4" fill="#FFC400"/><rect x="186" y="298" width="38" height="4" fill="#FF453A"/>
+  <text x="70" y="344" font-family="'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="26" font-weight="500" fill="#ECEAE4">Know exactly what GitHub Copilot is costing you.</text>
 
-  <!-- wordmark -->
-  <text x="68" y="306" font-family="'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="150" font-weight="700" letter-spacing="-5" fill="#ECEAE4">Weevil</text>
-  <rect x="72" y="338" width="132" height="4" fill="url(#rule-grad)"/>
-  <text x="70" y="384" font-family="'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="28" font-weight="500" fill="#ECEAE4">Know exactly what GitHub Copilot is costing you.</text>
+  <!-- OP-Z readout screens -->
+  
+    <rect x="70" y="380" width="198" height="86" rx="8" fill="#000" stroke="rgba(255,255,255,0.16)"/>
+    <text x="86" y="408" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="11" letter-spacing="2" fill="#6A6A6A">TODAY</text>
+    <text x="86" y="448" font-family="'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="38" font-weight="700" letter-spacing="-1.5" fill="#2F9BE8">$4.20</text>
+  
+    <rect x="280" y="380" width="198" height="86" rx="8" fill="#000" stroke="rgba(255,255,255,0.16)"/>
+    <text x="296" y="408" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="11" letter-spacing="2" fill="#6A6A6A">THIS MONTH</text>
+    <text x="296" y="448" font-family="'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="38" font-weight="700" letter-spacing="-1.5" fill="#4FC23A">$12.40</text>
 
-  <!-- readout chips -->
+  <!-- group chips -->
+  <rect x="70" y="468" width="34" height="34" rx="6" fill="#2F9BE8"/><text x="87" y="492" font-family="'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#000" text-anchor="middle">C</text><rect x="110" y="468" width="34" height="34" rx="6" fill="#4FC23A"/><text x="127" y="492" font-family="'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#000" text-anchor="middle">I</text><rect x="150" y="468" width="34" height="34" rx="6" fill="#FFC400"/><text x="167" y="492" font-family="'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#000" text-anchor="middle">A</text><rect x="190" y="468" width="34" height="34" rx="6" fill="#FF453A"/><text x="207" y="492" font-family="'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#000" text-anchor="middle">E</text>
+  <text x="236" y="490" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="13" letter-spacing="1.5" fill="#7C7C7C">chat · inline · agent · edit</text>
+
+  <!-- ADSR spend envelope -->
+  <text x="700" y="150" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="13" letter-spacing="2" fill="#7C7C7C">SPEND ENVELOPE · 30D</text>
+  <text x="1150" y="150" font-family="'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="26" font-weight="700" fill="#4FC23A" text-anchor="end">38%</text>
   
-    <rect x="70" y="414" width="172" height="64" rx="6" fill="#15131b" stroke="rgba(236,234,228,0.30)"/>
-    <rect x="70" y="414" width="172" height="64" rx="6" fill="url(#scr)"/>
-    <text x="84" y="436" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="11" letter-spacing="2" fill="#8C887E">TODAY</text>
-    <text x="84" y="464" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="24" font-weight="700" fill="#FFB454">$4.20</text>
-  
-    <rect x="258" y="414" width="172" height="64" rx="6" fill="#15131b" stroke="rgba(236,234,228,0.30)"/>
-    <rect x="258" y="414" width="172" height="64" rx="6" fill="url(#scr)"/>
-    <text x="272" y="436" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="11" letter-spacing="2" fill="#8C887E">THIS MONTH</text>
-    <text x="272" y="464" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="24" font-weight="700" fill="#FF6B81">$12.40</text>
-  
-    <rect x="446" y="414" width="172" height="64" rx="6" fill="#15131b" stroke="rgba(236,234,228,0.30)"/>
-    <rect x="446" y="414" width="172" height="64" rx="6" fill="url(#scr)"/>
-    <text x="460" y="436" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="11" letter-spacing="2" fill="#8C887E">PROJECTED</text>
-    <text x="460" y="464" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="24" font-weight="700" fill="#B45CFF">$31.00</text>
+    <polygon points="700,322 786,170 786,322" fill="#2F9BE8"/>
+    <polygon points="786,322 786,170 870,238 870,322" fill="#4FC23A"/>
+    <polygon points="870,322 870,238 1066,238 1066,322" fill="#FFC400"/>
+    <polygon points="1066,322 1066,238 1150,322" fill="#FF453A"/>
+    <line x1="700" y1="322" x2="1150" y2="322" stroke="#ECEAE4" stroke-width="2"/>
+  <text x="700" y="350" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="12" letter-spacing="2" fill="#6A6A6A">PROJECTED $31.00 · ATTACK→RELEASE</text>
 
   <!-- footer metadata -->
-  <line x1="70" y1="548" x2="1130" y2="548" stroke="rgba(236,234,228,0.06)" stroke-width="1"/>
-  <text x="70" y="570" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="2" fill="#8C887E">VS&#160;CODE &#160;&#183;&#160; DUCKDB &#160;&#183;&#160; LOCAL-FIRST &#160;&#183;&#160; NO&#160;SIGN-IN</text>
-  <text x="1130" y="570" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="1" fill="#8C887E" text-anchor="end">github.com/RedPandaMC/Weevil</text>
+  <line x1="70" y1="548" x2="1130" y2="548" stroke="rgba(255,255,255,0.16)" stroke-width="1"/>
+  <text x="70" y="570" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="2" fill="#7C7C7C">VS&#160;CODE &#160;&#183;&#160; DUCKDB &#160;&#183;&#160; LOCAL-FIRST &#160;&#183;&#160; NO&#160;SIGN-IN</text>
+  <text x="1130" y="570" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="14" letter-spacing="1" fill="#7C7C7C" text-anchor="end">github.com/RedPandaMC/Weevil</text>
 </svg>

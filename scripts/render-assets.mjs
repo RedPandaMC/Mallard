@@ -123,74 +123,71 @@ console.log('banner');
 const GROTESK = "'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif";
 const MONO = "'JetBrains Mono', 'DejaVu Sans Mono', monospace";
 
-const DATA = ['#FFB454', '#FF6B81', '#B45CFF', '#36C5D4'];
+const DATA = ['#2F9BE8', '#4FC23A', '#FFC400', '#FF453A']; // OP-Z primaries
 
-function banner({ bg, ink, muted, grid, frame, screen }) {
+function banner({ bg, ink, muted, frame }) {
   const W = 1200;
   const H = 630;
   const m = 44;
+  const T = { blue: '#2F9BE8', green: '#4FC23A', yellow: '#FFC400', red: '#FF453A', gray: '#6A6A6A' };
   const tick = (x, y) =>
     `<path d="M${x - 7} ${y}H${x + 7}M${x} ${y - 7}V${y + 7}" stroke="${frame}" stroke-width="1.4"/>`;
-  const lead = (x1, y1, x2, y2, c) =>
-    `<path d="M${x1} ${y1}L${x2} ${y2}" stroke="${muted}" stroke-width="1" fill="none"/><circle cx="${x1}" cy="${y1}" r="3" fill="none" stroke="${c}" stroke-width="2"/>`;
-  const label = (x, y, t, anchor = 'start') =>
-    `<text x="${x}" y="${y}" font-family="${MONO}" font-size="14" letter-spacing="1.2" fill="${muted}" text-anchor="${anchor}">${t}</text>`;
 
-  // mini OP-Z readout chip
-  const chip = (x, y, lab, val, accent) => `
-    <rect x="${x}" y="${y}" width="172" height="64" rx="6" fill="${screen}" stroke="${frame}"/>
-    <rect x="${x}" y="${y}" width="172" height="64" rx="6" fill="url(#scr)"/>
-    <text x="${x + 14}" y="${y + 22}" font-family="${MONO}" font-size="11" letter-spacing="2" fill="${muted}">${lab}</text>
-    <text x="${x + 14}" y="${y + 50}" font-family="${MONO}" font-size="24" font-weight="700" fill="${accent}">${val}</text>`;
+  // OP-Z readout screen: pure-black OLED glass + big flat primary number
+  const sc = (x, y, lab, val, c) => `
+    <rect x="${x}" y="${y}" width="198" height="86" rx="8" fill="#000" stroke="${frame}"/>
+    <text x="${x + 16}" y="${y + 28}" font-family="${MONO}" font-size="11" letter-spacing="2" fill="${T.gray}">${lab}</text>
+    <text x="${x + 16}" y="${y + 68}" font-family="${GROTESK}" font-size="38" font-weight="700" letter-spacing="-1.5" fill="${c}">${val}</text>`;
 
-  // ruler tick strip
-  let ruler = '';
-  for (let i = 0; i <= 26; i++) {
-    const x = 700 + i * 15;
-    const tall = i % 5 === 0;
-    ruler += `<line x1="${x}" y1="492" x2="${x}" y2="${tall ? 504 : 499}" stroke="${muted}" stroke-width="${tall ? 1.6 : 1}"/>`;
-  }
+  // OP-Z group chip (flat colour square + letter)
+  const gc = (x, L, c) =>
+    `<rect x="${x}" y="468" width="34" height="34" rx="6" fill="${c}"/><text x="${x + 17}" y="492" font-family="${GROTESK}" font-size="18" font-weight="700" fill="#000" text-anchor="middle">${L}</text>`;
+
+  // flat ADSR "spend envelope"
+  const by = 322;
+  const env = `
+    <polygon points="700,${by} 786,170 786,${by}" fill="${T.blue}"/>
+    <polygon points="786,${by} 786,170 870,238 870,${by}" fill="${T.green}"/>
+    <polygon points="870,${by} 870,238 1066,238 1066,${by}" fill="${T.yellow}"/>
+    <polygon points="1066,${by} 1066,238 1150,${by}" fill="${T.red}"/>
+    <line x1="700" y1="${by}" x2="1150" y2="${by}" stroke="${ink}" stroke-width="2"/>`;
+
+  // 4-colour OP-Z bar
+  const bar = ['blue', 'green', 'yellow', 'red']
+    .map((k, i) => `<rect x="${m + 28 + i * 38}" y="298" width="38" height="4" fill="${T[k]}"/>`)
+    .join('');
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <defs>
-    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M40 0H0V40" fill="none" stroke="${grid}" stroke-width="1"/>
-    </pattern>
-    <pattern id="scr" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.6" fill="rgba(255,255,255,0.06)"/></pattern>
-    <linearGradient id="rule-grad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#FFB454"/><stop offset="0.5" stop-color="#FF6B81"/><stop offset="1" stop-color="#B45CFF"/>
-    </linearGradient>
-  </defs>
-
   <rect width="${W}" height="${H}" fill="${bg}"/>
-  <rect width="${W}" height="${H}" fill="url(#grid)" opacity="0.6"/>
   <rect x="${m}" y="${m}" width="${W - 2 * m}" height="${H - 2 * m}" fill="none" stroke="${frame}" stroke-width="1.4"/>
   ${tick(m, m)}${tick(W - m, m)}${tick(m, H - m)}${tick(W - m, H - m)}
 
   <!-- header tags -->
-  <text x="${m + 26}" y="${m + 40}" font-family="${MONO}" font-size="14" letter-spacing="3.5" fill="${muted}">COPILOT SPEND &#183; INSTRUMENT</text>
-  <text x="${W - m - 26}" y="${m + 40}" font-family="${MONO}" font-size="14" letter-spacing="2" fill="${muted}" text-anchor="end">v0.2 &#183; MIT</text>
+  <text x="${m + 26}" y="${m + 38}" font-family="${MONO}" font-size="14" letter-spacing="3.5" fill="${muted}">COPILOT SPEND &#183; INSTRUMENT</text>
+  <text x="${W - m - 26}" y="${m + 38}" font-family="${MONO}" font-size="14" letter-spacing="2" fill="${muted}" text-anchor="end">v0.2 &#183; MIT</text>
 
-  <!-- schematic weevil + technical callouts + bracket -->
-  <svg x="690" y="150" width="360" height="300" viewBox="0 0 2048 2048">${weevilInner}</svg>
-  <path d="M676 168 h-14 v14 M1064 168 h14 v14 M676 452 h-14 v-14 M1064 452 h14 v-14" fill="none" stroke="${frame}" stroke-width="1.4"/>
-  ${lead(810, 258, 752, 198, DATA[0])}${label(744, 193, 'live readout', 'end')}
-  ${lead(958, 300, 1052, 270, DATA[2])}${label(1058, 275, 'model mix')}
-  ${lead(922, 392, 1052, 432, DATA[1])}${label(1058, 437, 'token cost')}
-  ${ruler}
+  <!-- weevil mark (the only gradient) + wordmark -->
+  <svg x="${m + 22}" y="108" width="58" height="58" viewBox="0 0 2048 2048">${weevilInner}</svg>
+  <text x="${m + 22}" y="270" font-family="${GROTESK}" font-size="118" font-weight="700" letter-spacing="-4" fill="${ink}">Weevil</text>
+  ${bar}
+  <text x="${m + 26}" y="344" font-family="${GROTESK}" font-size="26" font-weight="500" fill="${ink}">Know exactly what GitHub Copilot is costing you.</text>
 
-  <!-- wordmark -->
-  <text x="${m + 24}" y="306" font-family="${GROTESK}" font-size="150" font-weight="700" letter-spacing="-5" fill="${ink}">Weevil</text>
-  <rect x="${m + 28}" y="338" width="132" height="4" fill="url(#rule-grad)"/>
-  <text x="${m + 26}" y="384" font-family="${GROTESK}" font-size="28" font-weight="500" fill="${ink}">Know exactly what GitHub Copilot is costing you.</text>
+  <!-- OP-Z readout screens -->
+  ${sc(m + 26, 380, 'TODAY', '$4.20', T.blue)}
+  ${sc(m + 236, 380, 'THIS MONTH', '$12.40', T.green)}
 
-  <!-- readout chips -->
-  ${chip(m + 26, 414, 'TODAY', '$4.20', DATA[0])}
-  ${chip(m + 214, 414, 'THIS MONTH', '$12.40', DATA[1])}
-  ${chip(m + 402, 414, 'PROJECTED', '$31.00', DATA[2])}
+  <!-- group chips -->
+  ${gc(m + 26, 'C', T.blue)}${gc(m + 66, 'I', T.green)}${gc(m + 106, 'A', T.yellow)}${gc(m + 146, 'E', T.red)}
+  <text x="${m + 192}" y="490" font-family="${MONO}" font-size="13" letter-spacing="1.5" fill="${muted}">chat · inline · agent · edit</text>
+
+  <!-- ADSR spend envelope -->
+  <text x="700" y="150" font-family="${MONO}" font-size="13" letter-spacing="2" fill="${muted}">SPEND ENVELOPE · 30D</text>
+  <text x="1150" y="150" font-family="${GROTESK}" font-size="26" font-weight="700" fill="${T.green}" text-anchor="end">38%</text>
+  ${env}
+  <text x="700" y="350" font-family="${MONO}" font-size="12" letter-spacing="2" fill="${T.gray}">PROJECTED $31.00 · ATTACK→RELEASE</text>
 
   <!-- footer metadata -->
-  <line x1="${m + 26}" y1="${H - m - 38}" x2="${W - m - 26}" y2="${H - m - 38}" stroke="${grid}" stroke-width="1"/>
+  <line x1="${m + 26}" y1="${H - m - 38}" x2="${W - m - 26}" y2="${H - m - 38}" stroke="${frame}" stroke-width="1"/>
   <text x="${m + 26}" y="${H - m - 16}" font-family="${MONO}" font-size="14" letter-spacing="2" fill="${muted}">VS&#160;CODE &#160;&#183;&#160; DUCKDB &#160;&#183;&#160; LOCAL-FIRST &#160;&#183;&#160; NO&#160;SIGN-IN</text>
   <text x="${W - m - 26}" y="${H - m - 16}" font-family="${MONO}" font-size="14" letter-spacing="1" fill="${muted}" text-anchor="end">github.com/RedPandaMC/Weevil</text>
 </svg>`;
@@ -198,20 +195,16 @@ function banner({ bg, ink, muted, grid, frame, screen }) {
 
 const themes = {
   dark: {
-    bg: '#100F0C',
+    bg: '#000000',
     ink: '#ECEAE4',
-    muted: '#8C887E',
-    grid: 'rgba(236,234,228,0.06)',
-    frame: 'rgba(236,234,228,0.30)',
-    screen: '#15131b',
+    muted: '#7C7C7C',
+    frame: 'rgba(255,255,255,0.16)',
   },
   light: {
     bg: '#ECEAE4',
-    ink: '#19180F',
+    ink: '#15140F',
     muted: '#6B675C',
-    grid: 'rgba(25,24,15,0.06)',
-    frame: 'rgba(25,24,15,0.32)',
-    screen: '#1a1822',
+    frame: 'rgba(0,0,0,0.2)',
   },
 };
 for (const [name, theme] of Object.entries(themes)) {
@@ -246,10 +239,10 @@ function patch() {
   const line = 'rgba(243,234,217,0.7)';
   const baseY = 352;
   const prisms =
-    isoPrism(150, baseY, 44, 64, 24, '#FFB454') +
-    isoPrism(210, baseY, 44, 132, 24, '#FF6B81') +
-    isoPrism(270, baseY, 44, 96, 24, '#B45CFF') +
-    isoPrism(330, baseY, 44, 48, 24, '#36C5D4');
+    isoPrism(150, baseY, 44, 64, 24, '#2F9BE8') +
+    isoPrism(210, baseY, 44, 132, 24, '#4FC23A') +
+    isoPrism(270, baseY, 44, 96, 24, '#FFC400') +
+    isoPrism(330, baseY, 44, 48, 24, '#FF453A');
   // ruler ticks along the baseline
   let ticks = '';
   for (let i = 0; i <= 13; i++) {

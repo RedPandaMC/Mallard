@@ -52,36 +52,48 @@
   --w-chart-main: 260px;
   --w-chart-mini: 200px;
 
-  /* ── Instrument identity layer ────────────────────────────────────
-     Weevil reads as a modern lab instrument. A per-metric data palette,
-     one bold action accent (Rabbit R1 cinnabar), a geometric grotesque
-     display face, monospace readouts, a fine technical grid, and a dark
-     "LCD" glass. Colour here is decorative only — every surface + text
-     colour still derives from --vscode-* above, so the dashboard stays
-     theme-compatible on both light and dark editor themes. */
-  --w-ink-amber: #ffb454;
-  --w-ink-coral: #ff6b81;
-  --w-ink-purple: #b45cff;
-  --w-ink-grad: linear-gradient(100deg, #ffb454 0%, #ff6b81 50%, #b45cff 100%);
+  /* ── Instrument identity layer (Teenage Engineering OP-1 / OP-Z) ───
+     The data readouts read like an OP-Z screen: pure-black OLED "glass"
+     with big, flat, saturated primary-coloured numbers and color-coded
+     parameters. The surrounding dashboard chrome (cards, text, borders)
+     still derives from --vscode-* above, so it stays theme-compatible —
+     the OP-Z screens are self-contained black panels within it. */
+
+  /* OP-Z primary palette — flat, saturated, no gradients */
+  --w-te-blue: #2f9be8;
+  --w-te-green: #4fc23a;
+  --w-te-yellow: #ffc400;
+  --w-te-red: #ff453a;
+  --w-te-magenta: #ff4f8b;
 
   --w-action: #fe5000; /* Rabbit R1 cinnabar — live / primary action */
   --w-action-fg: #ffffff;
-  --w-te-cyan: #36c5d4;
-  --w-te-green: #74d68a;
 
-  /* data palette, one accent per readout */
-  --w-data-1: var(--w-ink-amber);
-  --w-data-2: var(--w-ink-coral);
-  --w-data-3: var(--w-ink-purple);
-  --w-data-4: var(--w-te-cyan);
+  /* data palette, one flat primary per readout/parameter */
+  --w-data-1: var(--w-te-blue);
+  --w-data-2: var(--w-te-green);
+  --w-data-3: var(--w-te-yellow);
+  --w-data-4: var(--w-te-red);
+
+  /* flat four-colour segmented accent bar (OP-Z group colours) */
+  --w-te-bar: linear-gradient(
+    90deg,
+    var(--w-te-blue) 0 25%,
+    var(--w-te-green) 25% 50%,
+    var(--w-te-yellow) 50% 75%,
+    var(--w-te-red) 75% 100%
+  );
+
+  /* weevil-shell gradient — marketplace logo art only, never UI chrome */
+  --w-ink-grad: linear-gradient(100deg, #ffb454 0%, #ff6b81 50%, #b45cff 100%);
 
   /* Geometric grotesque display (system fonts only — CSP-safe). */
   --w-font-display: system-ui, 'Segoe UI', Roboto, var(--w-font), sans-serif;
   --w-label-font: var(--w-font-mono);
   --w-readout-font: var(--w-font-mono);
 
-  --w-screen: #15131b; /* instrument LCD glass */
-  --w-screen-grid: radial-gradient(rgba(255, 255, 255, 0.07) 0.5px, transparent 0.6px);
+  --w-screen: #000000; /* OP-Z OLED display glass */
+  --w-screen-grid: none;
 
   /* Fine technical grid (graph-paper), adapts per theme. */
   --w-grid-line: color-mix(in srgb, var(--w-fg) 4%, transparent);

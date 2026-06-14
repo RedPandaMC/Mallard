@@ -23,16 +23,9 @@ export function readTheme(): WeevilTheme {
     tooltipBg: cssVar('--vscode-editorHoverWidget-background', '#2d2d2d'),
     // Monospace technical labels, matching the dashboard's field-guide voice.
     labelFont: cssVar('--vscode-editor-font-family', 'monospace'),
-    // Lead with the "riso ink" trio (the weevil shell), then fall back to the
-    // theme's chart colours. The inks read on both light and dark editor themes.
-    series: [
-      '#B45CFF',
-      '#FF6B81',
-      '#FFB454',
-      cssVar('--vscode-charts-blue', '#4FC3F7'),
-      cssVar('--vscode-charts-green', '#A5D6A7'),
-      cssVar('--vscode-charts-yellow', '#FFF176'),
-    ],
+    // Flat OP-Z primary palette — saturated, no gradients, reads on light and
+    // dark editor themes alike.
+    series: ['#2F9BE8', '#4FC23A', '#FFC400', '#FF453A', '#FF4F8B', '#FE5000'],
   };
 }
 

@@ -23,11 +23,13 @@
 
 /* --- palette -------------------------------------------------------------- */
 :root {
-  --wv-amber: #ffb454;
-  --wv-coral: #ff6b81;
-  --wv-purple: #b45cff;
-  --wv-cyan: #36c5d4;
+  /* OP-Z primary palette — flat, saturated */
+  --wv-blue: #2f9be8;
+  --wv-green: #4fc23a;
+  --wv-yellow: #ffc400;
+  --wv-red: #ff453a;
   --wv-r1: #fe5000; /* Rabbit R1 cinnabar — the action accent */
+  /* weevil-shell gradient — logo art only, never UI chrome */
   --wv-ink-grad: linear-gradient(100deg, #ffb454 0%, #ff6b81 50%, #b45cff 100%);
 
   --wv-font-display: 'Schibsted Grotesk', system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -62,12 +64,12 @@
   --wv-grid-line: rgba(25, 24, 15, 0.05);
 }
 
-/* --- DARK ("console") — the default -------------------------------------- */
+/* --- DARK ("OP-Z console") — the default — pure black ------------------- */
 .dark {
-  --vp-c-bg: #100f0c;
-  --vp-c-bg-alt: #0b0a08;
-  --vp-c-bg-soft: #18160f;
-  --vp-c-bg-elv: #1c1a13;
+  --vp-c-bg: #000000;
+  --vp-c-bg-alt: #000000;
+  --vp-c-bg-soft: #0c0c0c;
+  --vp-c-bg-elv: #131313;
 
   --vp-c-text-1: #eceae4;
   --vp-c-text-2: #b6b2a6;
@@ -89,8 +91,8 @@
 
 /* --- hero ----------------------------------------------------------------- */
 :root {
-  --vp-home-hero-name-color: transparent;
-  --vp-home-hero-name-background: var(--wv-ink-grad);
+  --vp-home-hero-name-color: var(--vp-c-text-1);
+  --vp-home-hero-name-background: transparent;
   --vp-home-hero-image-background-image: radial-gradient(
     closest-side,
     rgba(255, 107, 129, 0.18),
@@ -205,10 +207,10 @@ h1.title {
   transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
 /* per-plate data colour, OP-Z parameter coding */
-.VPFeatures .items > div:nth-child(1) .VPFeature { --accent: var(--wv-amber); }
-.VPFeatures .items > div:nth-child(2) .VPFeature { --accent: var(--wv-coral); }
-.VPFeatures .items > div:nth-child(3) .VPFeature { --accent: var(--wv-purple); }
-.VPFeatures .items > div:nth-child(4) .VPFeature { --accent: var(--wv-cyan); }
+.VPFeatures .items > div:nth-child(1) .VPFeature { --accent: var(--wv-blue); }
+.VPFeatures .items > div:nth-child(2) .VPFeature { --accent: var(--wv-green); }
+.VPFeatures .items > div:nth-child(3) .VPFeature { --accent: var(--wv-yellow); }
+.VPFeatures .items > div:nth-child(4) .VPFeature { --accent: var(--wv-red); }
 .VPFeature::before {
   counter-increment: wv-fig;
   content: counter(wv-fig, decimal-leading-zero);
@@ -289,8 +291,7 @@ h1.title {
   position: absolute;
   inset: 0 auto 0 0;
   width: 2px;
-  background: var(--wv-ink-grad);
-  opacity: 0.7;
+  background: var(--wv-blue);
 }
 
 /* --- tables read like specimen data rows --------------------------------- */

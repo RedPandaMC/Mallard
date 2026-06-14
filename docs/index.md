@@ -48,12 +48,12 @@ features:
 ## Instrument palette
 
 <div class="wv-palette">
-  <div class="wv-swatch" style="--c:#ffb454"><span class="wv-swatch-chip"></span><b>Forage</b><code>#FFB454</code><small>today</small></div>
-  <div class="wv-swatch" style="--c:#ff6b81"><span class="wv-swatch-chip"></span><b>Bore</b><code>#FF6B81</code><small>month-to-date</small></div>
-  <div class="wv-swatch" style="--c:#b45cff"><span class="wv-swatch-chip"></span><b>Elytra</b><code>#B45CFF</code><small>projected</small></div>
-  <div class="wv-swatch" style="--c:#36c5d4"><span class="wv-swatch-chip"></span><b>Probe</b><code>#36C5D4</code><small>top model</small></div>
-  <div class="wv-swatch" style="--c:#74d68a"><span class="wv-swatch-chip"></span><b>Live</b><code>#74D68A</code><small>on track</small></div>
+  <div class="wv-swatch" style="--c:#2f9be8"><span class="wv-swatch-chip"></span><b>Probe</b><code>#2F9BE8</code><small>today</small></div>
+  <div class="wv-swatch" style="--c:#4fc23a"><span class="wv-swatch-chip"></span><b>Live</b><code>#4FC23A</code><small>on track</small></div>
+  <div class="wv-swatch" style="--c:#ffc400"><span class="wv-swatch-chip"></span><b>Forage</b><code>#FFC400</code><small>month-to-date</small></div>
+  <div class="wv-swatch" style="--c:#ff453a"><span class="wv-swatch-chip"></span><b>Bore</b><code>#FF453A</code><small>projected</small></div>
   <div class="wv-swatch" style="--c:#fe5000"><span class="wv-swatch-chip"></span><b>Alert</b><code>#FE5000</code><small>action</small></div>
+  <div class="wv-swatch" style="--c:#eceae4"><span class="wv-swatch-chip"></span><b>Signal</b><code>#ECEAE4</code><small>readout</small></div>
 </div>
 
 </div>

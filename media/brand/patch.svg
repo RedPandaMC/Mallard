@@ -14,19 +14,19 @@
   <!-- axes -->
   <line x1="120" y1="352" x2="404" y2="352" stroke="rgba(243,234,217,0.7)" stroke-width="2"/>
   <line x1="132" y1="150" x2="132" y2="352" stroke="rgba(243,234,217,0.7)" stroke-width="2"/>
-  <g fill="none" stroke="#FFB454" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+  <g fill="none" stroke="#2F9BE8" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
     <rect x="150" y="288" width="44" height="64"/>
     <path d="M150 288 L167.28 276 L211.28 276 L194 288 Z"/>
     <path d="M194 288 L211.28 276 L211.28 340 L194 352 Z"/>
-  </g><g fill="none" stroke="#FF6B81" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+  </g><g fill="none" stroke="#4FC23A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
     <rect x="210" y="220" width="44" height="132"/>
     <path d="M210 220 L227.28 208 L271.28 208 L254 220 Z"/>
     <path d="M254 220 L271.28 208 L271.28 340 L254 352 Z"/>
-  </g><g fill="none" stroke="#B45CFF" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+  </g><g fill="none" stroke="#FFC400" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
     <rect x="270" y="256" width="44" height="96"/>
     <path d="M270 256 L287.28 244 L331.28 244 L314 256 Z"/>
     <path d="M314 256 L331.28 244 L331.28 340 L314 352 Z"/>
-  </g><g fill="none" stroke="#36C5D4" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+  </g><g fill="none" stroke="#FF453A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
     <rect x="330" y="304" width="44" height="48"/>
     <path d="M330 304 L347.28 292 L391.28 292 L374 304 Z"/>
     <path d="M374 304 L391.28 292 L391.28 340 L374 352 Z"/>

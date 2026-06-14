@@ -43,16 +43,15 @@ body {
   border-bottom: 1px solid var(--w-border);
 }
 
-/* ink registration rule under the cartouche */
+/* flat four-colour OP-Z accent bar under the wordmark */
 .wv-header::after {
   content: '';
   position: absolute;
   left: 0;
   bottom: -1px;
-  width: 104px;
-  height: 2px;
-  background: var(--w-ink-grad);
-  opacity: 0.85;
+  width: 140px;
+  height: 3px;
+  background: var(--w-te-bar);
 }
 
 .wv-brand {
@@ -467,7 +466,7 @@ body {
 
 .wv-kpi-card {
   position: relative;
-  --accent: var(--w-ink-purple);
+  --accent: var(--w-te-blue);
   background: var(--w-bg-card);
   border: 1px solid var(--w-border);
   border-radius: var(--w-r2);
@@ -512,30 +511,27 @@ body {
   border-color: var(--accent);
 }
 
-/* the value is an OP-Z LCD: dark glass + dot-matrix + big accent readout */
+/* the value is an OP-Z OLED screen: pure black glass + big flat primary number */
 .wv-kpi-value {
   align-self: stretch;
   background-color: var(--w-screen);
-  background-image: var(--w-screen-grid);
-  background-size: 4px 4px;
   border-radius: var(--w-r2);
-  padding: 8px 10px;
-  font-family: var(--w-readout-font);
-  font-size: 26px;
+  padding: 10px 12px;
+  font-family: var(--w-font-display);
+  font-size: 30px;
   font-weight: 700;
   color: var(--accent);
-  letter-spacing: -0.01em;
-  line-height: 1.15;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .wv-kpi-value--sm {
-  font-size: 16px;
-  padding: 10px;
+  font-size: 18px;
+  padding: 13px 12px;
 }
 
 .wv-kpi-sub {
@@ -583,16 +579,14 @@ body {
 }
 
 .wv-gauge-values {
-  font-family: var(--w-readout-font);
-  font-size: 13px;
+  font-family: var(--w-font-display);
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
-  color: var(--w-te-cyan);
+  color: var(--w-te-green);
   background-color: var(--w-screen);
-  background-image: var(--w-screen-grid);
-  background-size: 4px 4px;
-  padding: 2px var(--w-s2);
+  padding: 3px var(--w-s2);
   border-radius: var(--w-r1);
 }
 
@@ -653,7 +647,7 @@ body {
 }
 
 .wv-chart-section:hover {
-  border-color: color-mix(in srgb, var(--w-ink-purple) 45%, var(--w-border));
+  border-color: color-mix(in srgb, var(--w-te-blue) 45%, var(--w-border));
 }
 
 /* corner registration tick, bottom-right of each plate */
@@ -664,8 +658,8 @@ body {
   bottom: 9px;
   width: 9px;
   height: 9px;
-  border-right: 1px solid var(--w-ink-purple);
-  border-bottom: 1px solid var(--w-ink-purple);
+  border-right: 1px solid var(--w-te-blue);
+  border-bottom: 1px solid var(--w-te-blue);
   opacity: 0.4;
   pointer-events: none;
 }
@@ -702,7 +696,7 @@ body {
 }
 
 .wv-chart-title .codicon {
-  color: var(--w-ink-purple);
+  color: var(--w-te-blue);
 }
 
 .wv-chart-body {
