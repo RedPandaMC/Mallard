@@ -3,6 +3,7 @@ import { RELEVANT_CONFIG_KEYS } from './config';
 import { buildContainer, Container } from './container';
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
+import { registerTriggerView } from './ui/TriggerView';
 import { Value } from './domain/expr/ast';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -46,6 +47,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(restriction.onDidChange(updateStatusBar));
 
   registerCommands(context, container);
+  context.subscriptions.push(...registerTriggerView());
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {

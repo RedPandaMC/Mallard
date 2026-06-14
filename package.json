@@ -92,70 +92,30 @@
         }
       ]
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "weevil",
+          "title": "Weevil",
+          "icon": "media/weevil-icon.svg"
+        }
+      ]
+    },
     "views": {
       "weevil": [
         {
-          "type": "webview",
+          "type": "tree",
           "id": "weevil.trigger",
-          "name": "Weevil",
-          "visibility": "hidden"
+          "name": "Weevil"
         }
       ]
     },
-    "commands": [
+    "viewsWelcome": [
       {
-        "command": "weevil.openDashboard",
-        "title": "Open Weevil Dashboard",
-        "category": "Weevil",
-        "icon": "$(graph)"
-      },
-      {
-        "command": "weevil.refresh",
-        "title": "Refresh Now",
-        "category": "Weevil",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "weevil.clearData",
-        "title": "Clear All Data",
-        "category": "Weevil"
-      },
-      {
-        "command": "weevil.showLogPath",
-        "title": "Show Detected Log Path",
-        "category": "Weevil"
-      },
-      {
-        "command": "weevil.signIn",
-        "title": "Sign In to GitHub",
-        "category": "Weevil",
-        "icon": "$(account)"
-      },
-      {
-        "command": "weevil.exportReport",
-        "title": "Export Monthly Report",
-        "category": "Weevil",
-        "icon": "$(export)"
-      },
-      {
-        "command": "weevil.simulateRestriction",
-        "title": "Simulate Restriction State",
-        "category": "Weevil",
-        "icon": "$(debug-start)"
+        "view": "weevil.trigger",
+        "contents": "Weevil tracks your Copilot spend in real time.\n\n[Open Dashboard](command:weevil.openDashboard)"
       }
     ],
-    "menus": {
-      "commandPalette": [
-        {
-          "command": "weevil.openDashboard",
-          "when": "false"
-        },
-        {
-          "command": "weevil.simulateRestriction",
-          "when": "false"
-        }
-      ]
-    },
     "configuration": {
       "title": "Weevil",
       "properties": {
