@@ -10,6 +10,7 @@ import { UserConfigStore } from './app/UserConfigStore';
 import { LayoutStore } from './app/LayoutStore';
 import { GitHubSession } from './billing/GitHubSession';
 import { GitHubUsageService } from './billing/GitHubUsageService';
+import { RestrictionEngine } from './domain/restriction/engine';
 import { PricingManifest } from './domain/pricing';
 import { initRepoAttribution } from './ingest/repoResolver';
 import { LogWatcher } from './ingest/LogWatcher';
@@ -22,6 +23,7 @@ export interface Container {
   userConfig: UserConfigStore;
   layout: LayoutStore;
   pricing: PricingService;
+  restriction: RestrictionEngine;
 }
 
 export async function buildContainer(context: vscode.ExtensionContext): Promise<Container> {
@@ -50,6 +52,23 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const userConfig = new UserConfigStore(storageDir);
   const layout = new LayoutStore(context.globalState);
   const usage = new UsageService(store, pricing, watcher, userConfig, github);
+  const restriction = new RestrictionEngine(storageDir);
+
+  // Re-evaluate the restriction on every snapshot fire.
+  context.subscriptions.push(
+    usage.onDidChangeSnapshot(async (snapshot) => {
+      const cfg = userConfig.get();
+      await restriction.reconcile({
+        snapshot,
+        rules: cfg.rules ?? [],
+        ...(cfg.vars !== undefined
+          ? { vars: cfg.vars as Record<string, import('./domain/expr/ast').Value> }
+          : {}),
+        ...(cfg.groups !== undefined ? { groups: cfg.groups } : {}),
+        signedIn: snapshot.authStatus === 'signed-in',
+      });
+    }),
+  );
 
   context.subscriptions.push(
     { dispose: () => pricing.dispose() },
@@ -58,14 +77,13 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     userConfig,
     layout,
     usage,
+    restriction,
   );
 
-  return { usage, store, userConfig, layout, pricing };
+  return { usage, store, userConfig, layout, pricing, restriction };
 }
 
-async function loadBundledManifest(
-  context: vscode.ExtensionContext,
-): Promise<PricingManifest> {
+async function loadBundledManifest(context: vscode.ExtensionContext): Promise<PricingManifest> {
   const fallback: PricingManifest = { version: 1, pricePerCredit: 0.04, updatedAt: '', models: {} };
   const path = vscode.Uri.joinPath(context.extensionUri, 'media', 'pricing-manifest.json');
   try {
