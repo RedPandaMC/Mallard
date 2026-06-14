@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="media/weevil-banner.svg" alt="Weevil" width="640" />
+<img src="media/weevil-icon.png" alt="Weevil" width="160" />
 
 Real-time GitHub Copilot cost tracking for VS Code.
 
@@ -81,10 +81,10 @@ categories such as tool and reasoning are not available locally.
 Weevil reads two settings. Budget, included credits, and alert thresholds are
 edited in the dashboard, not here.
 
-| Setting | Default | Description |
-| --- | --- | --- |
-| `weevil.copilotLogPath` | `""` | Override the log directory. Blank means auto-detect via `vscode.env.logUri`. |
-| `weevil.pricingManifestUrl` | `""` | Override the pricing manifest URL. Blank means use the built-in URL. |
+| Setting                     | Default | Description                                                                  |
+| --------------------------- | ------- | ---------------------------------------------------------------------------- |
+| `weevil.copilotLogPath`     | `""`    | Override the log directory. Blank means auto-detect via `vscode.env.logUri`. |
+| `weevil.pricingManifestUrl` | `""`    | Override the pricing manifest URL. Blank means use the built-in URL.         |
 
 ## Commands
 
