@@ -58,6 +58,14 @@ export class UsageService implements vscode.Disposable {
     return this.watcher.getLogPaths();
   }
 
+  getSearchedDirs(): string[] {
+    return this.watcher.getSearchedDirs();
+  }
+
+  getKnownDirs(): string[] {
+    return this.watcher.getKnownDirs();
+  }
+
   getStatus() {
     return this.watcher.getStatus();
   }
@@ -123,7 +131,9 @@ export class UsageService implements vscode.Disposable {
 
     const source =
       filteredEvents.length > 0
-        ? (filteredEvents.some((e) => e.source === 'local') ? 'local' : 'lm')
+        ? filteredEvents.some((e) => e.source === 'local')
+          ? 'local'
+          : 'lm'
         : 'local';
 
     const options: SnapshotOptions = {
