@@ -5,3 +5,4 @@ out/
 .vscode-test/
 *.log
 .DS_Store
+scripts/.fontcache/

@@ -144,7 +144,9 @@
     "test": "vscode-test",
     "vscode:prepublish": "bun run package",
     "vsce:package": "vsce package",
-    "docs:build": "vitepress build docs"
+    "assets": "node scripts/render-assets.mjs",
+    "docs:build": "vitepress build docs",
+    "docs:dev": "vitepress dev docs"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.3-r.3",
@@ -158,6 +160,7 @@
   "devDependencies": {
     "@eslint/js": "^9.9.0",
     "@preact/signals-core": "^1.14.2",
+    "@resvg/resvg-js": "^2.6.2",
     "@types/mocha": "^10.0.7",
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.95.0",
