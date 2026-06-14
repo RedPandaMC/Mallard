@@ -75,6 +75,36 @@ export interface AlertConfig {
   velocityCreditsPerHour: number;
 }
 
+export type RestrictionMode = 'soft' | 'hard';
+
+export type RestrictionScope = 'copilot' | 'copilot+lab' | 'custom';
+
+export interface RuleRestrict {
+  mode: RestrictionMode;
+  scope: RestrictionScope;
+  reEnableWhen?: string;
+  graceMinutes?: number;
+}
+
+export interface AlertRule {
+  id: string;
+  severity: 'info' | 'warning' | 'critical';
+  cooldown?: string;
+  message: string;
+  when: string;
+  active?: string;
+  derived?: Record<string, string>;
+  requiresAuth?: boolean;
+  notify?: boolean;
+  restrict?: RuleRestrict;
+}
+
+export interface AlertGroup {
+  id: string;
+  label?: string;
+  active: string;
+}
+
 export interface UserConfig {
   /** Monthly USD budget; 0 = no budget set. */
   monthlyBudget: number;
@@ -83,6 +113,12 @@ export interface UserConfig {
   /** Warn once a day when daily credits exceed this; 0 = off. */
   dailyCreditAlert: number;
   alerts: AlertConfig;
+  /** Optional v2 fields (added in §4 of the design). */
+  version?: 1 | 2;
+  vars?: Record<string, number | string | boolean | (string | number)[]>;
+  groups?: AlertGroup[];
+  rules?: AlertRule[];
+  budget?: { monthlyUsd: number; includedCredits: number };
 }
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
@@ -90,6 +126,33 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
   includedCredits: 300,
   dailyCreditAlert: 0,
   alerts: { velocityEnabled: false, velocityCreditsPerHour: 0 },
+  version: 1,
+  vars: {},
+  groups: [],
+  rules: [],
+  budget: { monthlyUsd: 0, includedCredits: 300 },
+};
+
+export interface RestrictionState {
+  version: 1;
+  active: boolean;
+  scope: string;
+  ruleId: string;
+  reasonMessage: string;
+  firedAt: number;
+  graceExpiresAt: number | null;
+  userOverrideUntil: number | null;
+}
+
+export const DEFAULT_RESTRICTION_STATE: RestrictionState = {
+  version: 1,
+  active: false,
+  scope: '',
+  ruleId: '',
+  reasonMessage: '',
+  firedAt: 0,
+  graceExpiresAt: null,
+  userOverrideUntil: null,
 };
 
 /**
@@ -227,7 +290,7 @@ export interface GitHubBillingData {
 // ─── Pre-computed chart payloads (assembled on host, consumed by webview) ────
 
 export interface DailyBarPoint {
-  date: string;       // MM-DD
+  date: string; // MM-DD
   credits: number;
   cost: number;
   colorIndex: number; // 0 = blue (<70%), 1 = amber (70–100%), 2 = red (≥100%)
@@ -235,12 +298,12 @@ export interface DailyBarPoint {
 
 export interface DailyBarsData {
   points: DailyBarPoint[];
-  budgetLine: number | null;    // daily included-credits threshold
+  budgetLine: number | null; // daily included-credits threshold
   projectedLine: number | null; // projected daily pace
 }
 
 export interface ModelBreakdownData {
-  labels: string[];    // display names, provider-prefix stripped, max 32 chars
+  labels: string[]; // display names, provider-prefix stripped, max 32 chars
   credits: number[];
   costs: number[];
   tokens: number[];

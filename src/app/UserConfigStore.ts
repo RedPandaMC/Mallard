@@ -9,7 +9,10 @@ import { mkdirSync, readFileSync, writeFileSync, watch, FSWatcher } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { DEFAULT_USER_CONFIG, UserConfig } from '../domain/types';
+import { UserConfig } from '../domain/types';
+import { mergeConfig } from './mergeConfig';
+
+export { mergeConfig } from './mergeConfig';
 
 const FILE = 'config.json';
 
@@ -24,6 +27,46 @@ const ConfigSchema = z
         velocityCreditsPerHour: z.number(),
       })
       .partial(),
+    version: z.union([z.literal(1), z.literal(2)]).optional(),
+    vars: z.record(z.string(), z.unknown()).optional(),
+    groups: z
+      .array(
+        z.object({
+          id: z.string(),
+          label: z.string().optional(),
+          active: z.string(),
+        }),
+      )
+      .optional(),
+    rules: z
+      .array(
+        z.object({
+          id: z.string(),
+          severity: z.enum(['info', 'warning', 'critical']),
+          cooldown: z.string().optional(),
+          message: z.string(),
+          when: z.string(),
+          active: z.string().optional(),
+          derived: z.record(z.string(), z.string()).optional(),
+          requiresAuth: z.boolean().optional(),
+          notify: z.boolean().optional(),
+          restrict: z
+            .object({
+              mode: z.enum(['soft', 'hard']),
+              scope: z.enum(['copilot', 'copilot+lab', 'custom']),
+              reEnableWhen: z.string().optional(),
+              graceMinutes: z.number().optional(),
+            })
+            .optional(),
+        }),
+      )
+      .optional(),
+    budget: z
+      .object({
+        monthlyUsd: z.number(),
+        includedCredits: z.number(),
+      })
+      .optional(),
   })
   .partial();
 
@@ -112,26 +155,4 @@ export class UserConfigStore implements vscode.Disposable {
       /* watching is best-effort */
     }
   }
-}
-
-/** Merge a partial over defaults, clamping numbers to be non-negative. */
-export function mergeConfig(stored?: Partial<UserConfig>): UserConfig {
-  const d = DEFAULT_USER_CONFIG;
-  const nonNeg = (v: unknown, fallback: number) =>
-    typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fallback;
-  return {
-    monthlyBudget: nonNeg(stored?.monthlyBudget, d.monthlyBudget),
-    includedCredits: nonNeg(stored?.includedCredits, d.includedCredits),
-    dailyCreditAlert: nonNeg(stored?.dailyCreditAlert, d.dailyCreditAlert),
-    alerts: {
-      velocityEnabled:
-        typeof stored?.alerts?.velocityEnabled === 'boolean'
-          ? stored.alerts.velocityEnabled
-          : d.alerts.velocityEnabled,
-      velocityCreditsPerHour: nonNeg(
-        stored?.alerts?.velocityCreditsPerHour,
-        d.alerts.velocityCreditsPerHour,
-      ),
-    },
-  };
 }
