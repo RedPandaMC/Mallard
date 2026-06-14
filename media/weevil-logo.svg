@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 2048" width="2048" height="2048" role="img" aria-label="Weevil">
   <defs><linearGradient id="weevil-grad" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#38BDF8"/><stop offset="0.55" stop-color="#818CF8"/><stop offset="1" stop-color="#C084FC"/>
+    <stop offset="0" stop-color="#FFB454"/><stop offset="0.5" stop-color="#FF6B81"/><stop offset="1" stop-color="#B45CFF"/>
   </linearGradient></defs>
   
   <g transform="translate(1024, 1024) scale(2.2) translate(-1024, -1024)">
