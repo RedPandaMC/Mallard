@@ -51,4 +51,25 @@
   /* Chart dimensions */
   --w-chart-main: 260px;
   --w-chart-mini: 200px;
+
+  /* ── Field Guide identity layer ───────────────────────────────────
+     Fixed "riso ink" accents (the weevil shell) plus typographic tokens.
+     Used only for decorative accents/series; all surface + text colour
+     still derives from --vscode-* above, so the dashboard stays
+     theme-compatible on both light and dark editor themes. */
+  --w-ink-amber: #ffb454;
+  --w-ink-coral: #ff6b81;
+  --w-ink-purple: #b45cff;
+  --w-ink-grad: linear-gradient(100deg, #ffb454 0%, #ff6b81 50%, #b45cff 100%);
+
+  /* Display serif for specimen titles (system fonts only — CSP-safe). */
+  --w-font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  /* Monospace technical labels reuse the editor font. */
+  --w-label-font: var(--w-font-mono);
+
+  /* Halftone overprint — foreground dots at low alpha, adapts per theme. */
+  --w-halftone: radial-gradient(
+    color-mix(in srgb, var(--w-fg) 5%, transparent) 0.5px,
+    transparent 0.6px
+  );
 }

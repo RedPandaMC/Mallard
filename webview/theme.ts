@@ -10,6 +10,7 @@ export interface WeevilTheme {
   border: string;
   series: string[];
   tooltipBg: string;
+  labelFont: string;
 }
 
 export function readTheme(): WeevilTheme {
@@ -20,11 +21,15 @@ export function readTheme(): WeevilTheme {
     muted: cssVar('--vscode-descriptionForeground', '#858585'),
     border: cssVar('--vscode-panel-border', '#3c3c3c'),
     tooltipBg: cssVar('--vscode-editorHoverWidget-background', '#2d2d2d'),
+    // Monospace technical labels, matching the dashboard's field-guide voice.
+    labelFont: cssVar('--vscode-editor-font-family', 'monospace'),
+    // Lead with the "riso ink" trio (the weevil shell), then fall back to the
+    // theme's chart colours. The inks read on both light and dark editor themes.
     series: [
+      '#B45CFF',
+      '#FF6B81',
+      '#FFB454',
       cssVar('--vscode-charts-blue', '#4FC3F7'),
-      cssVar('--vscode-charts-orange', '#FFB74D'),
-      cssVar('--vscode-charts-purple', '#CE93D8'),
-      cssVar('--vscode-charts-red', '#EF9A9A'),
       cssVar('--vscode-charts-green', '#A5D6A7'),
       cssVar('--vscode-charts-yellow', '#FFF176'),
     ],
@@ -32,11 +37,12 @@ export function readTheme(): WeevilTheme {
 }
 
 export function buildEChartsTheme(t: WeevilTheme): Record<string, any> {
+  const axisLabel = { color: t.muted, fontFamily: t.labelFont, fontSize: 11 };
   return {
     backgroundColor: 'transparent',
-    textStyle: { color: t.fg, fontSize: 12 },
+    textStyle: { color: t.fg, fontFamily: t.labelFont, fontSize: 12 },
     title: { textStyle: { color: t.fg }, subtextStyle: { color: t.muted } },
-    legend: { textStyle: { color: t.fg } },
+    legend: { textStyle: { color: t.fg, fontFamily: t.labelFont } },
     tooltip: {
       backgroundColor: t.tooltipBg,
       borderColor: t.border,
@@ -46,13 +52,13 @@ export function buildEChartsTheme(t: WeevilTheme): Record<string, any> {
     categoryAxis: {
       axisLine: { lineStyle: { color: t.border } },
       axisTick: { lineStyle: { color: t.border } },
-      axisLabel: { color: t.muted },
-      splitLine: { lineStyle: { color: t.border } },
+      axisLabel,
+      splitLine: { show: false },
     },
     valueAxis: {
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: t.muted },
+      axisLabel,
       splitLine: { lineStyle: { color: t.border, type: 'dashed' } },
     },
   };

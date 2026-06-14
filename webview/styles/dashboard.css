@@ -2,7 +2,10 @@
    Base layout
 ───────────────────────────────────────── */
 body {
-  background: var(--w-bg);
+  background-color: var(--w-bg);
+  /* faint halftone overprint — the "risograph" texture */
+  background-image: var(--w-halftone);
+  background-size: 5px 5px;
   color: var(--w-fg);
   font-family: var(--w-font);
   font-size: var(--w-font-size);
@@ -31,12 +34,25 @@ body {
    Header
 ───────────────────────────────────────── */
 .wv-header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--w-s4);
   padding-bottom: var(--w-s4);
   border-bottom: 1px solid var(--w-border);
+}
+
+/* ink registration rule under the cartouche */
+.wv-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 104px;
+  height: 2px;
+  background: var(--w-ink-grad);
+  opacity: 0.85;
 }
 
 .wv-brand {
@@ -46,8 +62,8 @@ body {
 }
 
 .wv-brand-logo {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
   object-fit: contain;
 }
@@ -78,16 +94,29 @@ body {
 }
 
 .wv-brand-name {
-  font-size: 16px;
+  font-family: var(--w-font-display);
+  font-size: 22px;
   font-weight: 600;
   color: var(--w-fg);
   letter-spacing: -0.01em;
+  line-height: 1.1;
 }
 
-.wv-brand-tagline {
-  font-size: 11px;
-  color: var(--w-fg-muted);
+.wv-brand-binomial {
+  font-family: var(--w-font-display);
   font-style: italic;
+  font-size: 12px;
+  color: var(--w-fg-muted);
+  line-height: 1.3;
+}
+
+.wv-brand-meta {
+  margin-top: 2px;
+  font-family: var(--w-label-font);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--w-fg-subtle);
 }
 
 /* ─────────────────────────────────────────
@@ -99,7 +128,9 @@ body {
   gap: var(--w-s2);
   padding: var(--w-s1) var(--w-s3);
   border-radius: var(--w-r1);
+  font-family: var(--w-label-font);
   font-size: 11px;
+  letter-spacing: 0.02em;
   color: var(--w-fg-muted);
   background: var(--w-bg-card);
   border: 1px solid var(--w-border);
@@ -261,27 +292,59 @@ body {
    Empty state
 ───────────────────────────────────────── */
 .wv-empty {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   gap: var(--w-s4);
-  padding: var(--w-s8) var(--w-s4);
-  max-width: 480px;
-  margin: 0 auto;
+  padding: var(--w-s8);
+  max-width: 520px;
+  margin: var(--w-s6) auto;
+  border: 1px solid var(--w-border);
+  border-radius: var(--w-r3);
+  background: linear-gradient(var(--w-bg-card), var(--w-bg-card)) padding-box;
+}
+
+/* catalogue caption on the specimen card */
+.wv-empty::before {
+  content: 'FIELD SPECIMEN · No.001 — not yet collected';
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  font-family: var(--w-label-font);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--w-fg-subtle);
+}
+/* corner registration tick */
+.wv-empty::after {
+  content: '';
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 12px;
+  height: 12px;
+  border-right: 1px solid var(--w-ink-purple);
+  border-bottom: 1px solid var(--w-ink-purple);
+  opacity: 0.5;
 }
 
 .wv-empty-logo {
-  width: 72px;
-  height: 72px;
+  width: 80px;
+  height: 80px;
   object-fit: contain;
-  opacity: 0.65;
+  opacity: 0.8;
+  margin-top: var(--w-s3);
 }
 
 .wv-empty-title {
-  font-size: 18px;
+  font-family: var(--w-font-display);
+  font-size: 22px;
   font-weight: 600;
   color: var(--w-fg);
+  letter-spacing: -0.01em;
 }
 
 .wv-empty-body {
@@ -358,26 +421,58 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: var(--w-s3);
+  counter-reset: wv-fig;
 }
 
 .wv-kpi-card {
+  position: relative;
   background: var(--w-bg-card);
   border: 1px solid var(--w-border);
   border-radius: var(--w-r2);
-  padding: var(--w-s4);
+  padding: calc(var(--w-s4) + 2px) var(--w-s4) var(--w-s4);
   display: flex;
   flex-direction: column;
   gap: var(--w-s1);
+  overflow: hidden;
   transition: border-color 0.15s;
 }
 
-.wv-kpi-card:hover { border-color: var(--w-brand); }
+/* ink hairline along the top — the "specimen" accent */
+.wv-kpi-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: var(--w-ink-grad);
+  opacity: 0.5;
+}
+
+/* catalogue figure number */
+.wv-kpi-card::after {
+  counter-increment: wv-fig;
+  content: 'fig.' counter(wv-fig);
+  position: absolute;
+  top: 9px;
+  right: 11px;
+  font-family: var(--w-label-font);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--w-fg-subtle);
+}
+
+.wv-kpi-card:hover {
+  border-color: var(--w-ink-purple);
+}
+.wv-kpi-card:hover::before {
+  opacity: 0.9;
+}
 
 .wv-kpi-label {
+  font-family: var(--w-label-font);
   font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--w-fg-muted);
 }
 
@@ -417,10 +512,11 @@ body {
 }
 
 .wv-gauge-label {
+  font-family: var(--w-label-font);
   font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--w-fg-muted);
   flex-shrink: 0;
 }
@@ -471,11 +567,31 @@ body {
    Chart sections
 ───────────────────────────────────────── */
 .wv-chart-section {
+  position: relative;
   background: var(--w-bg-card);
   border: 1px solid var(--w-border);
   border-radius: var(--w-r2);
   overflow: hidden;
   contain: layout paint;
+  transition: border-color 0.15s;
+}
+
+.wv-chart-section:hover {
+  border-color: color-mix(in srgb, var(--w-ink-purple) 45%, var(--w-border));
+}
+
+/* corner registration tick, bottom-right of each plate */
+.wv-chart-section::after {
+  content: '';
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  width: 9px;
+  height: 9px;
+  border-right: 1px solid var(--w-ink-purple);
+  border-bottom: 1px solid var(--w-ink-purple);
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .wv-chart-header {
@@ -486,15 +602,31 @@ body {
   border-bottom: 1px solid var(--w-border);
 }
 
+/* plate number on the right of each header */
+.wv-charts-grid { counter-reset: wv-plate; }
+.wv-chart-header::after {
+  counter-increment: wv-plate;
+  content: 'pl.' counter(wv-plate);
+  font-family: var(--w-label-font);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--w-fg-subtle);
+}
+
 .wv-chart-title {
   display: flex;
   align-items: center;
   gap: var(--w-s2);
+  font-family: var(--w-label-font);
   font-size: 12px;
   font-weight: 600;
   color: var(--w-fg);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
+}
+
+.wv-chart-title .codicon {
+  color: var(--w-ink-purple);
 }
 
 .wv-chart-body {
@@ -531,11 +663,17 @@ body {
   justify-content: space-between;
 }
 .wv-analysis-title {
+  font-family: var(--w-label-font);
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--w-fg-muted);
+}
+.wv-analysis-title::before {
+  content: 'plate · ';
+  color: var(--w-ink-purple);
+  opacity: 0.85;
 }
 .wv-analysis-actions { display: flex; gap: var(--w-s2); }
 .wv-btn--sm { padding: var(--w-s1) var(--w-s2); font-size: 11px; }
@@ -642,10 +780,11 @@ body {
   align-items: center;
   gap: var(--w-s2);
   padding: var(--w-s3) var(--w-s4);
+  font-family: var(--w-label-font);
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--w-fg);
   cursor: pointer;
   list-style: none;
