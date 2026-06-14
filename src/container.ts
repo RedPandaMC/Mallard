@@ -47,7 +47,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
 
   const githubSession = new GitHubSession();
   const github = new GitHubUsageService(githubSession);
-  const userConfig = new UserConfigStore(context.globalState);
+  const userConfig = new UserConfigStore(storageDir);
   const layout = new LayoutStore(context.globalState);
   const usage = new UsageService(store, pricing, watcher, userConfig, github);
 

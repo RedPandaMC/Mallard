@@ -18,6 +18,7 @@ export type HostBoundMsg =
   | { type: 'setFilter'; value: Filter }
   | { type: 'setConfig'; value: Partial<UserConfig> }
   | { type: 'setLayout'; value: DashboardLayout }
+  | { type: 'openConfig' }
   | { type: 'command'; id: CommandId };
 
 const COMMAND_IDS: CommandId[] = ['openDashboard', 'signIn'];
@@ -31,6 +32,7 @@ export function isHostBoundMsg(m: unknown): m is HostBoundMsg {
   switch (m.type) {
     case 'ready':
     case 'refresh':
+    case 'openConfig':
       return true;
     case 'setFilter':
     case 'setConfig':

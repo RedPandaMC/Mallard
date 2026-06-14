@@ -3,24 +3,55 @@
 Weevil works out of the box. Most of what you might want to change lives in the
 dashboard, not in `settings.json`.
 
-## In the dashboard
+## Budget and alerts
 
-Open the dashboard and expand the "Budget and alerts" panel. These values are
-saved per user and take effect immediately:
+Budget and alert thresholds live in a small JSON config file, editable two ways:
+through the dashboard, or by hand.
+
+### In the dashboard
+
+Expand the "Budget and alerts" panel. Each field writes the config file
+immediately:
 
 - **Monthly budget (USD).** When month-to-date cost crosses 80 percent of this
   value Weevil shows a notification, and again at 100 percent. Each fires at
   most once every four hours. Set to 0 to turn budget alerts off.
 - **Included credits per month.** Your plan's premium request allowance. This
-  colours the spend gauge and the status bar chip. The free tier includes 300.
+  colours the spend gauge. The free tier includes 300.
 - **Daily credit alert.** Notify once a day when the day's credits cross this
   number. Set to 0 to turn it off.
 - **Spending velocity alert.** Notify when the recent spending rate crosses a
   credits-per-hour threshold. Useful for catching runaway agent loops.
 
-These were previously settings; they moved into the UI so you can adjust them
-without opening `settings.json`, and they follow you across machines through VS
-Code's user storage.
+### As a JSON file
+
+Click "Edit as JSON" in that panel to open the file directly. It is a
+`config.json` in Weevil's storage directory and is the source of truth: edit it
+by hand and the dashboard updates as soon as you save. The full shape is:
+
+```json
+{
+  "monthlyBudget": 20,
+  "includedCredits": 300,
+  "dailyCreditAlert": 50,
+  "alerts": {
+    "velocityEnabled": true,
+    "velocityCreditsPerHour": 40
+  }
+}
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `monthlyBudget` | number | USD budget; 0 turns budget alerts off. |
+| `includedCredits` | number | Plan's monthly premium requests; colours the gauge. |
+| `dailyCreditAlert` | number | Daily credit threshold; 0 turns it off. |
+| `alerts.velocityEnabled` | boolean | Whether the spending-velocity alert is active. |
+| `alerts.velocityCreditsPerHour` | number | Credits-per-hour rate that triggers it. |
+
+Values are validated and clamped, so a missing or malformed field falls back to
+its default rather than breaking. The file lives on the machine it was created
+on; it is not synced across machines.
 
 ## Arranging the dashboard
 

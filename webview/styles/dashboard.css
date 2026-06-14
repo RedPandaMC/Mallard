@@ -673,6 +673,11 @@ body {
   gap: var(--w-s2);
 }
 
+.wv-config-body .wv-btn {
+  align-self: flex-start;
+  margin-top: var(--w-s1);
+}
+
 .wv-config-row {
   display: flex;
   align-items: center;

@@ -7,8 +7,9 @@ export interface AlertConfigPanelHandle {
 
 /**
  * In-webview editor for budget, included credits, and alert thresholds. These
- * live in extension globalState (not settings.json); each change posts a
- * `setConfig` message to the host, which persists and recomputes.
+ * live in a hand-editable JSON config file (not settings.json); each change
+ * posts a `setConfig` message to the host, which writes the file and recomputes.
+ * "Edit as JSON" opens that file directly.
  */
 export function mountAlertConfigPanel(el: HTMLElement): AlertConfigPanelHandle {
   el.innerHTML = `
@@ -38,6 +39,9 @@ export function mountAlertConfigPanel(el: HTMLElement): AlertConfigPanelHandle {
           <input type="number" min="0" step="1" id="cfg-velo-rate" />
         </label>
         <p class="wv-config-note">Zero disables a threshold. Saved instantly.</p>
+        <button class="wv-btn wv-btn--sm" id="cfg-edit-json">
+          <i class="codicon codicon-json"></i> Edit as JSON
+        </button>
       </div>
     </details>`;
 
@@ -46,6 +50,10 @@ export function mountAlertConfigPanel(el: HTMLElement): AlertConfigPanelHandle {
   const daily = el.querySelector<HTMLInputElement>('#cfg-daily')!;
   const veloOn = el.querySelector<HTMLInputElement>('#cfg-velo-on')!;
   const veloRate = el.querySelector<HTMLInputElement>('#cfg-velo-rate')!;
+
+  el.querySelector('#cfg-edit-json')!.addEventListener('click', () => {
+    post({ type: 'openConfig' });
+  });
 
   const num = (input: HTMLInputElement) => Math.max(0, Number(input.value) || 0);
 

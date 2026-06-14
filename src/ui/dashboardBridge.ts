@@ -42,6 +42,9 @@ export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vsc
       case 'setLayout':
         await layout.set(raw.value);
         break;
+      case 'openConfig':
+        await vscode.window.showTextDocument(userConfig.uri);
+        break;
       case 'command':
         if (raw.id === 'openDashboard') void vscode.commands.executeCommand('weevil.openDashboard');
         else if (raw.id === 'signIn') void usage.signInGitHub();
