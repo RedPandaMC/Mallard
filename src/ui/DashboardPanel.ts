@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { UsageService } from '../app/UsageService';
 import { UserConfigStore } from '../app/UserConfigStore';
 import { LayoutStore } from '../app/LayoutStore';
+import { RestrictionEngine } from '../domain/restriction/engine';
 import { bindDashboard } from './dashboardBridge';
 import { renderHtml } from './webviewHtml';
 
@@ -20,6 +21,7 @@ export class DashboardPanel {
     usage: UsageService,
     userConfig: UserConfigStore,
     layout: LayoutStore,
+    restriction: RestrictionEngine,
   ): void {
     if (DashboardPanel.current) {
       DashboardPanel.current.panel.reveal();
@@ -36,19 +38,30 @@ export class DashboardPanel {
           vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview'),
           vscode.Uri.joinPath(context.extensionUri, 'media'),
           vscode.Uri.joinPath(context.extensionUri, 'node_modules', '@vscode', 'codicons', 'dist'),
+          vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'monaco-editor'),
         ],
       },
     );
-    panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'weevil-activitybar.svg');
-    DashboardPanel.current = new DashboardPanel(panel, context, { usage, userConfig, layout });
+    panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'weevil-icon.svg');
+    DashboardPanel.current = new DashboardPanel(panel, context, {
+      usage,
+      userConfig,
+      layout,
+      restriction,
+    });
   }
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
     context: vscode.ExtensionContext,
-    deps: { usage: UsageService; userConfig: UserConfigStore; layout: LayoutStore },
+    deps: {
+      usage: UsageService;
+      userConfig: UserConfigStore;
+      layout: LayoutStore;
+      restriction: RestrictionEngine;
+    },
   ) {
-    panel.webview.html = renderHtml(panel.webview, context.extensionUri, { embedded: false });
+    panel.webview.html = renderHtml(panel.webview, context.extensionUri);
     this.disposables.push(
       ...bindDashboard(panel.webview, deps),
       panel.onDidDispose(() => this.dispose()),

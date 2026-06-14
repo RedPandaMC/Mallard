@@ -3,16 +3,47 @@ import { RELEVANT_CONFIG_KEYS } from './config';
 import { buildContainer, Container } from './container';
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
-import { SidebarViewProvider } from './ui/SidebarViewProvider';
+import { Value } from './domain/expr/ast';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const container = await buildContainer(context);
-  const { usage, userConfig, layout } = container;
+  const { usage, restriction } = container;
 
-  const sidebar = new SidebarViewProvider(context, usage, userConfig, layout);
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(SidebarViewProvider.viewType, sidebar),
-  );
+  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  statusBar.command = 'weevil.openDashboard';
+  context.subscriptions.push(statusBar);
+  const updateStatusBar = () => {
+    const s = usage.current;
+    const auth = s?.authStatus ?? 'signed-out';
+    const r = restriction.getState();
+    if (r.active) {
+      statusBar.text = `$(shield) Copilot restricted`;
+      statusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+      statusBar.tooltip = r.reasonMessage;
+      statusBar.show();
+    } else if (r.userOverrideUntil && r.userOverrideUntil > Date.now()) {
+      const m = Math.max(1, Math.round((r.userOverrideUntil - Date.now()) / 60_000));
+      statusBar.text = `$(debug-pause) Weevil · override ${m}m`;
+      statusBar.backgroundColor = undefined;
+      statusBar.tooltip = 'Restriction rule is being overridden.';
+      statusBar.show();
+    } else if (auth === 'signed-in') {
+      statusBar.text = `$(verified-filled) ${s?.githubBilling?.quota?.plan ?? 'GitHub'}`;
+      statusBar.backgroundColor = undefined;
+      statusBar.tooltip = 'Open Weevil dashboard';
+      statusBar.show();
+    } else if (auth === 'signed-out') {
+      statusBar.text = '$(account) Sign in to GitHub';
+      statusBar.backgroundColor = undefined;
+      statusBar.tooltip = 'Click to sign in to GitHub for billing verification';
+      statusBar.show();
+    } else {
+      statusBar.hide();
+    }
+  };
+  updateStatusBar();
+  context.subscriptions.push(usage.onDidChangeSnapshot(updateStatusBar));
+  context.subscriptions.push(restriction.onDidChange(updateStatusBar));
 
   registerCommands(context, container);
 
@@ -32,11 +63,13 @@ export function deactivate(): void {
 }
 
 function registerCommands(context: vscode.ExtensionContext, c: Container): void {
-  const { usage, store, userConfig, layout, pricing } = c;
+  const { usage, store, userConfig, layout, pricing, restriction } = c;
   const reg = (id: string, fn: (...args: unknown[]) => unknown) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
 
-  reg('weevil.openDashboard', () => DashboardPanel.show(context, usage, userConfig, layout));
+  reg('weevil.openDashboard', () =>
+    DashboardPanel.show(context, usage, userConfig, layout, restriction),
+  );
 
   reg('weevil.refresh', async () => {
     await usage.refresh();
@@ -45,8 +78,9 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
   reg('weevil.clearData', async () => {
     const ok = await vscode.window.showWarningMessage(
       'Clear all Weevil data? This wipes recorded usage, your budget and alert ' +
-        'settings, the saved dashboard layout, and the cached pricing manifest. ' +
-        'It cannot be undone. Run this before uninstalling to leave nothing behind.',
+        'settings, the saved dashboard layout, the cached pricing manifest, and ' +
+        'any active restriction. It cannot be undone. Run this before ' +
+        'uninstalling to leave nothing behind.',
       { modal: true },
       'Clear everything',
     );
@@ -55,6 +89,7 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
       await userConfig.reset();
       await layout.reset();
       await pricing.clearCache();
+      await restriction.clearAll();
       await usage.refresh();
     }
   });
@@ -87,17 +122,55 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     }
   });
 
-  reg('weevil.showLogPath', () => {
+  reg('weevil.showLogPath', async () => {
     const paths = usage.getLogPaths();
-    if (paths.length === 0) {
-      void vscode.window.showInformationMessage(
-        'Weevil: No Copilot log files detected. Make sure Copilot is installed and has been used. ' +
-          'You can override the path via the weevil.copilotLogPath setting.',
-      );
-    } else {
+    if (paths.length > 0) {
       void vscode.window.showInformationMessage(
         `Weevil: Watching ${paths.length} log file(s): ${paths.join(', ')}`,
       );
+      return;
     }
+    const searched = usage.getSearchedDirs();
+    const known = usage.getKnownDirs();
+    const tried = searched.length > 0 ? searched : known;
+    const detail =
+      tried.length > 0 ? `\n\nSearched:\n${tried.map((p) => '  ' + p).join('\n')}` : '';
+    const pick = await vscode.window.showInformationMessage(
+      'Weevil: No Copilot log files detected. Make sure Copilot is installed and has been used. ' +
+        'You can override the path via the weevil.copilotLogPath setting.' +
+        detail,
+      'Pick log folder…',
+    );
+    if (pick) {
+      const uri = await vscode.window.showOpenDialog({
+        canSelectFolders: true,
+        canSelectFiles: false,
+        canSelectMany: false,
+        openLabel: 'Use this folder',
+        title: 'Select Copilot log folder',
+      });
+      if (uri && uri[0]) {
+        await vscode.workspace
+          .getConfiguration('weevil')
+          .update('copilotLogPath', uri[0].fsPath, vscode.ConfigurationTarget.Global);
+        await usage.refresh();
+      }
+    }
+  });
+
+  reg('weevil.simulateRestriction', async () => {
+    const snapshot = usage.current;
+    const cfg = userConfig.get();
+    const report = await restriction.simulate({
+      snapshot: snapshot ?? null,
+      rules: cfg.rules ?? [],
+      ...(cfg.vars !== undefined ? { vars: cfg.vars as Record<string, Value> } : {}),
+      ...(cfg.groups !== undefined ? { groups: cfg.groups } : {}),
+      signedIn: snapshot?.authStatus === 'signed-in',
+    });
+    const channel = vscode.window.createOutputChannel('Weevil Restriction');
+    channel.clear();
+    channel.appendLine(JSON.stringify(report, null, 2));
+    channel.show(true);
   });
 }

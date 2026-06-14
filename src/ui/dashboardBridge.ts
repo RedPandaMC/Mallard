@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { UsageService } from '../app/UsageService';
 import { UserConfigStore } from '../app/UserConfigStore';
 import { LayoutStore } from '../app/LayoutStore';
+import { RestrictionEngine } from '../domain/restriction/engine';
 import { Filter } from '../domain/types';
 import { isHostBoundMsg, WebviewBoundMsg } from './messaging';
 
@@ -14,10 +15,11 @@ export interface DashboardDeps {
   usage: UsageService;
   userConfig: UserConfigStore;
   layout: LayoutStore;
+  restriction: RestrictionEngine;
 }
 
 export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vscode.Disposable[] {
-  const { usage, userConfig, layout } = deps;
+  const { usage, userConfig, layout, restriction } = deps;
   const post = (m: WebviewBoundMsg) => void webview.postMessage(m);
 
   const onMessage = async (raw: unknown): Promise<void> => {
@@ -28,6 +30,7 @@ export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vsc
         if (s) post({ type: 'snapshot', payload: s });
         post({ type: 'config', value: userConfig.get() });
         post({ type: 'layout', value: layout.get() });
+        post({ type: 'restriction', value: restriction.getState() });
         break;
       }
       case 'refresh':
@@ -49,6 +52,31 @@ export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vsc
         if (raw.id === 'openDashboard') void vscode.commands.executeCommand('weevil.openDashboard');
         else if (raw.id === 'signIn') void usage.signInGitHub();
         break;
+      case 'restrictSnooze':
+        await restriction.snooze(raw.minutes);
+        break;
+      case 'restrictNow':
+        await restriction.snooze(0);
+        // Re-apply by clearing the grace window: a fresh reconcile will be
+        // a no-op since the rule is already active; trigger one manually.
+        {
+          const s = usage.current;
+          const cfg = userConfig.get();
+          await restriction.reconcile({
+            snapshot: s ?? null,
+            rules: cfg.rules ?? [],
+            ...(cfg.vars !== undefined
+              ? { vars: cfg.vars as Record<string, import('../domain/expr/ast').Value> }
+              : {}),
+            ...(cfg.groups !== undefined ? { groups: cfg.groups } : {}),
+            signedIn: s?.authStatus === 'signed-in',
+          });
+        }
+        break;
+      case 'restrictPermanent':
+        // Set the user override to a far-future timestamp.
+        await restriction.snooze(60 * 24 * 365 * 10);
+        break;
     }
   };
 
@@ -57,6 +85,7 @@ export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vsc
     usage.onDidChangeSnapshot((s) => post({ type: 'snapshot', payload: s })),
     userConfig.onDidChange((value) => post({ type: 'config', value })),
     layout.onDidChange((value) => post({ type: 'layout', value })),
+    restriction.onDidChange((value) => post({ type: 'restriction', value })),
     vscode.window.onDidChangeActiveColorTheme(() => post({ type: 'theme' })),
   ];
 }

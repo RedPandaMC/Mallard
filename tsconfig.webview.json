@@ -3,8 +3,14 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
     "types": []
   },
-  "include": ["webview/**/*.ts", "src/domain/**/*.ts", "src/ui/messaging.ts"]
+  "include": [
+    "webview/**/*.ts",
+    "src/domain/types.ts",
+    "src/domain/expr/**/*.ts",
+    "src/domain/alertRules.ts",
+    "src/ui/messaging.ts"
+  ]
 }

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="media/weevil-icon.png" alt="Weevil" width="160" />
+<img src="media/weevil-icon.svg" alt="Weevil" width="160" />
 
 Real-time GitHub Copilot cost tracking for VS Code.
 
