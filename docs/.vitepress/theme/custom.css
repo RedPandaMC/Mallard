@@ -1,0 +1,311 @@
+/* ==========================================================================
+   Weevil Field Guide — VitePress theme
+   A scientific-risograph / field-guide skin: cream "paper" light mode and a
+   "darkroom" dark default, limited ink palette (amber → coral → purple),
+   halftone texture, registration marks, Fraunces display + JetBrains Mono.
+   ========================================================================== */
+
+/* --- self-hosted brand fonts (OFL) --------------------------------------- */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/fraunces-var.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-var.woff2') format('woff2');
+}
+
+/* --- ink palette ---------------------------------------------------------- */
+:root {
+  --wv-amber: #ffb454;
+  --wv-coral: #ff6b81;
+  --wv-purple: #b45cff;
+  --wv-ink-grad: linear-gradient(100deg, #ffb454 0%, #ff6b81 50%, #b45cff 100%);
+
+  --wv-font-display: 'Fraunces', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  --vp-font-family-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Cascadia Code',
+    'Fira Code', Consolas, monospace;
+
+  /* halftone dot, tinted per scheme via --wv-ht-color */
+  --wv-ht-color: rgba(42, 36, 27, 0.5);
+}
+
+/* --- LIGHT ("paper") ------------------------------------------------------ */
+:root {
+  --vp-c-bg: #f3ead9;
+  --vp-c-bg-alt: #ece1cc;
+  --vp-c-bg-soft: #efe5d2;
+  --vp-c-bg-elv: #f7efe1;
+
+  --vp-c-text-1: #2a241b;
+  --vp-c-text-2: #5b5142;
+  --vp-c-text-3: #8a8068;
+
+  --vp-c-divider: rgba(42, 36, 27, 0.14);
+  --vp-c-border: rgba(42, 36, 27, 0.18);
+  --vp-c-gutter: rgba(42, 36, 27, 0.1);
+
+  --vp-c-brand-1: #9a3fe0;
+  --vp-c-brand-2: #b45cff;
+  --vp-c-brand-3: #c77bff;
+  --vp-c-brand-soft: rgba(180, 92, 255, 0.14);
+
+  --vp-c-default-soft: rgba(42, 36, 27, 0.06);
+
+  --wv-ht-color: rgba(42, 36, 27, 0.5);
+}
+
+/* --- DARK ("darkroom") — the default ------------------------------------- */
+.dark {
+  --vp-c-bg: #16140f;
+  --vp-c-bg-alt: #100f0b;
+  --vp-c-bg-soft: #1d1a13;
+  --vp-c-bg-elv: #211d16;
+
+  --vp-c-text-1: #f3ead9;
+  --vp-c-text-2: #c7bca6;
+  --vp-c-text-3: #8e866f;
+
+  --vp-c-divider: rgba(243, 234, 217, 0.12);
+  --vp-c-border: rgba(243, 234, 217, 0.16);
+  --vp-c-gutter: rgba(243, 234, 217, 0.08);
+
+  --vp-c-brand-1: #ffc081;
+  --vp-c-brand-2: #ff8aa0;
+  --vp-c-brand-3: #b45cff;
+  --vp-c-brand-soft: rgba(180, 92, 255, 0.18);
+
+  --vp-c-default-soft: rgba(243, 234, 217, 0.06);
+
+  --wv-ht-color: rgba(243, 234, 217, 0.5);
+}
+
+/* --- hero ----------------------------------------------------------------- */
+:root {
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: var(--wv-ink-grad);
+  --vp-home-hero-image-background-image: radial-gradient(
+    closest-side,
+    rgba(255, 107, 129, 0.18),
+    rgba(180, 92, 255, 0.1) 70%,
+    transparent
+  );
+  --vp-home-hero-image-filter: blur(44px);
+}
+
+.VPHero .name {
+  font-family: var(--wv-font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.VPHero .text {
+  font-family: var(--wv-font-display);
+  font-weight: 480;
+  letter-spacing: -0.01em;
+  color: var(--vp-c-text-1);
+}
+.VPHero .tagline {
+  color: var(--vp-c-text-2);
+}
+/* keep the weevil mark crisp, not washed out */
+.VPHero .image-bg {
+  opacity: 0.55;
+}
+
+/* --- catalogue line + specimen note (slots) ------------------------------ */
+.wv-catalogue {
+  max-width: 1152px;
+  margin: 16px auto -8px;
+  padding: 0 48px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-3);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.wv-catalogue em {
+  font-family: var(--wv-font-display);
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 14px;
+  color: var(--vp-c-text-2);
+}
+.wv-catalogue .wv-tick {
+  color: var(--vp-c-brand-3);
+  opacity: 0.7;
+}
+.wv-catalogue::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--vp-c-divider);
+}
+.wv-plate-note {
+  max-width: 1152px;
+  margin: 4px auto 0;
+  padding: 28px 48px 0;
+  border-top: 1px dashed var(--vp-c-divider);
+  font-family: var(--vp-font-family-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  color: var(--vp-c-text-3);
+}
+@media (max-width: 640px) {
+  .wv-catalogue,
+  .wv-plate-note {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+/* --- headings: Fraunces display ------------------------------------------ */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.VPDocAsideOutline .title,
+h1.title {
+  font-family: var(--wv-font-display);
+  letter-spacing: -0.015em;
+}
+.vp-doc h1 {
+  font-weight: 600;
+}
+.vp-doc h2 {
+  font-weight: 560;
+  border-top: 1px solid var(--vp-c-divider);
+}
+/* riso accent tick before page h2s */
+.vp-doc h2::before {
+  content: 'fig.';
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--vp-c-brand-3);
+  margin-right: 0.6em;
+  vertical-align: 0.35em;
+  opacity: 0.8;
+}
+
+/* --- feature plates (home) ----------------------------------------------- */
+.VPFeatures .items {
+  counter-reset: wv-fig;
+}
+.VPFeature {
+  position: relative;
+  border: 1px solid var(--vp-c-border);
+  background: var(--vp-c-bg-soft);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.VPFeature::before {
+  counter-increment: wv-fig;
+  content: 'fig.' counter(wv-fig);
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--vp-c-text-3);
+}
+/* corner registration tick */
+.VPFeature::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  width: 10px;
+  height: 10px;
+  border-left: 1px solid var(--vp-c-brand-3);
+  border-bottom: 1px solid var(--vp-c-brand-3);
+  opacity: 0.55;
+}
+.VPFeature:hover {
+  border-color: var(--vp-c-brand-3);
+  transform: translateY(-2px);
+}
+.VPFeature .title {
+  font-family: var(--wv-font-display);
+  font-weight: 560;
+  letter-spacing: -0.01em;
+}
+
+/* --- buttons -------------------------------------------------------------- */
+.VPButton.brand {
+  background: var(--vp-c-brand-3);
+  border-color: var(--vp-c-brand-3);
+  color: #fff;
+  font-weight: 600;
+}
+.VPButton.brand:hover {
+  background: var(--wv-coral);
+  border-color: var(--wv-coral);
+}
+
+/* --- nav / links ---------------------------------------------------------- */
+.VPNavBarTitle .text {
+  font-family: var(--wv-font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.vp-doc a {
+  text-decoration-color: var(--vp-c-brand-soft);
+  text-underline-offset: 3px;
+}
+
+/* --- code: mono + ink-edged ---------------------------------------------- */
+.vp-doc :not(pre) > code {
+  font-family: var(--vp-font-family-mono);
+  background: var(--vp-c-default-soft);
+}
+.vp-doc div[class*='language-'] {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+}
+.vp-doc div[class*='language-']::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--wv-ink-grad);
+  opacity: 0.7;
+}
+
+/* --- tables read like specimen data rows --------------------------------- */
+.vp-doc th {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2);
+}
+
+/* --- halftone overprint (whole page, very subtle) ------------------------ */
+.Layout::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(var(--wv-ht-color) 0.7px, transparent 0.8px);
+  background-size: 5px 5px;
+  opacity: 0.05;
+}
+
+/* --- codicons used inline in markdown ------------------------------------ */
+.vp-doc .codicon {
+  font-size: 1.05em;
+  vertical-align: -0.12em;
+  color: var(--vp-c-brand-3);
+}

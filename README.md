@@ -1,12 +1,18 @@
 <div align="center">
 
-<img src="media/weevil-icon.svg" alt="Weevil" width="160" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="media/brand/og-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="media/brand/og-light.png" />
+  <img alt="Weevil — know exactly what GitHub Copilot is costing you." src="media/brand/og-dark.png" width="820" />
+</picture>
 
-Real-time GitHub Copilot cost tracking for VS Code.
+<br /><br />
 
 [![CI](https://github.com/RedPandaMC/Weevil/actions/workflows/ci.yml/badge.svg)](https://github.com/RedPandaMC/Weevil/actions/workflows/ci.yml)
 [![Docs](https://github.com/RedPandaMC/Weevil/actions/workflows/docs.yml/badge.svg)](https://github.com/RedPandaMC/Weevil/actions/workflows/docs.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+`FIELD SPECIMEN · No.001` — *Curculionoidea copiloti*
 
 </div>
 
@@ -18,9 +24,18 @@ and a projected month-end total, broken down by model, surface, cost type, and
 repository. The core features need no sign-in and make no network calls. You can
 optionally connect to GitHub's billing API for the authoritative charge.
 
-## Features
+### What Weevil inspects
 
-- **Dashboard in the sidebar.** Click the Weevil icon in the activity bar to open
+| | part | reads from |
+| :-- | :-- | :-- |
+| `fig.1` | **rostrum** — live readout | today / MTD / projected month-end |
+| `fig.2` | **elytra** — model mix | per-model credits, cost & tokens |
+| `fig.3` | **thorax** — surface flow | chat · inline · agent · edit |
+| `fig.4` | **abdomen** — token cost | input vs. output split |
+
+## <img src="media/brand/codicons/graph.svg" width="18" align="top" /> Features
+
+- **Dashboard in the editor.** Click the Weevil icon in the activity bar to open
   the full dashboard: KPI cards (today, month-to-date, projected, top model), a
   spend gauge, a 30-day bar chart with a projected-pace line, a model breakdown, a
   model-to-surface flow chart, and a spend-by-cost-type chart. A pop-out button
@@ -44,7 +59,7 @@ optionally connect to GitHub's billing API for the authoritative charge.
   snapshot. It contains no external requests, so it prints to PDF from any
   browser.
 
-## Quick start
+## <img src="media/brand/codicons/pulse.svg" width="18" align="top" /> Quick start
 
 1. Install from the Extensions view, or:
 
@@ -62,21 +77,20 @@ If the dashboard shows "not enough data", Copilot has not written logs yet, or
 Weevil cannot find them. Run "Weevil: Show Detected Log Path" to check, and set
 `weevil.copilotLogPath` if needed.
 
-## How it works
+## <img src="media/brand/codicons/beaker.svg" width="18" align="top" /> How it works
 
 Copilot writes JSON-lines OTel logs containing the model, input and output token
 counts, the surface (chat, inline, agent, edit), and a timestamp. Weevil watches
 those files, stores events in a local embedded database (DuckDB; recent events
 at full detail, older ones rolled up to daily rows), and computes a render-ready
-snapshot
-that the dashboard (in the sidebar and the pop-out panel) consumes.
+snapshot that the dashboard (in the sidebar and the pop-out panel) consumes.
 
 Token counts are estimates, so costs are estimates. For the authoritative number,
 connect GitHub billing. The logs expose only input and output token counts per
 call, so the spend-by-cost-type chart splits cost into input and output; richer
 categories such as tool and reasoning are not available locally.
 
-## Settings
+## <img src="media/brand/codicons/gear.svg" width="18" align="top" /> Settings
 
 Weevil reads two settings. Budget, included credits, and alert thresholds are
 edited in the dashboard, not here.
@@ -86,12 +100,12 @@ edited in the dashboard, not here.
 | `weevil.copilotLogPath`     | `""`    | Override the log directory. Blank means auto-detect via `vscode.env.logUri`. |
 | `weevil.pricingManifestUrl` | `""`    | Override the pricing manifest URL. Blank means use the built-in URL.         |
 
-## Commands
+## <img src="media/brand/codicons/git-commit.svg" width="18" align="top" /> Commands
 
 `Weevil: Open Dashboard`, `Refresh Now`, `Clear All Data`, `Show Detected Log
 Path`, `Sign In to GitHub`, `Export Monthly Report`.
 
-## Privacy and security
+## <img src="media/brand/codicons/shield.svg" width="18" align="top" /> Privacy and security
 
 - Usage data lives in your per-user global storage, never in settings or in git.
   "Clear All Data" wipes events, your budget/alert config, the saved layout, and
@@ -104,7 +118,7 @@ Path`, `Sign In to GitHub`, `Export Monthly Report`.
 - Log paths are validated against known roots; paths containing `..` are rejected.
 - No credentials are stored. GitHub sign-in uses VS Code's session API.
 
-## Development
+## <img src="media/brand/codicons/telescope.svg" width="18" align="top" /> Development
 
 ```bash
 bun install
@@ -113,6 +127,8 @@ bun run check-types    # type-check both tsconfigs
 bun run lint
 bun run test:unit      # pure logic tests
 bun test               # integration tests in a real VS Code host
+bun run assets         # regenerate brand rasters from the source SVG art
+bun run docs:dev       # preview the documentation site
 ```
 
 Press F5 to launch an Extension Development Host.

@@ -1,5 +1,8 @@
 import { defineConfig } from 'vitepress';
 
+const site = 'https://redpandamc.github.io/Weevil';
+const ogImage = `${site}/brand/og-dark.png`;
+
 export default defineConfig({
   title: 'Weevil',
   description: 'Know exactly what GitHub Copilot is costing you.',
@@ -7,9 +10,24 @@ export default defineConfig({
   // site at /Weevil/, and asset URLs are case-sensitive.
   base: '/Weevil/',
 
+  // Dark "darkroom" by default; the appearance toggle still offers light "paper".
+  appearance: 'dark',
+  cleanUrls: true,
+
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/Weevil/logo.svg' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/Weevil/favicon.svg' }],
+    ['link', { rel: 'alternate icon', href: '/Weevil/favicon.ico', sizes: 'any' }],
     ['meta', { name: 'theme-color', content: '#B45CFF' }],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:title', content: 'Weevil' }],
+    ['meta', { property: 'og:site_name', content: 'Weevil' }],
+    ['meta', { property: 'og:url', content: `${site}/` }],
+    ['meta', { property: 'og:description', content: 'Know exactly what GitHub Copilot is costing you.' }],
+    ['meta', { property: 'og:image', content: ogImage }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:title', content: 'Weevil' }],
+    ['meta', { name: 'twitter:description', content: 'Know exactly what GitHub Copilot is costing you.' }],
+    ['meta', { name: 'twitter:image', content: ogImage }],
   ],
 
   themeConfig: {
@@ -41,7 +59,7 @@ export default defineConfig({
     socialLinks: [{ icon: 'github', link: 'https://github.com/RedPandaMC/Weevil' }],
 
     footer: {
-      message: 'MIT License',
+      message: 'FIELD SPECIMEN · No.001 — Curculionoidea copiloti · MIT License',
       copyright: 'Copyright © 2025 RedPandaMC',
     },
   },

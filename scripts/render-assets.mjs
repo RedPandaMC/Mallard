@@ -111,8 +111,9 @@ for (const name of wantCodicons) {
     console.warn('  ! missing codicon', name);
     continue;
   }
-  const tinted = readFileSync(src, 'utf8').replace(/currentColor/g, INK);
-  out(`media/brand/codicons/${name}.svg`, Buffer.from(tinted));
+  const tinted = Buffer.from(readFileSync(src, 'utf8').replace(/currentColor/g, INK));
+  out(`media/brand/codicons/${name}.svg`, tinted); // README (repo-relative)
+  out(`docs/public/brand/codicons/${name}.svg`, tinted); // docs site (served)
 }
 
 // =========================================================================
@@ -191,8 +192,11 @@ const themes = {
 };
 for (const [name, theme] of Object.entries(themes)) {
   const svg = banner(theme);
+  const png = render(svg);
   out(`media/brand/og-${name}.svg`, Buffer.from(svg));
-  out(`media/brand/og-${name}.png`, render(svg));
+  out(`media/brand/og-${name}.png`, png);
+  // also serve from the docs site so social scrapers can fetch an absolute URL
+  out(`docs/public/brand/og-${name}.png`, png);
 }
 
 console.log('done.');
