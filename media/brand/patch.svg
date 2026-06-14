@@ -9,7 +9,7 @@
 
   <text x="52" y="74" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="15" letter-spacing="4" fill="rgba(243,234,217,0.45)">FIELD KIT</text>
   <text x="460" y="74" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="15" letter-spacing="2" fill="rgba(243,234,217,0.45)" text-anchor="end">No.001</text>
-  <text x="52" y="118" font-family="'Space Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="19" letter-spacing="2" fill="rgba(243,234,217,0.7)">x + y</text>
+  <text x="52" y="118" font-family="'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif" font-size="19" letter-spacing="2" fill="rgba(243,234,217,0.7)">x + y</text>
 
   <!-- axes -->
   <line x1="120" y1="352" x2="404" y2="352" stroke="rgba(243,234,217,0.7)" stroke-width="2"/>

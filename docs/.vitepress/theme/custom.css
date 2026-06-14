@@ -2,16 +2,16 @@
    Weevil — modern lab-instrument theme for VitePress
    Near-black "console" dark default + cool "paper" light mode, a per-metric
    data palette (amber/coral/purple/cyan), Rabbit R1 cinnabar action accent,
-   a fine technical grid, Space Grotesk display + JetBrains Mono readouts.
+   a fine technical grid, Schibsted Grotesk display + JetBrains Mono readouts.
    ========================================================================== */
 
 /* --- self-hosted brand fonts (OFL) --------------------------------------- */
 @font-face {
-  font-family: 'Space Grotesk';
+  font-family: 'Schibsted Grotesk';
   font-style: normal;
-  font-weight: 300 700;
+  font-weight: 400 900;
   font-display: swap;
-  src: url('/fonts/space-grotesk-var.woff2') format('woff2');
+  src: url('/fonts/schibsted-grotesk-var.woff2') format('woff2');
 }
 @font-face {
   font-family: 'JetBrains Mono';
@@ -30,7 +30,7 @@
   --wv-r1: #fe5000; /* Rabbit R1 cinnabar — the action accent */
   --wv-ink-grad: linear-gradient(100deg, #ffb454 0%, #ff6b81 50%, #b45cff 100%);
 
-  --wv-font-display: 'Space Grotesk', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --wv-font-display: 'Schibsted Grotesk', system-ui, 'Segoe UI', Roboto, sans-serif;
   --vp-font-family-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Cascadia Code',
     'Fira Code', Consolas, monospace;
 

@@ -17,7 +17,7 @@ const r = (p) => join(root, p);
 
 // --- fonts -----------------------------------------------------------------
 const fontDir = r('scripts/.fontcache');
-const fontFiles = ['SpaceGrotesk.ttf', 'JetBrainsMono.ttf']
+const fontFiles = ['SchibstedGrotesk.ttf', 'JetBrainsMono.ttf']
   .map((f) => join(fontDir, f))
   .filter((f) => existsSync(f));
 
@@ -29,7 +29,7 @@ function render(svg, { width, height } = {}) {
       : { mode: 'original' };
   const resvg = new Resvg(svg, {
     fitTo,
-    font: { fontFiles, loadSystemFonts: true, defaultFontFamily: 'Space Grotesk' },
+    font: { fontFiles, loadSystemFonts: true, defaultFontFamily: 'Schibsted Grotesk' },
     background: 'rgba(0,0,0,0)',
   });
   return resvg.render().asPng();
@@ -120,7 +120,7 @@ for (const name of wantCodicons) {
 // 4. Social / hero banner — the instrument schematic (dark + light)
 // =========================================================================
 console.log('banner');
-const GROTESK = "'Space Grotesk', 'Liberation Sans', Arial, sans-serif";
+const GROTESK = "'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif";
 const MONO = "'JetBrains Mono', 'DejaVu Sans Mono', monospace";
 
 const DATA = ['#FFB454', '#FF6B81', '#B45CFF', '#36C5D4'];

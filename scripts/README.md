@@ -10,19 +10,19 @@ bun run assets
 ```
 
 Outputs (all committed): `media/weevil-icon-{128,256,512}.png`,
-`media/brand/og-{dark,light}.{svg,png}`, `media/brand/codicons/*.svg`,
-`docs/public/favicon.{svg,ico}`.
+`media/brand/og-{dark,light}.{svg,png}`, `media/brand/patch.{svg,png}`,
+`media/brand/codicons/*.svg`, `docs/public/favicon.{svg,ico}`.
 
 ### Fonts
 
-Banner text uses the brand fonts (Fraunces + JetBrains Mono). The script reads
-TTFs from `scripts/.fontcache/` (git-ignored); if missing it falls back to
-system fonts. To restore the cache:
+Banner/patch text uses the brand fonts (Schibsted Grotesk + JetBrains Mono). The
+script reads TTFs from `scripts/.fontcache/` (git-ignored); if missing it falls
+back to system fonts. To restore the cache:
 
 ```bash
 mkdir -p scripts/.fontcache
-curl -sSL -o scripts/.fontcache/Fraunces.ttf \
-  'https://github.com/google/fonts/raw/main/ofl/fraunces/Fraunces%5BSOFT%2CWONK%2Copsz%2Cwght%5D.ttf'
+curl -sSL -o scripts/.fontcache/SchibstedGrotesk.ttf \
+  'https://github.com/google/fonts/raw/main/ofl/schibstedgrotesk/SchibstedGrotesk%5Bwght%5D.ttf'
 curl -sSL -o scripts/.fontcache/JetBrainsMono.ttf \
   'https://github.com/google/fonts/raw/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf'
 ```
