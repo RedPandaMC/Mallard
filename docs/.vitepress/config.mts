@@ -8,8 +8,8 @@ export default defineConfig({
   base: '/Weevil/',
 
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/Weevil/favicon.svg' }],
-    ['meta', { name: 'theme-color', content: '#818CF8' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/Weevil/logo.svg' }],
+    ['meta', { name: 'theme-color', content: '#B45CFF' }],
   ],
 
   themeConfig: {
