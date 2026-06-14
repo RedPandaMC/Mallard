@@ -23,6 +23,9 @@ export function mountEmptyState(el: HTMLElement): EmptyStateHandle {
         <button class="wv-btn wv-btn--primary" id="empty-refresh">
           <i class="codicon codicon-refresh"></i> Refresh
         </button>
+        <button class="wv-btn" id="empty-signin">
+          <i class="codicon codicon-account"></i> Sign in to verify spend
+        </button>
       </div>
       <p class="wv-empty-reason" id="empty-reason"></p>
     </div>`;
@@ -31,6 +34,9 @@ export function mountEmptyState(el: HTMLElement): EmptyStateHandle {
 
   el.querySelector('#empty-refresh')!.addEventListener('click', () => {
     post({ type: 'refresh' });
+  });
+  el.querySelector('#empty-signin')!.addEventListener('click', () => {
+    post({ type: 'command', id: 'signIn' });
   });
 
   return {
