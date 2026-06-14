@@ -5,8 +5,9 @@ All commands are available from the Command Palette (`Ctrl+Shift+P` or
 
 ## Weevil: Open Dashboard
 
-ID `weevil.openDashboard`. Opens or focuses the full dashboard panel, the same
-action as clicking the status bar chip. The dashboard shows:
+ID `weevil.openDashboard`. Opens or focuses the dashboard in an editor tab, the
+same view shown in the activity-bar sidebar (and reachable via its pop-out
+button). The dashboard shows:
 
 - KPI cards: today, month-to-date, projected month-end, top model
 - A spend gauge: credits used against your included allowance
