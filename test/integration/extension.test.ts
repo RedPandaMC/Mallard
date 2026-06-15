@@ -28,7 +28,12 @@ describe('Weevil extension (integration)', () => {
     for (const cmd of EXPECTED_COMMANDS) {
       assert.ok(all.includes(cmd), `command ${cmd} should be registered`);
     }
-    const contributed = all.filter((c) => c.startsWith('weevil.')).sort();
+    // VS Code auto-registers per-view commands for the contributed `weevil.trigger`
+    // tree view (focus/open/removeView/resetViewLocation/toggleVisibility); those
+    // are framework-generated, not part of the extension's command contract.
+    const contributed = all
+      .filter((c) => c.startsWith('weevil.') && !c.startsWith('weevil.trigger.'))
+      .sort();
     assert.deepStrictEqual(
       contributed,
       [...EXPECTED_COMMANDS].sort(),
