@@ -46,20 +46,34 @@ const logoSvg = readFileSync(r('docs/public/logo.svg'), 'utf8');
 const weevilInner = logoSvg
   .replace(/^[\s\S]*?<svg[^>]*>/, '')
   .replace(/<\/svg>\s*$/, '');
+// black-filled weevil (for the OP-Z app icon)
+const weevilBlack = weevilInner.replace(/fill="url\(#weevil-grad\)"/, 'fill="#000000"');
+
+// OP-Z app icon: flat Rabbit-R1-cinnabar tile + black weevil (group-chip style)
+function appIconSvg() {
+  const pad = 74;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#FE5000"/>
+  <svg x="${pad}" y="${pad - 10}" width="${512 - 2 * pad}" height="${512 - 2 * pad}" viewBox="0 0 2048 2048">${weevilBlack}</svg>
+</svg>`;
+}
+const iconSvg = appIconSvg();
 
 // =========================================================================
-// 1. Marketplace / app icon PNGs
+// 1. Marketplace / app icon PNGs (OP-Z cinnabar tile)
 // =========================================================================
 console.log('icons');
+out('media/brand/icon.svg', Buffer.from(iconSvg));
+out('docs/public/icon.svg', Buffer.from(iconSvg));
 for (const size of [128, 256, 512]) {
-  out(`media/weevil-icon-${size}.png`, render(logoSvg, { width: size }));
+  out(`media/weevil-icon-${size}.png`, render(iconSvg, { width: size }));
 }
 
 // =========================================================================
-// 2. Favicon (svg + multi-size ico)
+// 2. Favicon (svg + multi-size ico) — same OP-Z icon
 // =========================================================================
 console.log('favicon');
-writeFileSync(r('docs/public/favicon.svg'), logoSvg);
+writeFileSync(r('docs/public/favicon.svg'), iconSvg);
 console.log('  •', 'docs/public/favicon.svg');
 
 function ico(pngs) {
@@ -85,7 +99,7 @@ function ico(pngs) {
 }
 out(
   'docs/public/favicon.ico',
-  ico([16, 32, 48].map((size) => ({ size, data: render(logoSvg, { width: size }) }))),
+  ico([16, 32, 48].map((size) => ({ size, data: render(iconSvg, { width: size }) }))),
 );
 
 // =========================================================================
@@ -166,8 +180,9 @@ function banner({ bg, ink, muted, frame }) {
   <text x="${m + 26}" y="${m + 38}" font-family="${MONO}" font-size="14" letter-spacing="3.5" fill="${muted}">COPILOT SPEND &#183; INSTRUMENT</text>
   <text x="${W - m - 26}" y="${m + 38}" font-family="${MONO}" font-size="14" letter-spacing="2" fill="${muted}" text-anchor="end">v0.2 &#183; MIT</text>
 
-  <!-- weevil mark (the only gradient) + wordmark -->
-  <svg x="${m + 22}" y="108" width="58" height="58" viewBox="0 0 2048 2048">${weevilInner}</svg>
+  <!-- OP-Z app icon (cinnabar tile) + wordmark -->
+  <rect x="${m + 22}" y="104" width="62" height="62" rx="15" fill="#FE5000"/>
+  <svg x="${m + 30}" y="108" width="46" height="46" viewBox="0 0 2048 2048">${weevilBlack}</svg>
   <text x="${m + 22}" y="270" font-family="${GROTESK}" font-size="118" font-weight="700" letter-spacing="-4" fill="${ink}">Weevil</text>
   ${bar}
   <text x="${m + 26}" y="344" font-family="${GROTESK}" font-size="26" font-weight="500" fill="${ink}">Know exactly what GitHub Copilot is costing you.</text>
