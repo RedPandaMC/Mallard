@@ -2,6 +2,7 @@
  * 30-day daily bar chart — consumes pre-computed DailyBarsData from the host.
  */
 import { echarts, initChart } from './echarts';
+import { readTheme } from '../theme';
 import { UsageSnapshot } from '../../src/domain/types';
 import { formatMoney, formatCredits } from '../../src/domain/format';
 
@@ -10,12 +11,6 @@ export interface DailyBarsHandle {
   resize(): void;
 }
 
-const COLORS = [
-  'var(--vscode-charts-blue, #4FC3F7)',
-  'var(--vscode-charts-orange, #FFB74D)',
-  'var(--vscode-charts-red, #EF9A9A)',
-] as const;
-
 export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
   const chart = initChart(el);
 
@@ -23,12 +18,18 @@ export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
     update(s: UsageSnapshot) {
       const { points, budgetLine, projectedLine } = s.chartData.dailyBars;
       const currency = s.currency;
+      const t = readTheme();
+      // colorIndex 0/1/2 → severity ramp gray → coral → red (duotone).
+      const sev = [t.sevOk, t.sevWarn, t.sevOver];
 
       const series: echarts.SeriesOption[] = [
         {
           type: 'bar',
           name: 'Credits',
-          data: points.map((p) => ({ value: p.credits, itemStyle: { color: COLORS[p.colorIndex]! } })),
+          data: points.map((p) => ({
+            value: p.credits,
+            itemStyle: { color: sev[p.colorIndex] ?? t.sevOk },
+          })),
           emphasis: { itemStyle: { opacity: 0.85 } },
         },
       ];
@@ -38,7 +39,7 @@ export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
           type: 'line',
           name: 'Daily budget',
           data: points.map(() => budgetLine),
-          lineStyle: { type: 'dashed', color: 'var(--vscode-charts-orange, #FFB74D)', width: 1 },
+          lineStyle: { type: 'dashed', color: t.sevWarn, width: 1 },
           symbol: 'none',
           silent: true,
         } as echarts.SeriesOption);
@@ -49,7 +50,7 @@ export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
           type: 'line',
           name: 'Projected pace',
           data: points.map(() => projectedLine),
-          lineStyle: { type: 'dotted', color: 'var(--vscode-charts-purple, #CE93D8)', width: 1 },
+          lineStyle: { type: 'dotted', color: t.accent, width: 1.5 },
           symbol: 'none',
           silent: true,
         } as echarts.SeriesOption);

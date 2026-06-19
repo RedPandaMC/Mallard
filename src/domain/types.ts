@@ -169,7 +169,15 @@ export interface DashboardPanelLayout {
 export type DashboardLayout = DashboardPanelLayout[];
 
 /** The analysis panels that can be reordered, resized, and hidden. */
-export const DASHBOARD_PANELS = ['daily', 'heatmap', 'models', 'sankey', 'category'] as const;
+export const DASHBOARD_PANELS = [
+  'daily',
+  'heatmap',
+  'models',
+  'sankey',
+  'category',
+  'cumulative',
+  'weekday',
+] as const;
 
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
   { id: 'daily', span: 2, hidden: false },
@@ -177,6 +185,8 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
   { id: 'models', span: 1, hidden: false },
   { id: 'sankey', span: 1, hidden: false },
   { id: 'category', span: 1, hidden: false },
+  { id: 'cumulative', span: 1, hidden: false },
+  { id: 'weekday', span: 1, hidden: false },
 ];
 
 /** Active filter applied to build the current snapshot. */

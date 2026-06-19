@@ -4,6 +4,7 @@
  * Only rendered when there is at least one non-zero day.
  */
 import { echarts, initChart } from './echarts';
+import { readTheme } from '../theme';
 import { UsageSnapshot } from '../../src/domain/types';
 import { formatCredits } from '../../src/domain/format';
 
@@ -23,6 +24,7 @@ export function mountHeatmap(el: HTMLElement): HeatmapHandle {
         return;
       }
       el.style.display = '';
+      const t = readTheme();
 
       const rangeStart = cells[0]?.date ?? '';
       const rangeEnd = cells[cells.length - 1]?.date ?? '';
@@ -41,18 +43,15 @@ export function mountHeatmap(el: HTMLElement): HeatmapHandle {
             show: false,
             min: 0,
             max,
+            // duotone ramp: faint gray (light usage) → mid gray → Swiss red.
             inRange: {
-              color: [
-                'var(--vscode-charts-lines, #404040)',
-                'var(--vscode-charts-green, #81C784)',
-                'var(--vscode-charts-blue, #4FC3F7)',
-              ],
+              color: [t.series[5] ?? t.muted, t.series[3] ?? t.muted, t.accent],
             },
           },
           calendar: {
             range: [rangeStart, rangeEnd],
             cellSize: [14, 14],
-            itemStyle: { borderWidth: 1, borderColor: 'var(--vscode-editorWidget-border, #454545)' },
+            itemStyle: { borderWidth: 1, borderColor: t.border },
             yearLabel: { show: false },
             monthLabel: { fontSize: 10 },
             dayLabel: { fontSize: 9, firstDay: 1 },
