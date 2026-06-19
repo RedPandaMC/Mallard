@@ -1,3 +1,4 @@
+import './styles/fonts.css';
 import './styles/reset.css';
 import './styles/theme.css';
 import './styles/dashboard.css';

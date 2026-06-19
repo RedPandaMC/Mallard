@@ -7,7 +7,7 @@ body {
   background-image: var(--w-grid);
   background-size: 40px 40px;
   color: var(--w-fg);
-  font-family: var(--w-font);
+  font-family: 'Hanken Grotesk', var(--w-font);
   font-size: var(--w-font-size);
   line-height: 1.5;
 }
@@ -43,7 +43,7 @@ body {
   border-bottom: 1px solid var(--w-border);
 }
 
-/* flat four-colour OP-Z accent bar under the wordmark */
+/* single Swiss-red rule under the wordmark */
 .wv-header::after {
   content: '';
   position: absolute;
@@ -51,7 +51,7 @@ body {
   bottom: -1px;
   width: 140px;
   height: 3px;
-  background: var(--w-te-bar);
+  background: var(--w-accent);
 }
 
 .wv-brand {
@@ -466,7 +466,7 @@ body {
 
 .wv-kpi-card {
   position: relative;
-  --accent: var(--w-te-blue);
+  --accent: var(--w-accent);
   background: var(--w-bg-card);
   border: 1px solid var(--w-border);
   border-radius: var(--w-r2);
@@ -478,20 +478,20 @@ body {
   transition: border-color 0.15s;
 }
 
-/* per-metric data colour (OP-Z parameter colour coding) */
-.wv-kpi-card:nth-child(1) { --accent: var(--w-data-1); }
-.wv-kpi-card:nth-child(2) { --accent: var(--w-data-2); }
-.wv-kpi-card:nth-child(3) { --accent: var(--w-data-3); }
-.wv-kpi-card:nth-child(4) { --accent: var(--w-data-4); }
+/* per-metric severity colour on the top rule: today=accent, month=ok(gray),
+   projected=warn(coral), top-model=over(red) — gray→red, no third hue. */
+.wv-kpi-card:nth-child(1) { --accent: var(--w-accent); }
+.wv-kpi-card:nth-child(2) { --accent: var(--w-sev-ok); }
+.wv-kpi-card:nth-child(3) { --accent: var(--w-sev-warn); }
+.wv-kpi-card:nth-child(4) { --accent: var(--w-sev-over); }
 
-/* the card's single accent hairline along the top */
+/* the card's single accent rule along the top */
 .wv-kpi-card::before {
   content: '';
   position: absolute;
   inset: 0 0 auto 0;
-  height: 2px;
+  height: 3px;
   background: var(--accent);
-  opacity: 0.85;
 }
 
 /* channel index code */
@@ -511,18 +511,17 @@ body {
   border-color: var(--accent);
 }
 
-/* the value is an OP-Z OLED screen: pure black glass + big flat primary number */
+/* big flat Archivo numeral, set in the theme foreground (the severity colour
+   lives on the top rule, not the number) */
 .wv-kpi-value {
   align-self: stretch;
-  background-color: var(--w-screen);
-  border-radius: var(--w-r2);
-  padding: 10px 12px;
+  margin-top: 2px;
   font-family: var(--w-font-display);
-  font-size: 30px;
-  font-weight: 700;
-  color: var(--accent);
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--w-fg);
   letter-spacing: -0.03em;
-  line-height: 1.1;
+  line-height: 0.95;
   font-variant-numeric: tabular-nums;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -530,8 +529,7 @@ body {
 }
 
 .wv-kpi-value--sm {
-  font-size: 18px;
-  padding: 13px 12px;
+  font-size: 22px;
 }
 
 .wv-kpi-sub {
@@ -553,14 +551,18 @@ body {
    Spend Gauge
 ───────────────────────────────────────── */
 .wv-gauge-section {
+  --sev: var(--w-sev-ok);
   background: var(--w-bg-card);
   border: 1px solid var(--w-border);
   border-radius: var(--w-r2);
   padding: var(--w-s4);
   display: flex;
   flex-direction: column;
-  gap: var(--w-s2);
+  gap: var(--w-s3);
 }
+
+.wv-gauge-section[data-severity='warn'] { --sev: var(--w-sev-warn); }
+.wv-gauge-section[data-severity='err']  { --sev: var(--w-sev-over); }
 
 .wv-gauge-header {
   display: flex;
@@ -570,63 +572,84 @@ body {
 
 .wv-gauge-label {
   font-family: var(--w-label-font);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.14em;
   color: var(--w-fg-muted);
   flex-shrink: 0;
 }
 
-.wv-gauge-values {
-  font-family: var(--w-font-display);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
-  color: var(--w-te-green);
-  background-color: var(--w-screen);
-  padding: 3px var(--w-s2);
-  border-radius: var(--w-r1);
-}
-
-/* outlined-label chip (instrument legend style) */
+/* outlined severity word (instrument legend style) */
 .wv-gauge-badge {
   font-family: var(--w-label-font);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 2px var(--w-s2);
-  border: 1px solid currentColor;
-  border-radius: var(--w-r1);
+  color: var(--sev);
   margin-left: auto;
 }
 
-.wv-gauge-badge[data-severity='ok']   { color: var(--w-ok); }
-.wv-gauge-badge[data-severity='warn'] { color: var(--w-warn); }
-.wv-gauge-badge[data-severity='err']  { color: var(--w-err); }
-
-.wv-gauge-track {
-  width: 100%;
-  height: 10px;
-  background-color: var(--w-screen);
-  background-image: var(--w-screen-grid);
-  background-size: 4px 4px;
-  border-radius: 9999px;
-  overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+/* big Archivo percentage, coloured by severity */
+.wv-gauge-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
 }
 
-.wv-gauge-fill {
-  height: 100%;
-  border-radius: 9999px;
-  background: var(--w-ok);
-  transition: width 0.4s ease;
+.wv-gauge-pct {
+  font-family: var(--w-font-display);
+  font-weight: 800;
+  font-size: 46px;
+  line-height: 0.85;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--sev);
 }
 
-.wv-gauge-fill[data-severity='warn'] { background: var(--w-warn); }
-.wv-gauge-fill[data-severity='err']  { background: var(--w-err); }
+.wv-gauge-pct-sign {
+  font-family: var(--w-font-display);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--sev);
+}
+
+/* 30-segment bar gauge (scale runs to 120% so overage is visible) */
+.wv-gauge-segments {
+  display: flex;
+  gap: 2px;
+  height: 22px;
+}
+
+.wv-gauge-seg {
+  flex: 1;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--w-fg) 10%, transparent);
+}
+
+.wv-gauge-seg--on {
+  transform-origin: bottom;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wv-gauge-seg--on {
+    animation: wv-seg-rise 0.5s ease both;
+  }
+}
+
+@keyframes wv-seg-rise {
+  from { transform: scaleY(0); opacity: 0; }
+  to   { transform: scaleY(1); opacity: 1; }
+}
+
+.wv-gauge-scale {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--w-label-font);
+  font-size: 10px;
+  color: var(--w-fg-muted);
+}
 
 .wv-gauge-sub {
   font-size: 11px;

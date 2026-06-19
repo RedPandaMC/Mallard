@@ -22,16 +22,18 @@
   --w-font-size: var(--vscode-font-size, 13px);
   --w-font-mono: var(--vscode-editor-font-family, 'Cascadia Code', 'Fira Code', monospace);
 
-  /* Brand accent — derived from VS Code button colour for full theme compatibility */
-  --w-brand: var(--vscode-button-background, #0e639c);
-  --w-brand-fg: var(--vscode-button-foreground, #ffffff);
-  --w-brand-dim: color-mix(in srgb, var(--vscode-button-background, #0e639c) 12%, transparent);
-  --w-brand-hover: color-mix(in srgb, var(--vscode-button-background, #0e639c) 22%, transparent);
+  /* Brand accent — the Swiss red (mapped to --w-accent below). In the
+     "theme" palette mode, --w-accent is re-derived from --vscode-* at runtime,
+     and everything keyed off these brand tokens follows automatically. */
+  --w-brand: var(--w-accent);
+  --w-brand-fg: var(--w-accent-fg);
+  --w-brand-dim: color-mix(in srgb, var(--w-accent) 12%, transparent);
+  --w-brand-hover: color-mix(in srgb, var(--w-accent) 22%, transparent);
 
-  /* Status */
-  --w-ok: var(--vscode-charts-green, #4caf50);
-  --w-warn: var(--vscode-charts-orange, #ff9800);
-  --w-err: var(--vscode-charts-red, #f44336);
+  /* Status → duotone severity (gray → coral → red, no third hue) */
+  --w-ok: var(--w-sev-ok);
+  --w-warn: var(--w-sev-warn);
+  --w-err: var(--w-sev-over);
 
   /* Spacing scale */
   --w-s0: 2px;
@@ -52,51 +54,88 @@
   --w-chart-main: 260px;
   --w-chart-mini: 200px;
 
-  /* ── Instrument identity layer (Teenage Engineering OP-1 / OP-Z) ───
-     The data readouts read like an OP-Z screen: pure-black OLED "glass"
-     with big, flat, saturated primary-coloured numbers and color-coded
-     parameters. The surrounding dashboard chrome (cards, text, borders)
-     still derives from --vscode-* above, so it stays theme-compatible —
-     the OP-Z screens are self-contained black panels within it. */
+  /* ── Swiss duotone data layer ──────────────────────────────────────
+     Surfaces stay theme-native (derived from --vscode-* above). The data
+     layer is strict DUOTONE: one red accent plus a grayscale ramp derived
+     from --vscode-foreground, so charts read as black-and-white with a
+     single accent and adapt to any editor theme. Severity ramps gray → red
+     (no third hue), which is inherently colour-blind safe. */
 
-  /* OP-Z primary palette — flat, saturated, no gradients */
-  --w-te-blue: #2f9be8;
-  --w-te-green: #4fc23a;
-  --w-te-yellow: #ffc400;
-  --w-te-red: #ff453a;
-  --w-te-magenta: #ff4f8b;
+  /* Swiss red accent — fixed hue (dark default; lighter on dark themes,
+     deeper on light themes — switched by VS Code's body theme class below). */
+  --w-accent: #ff453a;
+  --w-accent-fg: #ffffff;
 
-  --w-action: #fe5000; /* Rabbit R1 cinnabar — live / primary action */
-  --w-action-fg: #ffffff;
+  /* Grayscale ramp from the theme foreground (adapts to any theme). */
+  --w-gray-1: color-mix(in srgb, var(--w-fg) 86%, transparent);
+  --w-gray-2: color-mix(in srgb, var(--w-fg) 62%, transparent);
+  --w-gray-3: color-mix(in srgb, var(--w-fg) 44%, transparent);
+  --w-gray-4: color-mix(in srgb, var(--w-fg) 30%, transparent);
+  --w-gray-5: color-mix(in srgb, var(--w-fg) 20%, transparent);
 
-  /* data palette, one flat primary per readout/parameter */
-  --w-data-1: var(--w-te-blue);
-  --w-data-2: var(--w-te-green);
-  --w-data-3: var(--w-te-yellow);
-  --w-data-4: var(--w-te-red);
+  /* Duotone series: accent first, then grayscale steps. */
+  --w-series-1: var(--w-accent);
+  --w-series-2: var(--w-gray-1);
+  --w-series-3: var(--w-gray-2);
+  --w-series-4: var(--w-gray-3);
+  --w-series-5: var(--w-gray-4);
+  --w-series-6: var(--w-gray-5);
 
-  /* flat four-colour segmented accent bar (OP-Z group colours) */
-  --w-te-bar: linear-gradient(
-    90deg,
-    var(--w-te-blue) 0 25%,
-    var(--w-te-green) 25% 50%,
-    var(--w-te-yellow) 50% 75%,
-    var(--w-te-red) 75% 100%
-  );
+  /* Severity ramps gray → red (warn is a muted coral; switched per theme). */
+  --w-sev-ok: var(--w-gray-2);
+  --w-sev-warn: #ff8a80;
+  --w-sev-over: var(--w-accent);
+
+  /* ── Back-compat aliases: old instrument token names → duotone values,
+     so dashboard.css/components reskin without renaming every reference. */
+  --w-action: var(--w-accent);
+  --w-action-fg: var(--w-accent-fg);
+  --w-data-1: var(--w-series-1);
+  --w-data-2: var(--w-series-2);
+  --w-data-3: var(--w-series-3);
+  --w-data-4: var(--w-series-4);
+  --w-te-blue: var(--w-accent);
+  --w-te-green: var(--w-sev-ok);
+  --w-te-yellow: var(--w-sev-warn);
+  --w-te-red: var(--w-accent);
+  --w-te-magenta: var(--w-series-5);
+
+  /* single red rule (replaces the four-colour OP-Z bar). */
+  --w-te-bar: var(--w-accent);
+
+  /* no more black OLED glass — readouts sit on the theme-native card. */
+  --w-screen: transparent;
+  --w-screen-grid: none;
 
   /* mallard-shell gradient — marketplace logo art only, never UI chrome */
   --w-ink-grad: linear-gradient(100deg, #ffb454 0%, #ff6b81 50%, #b45cff 100%);
 
-  /* Geometric grotesque display (system fonts only — CSP-safe). */
-  --w-font-display: system-ui, 'Segoe UI', Roboto, var(--w-font), sans-serif;
-  --w-label-font: var(--w-font-mono);
-  --w-readout-font: var(--w-font-mono);
+  /* Typography — bundled brand fonts (see fonts.css). */
+  --w-font-display: 'Archivo', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --w-label-font: 'IBM Plex Mono', var(--w-font-mono);
+  --w-readout-font: 'IBM Plex Mono', var(--w-font-mono);
 
-  --w-screen: #000000; /* OP-Z OLED display glass */
-  --w-screen-grid: none;
-
-  /* Fine technical grid (graph-paper), adapts per theme. */
-  --w-grid-line: color-mix(in srgb, var(--w-fg) 4%, transparent);
+  /* Fine hairline grid (graph-paper), adapts per theme. */
+  --w-grid-line: color-mix(in srgb, var(--w-fg) 7%, transparent);
   --w-grid: linear-gradient(var(--w-grid-line) 1px, transparent 1px),
     linear-gradient(90deg, var(--w-grid-line) 1px, transparent 1px);
+}
+
+/* Accent hue per editor theme: deep Swiss red on light surfaces, a slightly
+   lighter red on dark surfaces so it stays legible. VS Code always sets one of
+   these classes on <body>. */
+body.vscode-light,
+body.vscode-high-contrast-light {
+  --w-accent: #e5231b;
+  --w-sev-warn: #f2766e;
+}
+
+/* High-contrast themes: lean on VS Code's contrast borders so every plate,
+   card, and control has a visible edge (the duotone grays alone are too
+   subtle against a pure-black/white HC background). Charts additionally use
+   non-colour encoding (see chart builders) so meaning never rests on hue. */
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --w-border: var(--vscode-contrastBorder, var(--w-border));
+  --w-grid-line: color-mix(in srgb, var(--w-fg) 22%, transparent);
 }
