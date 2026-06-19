@@ -105,6 +105,20 @@ plan.
 "mallard.pricingManifestUrl": "https://example.com/my-pricing.json"
 ```
 
+### `mallard.palette`
+
+Type `string`, one of `"swiss"` (default) or `"theme"`.
+
+Controls the dashboard chart palette. `swiss` uses the fixed Swiss duotone —
+one red accent plus a grayscale ramp. `theme` instead derives the accent from
+your active VS Code theme (its button / link colour). Both modes keep the same
+duotone structure and are validated for contrast and colour-blindness, so the
+charts stay legible whichever you pick.
+
+```json
+"mallard.palette": "theme"
+```
+
 ## Notes
 
 - The price per credit comes from the pricing manifest (0.04 USD by default) and

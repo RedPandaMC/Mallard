@@ -156,6 +156,15 @@ export const DEFAULT_RESTRICTION_STATE: RestrictionState = {
 };
 
 /**
+ * Chart colour palette mode (the `mallard.palette` setting):
+ * - `swiss`: the fixed Swiss duotone — one red accent + a grayscale ramp.
+ * - `theme`: derive the accent from the active VS Code theme, validated for
+ *   contrast and colour-blindness, keeping the duotone structure.
+ * Both modes are run through the accessibility checks in webview/color.ts.
+ */
+export type PaletteMode = 'swiss' | 'theme';
+
+/**
  * Persisted dashboard layout. Each analysis panel has a position (array order),
  * a width span (1 = half, 2 = full, in the two-column grid), and a visibility
  * flag. Edited in the dashboard's edit mode and stored in globalState.

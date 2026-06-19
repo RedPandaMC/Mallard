@@ -1,5 +1,37 @@
+import { deriveAccent, ensureContrast, parseColor, toHex } from './color';
+import type { PaletteMode } from '../src/domain/types';
+import type { ThemeKind } from '../src/ui/messaging';
+
 function cssVar(name: string, fallback = ''): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+/**
+ * Resolve the dashboard accent for the active palette mode and theme, set it on
+ * the document root, and run it through the accessibility checks — for BOTH
+ * modes, not just the theme-derived one:
+ * - `swiss`: the fixed Swiss red, nudged for contrast if an unusual editor
+ *   theme would make it illegible against the surface.
+ * - `theme`: derived from the VS Code accent (button / link), with contrast +
+ *   colour-blindness validation (see webview/color.ts).
+ * Everything keyed off --w-accent (series, severity, brand) follows.
+ */
+export function applyPalette(palette: PaletteMode, kind: ThemeKind): void {
+  const root = document.documentElement;
+  const bgStr = cssVar('--vscode-editor-background', '#1e1e1e');
+  const bg = parseColor(bgStr) ?? { r: 30, g: 30, b: 30 };
+  const light = kind === 'light' || kind === 'high-contrast-light';
+  const baseRed = light ? '#e5231b' : '#ff453a';
+
+  let accent: string;
+  if (palette === 'theme') {
+    const seed =
+      cssVar('--vscode-button-background') || cssVar('--vscode-textLink-foreground') || baseRed;
+    accent = deriveAccent(seed, bgStr, baseRed);
+  } else {
+    accent = toHex(ensureContrast(parseColor(baseRed)!, bg, 3));
+  }
+  root.style.setProperty('--w-accent', accent);
 }
 
 export interface MallardTheme {

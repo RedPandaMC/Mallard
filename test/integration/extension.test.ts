@@ -53,11 +53,12 @@ describe('Mallard extension (integration)', () => {
     assert.ok(true);
   });
 
-  it('exposes only the two documented settings', () => {
+  it('exposes only the documented settings', () => {
     const ext = vscode.extensions.getExtension(EXT_ID)!;
     const props = ext.packageJSON.contributes.configuration.properties as Record<string, unknown>;
     assert.deepStrictEqual(Object.keys(props).sort(), [
       'mallard.copilotLogPath',
+      'mallard.palette',
       'mallard.pricingManifestUrl',
     ]);
   });

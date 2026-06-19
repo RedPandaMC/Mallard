@@ -5,6 +5,7 @@
 import {
   DashboardLayout,
   Filter,
+  PaletteMode,
   RestrictionState,
   UsageSnapshot,
   UserConfig,
@@ -12,12 +13,16 @@ import {
 
 export type CommandId = 'openDashboard' | 'signIn';
 
+/** Active editor theme kind, mirrored to the webview so it can derive an
+ *  accessible accent (the webview also sees VS Code's body theme class). */
+export type ThemeKind = 'light' | 'dark' | 'high-contrast' | 'high-contrast-light';
+
 export type WebviewBoundMsg =
   | { type: 'snapshot'; payload: UsageSnapshot }
   | { type: 'config'; value: UserConfig }
   | { type: 'layout'; value: DashboardLayout }
   | { type: 'restriction'; value: RestrictionState }
-  | { type: 'theme' };
+  | { type: 'theme'; kind: ThemeKind; palette: PaletteMode };
 
 export type HostBoundMsg =
   | { type: 'ready' }

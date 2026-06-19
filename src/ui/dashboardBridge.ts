@@ -9,13 +9,33 @@ import { UserConfigStore } from '../app/UserConfigStore';
 import { LayoutStore } from '../app/LayoutStore';
 import { RestrictionEngine } from '../domain/restriction/engine';
 import { Filter } from '../domain/types';
-import { isHostBoundMsg, WebviewBoundMsg } from './messaging';
+import { readConfig } from '../config';
+import { isHostBoundMsg, ThemeKind, WebviewBoundMsg } from './messaging';
 
 export interface DashboardDeps {
   usage: UsageService;
   userConfig: UserConfigStore;
   layout: LayoutStore;
   restriction: RestrictionEngine;
+}
+
+function themeKind(): ThemeKind {
+  switch (vscode.window.activeColorTheme.kind) {
+    case vscode.ColorThemeKind.Light:
+      return 'light';
+    case vscode.ColorThemeKind.HighContrast:
+      return 'high-contrast';
+    case vscode.ColorThemeKind.HighContrastLight:
+      return 'high-contrast-light';
+    default:
+      return 'dark';
+  }
+}
+
+/** The theme message carries the active theme kind and the palette setting —
+ *  the two inputs the webview needs to derive an accessible accent. */
+function themeMsg(): WebviewBoundMsg {
+  return { type: 'theme', kind: themeKind(), palette: readConfig().palette };
 }
 
 export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vscode.Disposable[] {
@@ -31,6 +51,7 @@ export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vsc
         post({ type: 'config', value: userConfig.get() });
         post({ type: 'layout', value: layout.get() });
         post({ type: 'restriction', value: restriction.getState() });
+        post(themeMsg());
         break;
       }
       case 'refresh':
@@ -86,6 +107,9 @@ export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vsc
     userConfig.onDidChange((value) => post({ type: 'config', value })),
     layout.onDidChange((value) => post({ type: 'layout', value })),
     restriction.onDidChange((value) => post({ type: 'restriction', value })),
-    vscode.window.onDidChangeActiveColorTheme(() => post({ type: 'theme' })),
+    vscode.window.onDidChangeActiveColorTheme(() => post(themeMsg())),
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('mallard.palette')) post(themeMsg());
+    }),
   ];
 }

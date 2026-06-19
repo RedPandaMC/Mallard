@@ -128,6 +128,19 @@
           "type": "string",
           "default": "",
           "description": "Override URL for the pricing manifest JSON. Leave blank to use the auto-refreshed default."
+        },
+        "mallard.palette": {
+          "type": "string",
+          "enum": [
+            "swiss",
+            "theme"
+          ],
+          "enumDescriptions": [
+            "Fixed Swiss duotone: one red accent plus a grayscale ramp.",
+            "Derive the accent from your VS Code theme (validated for contrast and colour-blindness)."
+          ],
+          "default": "swiss",
+          "description": "Dashboard chart palette. Both modes keep the duotone structure and are checked for accessibility."
         }
       }
     }

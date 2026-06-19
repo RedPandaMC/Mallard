@@ -9,6 +9,7 @@ import { lazyChart } from './lazyMount';
 import { mountLayout } from './layout';
 import { DashboardLayout, DEFAULT_DASHBOARD_LAYOUT } from '../src/domain/types';
 import { applyTheme } from './charts/echarts';
+import { applyPalette } from './theme';
 import { mountDailyBars } from './charts/dailyBars';
 import { mountHeatmap } from './charts/heatmap';
 import { mountModelBreakdown } from './charts/modelBreakdown';
@@ -42,6 +43,7 @@ onMessage((msg) => {
   } else if (msg.type === 'restriction') {
     setState({ restriction: msg.value });
   } else if (msg.type === 'theme') {
+    applyPalette(msg.palette, msg.kind);
     applyTheme();
     if (state().snapshot) setState({ snapshot: state().snapshot });
   }
