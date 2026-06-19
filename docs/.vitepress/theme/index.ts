@@ -1,10 +1,11 @@
 import DefaultTheme from 'vitepress/theme';
 import type { Theme } from 'vitepress';
-import '@vscode/codicons/dist/codicon.css';
 import './custom.css';
-import Layout from './Layout.vue';
+import MallardLanding from './MallardLanding.vue';
 
 export default {
   extends: DefaultTheme,
-  Layout,
+  enhanceApp({ app }) {
+    app.component('MallardLanding', MallardLanding);
+  },
 } satisfies Theme;

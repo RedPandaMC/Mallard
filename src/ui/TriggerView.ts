@@ -1,5 +1,5 @@
 /**
- * Activity-bar launcher. Clicking the Weevil icon in the activity bar reveals
+ * Activity-bar launcher. Clicking the Mallard icon in the activity bar reveals
  * this (empty) tree view, which immediately opens the dashboard in the editor
  * area. The view itself renders nothing but a welcome button (see the
  * `viewsWelcome` contribution in package.json); it exists only to turn a click
@@ -11,7 +11,7 @@ const TRIGGER_VIEW_ID = 'weevil.trigger';
 
 /**
  * Ignore visibility events fired within this window after activation, so a
- * Weevil container that was focused when the window last closed does not
+ * Mallard container that was focused when the window last closed does not
  * auto-pop the dashboard on every reload.
  */
 const STARTUP_GUARD_MS = 1500;

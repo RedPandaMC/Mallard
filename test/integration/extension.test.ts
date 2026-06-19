@@ -13,7 +13,7 @@ const EXPECTED_COMMANDS = [
   'weevil.simulateRestriction',
 ];
 
-describe('Weevil extension (integration)', () => {
+describe('Mallard extension (integration)', () => {
   it('is present and activates without throwing', async () => {
     const ext = vscode.extensions.getExtension(EXT_ID);
     assert.ok(ext, `extension ${EXT_ID} should be installed`);

@@ -1,5 +1,5 @@
 /**
- * Shared, pure data model for Weevil. Imported by BOTH the extension host and
+ * Shared, pure data model for Mallard. Imported by BOTH the extension host and
  * the webview bundle — must never import `vscode` or any Node/DOM API.
  */
 

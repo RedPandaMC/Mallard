@@ -1,6 +1,6 @@
 # Settings Reference
 
-Weevil reads only two VS Code settings. Budget, included credits, and alert
+Mallard reads only two VS Code settings. Budget, included credits, and alert
 thresholds are not settings; you edit them in the dashboard (see
 [Configuration](/guide/configuration)) and they are stored per user.
 

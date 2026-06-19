@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-This release refocuses Weevil on its core: parse Copilot's local OTel logs for
+This release refocuses Mallard on its core: parse Copilot's local OTel logs for
 real-time per-model cost, with optional GitHub billing reconciliation.
 
 ### Added

@@ -2,7 +2,7 @@ function cssVar(name: string, fallback = ''): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
-export interface WeevilTheme {
+export interface MallardTheme {
   bg: string;
   card: string;
   fg: string;
@@ -13,7 +13,7 @@ export interface WeevilTheme {
   labelFont: string;
 }
 
-export function readTheme(): WeevilTheme {
+export function readTheme(): MallardTheme {
   return {
     bg: cssVar('--vscode-editor-background', '#1e1e1e'),
     card: cssVar('--vscode-sideBar-background', '#252526'),
@@ -29,7 +29,7 @@ export function readTheme(): WeevilTheme {
   };
 }
 
-export function buildEChartsTheme(t: WeevilTheme): Record<string, any> {
+export function buildEChartsTheme(t: MallardTheme): Record<string, any> {
   const axisLabel = { color: t.muted, fontFamily: t.labelFont, fontSize: 11 };
   return {
     backgroundColor: 'transparent',

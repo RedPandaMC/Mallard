@@ -72,7 +72,7 @@ function mountDashboard(root: HTMLElement): void {
         <div class="wv-brand">
           <img class="wv-brand-logo" src="${LOGO_SRC}" alt="" aria-hidden="true" />
           <div>
-            <div class="wv-brand-name">Weevil</div>
+            <div class="wv-brand-name">Mallard</div>
             <div class="wv-brand-meta">Copilot spend · instrument</div>
           </div>
         </div>

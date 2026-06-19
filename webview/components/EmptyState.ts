@@ -11,12 +11,12 @@ export function mountEmptyState(el: HTMLElement): EmptyStateHandle {
       <img class="wv-empty-logo" src="${logo}" alt="" aria-hidden="true" />
       <h2 class="wv-empty-title">No signal yet</h2>
       <p class="wv-empty-body">
-        Weevil reads Copilot's local OTel log files automatically.<br/>
+        Mallard reads Copilot's local OTel log files automatically.<br/>
         No log files were found at the expected location.
       </p>
       <ol class="wv-empty-steps">
         <li>Make sure GitHub Copilot is installed and you have used it recently.</li>
-        <li>Run <strong>Weevil: Show Detected Log Path</strong> to verify discovery.</li>
+        <li>Run <strong>Mallard: Show Detected Log Path</strong> to verify discovery.</li>
         <li>If no path is found, set <code>weevil.copilotLogPath</code> in settings.</li>
       </ol>
       <div class="wv-empty-actions">

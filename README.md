@@ -3,7 +3,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="media/brand/og-dark.png" />
   <source media="(prefers-color-scheme: light)" srcset="media/brand/og-light.png" />
-  <img alt="Weevil — know exactly what GitHub Copilot is costing you." src="media/brand/og-dark.png" width="820" />
+  <img alt="Mallard — know exactly what GitHub Copilot is costing you." src="media/brand/og-dark.png" width="820" />
 </picture>
 
 <br /><br />
@@ -18,13 +18,13 @@
 
 ---
 
-Weevil reads the OpenTelemetry log files GitHub Copilot writes to VS Code's log
+Mallard reads the OpenTelemetry log files GitHub Copilot writes to VS Code's log
 directory and turns them into a live picture of your spend: today, month-to-date,
 and a projected month-end total, broken down by model, surface, cost type, and
 repository. The core features need no sign-in and make no network calls. You can
 optionally connect to GitHub's billing API for the authoritative charge.
 
-### What Weevil reads out
+### What Mallard reads out
 
 | ch | readout | reads from |
 | :-- | :-- | :-- |
@@ -33,9 +33,9 @@ optionally connect to GitHub's billing API for the authoritative charge.
 | `03` | **surface flow** | chat · inline · agent · edit |
 | `04` | **token cost** | input vs. output split |
 
-## <img src="media/brand/codicons/graph.svg" width="18" align="top" /> Features
+## Features
 
-- **Dashboard in the editor.** Click the Weevil icon in the activity bar to open
+- **Dashboard in the editor.** Click the Mallard icon in the activity bar to open
   the full dashboard: KPI cards (today, month-to-date, projected, top model), a
   spend gauge, a 30-day bar chart with a projected-pace line, a model breakdown, a
   model-to-surface flow chart, and a spend-by-cost-type chart. A pop-out button
@@ -50,7 +50,7 @@ optionally connect to GitHub's billing API for the authoritative charge.
 - **Automatic pricing.** Credit multipliers ship with the extension and refresh
   once a day from a known URL, validated before use, with the bundled copy as a
   fallback. A pricing change is a one-line repo update, no user action needed.
-- **Workspace aware.** When several repositories are open, Weevil attributes usage
+- **Workspace aware.** When several repositories are open, Mallard attributes usage
   to the active workspace repo and lets you filter the dashboard per repo.
 - **Optional GitHub reconciliation.** Connect with VS Code's built-in GitHub
   session to show the authoritative charge, which aggregates usage across every
@@ -59,7 +59,7 @@ optionally connect to GitHub's billing API for the authoritative charge.
   snapshot. It contains no external requests, so it prints to PDF from any
   browser.
 
-## <img src="media/brand/codicons/pulse.svg" width="18" align="top" /> Quick start
+## Quick start
 
 1. Install from the Extensions view, or:
 
@@ -67,20 +67,20 @@ optionally connect to GitHub's billing API for the authoritative charge.
    code --install-extension RedPandaMC.weevil
    ```
 
-2. Use Copilot as normal. Weevil starts collecting immediately, no sign-in
+2. Use Copilot as normal. Mallard starts collecting immediately, no sign-in
    required.
 
-3. Open the dashboard from the Weevil icon in the activity bar, or run
-   "Weevil: Open Dashboard" from the Command Palette.
+3. Open the dashboard from the Mallard icon in the activity bar, or run
+   "Mallard: Open Dashboard" from the Command Palette.
 
 If the dashboard shows "not enough data", Copilot has not written logs yet, or
-Weevil cannot find them. Run "Weevil: Show Detected Log Path" to check, and set
+Mallard cannot find them. Run "Mallard: Show Detected Log Path" to check, and set
 `weevil.copilotLogPath` if needed.
 
-## <img src="media/brand/codicons/beaker.svg" width="18" align="top" /> How it works
+## How it works
 
 Copilot writes JSON-lines OTel logs containing the model, input and output token
-counts, the surface (chat, inline, agent, edit), and a timestamp. Weevil watches
+counts, the surface (chat, inline, agent, edit), and a timestamp. Mallard watches
 those files, stores events in a local embedded database (DuckDB; recent events
 at full detail, older ones rolled up to daily rows), and computes a render-ready
 snapshot that the dashboard (in the sidebar and the pop-out panel) consumes.
@@ -90,9 +90,9 @@ connect GitHub billing. The logs expose only input and output token counts per
 call, so the spend-by-cost-type chart splits cost into input and output; richer
 categories such as tool and reasoning are not available locally.
 
-## <img src="media/brand/codicons/gear.svg" width="18" align="top" /> Settings
+## Settings
 
-Weevil reads two settings. Budget, included credits, and alert thresholds are
+Mallard reads two settings. Budget, included credits, and alert thresholds are
 edited in the dashboard, not here.
 
 | Setting                     | Default | Description                                                                  |
@@ -100,17 +100,17 @@ edited in the dashboard, not here.
 | `weevil.copilotLogPath`     | `""`    | Override the log directory. Blank means auto-detect via `vscode.env.logUri`. |
 | `weevil.pricingManifestUrl` | `""`    | Override the pricing manifest URL. Blank means use the built-in URL.         |
 
-## <img src="media/brand/codicons/git-commit.svg" width="18" align="top" /> Commands
+## Commands
 
-`Weevil: Open Dashboard`, `Refresh Now`, `Clear All Data`, `Show Detected Log
+`Mallard: Open Dashboard`, `Refresh Now`, `Clear All Data`, `Show Detected Log
 Path`, `Sign In to GitHub`, `Export Monthly Report`.
 
-## <img src="media/brand/codicons/shield.svg" width="18" align="top" /> Privacy and security
+## Privacy and security
 
 - Usage data lives in your per-user global storage, never in settings or in git.
   "Clear All Data" wipes events, your budget/alert config, the saved layout, and
   the cached pricing manifest. VS Code keeps extension storage after uninstall,
-  so run it before removing Weevil to leave nothing behind.
+  so run it before removing Mallard to leave nothing behind.
 - The webview uses a strict Content-Security-Policy with a per-load nonce: no
   inline scripts, no inline styles, no eval, and no external origins. Messages are
   validated by typed guards in both directions.
@@ -118,7 +118,7 @@ Path`, `Sign In to GitHub`, `Export Monthly Report`.
 - Log paths are validated against known roots; paths containing `..` are rejected.
 - No credentials are stored. GitHub sign-in uses VS Code's session API.
 
-## <img src="media/brand/codicons/telescope.svg" width="18" align="top" /> Development
+## Development
 
 ```bash
 bun install
@@ -137,4 +137,3 @@ Press F5 to launch an Extension Development Host.
 
 MIT, Jurrean De Nys
 
-<div align="center"><br /><img src="media/brand/patch.png" width="170" alt="Weevil field kit" /></div>

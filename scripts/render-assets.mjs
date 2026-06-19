@@ -1,83 +1,85 @@
-// Renders all Weevil brand raster assets from the source SVG art.
+// Renders all Mallard brand raster assets (duck mark) from the canonical SVG
+// paths below. Outputs are committed binaries, so this only runs when the art
+// changes:  bun run assets
 //
-// Source of truth: docs/public/logo.svg (the gradient weevil mark) and the
-// codicon SVGs shipped in @vscode/codicons. Outputs are committed binaries, so
-// this only needs to run when the art changes:  bun run assets
-//
-// Rasterisation uses @resvg/resvg-js (gradient-aware). Banner text is rendered
-// with the brand fonts cached under scripts/.fontcache (downloaded once; see
-// README in that folder). Everything degrades to system fonts if absent.
+// Rasterisation uses @resvg/resvg-js. Text (OG banner) uses the brand fonts
+// cached under scripts/.fontcache (see scripts/README.md to restore them).
 import { Resvg } from '@resvg/resvg-js';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const r = (p) => join(root, p);
 
-// --- fonts -----------------------------------------------------------------
 const fontDir = r('scripts/.fontcache');
-const fontFiles = ['SchibstedGrotesk.ttf', 'JetBrainsMono.ttf']
+const fontFiles = ['Archivo-Heavy.ttf', 'HankenGrotesk.ttf', 'IBMPlexMono-Regular.ttf']
   .map((f) => join(fontDir, f))
-  .filter((f) => existsSync(f));
+  .filter(existsSync);
 
-function render(svg, { width, height } = {}) {
-  const fitTo = width
-    ? { mode: 'width', value: width }
-    : height
-      ? { mode: 'height', value: height }
-      : { mode: 'original' };
+function render(svg, { width } = {}) {
   const resvg = new Resvg(svg, {
-    fitTo,
-    font: { fontFiles, loadSystemFonts: true, defaultFontFamily: 'Schibsted Grotesk' },
+    fitTo: width ? { mode: 'width', value: width } : { mode: 'original' },
+    font: { fontFiles, loadSystemFonts: true, defaultFontFamily: 'Archivo' },
     background: 'rgba(0,0,0,0)',
   });
   return resvg.render().asPng();
 }
-
 function out(path, buf) {
   mkdirSync(dirname(r(path)), { recursive: true });
   writeFileSync(r(path), buf);
   console.log('  •', path, `(${(buf.length / 1024).toFixed(1)} kB)`);
 }
 
-// --- the weevil mark (gradient), as reusable inner markup ------------------
-const logoSvg = readFileSync(r('docs/public/logo.svg'), 'utf8');
-const weevilInner = logoSvg
-  .replace(/^[\s\S]*?<svg[^>]*>/, '')
-  .replace(/<\/svg>\s*$/, '');
-// black-filled weevil (for the OP-Z app icon)
-const weevilBlack = weevilInner.replace(/fill="url\(#weevil-grad\)"/, 'fill="#000000"');
+// --- the mallard duck, as path data (viewBox 0 0 490 491) ------------------
+const DUCK = {
+  head: 'M376.57,141.50 C400.83,164.97 429.17,187.34 476.34,187.42 C486.83,191.21 488.70,200.40 488.11,214.28 C486.14,225.44 451.49,229.82 436.75,230.49 C427.23,230.92 334.63,229.96 333.75,229.25 C333.06,228.69 333.72,228.14 333.75,228.10 C359.74,210.92 375.91,183.82 376.57,141.50 Z',
+  body: 'M337.75,490.92 L228.75,490.97 C313.83,448.76 293.14,315.53 207.00,291.04 L207.01,146.25 C211.57,46.43 334.43,38.09 356.05,121.03 C366.56,161.34 348.45,195.98 325.35,212.75 C322.71,214.66 307.17,222.42 306.40,225.59 C304.60,233.02 339.68,297.10 344.66,306.75 C381.72,371.24 410.52,437.51 337.75,490.92 Z',
+  wing: 'M-0.00,374.50 L-0.00,294.50 L168.75,294.50 C233.93,300.98 260.17,382.52 210.95,426.43 C163.42,465.13 99.11,431.86 88.63,381.25 C59.42,382.53 22.91,383.36 -0.00,374.50 Z',
+  eye: 'M305.97,120.56 C324.53,134.97 308.57,164.98 285.47,151.47 C269.05,137.87 283.12,110.17 305.97,120.56 Z',
+};
+// flat duotone duck: silhouette in `fg`, eye in `eye`
+const duckFlat = (fg, eye) =>
+  `<path d="${DUCK.wing}" fill="${fg}"/><path d="${DUCK.body}" fill="${fg}"/><path d="${DUCK.head}" fill="${fg}"/><path d="${DUCK.eye}" fill="${eye}"/>`;
+// monochrome silhouette (activity bar — masked by VS Code to theme colour)
+const duckMono = (c) =>
+  `<path d="${DUCK.wing}" fill="${c}"/><path d="${DUCK.body}" fill="${c}"/><path d="${DUCK.head}" fill="${c}"/>`;
 
-// OP-Z app icon: flat Rabbit-R1-cinnabar tile + black weevil (group-chip style)
+// =========================================================================
+// 1. App / marketplace icon — black tile + white duck + red eye (duotone)
+// =========================================================================
+const RED = '#E5231B';
 function appIconSvg() {
-  const pad = 74;
+  const pad = 96;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#FE5000"/>
-  <svg x="${pad}" y="${pad - 10}" width="${512 - 2 * pad}" height="${512 - 2 * pad}" viewBox="0 0 2048 2048">${weevilBlack}</svg>
+  <rect width="512" height="512" rx="112" fill="#0A0A0A"/>
+  <svg x="${pad}" y="${pad}" width="${512 - 2 * pad}" height="${512 - 2 * pad}" viewBox="0 0 490 491">${duckFlat('#FFFFFF', RED)}</svg>
 </svg>`;
 }
 const iconSvg = appIconSvg();
 
-// =========================================================================
-// 1. Marketplace / app icon PNGs (OP-Z cinnabar tile)
-// =========================================================================
-console.log('icons');
+console.log('icon');
 out('media/brand/icon.svg', Buffer.from(iconSvg));
 out('docs/public/icon.svg', Buffer.from(iconSvg));
-for (const size of [128, 256, 512]) {
-  out(`media/weevil-icon-${size}.png`, render(iconSvg, { width: size }));
-}
+out('docs/public/logo.svg', Buffer.from(iconSvg));
+for (const size of [128, 256, 512]) out(`media/mallard-icon-${size}.png`, render(iconSvg, { width: size }));
+
+// activity-bar icon: monochrome duck, currentColor (no tile)
+console.log('activity-bar icon');
+out(
+  'media/mallard-icon.svg',
+  Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="-30 -30 550 551" fill="currentColor">${duckMono('currentColor')}</svg>`,
+  ),
+);
 
 // =========================================================================
-// 2. Favicon (svg + multi-size ico) — same OP-Z icon
+// 2. Favicon (svg + multi-size ico)
 // =========================================================================
 console.log('favicon');
 writeFileSync(r('docs/public/favicon.svg'), iconSvg);
 console.log('  •', 'docs/public/favicon.svg');
-
 function ico(pngs) {
-  // ICONDIR + entries that embed PNG payloads (modern .ico).
   const head = Buffer.alloc(6);
   head.writeUInt16LE(0, 0);
   head.writeUInt16LE(1, 2);
@@ -88,8 +90,8 @@ function ico(pngs) {
     const e = Buffer.alloc(16);
     e.writeUInt8(size >= 256 ? 0 : size, 0);
     e.writeUInt8(size >= 256 ? 0 : size, 1);
-    e.writeUInt16LE(1, 4); // planes
-    e.writeUInt16LE(32, 6); // bpp
+    e.writeUInt16LE(1, 4);
+    e.writeUInt16LE(32, 6);
     e.writeUInt32LE(data.length, 8);
     e.writeUInt32LE(offset, 12);
     entries.push(e);
@@ -97,203 +99,80 @@ function ico(pngs) {
   }
   return Buffer.concat([head, ...entries, ...pngs.map((p) => p.data)]);
 }
-out(
-  'docs/public/favicon.ico',
-  ico([16, 32, 48].map((size) => ({ size, data: render(iconSvg, { width: size }) }))),
-);
+out('docs/public/favicon.ico', ico([16, 32, 48].map((size) => ({ size, data: render(iconSvg, { width: size }) }))));
 
 // =========================================================================
-// 3. Tinted codicons for the README (GitHub-safe <img> section markers)
-// =========================================================================
-console.log('codicons');
-const codiconSrc = r('node_modules/@vscode/codicons/src/icons');
-const INK = '#B45CFF';
-const wantCodicons = [
-  'graph',
-  'pulse',
-  'shield',
-  'gear',
-  'git-commit',
-  'multiple-windows',
-  'beaker',
-  'telescope',
-  'verified',
-];
-for (const name of wantCodicons) {
-  const src = join(codiconSrc, `${name}.svg`);
-  if (!existsSync(src)) {
-    console.warn('  ! missing codicon', name);
-    continue;
-  }
-  const tinted = Buffer.from(readFileSync(src, 'utf8').replace(/currentColor/g, INK));
-  out(`media/brand/codicons/${name}.svg`, tinted); // README (repo-relative)
-  out(`docs/public/brand/codicons/${name}.svg`, tinted); // docs site (served)
-}
-
-// =========================================================================
-// 4. Social / hero banner — the instrument schematic (dark + light)
+// 3. Social / OG banner — Swiss duotone (dark + light)
 // =========================================================================
 console.log('banner');
-const GROTESK = "'Schibsted Grotesk', 'Liberation Sans', Arial, sans-serif";
-const MONO = "'JetBrains Mono', 'DejaVu Sans Mono', monospace";
+const ARCHIVO = "'Archivo', 'Liberation Sans', Arial, sans-serif";
+const MONO = "'IBM Plex Mono', 'DejaVu Sans Mono', monospace";
+const HANKEN = "'Hanken Grotesk', 'Liberation Sans', Arial, sans-serif";
 
-const DATA = ['#2F9BE8', '#4FC23A', '#FFC400', '#FF453A']; // OP-Z primaries
-
-function banner({ bg, ink, muted, frame }) {
-  const W = 1200;
-  const H = 630;
-  const m = 44;
-  const T = { blue: '#2F9BE8', green: '#4FC23A', yellow: '#FFC400', red: '#FF453A', gray: '#6A6A6A' };
-  const tick = (x, y) =>
-    `<path d="M${x - 7} ${y}H${x + 7}M${x} ${y - 7}V${y + 7}" stroke="${frame}" stroke-width="1.4"/>`;
-
-  // OP-Z readout screen: pure-black OLED glass + big flat primary number
-  const sc = (x, y, lab, val, c) => `
-    <rect x="${x}" y="${y}" width="198" height="86" rx="8" fill="#000" stroke="${frame}"/>
-    <text x="${x + 16}" y="${y + 28}" font-family="${MONO}" font-size="11" letter-spacing="2" fill="${T.gray}">${lab}</text>
-    <text x="${x + 16}" y="${y + 68}" font-family="${GROTESK}" font-size="38" font-weight="700" letter-spacing="-1.5" fill="${c}">${val}</text>`;
-
-  // OP-Z group chip (flat colour square + letter)
-  const gc = (x, L, c) =>
-    `<rect x="${x}" y="468" width="34" height="34" rx="6" fill="${c}"/><text x="${x + 17}" y="492" font-family="${GROTESK}" font-size="18" font-weight="700" fill="#000" text-anchor="middle">${L}</text>`;
-
-  // flat ADSR "spend envelope"
-  const by = 322;
-  const env = `
-    <polygon points="700,${by} 786,170 786,${by}" fill="${T.blue}"/>
-    <polygon points="786,${by} 786,170 870,238 870,${by}" fill="${T.green}"/>
-    <polygon points="870,${by} 870,238 1066,238 1066,${by}" fill="${T.yellow}"/>
-    <polygon points="1066,${by} 1066,238 1150,${by}" fill="${T.red}"/>
-    <line x1="700" y1="${by}" x2="1150" y2="${by}" stroke="${ink}" stroke-width="2"/>`;
-
-  // 4-colour OP-Z bar
-  const bar = ['blue', 'green', 'yellow', 'red']
-    .map((k, i) => `<rect x="${m + 28 + i * 38}" y="298" width="38" height="4" fill="${T[k]}"/>`)
-    .join('');
-
+function banner({ bg, fg, mut, mut2, line, accent }) {
+  const W = 1200,
+    H = 630,
+    m = 56;
+  // duotone "this month" summary card on the right
+  const card = `
+    <g font-family="${MONO}">
+      <line x1="720" y1="150" x2="${W - m}" y2="150" stroke="${fg}" stroke-width="1.5"/>
+      <text x="720" y="142" font-size="13" letter-spacing="2" fill="${mut}">THIS MONTH</text>
+      <text x="${W - m}" y="142" font-size="13" letter-spacing="1" fill="${accent}" text-anchor="end">● LIVE</text>
+      <text x="720" y="232" font-family="${ARCHIVO}" font-weight="800" font-size="78" letter-spacing="-2" fill="${fg}">$38.56</text>
+      <text x="720" y="262" font-family="${HANKEN}" font-size="15" fill="${mut2}">4,820 credits · 62% of $50 budget</text>
+      <rect x="720" y="284" width="424" height="13" fill="none" stroke="${line}"/>
+      <rect x="720" y="284" width="212" height="13" fill="${fg}"/>
+      <rect x="932" y="284" width="51" height="13" fill="${accent}"/>
+      <g font-size="13.5">
+        <line x1="720" y1="338" x2="${W - m}" y2="338" stroke="${line}"/>
+        <text x="720" y="364" fill="${mut}">Today</text><text x="${W - m}" y="364" fill="${fg}" text-anchor="end">$6.42</text>
+        <line x1="720" y1="382" x2="${W - m}" y2="382" stroke="${line}"/>
+        <text x="720" y="408" fill="${mut}">Projected</text><text x="${W - m}" y="408" fill="${accent}" text-anchor="end">$61.40</text>
+        <line x1="720" y1="426" x2="${W - m}" y2="426" stroke="${line}"/>
+        <text x="720" y="452" fill="${mut}">Top model</text><text x="${W - m}" y="452" fill="${fg}" text-anchor="end">sonnet-4.5</text>
+        <line x1="720" y1="470" x2="${W - m}" y2="470" stroke="${line}"/>
+      </g>
+    </g>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <rect width="${W}" height="${H}" fill="${bg}"/>
-  <rect x="${m}" y="${m}" width="${W - 2 * m}" height="${H - 2 * m}" fill="none" stroke="${frame}" stroke-width="1.4"/>
-  ${tick(m, m)}${tick(W - m, m)}${tick(m, H - m)}${tick(W - m, H - m)}
+  <rect x="${m}" y="${m}" width="${W - 2 * m}" height="${H - 2 * m}" fill="none" stroke="${line}"/>
+  <line x1="660" y1="${m}" x2="660" y2="${H - m}" stroke="${line}"/>
 
-  <!-- header tags -->
-  <text x="${m + 26}" y="${m + 38}" font-family="${MONO}" font-size="14" letter-spacing="3.5" fill="${muted}">COPILOT SPEND &#183; INSTRUMENT</text>
-  <text x="${W - m - 26}" y="${m + 38}" font-family="${MONO}" font-size="14" letter-spacing="2" fill="${muted}" text-anchor="end">v0.2 &#183; MIT</text>
+  <!-- wordmark -->
+  <svg x="${m + 24}" y="${m + 22}" width="60" height="60" viewBox="0 0 512 512"><rect width="512" height="512" rx="120" fill="#0A0A0A"/><svg x="96" y="96" width="320" height="320" viewBox="0 0 490 491">${duckFlat('#FFFFFF', accent)}</svg></svg>
+  <text x="${m + 100}" y="${m + 66}" font-family="${ARCHIVO}" font-weight="800" font-size="34" letter-spacing="1" fill="${fg}">MALLARD</text>
 
-  <!-- OP-Z app icon (cinnabar tile) + wordmark -->
-  <rect x="${m + 22}" y="104" width="62" height="62" rx="15" fill="#FE5000"/>
-  <svg x="${m + 30}" y="108" width="46" height="46" viewBox="0 0 2048 2048">${weevilBlack}</svg>
-  <text x="${m + 22}" y="270" font-family="${GROTESK}" font-size="118" font-weight="700" letter-spacing="-4" fill="${ink}">Weevil</text>
-  ${bar}
-  <text x="${m + 26}" y="344" font-family="${GROTESK}" font-size="26" font-weight="500" fill="${ink}">Know exactly what GitHub Copilot is costing you.</text>
+  <!-- eyebrow -->
+  <g font-family="${MONO}" font-size="13" letter-spacing="3">
+    <text x="${m + 24}" y="270" fill="${accent}" font-weight="600">01</text>
+    <line x1="${m + 52}" y1="265" x2="${m + 84}" y2="265" stroke="${fg}"/>
+    <text x="${m + 96}" y="270" fill="${mut}">COPILOT SPEND TRACKER · VS CODE</text>
+  </g>
 
-  <!-- OP-Z readout screens -->
-  ${sc(m + 26, 380, 'TODAY', '$4.20', T.blue)}
-  ${sc(m + 236, 380, 'THIS MONTH', '$12.40', T.green)}
+  <!-- headline -->
+  <text x="${m + 22}" y="356" font-family="${ARCHIVO}" font-weight="800" font-size="66" letter-spacing="-2" fill="${fg}">Get your Copilot</text>
+  <text x="${m + 22}" y="424" font-family="${ARCHIVO}" font-weight="800" font-size="66" letter-spacing="-2" fill="${fg}">spend all in a <tspan fill="${accent}">row.</tspan></text>
+  <text x="${m + 24}" y="466" font-family="${HANKEN}" font-size="17" fill="${mut2}">Reads Copilot's local logs · live dashboard · no sign-in.</text>
 
-  <!-- group chips -->
-  ${gc(m + 26, 'C', T.blue)}${gc(m + 66, 'I', T.green)}${gc(m + 106, 'A', T.yellow)}${gc(m + 146, 'E', T.red)}
-  <text x="${m + 192}" y="490" font-family="${MONO}" font-size="13" letter-spacing="1.5" fill="${muted}">chat · inline · agent · edit</text>
+  ${card}
 
-  <!-- ADSR spend envelope -->
-  <text x="700" y="150" font-family="${MONO}" font-size="13" letter-spacing="2" fill="${muted}">SPEND ENVELOPE · 30D</text>
-  <text x="1150" y="150" font-family="${GROTESK}" font-size="26" font-weight="700" fill="${T.green}" text-anchor="end">38%</text>
-  ${env}
-  <text x="700" y="350" font-family="${MONO}" font-size="12" letter-spacing="2" fill="${T.gray}">PROJECTED $31.00 · ATTACK→RELEASE</text>
-
-  <!-- footer metadata -->
-  <line x1="${m + 26}" y1="${H - m - 38}" x2="${W - m - 26}" y2="${H - m - 38}" stroke="${frame}" stroke-width="1"/>
-  <text x="${m + 26}" y="${H - m - 16}" font-family="${MONO}" font-size="14" letter-spacing="2" fill="${muted}">VS&#160;CODE &#160;&#183;&#160; DUCKDB &#160;&#183;&#160; LOCAL-FIRST &#160;&#183;&#160; NO&#160;SIGN-IN</text>
-  <text x="${W - m - 26}" y="${H - m - 16}" font-family="${MONO}" font-size="14" letter-spacing="1" fill="${muted}" text-anchor="end">github.com/RedPandaMC/Weevil</text>
+  <!-- footer -->
+  <text x="${m + 24}" y="${H - m - 18}" font-family="${MONO}" font-size="12.5" letter-spacing="2" fill="${mut}">MALLARD · v2.0 · BUILT FOR VS CODE · MIT</text>
+  <text x="${W - m - 24}" y="${H - m - 18}" font-family="${MONO}" font-size="12.5" letter-spacing="1" fill="${mut}" text-anchor="end">github.com/RedPandaMC/Mallard</text>
 </svg>`;
 }
 
 const themes = {
-  dark: {
-    bg: '#000000',
-    ink: '#ECEAE4',
-    muted: '#7C7C7C',
-    frame: 'rgba(255,255,255,0.16)',
-  },
-  light: {
-    bg: '#ECEAE4',
-    ink: '#15140F',
-    muted: '#6B675C',
-    frame: 'rgba(0,0,0,0.2)',
-  },
+  dark: { bg: '#0A0A0A', fg: '#FFFFFF', mut: '#8C8C8C', mut2: '#C9C9C9', line: 'rgba(255,255,255,0.18)', accent: '#FF453A' },
+  light: { bg: '#FFFFFF', fg: '#111111', mut: '#767676', mut2: '#3A3A3A', line: 'rgba(0,0,0,0.16)', accent: '#E5231B' },
 };
-for (const [name, theme] of Object.entries(themes)) {
-  const svg = banner(theme);
+for (const [name, t] of Object.entries(themes)) {
+  const svg = banner(t);
   const png = render(svg);
   out(`media/brand/og-${name}.svg`, Buffer.from(svg));
   out(`media/brand/og-${name}.png`, png);
-  // also serve from the docs site so social scrapers can fetch an absolute URL
   out(`docs/public/brand/og-${name}.png`, png);
-}
-
-// =========================================================================
-// 5. Field-kit patch — geometric 3D-wireframe instrument badge
-//    (embroidered-patch / X+Y axis-plot / ruler-baseline language)
-// =========================================================================
-console.log('patch');
-function isoPrism(x, baseY, w, h, depth, color) {
-  const dx = depth * 0.72;
-  const dy = -depth * 0.5;
-  const ft = baseY - h;
-  const fr = x + w;
-  return `<g fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
-    <rect x="${x}" y="${ft}" width="${w}" height="${h}"/>
-    <path d="M${x} ${ft} L${x + dx} ${ft + dy} L${x + dx + w} ${ft + dy} L${fr} ${ft} Z"/>
-    <path d="M${fr} ${ft} L${fr + dx} ${ft + dy} L${fr + dx} ${baseY + dy} L${fr} ${baseY} Z"/>
-  </g>`;
-}
-function patch() {
-  const S = 512;
-  const paper = '#F3EAD9';
-  const muted = 'rgba(243,234,217,0.45)';
-  const line = 'rgba(243,234,217,0.7)';
-  const baseY = 352;
-  const prisms =
-    isoPrism(150, baseY, 44, 64, 24, '#2F9BE8') +
-    isoPrism(210, baseY, 44, 132, 24, '#4FC23A') +
-    isoPrism(270, baseY, 44, 96, 24, '#FFC400') +
-    isoPrism(330, baseY, 44, 48, 24, '#FF453A');
-  // ruler ticks along the baseline
-  let ticks = '';
-  for (let i = 0; i <= 13; i++) {
-    const x = 132 + i * 20;
-    const tall = i % 5 === 0;
-    ticks += `<line x1="${x}" y1="${baseY + 18}" x2="${x}" y2="${baseY + (tall ? 32 : 26)}" stroke="${muted}" stroke-width="${tall ? 2 : 1}"/>`;
-  }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">
-  <defs>
-    <pattern id="pht" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.7" fill="${paper}"/></pattern>
-  </defs>
-  <rect x="6" y="6" width="${S - 12}" height="${S - 12}" rx="34" fill="#16140F"/>
-  <rect x="6" y="6" width="${S - 12}" height="${S - 12}" rx="34" fill="url(#pht)" opacity="0.05"/>
-  <rect x="18" y="18" width="${S - 36}" height="${S - 36}" rx="26" fill="none" stroke="${paper}" stroke-opacity="0.35" stroke-width="2"/>
-  <rect x="28" y="28" width="${S - 56}" height="${S - 56}" rx="20" fill="none" stroke="${paper}" stroke-opacity="0.2" stroke-width="1" stroke-dasharray="2 4"/>
-
-  <text x="52" y="74" font-family="${MONO}" font-size="15" letter-spacing="4" fill="${muted}">FIELD KIT</text>
-  <text x="${S - 52}" y="74" font-family="${MONO}" font-size="15" letter-spacing="2" fill="${muted}" text-anchor="end">No.001</text>
-  <text x="52" y="118" font-family="${GROTESK}" font-size="19" letter-spacing="2" fill="${line}">x + y</text>
-
-  <!-- axes -->
-  <line x1="120" y1="${baseY}" x2="404" y2="${baseY}" stroke="${line}" stroke-width="2"/>
-  <line x1="132" y1="150" x2="132" y2="${baseY}" stroke="${line}" stroke-width="2"/>
-  ${prisms}
-  ${ticks}
-
-  <text x="${S / 2}" y="${S - 40}" font-family="${MONO}" font-size="16" letter-spacing="6" fill="${paper}" text-anchor="middle">WEEVIL</text>
-</svg>`;
-  return svg;
-}
-{
-  const svg = patch();
-  const png = render(svg, { width: 512 });
-  out('media/brand/patch.svg', Buffer.from(svg));
-  out('media/brand/patch.png', png);
-  out('docs/public/brand/patch.png', png);
 }
 
 console.log('done.');

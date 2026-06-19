@@ -1,7 +1,7 @@
 {
   "name": "weevil",
-  "displayName": "Weevil",
-  "description": "Real-time Copilot cost and credit tracker. Parses local OTel logs to show exactly what you're spending.",
+  "displayName": "Mallard",
+  "description": "Get your Copilot spend all in a row. A live dashboard of cost, model usage, and where every credit goes — read from Copilot's local logs. No sign-in, no telemetry.",
   "version": "0.2.0",
   "publisher": "jurreandenys",
   "license": "MIT",
@@ -32,9 +32,9 @@
     "forecasting",
     "dashboard"
   ],
-  "icon": "media/weevil-icon-128.png",
+  "icon": "media/mallard-icon-128.png",
   "galleryBanner": {
-    "color": "#1B1B1F",
+    "color": "#0A0A0A",
     "theme": "dark"
   },
   "main": "./dist/extension.js",
@@ -45,14 +45,14 @@
     "commands": [
       {
         "command": "weevil.openDashboard",
-        "title": "Open Weevil Dashboard",
-        "category": "Weevil",
+        "title": "Open Mallard Dashboard",
+        "category": "Mallard",
         "icon": "$(graph)"
       },
       {
         "command": "weevil.refresh",
         "title": "Refresh Now",
-        "category": "Weevil",
+        "category": "Mallard",
         "icon": "$(refresh)"
       },
       {
@@ -68,19 +68,19 @@
       {
         "command": "weevil.signIn",
         "title": "Sign In to GitHub",
-        "category": "Weevil",
+        "category": "Mallard",
         "icon": "$(account)"
       },
       {
         "command": "weevil.exportReport",
         "title": "Export Monthly Report",
-        "category": "Weevil",
+        "category": "Mallard",
         "icon": "$(export)"
       },
       {
         "command": "weevil.simulateRestriction",
         "title": "Simulate Restriction State",
-        "category": "Weevil",
+        "category": "Mallard",
         "icon": "$(debug-start)"
       }
     ],
@@ -96,8 +96,8 @@
       "activitybar": [
         {
           "id": "weevil",
-          "title": "Weevil",
-          "icon": "media/weevil-icon.svg"
+          "title": "Mallard",
+          "icon": "media/mallard-icon.svg"
         }
       ]
     },
@@ -106,18 +106,18 @@
         {
           "type": "tree",
           "id": "weevil.trigger",
-          "name": "Weevil"
+          "name": "Mallard"
         }
       ]
     },
     "viewsWelcome": [
       {
         "view": "weevil.trigger",
-        "contents": "Weevil tracks your Copilot spend in real time.\n\n[Open Dashboard](command:weevil.openDashboard)"
+        "contents": "Mallard tracks your Copilot spend in real time.\n\n[Open Dashboard](command:weevil.openDashboard)"
       }
     ],
     "configuration": {
-      "title": "Weevil",
+      "title": "Mallard",
       "properties": {
         "weevil.copilotLogPath": {
           "type": "string",

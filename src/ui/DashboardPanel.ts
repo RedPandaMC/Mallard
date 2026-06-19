@@ -29,7 +29,7 @@ export class DashboardPanel {
     }
     const panel = vscode.window.createWebviewPanel(
       DashboardPanel.viewType,
-      'Weevil',
+      'Mallard',
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -42,7 +42,7 @@ export class DashboardPanel {
         ],
       },
     );
-    panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'weevil-icon.svg');
+    panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'mallard-icon-128.png');
     DashboardPanel.current = new DashboardPanel(panel, context, {
       usage,
       userConfig,
