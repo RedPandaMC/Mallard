@@ -1,6 +1,6 @@
 # Configuration
 
-Weevil works out of the box. Most of what you might want to change lives in the
+Mallard works out of the box. Most of what you might want to change lives in the
 dashboard, not in `settings.json`.
 
 ## Budget and alerts
@@ -14,7 +14,7 @@ Expand the "Budget and alerts" panel. Each field writes the config file
 immediately:
 
 - **Monthly budget (USD).** When month-to-date cost crosses 80 percent of this
-  value Weevil shows a notification, and again at 100 percent. Each fires at
+  value Mallard shows a notification, and again at 100 percent. Each fires at
   most once every four hours. Set to 0 to turn budget alerts off.
 - **Included credits per month.** Your plan's premium request allowance. This
   colours the spend gauge. The free tier includes 300.
@@ -26,7 +26,7 @@ immediately:
 ### As a JSON file
 
 Click "Edit as JSON" in that panel to open the file directly. It is a
-`config.json` in Weevil's storage directory and is the source of truth: edit it
+`config.json` in Mallard's storage directory and is the source of truth: edit it
 by hand and the dashboard updates as soon as you save. The full shape is:
 
 ```json
@@ -68,30 +68,30 @@ profile. "Reset layout" restores the defaults.
 
 ## Removing your data
 
-All of Weevil's data stays on your machine: usage events in the extension's
+All of Mallard's data stays on your machine: usage events in the extension's
 global storage, your budget, alert, and layout choices in VS Code's per-user
 state, and a cached pricing manifest. VS Code does not delete this when you
-uninstall an extension, so to remove everything run "Weevil: Clear All Data"
+uninstall an extension, so to remove everything run "Mallard: Clear All Data"
 first, then uninstall.
 
 ## VS Code settings
 
 There are two, for cases where auto-detection does not fit.
 
-### `weevil.copilotLogPath`
+### `mallard.copilotLogPath`
 
 Type `string`, default `""` (auto-detect).
 
-Override the directory Weevil scans for Copilot log files. Leave it blank to use
+Override the directory Mallard scans for Copilot log files. Leave it blank to use
 the path VS Code reports through `vscode.env.logUri`, which is correct in almost
 every case. Set it only if your logs live in a non-standard location, such as a
 portable VS Code install.
 
 ```json
-"weevil.copilotLogPath": "/custom/path/to/vscode/logs"
+"mallard.copilotLogPath": "/custom/path/to/vscode/logs"
 ```
 
-### `weevil.pricingManifestUrl`
+### `mallard.pricingManifestUrl`
 
 Type `string`, default `""` (built-in URL).
 
@@ -102,7 +102,21 @@ unavailable. Set this only if you host a custom manifest for a non-standard
 plan.
 
 ```json
-"weevil.pricingManifestUrl": "https://example.com/my-pricing.json"
+"mallard.pricingManifestUrl": "https://example.com/my-pricing.json"
+```
+
+### `mallard.palette`
+
+Type `string`, one of `"swiss"` (default) or `"theme"`.
+
+Controls the dashboard chart palette. `swiss` uses the fixed Swiss duotone —
+one red accent plus a grayscale ramp. `theme` instead derives the accent from
+your active VS Code theme (its button / link colour). Both modes keep the same
+duotone structure and are validated for contrast and colour-blindness, so the
+charts stay legible whichever you pick.
+
+```json
+"mallard.palette": "theme"
 ```
 
 ## Notes

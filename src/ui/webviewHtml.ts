@@ -17,7 +17,7 @@ export function renderHtml(webview: vscode.Webview, extensionUri: vscode.Uri): s
   const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(base, 'main.css'));
   const workerUri = webview.asWebviewUri(vscode.Uri.joinPath(base, 'monaco.workers.js'));
   const logoUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(extensionUri, 'media', 'weevil-icon.svg'),
+    vscode.Uri.joinPath(extensionUri, 'media', 'mallard-icon-128.png'),
   );
   const codiconsUri = webview.asWebviewUri(
     vscode.Uri.joinPath(extensionUri, 'node_modules', '@vscode/codicons', 'dist', 'codicon.css'),
@@ -41,7 +41,7 @@ export function renderHtml(webview: vscode.Webview, extensionUri: vscode.Uri): s
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link href="${codiconsUri}" rel="stylesheet" />
     <link href="${styleUri}" rel="stylesheet" />
-    <title>Weevil</title>
+    <title>Mallard</title>
   </head>
   <body data-logo="${logoUri}">
     <div id="app"></div>

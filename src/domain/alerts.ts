@@ -54,11 +54,11 @@ export function evaluateAlerts(
     const at80 = `budget-80-${month}`;
     const at100 = `budget-100-${month}`;
     if (pct >= 1.0 && ready(fired, at100, BUDGET_COOLDOWN_MS, now)) {
-      out.push({ key: at100, message: `Weevil: Monthly budget of $${config.monthlyBudget} exceeded.` });
+      out.push({ key: at100, message: `Mallard: Monthly budget of $${config.monthlyBudget} exceeded.` });
     } else if (pct >= 0.8 && pct < 1.0 && ready(fired, at80, BUDGET_COOLDOWN_MS, now)) {
       out.push({
         key: at80,
-        message: `Weevil: You've used 80% of your $${config.monthlyBudget} monthly budget.`,
+        message: `Mallard: You've used 80% of your $${config.monthlyBudget} monthly budget.`,
       });
     }
   }
@@ -68,7 +68,7 @@ export function evaluateAlerts(
     if (s.today.credits >= config.dailyCreditAlert && ready(fired, key, DAILY_COOLDOWN_MS, now)) {
       out.push({
         key,
-        message: `Weevil: Daily credit usage (${Math.round(s.today.credits)}) exceeded your threshold of ${config.dailyCreditAlert}.`,
+        message: `Mallard: Daily credit usage (${Math.round(s.today.credits)}) exceeded your threshold of ${config.dailyCreditAlert}.`,
       });
     }
   }
@@ -83,7 +83,7 @@ export function evaluateAlerts(
     ) {
       out.push({
         key,
-        message: `Weevil: Spending is fast — about ${Math.round(rate)} credits/hour (threshold ${config.alerts.velocityCreditsPerHour}).`,
+        message: `Mallard: Spending is fast — about ${Math.round(rate)} credits/hour (threshold ${config.alerts.velocityCreditsPerHour}).`,
       });
     }
   }

@@ -1,7 +1,7 @@
 {
-  "name": "weevil",
-  "displayName": "Weevil",
-  "description": "Real-time Copilot cost and credit tracker. Parses local OTel logs to show exactly what you're spending.",
+  "name": "mallard",
+  "displayName": "Mallard",
+  "description": "Get your Copilot spend all in a row. A live dashboard of cost, model usage, and where every credit goes — read from Copilot's local logs. No sign-in, no telemetry.",
   "version": "0.2.0",
   "publisher": "jurreandenys",
   "license": "MIT",
@@ -10,10 +10,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/RedPandaMC/weevil.git"
+    "url": "https://github.com/RedPandaMC/mallard.git"
   },
   "bugs": {
-    "url": "https://github.com/RedPandaMC/weevil/issues"
+    "url": "https://github.com/RedPandaMC/mallard/issues"
   },
   "engines": {
     "vscode": "^1.95.0"
@@ -32,9 +32,9 @@
     "forecasting",
     "dashboard"
   ],
-  "icon": "media/weevil-icon-128.png",
+  "icon": "media/mallard-icon-128.png",
   "galleryBanner": {
-    "color": "#1B1B1F",
+    "color": "#0A0A0A",
     "theme": "dark"
   },
   "main": "./dist/extension.js",
@@ -44,130 +44,103 @@
   "contributes": {
     "commands": [
       {
-        "command": "weevil.openDashboard",
-        "title": "Open Weevil Dashboard",
-        "category": "Weevil",
+        "command": "mallard.openDashboard",
+        "title": "Open Mallard Dashboard",
+        "category": "Mallard",
         "icon": "$(graph)"
       },
       {
-        "command": "weevil.refresh",
+        "command": "mallard.refresh",
         "title": "Refresh Now",
-        "category": "Weevil",
+        "category": "Mallard",
         "icon": "$(refresh)"
       },
       {
-        "command": "weevil.clearData",
+        "command": "mallard.clearData",
         "title": "Clear All Data",
-        "category": "Weevil"
+        "category": "Mallard"
       },
       {
-        "command": "weevil.showLogPath",
+        "command": "mallard.showLogPath",
         "title": "Show Detected Log Path",
-        "category": "Weevil"
+        "category": "Mallard"
       },
       {
-        "command": "weevil.signIn",
+        "command": "mallard.signIn",
         "title": "Sign In to GitHub",
-        "category": "Weevil",
+        "category": "Mallard",
         "icon": "$(account)"
       },
       {
-        "command": "weevil.exportReport",
+        "command": "mallard.exportReport",
         "title": "Export Monthly Report",
-        "category": "Weevil",
+        "category": "Mallard",
         "icon": "$(export)"
       },
       {
-        "command": "weevil.simulateRestriction",
+        "command": "mallard.simulateRestriction",
         "title": "Simulate Restriction State",
-        "category": "Weevil",
+        "category": "Mallard",
         "icon": "$(debug-start)"
       }
     ],
     "menus": {
       "commandPalette": [
         {
-          "command": "weevil.simulateRestriction",
+          "command": "mallard.simulateRestriction",
           "when": "false"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mallard",
+          "title": "Mallard",
+          "icon": "media/mallard-icon.svg"
         }
       ]
     },
     "views": {
-      "weevil": [
+      "mallard": [
         {
-          "type": "webview",
-          "id": "weevil.trigger",
-          "name": "Weevil",
-          "visibility": "hidden"
+          "type": "tree",
+          "id": "mallard.trigger",
+          "name": "Mallard"
         }
       ]
     },
-    "commands": [
+    "viewsWelcome": [
       {
-        "command": "weevil.openDashboard",
-        "title": "Open Weevil Dashboard",
-        "category": "Weevil",
-        "icon": "$(graph)"
-      },
-      {
-        "command": "weevil.refresh",
-        "title": "Refresh Now",
-        "category": "Weevil",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "weevil.clearData",
-        "title": "Clear All Data",
-        "category": "Weevil"
-      },
-      {
-        "command": "weevil.showLogPath",
-        "title": "Show Detected Log Path",
-        "category": "Weevil"
-      },
-      {
-        "command": "weevil.signIn",
-        "title": "Sign In to GitHub",
-        "category": "Weevil",
-        "icon": "$(account)"
-      },
-      {
-        "command": "weevil.exportReport",
-        "title": "Export Monthly Report",
-        "category": "Weevil",
-        "icon": "$(export)"
-      },
-      {
-        "command": "weevil.simulateRestriction",
-        "title": "Simulate Restriction State",
-        "category": "Weevil",
-        "icon": "$(debug-start)"
+        "view": "mallard.trigger",
+        "contents": "Mallard tracks your Copilot spend in real time.\n\n[Open Dashboard](command:mallard.openDashboard)"
       }
     ],
-    "menus": {
-      "commandPalette": [
-        {
-          "command": "weevil.openDashboard",
-          "when": "false"
-        },
-        {
-          "command": "weevil.simulateRestriction",
-          "when": "false"
-        }
-      ]
-    },
     "configuration": {
-      "title": "Weevil",
+      "title": "Mallard",
       "properties": {
-        "weevil.copilotLogPath": {
+        "mallard.copilotLogPath": {
           "type": "string",
           "default": "",
           "description": "Override path to the Copilot log directory (blank = auto-detect via VS Code logUri)."
         },
-        "weevil.pricingManifestUrl": {
+        "mallard.pricingManifestUrl": {
           "type": "string",
           "default": "",
           "description": "Override URL for the pricing manifest JSON. Leave blank to use the auto-refreshed default."
+        },
+        "mallard.palette": {
+          "type": "string",
+          "enum": [
+            "swiss",
+            "theme"
+          ],
+          "enumDescriptions": [
+            "Fixed Swiss duotone: one red accent plus a grayscale ramp.",
+            "Derive the accent from your VS Code theme (validated for contrast and colour-blindness)."
+          ],
+          "default": "swiss",
+          "description": "Dashboard chart palette. Both modes keep the duotone structure and are checked for accessibility."
         }
       }
     }
@@ -184,7 +157,9 @@
     "test": "vscode-test",
     "vscode:prepublish": "bun run package",
     "vsce:package": "vsce package",
-    "docs:build": "vitepress build docs"
+    "assets": "node scripts/render-assets.mjs",
+    "docs:build": "vitepress build docs",
+    "docs:dev": "vitepress dev docs"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.3-r.3",
@@ -198,6 +173,7 @@
   "devDependencies": {
     "@eslint/js": "^9.9.0",
     "@preact/signals-core": "^1.14.2",
+    "@resvg/resvg-js": "^2.6.2",
     "@types/mocha": "^10.0.7",
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.95.0",

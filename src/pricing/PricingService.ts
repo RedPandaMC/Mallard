@@ -11,7 +11,7 @@ import { PricingManifest } from '../domain/pricing';
 
 const CACHE_FILE = 'pricing-manifest.json';
 const REMOTE_URL =
-  'https://raw.githubusercontent.com/RedPandaMC/weevil/main/media/pricing-manifest.json';
+  'https://raw.githubusercontent.com/RedPandaMC/mallard/main/media/pricing-manifest.json';
 const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 5_000;
 

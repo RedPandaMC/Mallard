@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-This release refocuses Weevil on its core: parse Copilot's local OTel logs for
+This release refocuses Mallard on its core: parse Copilot's local OTel logs for
 real-time per-model cost, with optional GitHub billing reconciliation.
 
 ### Added
@@ -36,7 +36,7 @@ real-time per-model cost, with optional GitHub billing reconciliation.
 
 - Model-switching suggestions.
 - Sample and synthetic data; the dashboard degrades to "not enough data".
-- The `@weevil` chat participant and JSON notification rule schemas.
+- The `@mallard` chat participant and JSON notification rule schemas.
 
 ## 0.1.x
 

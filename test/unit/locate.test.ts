@@ -42,7 +42,7 @@ describe('platformDefaults', () => {
 
 describe('locateCopilotLogDirs', () => {
   it('skips candidates that do not exist on disk', async () => {
-    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'weevil-locate-'));
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'mallard-locate-'));
     try {
       // An override that exists → returned
       const okDir = path.join(tmp, 'logs');
@@ -57,7 +57,7 @@ describe('locateCopilotLogDirs', () => {
 
 describe('findLogFiles', () => {
   it('finds copilot log files at depth 3', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'weevil-find-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mallard-find-'));
     try {
       const file = path.join(root, 'exthost1', 'GitHub.copilot-chat', 'GitHub Copilot Chat.log');
       await mkdir(path.dirname(file));
@@ -70,7 +70,7 @@ describe('findLogFiles', () => {
   });
 
   it('matches .ndjson and .otel.json filenames', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'weevil-ndjson-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mallard-ndjson-'));
     try {
       const a = path.join(root, 'copilot.ndjson');
       const b = path.join(root, 'copilot.otel.json');
@@ -85,7 +85,7 @@ describe('findLogFiles', () => {
   });
 
   it('ignores files that do not mention copilot', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'weevil-ignore-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mallard-ignore-'));
     try {
       await touch(path.join(root, 'unrelated.log'));
       const out = await findLogFiles(root, [root], 5, 50);

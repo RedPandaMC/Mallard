@@ -2,9 +2,12 @@
    Base layout
 ───────────────────────────────────────── */
 body {
-  background: var(--w-bg);
+  background-color: var(--w-bg);
+  /* fine technical grid — instrument / graph-paper texture */
+  background-image: var(--w-grid);
+  background-size: 40px 40px;
   color: var(--w-fg);
-  font-family: var(--w-font);
+  font-family: 'Hanken Grotesk', var(--w-font);
   font-size: var(--w-font-size);
   line-height: 1.5;
 }
@@ -31,12 +34,24 @@ body {
    Header
 ───────────────────────────────────────── */
 .wv-header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--w-s4);
   padding-bottom: var(--w-s4);
   border-bottom: 1px solid var(--w-border);
+}
+
+/* single Swiss-red rule under the wordmark */
+.wv-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 140px;
+  height: 3px;
+  background: var(--w-accent);
 }
 
 .wv-brand {
@@ -46,8 +61,8 @@ body {
 }
 
 .wv-brand-logo {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
   object-fit: contain;
 }
@@ -74,20 +89,25 @@ body {
 .wv-icon-btn:hover {
   color: var(--w-fg);
   background: var(--w-bg-hover);
-  border-color: var(--w-brand);
+  border-color: var(--w-action);
 }
 
 .wv-brand-name {
-  font-size: 16px;
-  font-weight: 600;
+  font-family: var(--w-font-display);
+  font-size: 22px;
+  font-weight: 700;
   color: var(--w-fg);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
 }
 
-.wv-brand-tagline {
-  font-size: 11px;
-  color: var(--w-fg-muted);
-  font-style: italic;
+.wv-brand-meta {
+  margin-top: 3px;
+  font-family: var(--w-label-font);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--w-fg-subtle);
 }
 
 /* ─────────────────────────────────────────
@@ -99,7 +119,9 @@ body {
   gap: var(--w-s2);
   padding: var(--w-s1) var(--w-s3);
   border-radius: var(--w-r1);
+  font-family: var(--w-label-font);
   font-size: 11px;
+  letter-spacing: 0.02em;
   color: var(--w-fg-muted);
   background: var(--w-bg-card);
   border: 1px solid var(--w-border);
@@ -107,7 +129,7 @@ body {
 
 .wv-banner[data-kind='empty'] { border-color: var(--w-warn); color: var(--w-warn); }
 .wv-banner[data-kind='warn']  { border-color: var(--w-warn); color: var(--w-warn); }
-.wv-banner[data-kind='ok']    { border-color: var(--w-ok); }
+.wv-banner[data-kind='ok']    { border-color: var(--w-action); color: var(--w-action); }
 
 .wv-banner-dot {
   width: 6px;
@@ -115,6 +137,21 @@ body {
   border-radius: 50%;
   background: currentColor;
   flex-shrink: 0;
+}
+
+/* live recording pulse while tracking */
+.wv-banner[data-kind='ok'] .wv-banner-dot {
+  animation: wv-pulse 2s ease-in-out infinite;
+}
+
+@keyframes wv-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--w-action) 60%, transparent); }
+  70% { box-shadow: 0 0 0 5px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wv-banner[data-kind='ok'] .wv-banner-dot { animation: none; }
 }
 
 /* ─────────────────────────────────────────
@@ -150,8 +187,10 @@ body {
 .wv-preset-btn:hover { background: var(--w-bg-hover); color: var(--w-fg); }
 
 .wv-preset-btn[aria-pressed='true'] {
-  background: var(--w-brand-dim);
-  color: var(--w-brand);
+  background: var(--w-action);
+  color: var(--w-action-fg);
+  font-weight: 600;
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--w-action) 50%, #000);
 }
 
 .wv-metric-toggle {
@@ -173,7 +212,12 @@ body {
 }
 
 .wv-metric-btn:hover { background: var(--w-bg-hover); color: var(--w-fg); }
-.wv-metric-btn[aria-pressed='true'] { background: var(--w-brand-dim); color: var(--w-brand); }
+.wv-metric-btn[aria-pressed='true'] {
+  background: var(--w-action);
+  color: var(--w-action-fg);
+  font-weight: 600;
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--w-action) 50%, #000);
+}
 
 /* Repo selector */
 .wv-repo-select {
@@ -250,38 +294,89 @@ body {
   transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
 
-.wv-surface-chip:hover { color: var(--w-fg); border-color: var(--w-brand); }
-.wv-surface-chip[aria-pressed='true'] {
-  background: var(--w-brand-dim);
-  color: var(--w-brand);
-  border-color: var(--w-brand);
+.wv-surface-chip:hover { color: var(--w-fg); border-color: var(--w-action); }
+
+/* leading square encoder dot, colour-coded per surface (OP-Z group chips) */
+.wv-surface-chip::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--chip, var(--w-fg-muted));
+  flex-shrink: 0;
 }
+.wv-surface-chip { display: inline-flex; align-items: center; gap: var(--w-s1); }
+.wv-surface-chips .wv-surface-chip:nth-child(1) { --chip: var(--w-data-1); }
+.wv-surface-chips .wv-surface-chip:nth-child(2) { --chip: var(--w-data-2); }
+.wv-surface-chips .wv-surface-chip:nth-child(3) { --chip: var(--w-data-3); }
+.wv-surface-chips .wv-surface-chip:nth-child(4) { --chip: var(--w-data-4); }
+.wv-surface-chips .wv-surface-chip:nth-child(5) { --chip: var(--w-te-green); }
+
+.wv-surface-chip[aria-pressed='true'] {
+  background: var(--w-action);
+  color: var(--w-action-fg);
+  border-color: var(--w-action);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--w-action) 45%, transparent);
+}
+.wv-surface-chip[aria-pressed='true']::before { background: var(--w-action-fg); }
 
 /* ─────────────────────────────────────────
    Empty state
 ───────────────────────────────────────── */
 .wv-empty {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   gap: var(--w-s4);
-  padding: var(--w-s8) var(--w-s4);
-  max-width: 480px;
-  margin: 0 auto;
+  padding: var(--w-s8);
+  max-width: 520px;
+  margin: var(--w-s6) auto;
+  border: 1px solid var(--w-border);
+  border-radius: var(--w-r3);
+  background: linear-gradient(var(--w-bg-card), var(--w-bg-card)) padding-box;
+}
+
+/* instrument caption on the panel */
+.wv-empty::before {
+  content: 'NO SIGNAL · AWAITING DATA';
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  font-family: var(--w-label-font);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--w-action);
+}
+/* corner registration tick */
+.wv-empty::after {
+  content: '';
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 12px;
+  height: 12px;
+  border-right: 1px solid var(--w-data-3);
+  border-bottom: 1px solid var(--w-data-3);
+  opacity: 0.5;
 }
 
 .wv-empty-logo {
-  width: 72px;
-  height: 72px;
+  width: 80px;
+  height: 80px;
   object-fit: contain;
-  opacity: 0.65;
+  opacity: 0.8;
+  margin-top: var(--w-s3);
 }
 
 .wv-empty-title {
-  font-size: 18px;
-  font-weight: 600;
+  font-family: var(--w-font-display);
+  font-size: 22px;
+  font-weight: 700;
   color: var(--w-fg);
+  letter-spacing: -0.02em;
 }
 
 .wv-empty-body {
@@ -338,17 +433,25 @@ body {
   transition: background 0.1s, border-color 0.1s;
 }
 
-.wv-btn:hover { background: var(--w-bg-hover); border-color: var(--w-brand); }
+.wv-btn:hover { background: var(--w-bg-hover); border-color: var(--w-action); }
 
 .wv-btn--primary {
-  background: var(--w-brand);
-  color: var(--w-brand-fg);
-  border-color: var(--w-brand);
+  background: var(--w-action);
+  color: var(--w-action-fg);
+  border-color: var(--w-action);
+  font-weight: 600;
 }
 
 .wv-btn--primary:hover {
-  background: color-mix(in srgb, var(--w-brand) 85%, #000);
-  border-color: var(--w-brand);
+  background: color-mix(in srgb, var(--w-action) 85%, #000);
+  border-color: var(--w-action);
+}
+
+/* edit-layout toggle reads as a lit instrument button when active */
+#layout-edit[aria-pressed='true'] {
+  background: var(--w-action);
+  color: var(--w-action-fg);
+  border-color: var(--w-action);
 }
 
 /* ─────────────────────────────────────────
@@ -358,42 +461,89 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: var(--w-s3);
+  counter-reset: wv-fig;
 }
 
 .wv-kpi-card {
+  position: relative;
+  --accent: var(--w-accent);
   background: var(--w-bg-card);
   border: 1px solid var(--w-border);
   border-radius: var(--w-r2);
-  padding: var(--w-s4);
+  padding: calc(var(--w-s4) + 2px) var(--w-s4) var(--w-s4);
   display: flex;
   flex-direction: column;
-  gap: var(--w-s1);
+  gap: var(--w-s2);
+  overflow: hidden;
   transition: border-color 0.15s;
 }
 
-.wv-kpi-card:hover { border-color: var(--w-brand); }
+/* per-metric severity colour on the top rule: today=accent, month=ok(gray),
+   projected=warn(coral), top-model=over(red) — gray→red, no third hue. */
+.wv-kpi-card:nth-child(1) { --accent: var(--w-accent); }
+.wv-kpi-card:nth-child(2) { --accent: var(--w-sev-ok); }
+.wv-kpi-card:nth-child(3) { --accent: var(--w-sev-warn); }
+.wv-kpi-card:nth-child(4) { --accent: var(--w-sev-over); }
 
-.wv-kpi-label {
+/* the card's single accent rule along the top */
+.wv-kpi-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--accent);
+}
+
+/* channel index code */
+.wv-kpi-card::after {
+  counter-increment: wv-fig;
+  content: counter(wv-fig, decimal-leading-zero);
+  position: absolute;
+  top: 9px;
+  right: 11px;
+  font-family: var(--w-label-font);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--w-fg-subtle);
+}
+
+.wv-kpi-card:hover {
+  border-color: var(--accent);
+}
+
+/* big flat Archivo numeral, set in the theme foreground (the severity colour
+   lives on the top rule, not the number) */
+.wv-kpi-value {
+  align-self: stretch;
+  margin-top: 2px;
+  font-family: var(--w-font-display);
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--w-fg);
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wv-kpi-value--sm {
+  font-size: 22px;
+}
+
+.wv-kpi-sub {
+  font-family: var(--w-label-font);
   font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--w-fg-muted);
 }
 
-.wv-kpi-value {
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--w-fg);
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums;
-}
-
-.wv-kpi-value--sm { font-size: 15px; }
-
-.wv-kpi-sub {
+.wv-kpi-label {
+  font-family: var(--w-label-font);
   font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--w-fg-muted);
 }
 
@@ -401,14 +551,18 @@ body {
    Spend Gauge
 ───────────────────────────────────────── */
 .wv-gauge-section {
+  --sev: var(--w-sev-ok);
   background: var(--w-bg-card);
   border: 1px solid var(--w-border);
   border-radius: var(--w-r2);
   padding: var(--w-s4);
   display: flex;
   flex-direction: column;
-  gap: var(--w-s2);
+  gap: var(--w-s3);
 }
+
+.wv-gauge-section[data-severity='warn'] { --sev: var(--w-sev-warn); }
+.wv-gauge-section[data-severity='err']  { --sev: var(--w-sev-over); }
 
 .wv-gauge-header {
   display: flex;
@@ -417,50 +571,85 @@ body {
 }
 
 .wv-gauge-label {
-  font-size: 11px;
+  font-family: var(--w-label-font);
+  font-size: 10px;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.14em;
   color: var(--w-fg-muted);
   flex-shrink: 0;
 }
 
-.wv-gauge-values {
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--w-fg);
-}
-
+/* outlined severity word (instrument legend style) */
 .wv-gauge-badge {
-  font-size: 11px;
+  font-family: var(--w-label-font);
+  font-size: 10px;
   font-weight: 600;
-  padding: 1px var(--w-s2);
-  border-radius: 9999px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sev);
   margin-left: auto;
 }
 
-.wv-gauge-badge[data-severity='ok']   { background: rgba(76, 175, 80, 0.15); color: var(--w-ok); }
-.wv-gauge-badge[data-severity='warn'] { background: rgba(255, 152, 0, 0.15); color: var(--w-warn); }
-.wv-gauge-badge[data-severity='err']  { background: rgba(244, 67, 54, 0.15); color: var(--w-err); }
-
-.wv-gauge-track {
-  width: 100%;
-  height: 8px;
-  background: var(--w-bg-hover);
-  border-radius: 9999px;
-  overflow: hidden;
+/* big Archivo percentage, coloured by severity */
+.wv-gauge-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
 }
 
-.wv-gauge-fill {
-  height: 100%;
-  border-radius: 9999px;
-  background: var(--w-ok);
-  transition: width 0.4s ease;
+.wv-gauge-pct {
+  font-family: var(--w-font-display);
+  font-weight: 800;
+  font-size: 46px;
+  line-height: 0.85;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--sev);
 }
 
-.wv-gauge-fill[data-severity='warn'] { background: var(--w-warn); }
-.wv-gauge-fill[data-severity='err']  { background: var(--w-err); }
+.wv-gauge-pct-sign {
+  font-family: var(--w-font-display);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--sev);
+}
+
+/* 30-segment bar gauge (scale runs to 120% so overage is visible) */
+.wv-gauge-segments {
+  display: flex;
+  gap: 2px;
+  height: 22px;
+}
+
+.wv-gauge-seg {
+  flex: 1;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--w-fg) 10%, transparent);
+}
+
+.wv-gauge-seg--on {
+  transform-origin: bottom;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wv-gauge-seg--on {
+    animation: wv-seg-rise 0.5s ease both;
+  }
+}
+
+@keyframes wv-seg-rise {
+  from { transform: scaleY(0); opacity: 0; }
+  to   { transform: scaleY(1); opacity: 1; }
+}
+
+.wv-gauge-scale {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--w-label-font);
+  font-size: 10px;
+  color: var(--w-fg-muted);
+}
 
 .wv-gauge-sub {
   font-size: 11px;
@@ -471,11 +660,31 @@ body {
    Chart sections
 ───────────────────────────────────────── */
 .wv-chart-section {
+  position: relative;
   background: var(--w-bg-card);
   border: 1px solid var(--w-border);
   border-radius: var(--w-r2);
   overflow: hidden;
   contain: layout paint;
+  transition: border-color 0.15s;
+}
+
+.wv-chart-section:hover {
+  border-color: color-mix(in srgb, var(--w-te-blue) 45%, var(--w-border));
+}
+
+/* corner registration tick, bottom-right of each plate */
+.wv-chart-section::after {
+  content: '';
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  width: 9px;
+  height: 9px;
+  border-right: 1px solid var(--w-te-blue);
+  border-bottom: 1px solid var(--w-te-blue);
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .wv-chart-header {
@@ -486,15 +695,31 @@ body {
   border-bottom: 1px solid var(--w-border);
 }
 
+/* channel index code on the right of each header */
+.wv-charts-grid { counter-reset: wv-plate; }
+.wv-chart-header::after {
+  counter-increment: wv-plate;
+  content: 'CH ' counter(wv-plate, decimal-leading-zero);
+  font-family: var(--w-label-font);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--w-fg-subtle);
+}
+
 .wv-chart-title {
   display: flex;
   align-items: center;
   gap: var(--w-s2);
+  font-family: var(--w-label-font);
   font-size: 12px;
   font-weight: 600;
   color: var(--w-fg);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
+}
+
+.wv-chart-title .codicon {
+  color: var(--w-te-blue);
 }
 
 .wv-chart-body {
@@ -531,11 +756,16 @@ body {
   justify-content: space-between;
 }
 .wv-analysis-title {
+  font-family: var(--w-label-font);
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--w-fg-muted);
+}
+.wv-analysis-title::before {
+  content: '▪ ';
+  color: var(--w-action);
 }
 .wv-analysis-actions { display: flex; gap: var(--w-s2); }
 .wv-btn--sm { padding: var(--w-s1) var(--w-s2); font-size: 11px; }
@@ -642,10 +872,11 @@ body {
   align-items: center;
   gap: var(--w-s2);
   padding: var(--w-s3) var(--w-s4);
+  font-family: var(--w-label-font);
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--w-fg);
   cursor: pointer;
   list-style: none;

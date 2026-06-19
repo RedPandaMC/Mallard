@@ -7,7 +7,9 @@ import * as vscode from 'vscode';
 import { DashboardLayout } from '../domain/types';
 import { normalizeLayout } from '../domain/layout';
 
-const STORAGE_KEY = 'weevil.dashboardLayout';
+const STORAGE_KEY = 'mallard.dashboardLayout';
+/** Pre-rebrand key; read once so an upgrade keeps the saved layout. */
+const LEGACY_STORAGE_KEY = 'weevil.dashboardLayout';
 
 export class LayoutStore implements vscode.Disposable {
   private readonly _onDidChange = new vscode.EventEmitter<DashboardLayout>();
@@ -16,7 +18,10 @@ export class LayoutStore implements vscode.Disposable {
   constructor(private readonly memento: vscode.Memento) {}
 
   get(): DashboardLayout {
-    return normalizeLayout(this.memento.get<DashboardLayout>(STORAGE_KEY));
+    const stored =
+      this.memento.get<DashboardLayout>(STORAGE_KEY) ??
+      this.memento.get<DashboardLayout>(LEGACY_STORAGE_KEY);
+    return normalizeLayout(stored);
   }
 
   async set(layout: DashboardLayout): Promise<void> {

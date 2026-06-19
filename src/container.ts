@@ -1,5 +1,5 @@
 /**
- * Builds and wires every Weevil service in one place, so activation reads as a
+ * Builds and wires every Mallard service in one place, so activation reads as a
  * flat list of registrations. All disposables are pushed onto the extension
  * context's subscriptions.
  */

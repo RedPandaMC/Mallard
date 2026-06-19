@@ -1,5 +1,5 @@
 /**
- * Monaco-based editor for the Weevil alert-rule document. The editor hosts
+ * Monaco-based editor for the Mallard alert-rule document. The editor hosts
  * a JSON language with a custom schema, completion provider, and hover
  * provider. The preview column on the right shows, for every rule, whether
  * it would fire *now* and the rendered `message` template.

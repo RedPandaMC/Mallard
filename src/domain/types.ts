@@ -1,5 +1,5 @@
 /**
- * Shared, pure data model for Weevil. Imported by BOTH the extension host and
+ * Shared, pure data model for Mallard. Imported by BOTH the extension host and
  * the webview bundle — must never import `vscode` or any Node/DOM API.
  */
 
@@ -156,6 +156,15 @@ export const DEFAULT_RESTRICTION_STATE: RestrictionState = {
 };
 
 /**
+ * Chart colour palette mode (the `mallard.palette` setting):
+ * - `swiss`: the fixed Swiss duotone — one red accent + a grayscale ramp.
+ * - `theme`: derive the accent from the active VS Code theme, validated for
+ *   contrast and colour-blindness, keeping the duotone structure.
+ * Both modes are run through the accessibility checks in webview/color.ts.
+ */
+export type PaletteMode = 'swiss' | 'theme';
+
+/**
  * Persisted dashboard layout. Each analysis panel has a position (array order),
  * a width span (1 = half, 2 = full, in the two-column grid), and a visibility
  * flag. Edited in the dashboard's edit mode and stored in globalState.
@@ -169,7 +178,15 @@ export interface DashboardPanelLayout {
 export type DashboardLayout = DashboardPanelLayout[];
 
 /** The analysis panels that can be reordered, resized, and hidden. */
-export const DASHBOARD_PANELS = ['daily', 'heatmap', 'models', 'sankey', 'category'] as const;
+export const DASHBOARD_PANELS = [
+  'daily',
+  'heatmap',
+  'models',
+  'sankey',
+  'category',
+  'cumulative',
+  'weekday',
+] as const;
 
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
   { id: 'daily', span: 2, hidden: false },
@@ -177,6 +194,8 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
   { id: 'models', span: 1, hidden: false },
   { id: 'sankey', span: 1, hidden: false },
   { id: 'category', span: 1, hidden: false },
+  { id: 'cumulative', span: 1, hidden: false },
+  { id: 'weekday', span: 1, hidden: false },
 ];
 
 /** Active filter applied to build the current snapshot. */

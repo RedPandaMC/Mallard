@@ -3,6 +3,7 @@ import { RELEVANT_CONFIG_KEYS } from './config';
 import { buildContainer, Container } from './container';
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
+import { registerTriggerView } from './ui/TriggerView';
 import { Value } from './domain/expr/ast';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -10,7 +11,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const { usage, restriction } = container;
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBar.command = 'weevil.openDashboard';
+  statusBar.command = 'mallard.openDashboard';
   context.subscriptions.push(statusBar);
   const updateStatusBar = () => {
     const s = usage.current;
@@ -23,14 +24,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       statusBar.show();
     } else if (r.userOverrideUntil && r.userOverrideUntil > Date.now()) {
       const m = Math.max(1, Math.round((r.userOverrideUntil - Date.now()) / 60_000));
-      statusBar.text = `$(debug-pause) Weevil · override ${m}m`;
+      statusBar.text = `$(debug-pause) Mallard · override ${m}m`;
       statusBar.backgroundColor = undefined;
       statusBar.tooltip = 'Restriction rule is being overridden.';
       statusBar.show();
     } else if (auth === 'signed-in') {
       statusBar.text = `$(verified-filled) ${s?.githubBilling?.quota?.plan ?? 'GitHub'}`;
       statusBar.backgroundColor = undefined;
-      statusBar.tooltip = 'Open Weevil dashboard';
+      statusBar.tooltip = 'Open Mallard dashboard';
       statusBar.show();
     } else if (auth === 'signed-out') {
       statusBar.text = '$(account) Sign in to GitHub';
@@ -46,6 +47,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(restriction.onDidChange(updateStatusBar));
 
   registerCommands(context, container);
+  context.subscriptions.push(...registerTriggerView());
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
@@ -67,17 +69,17 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
   const reg = (id: string, fn: (...args: unknown[]) => unknown) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
 
-  reg('weevil.openDashboard', () =>
+  reg('mallard.openDashboard', () =>
     DashboardPanel.show(context, usage, userConfig, layout, restriction),
   );
 
-  reg('weevil.refresh', async () => {
+  reg('mallard.refresh', async () => {
     await usage.refresh();
   });
 
-  reg('weevil.clearData', async () => {
+  reg('mallard.clearData', async () => {
     const ok = await vscode.window.showWarningMessage(
-      'Clear all Weevil data? This wipes recorded usage, your budget and alert ' +
+      'Clear all Mallard data? This wipes recorded usage, your budget and alert ' +
         'settings, the saved dashboard layout, the cached pricing manifest, and ' +
         'any active restriction. It cannot be undone. Run this before ' +
         'uninstalling to leave nothing behind.',
@@ -94,21 +96,21 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     }
   });
 
-  reg('weevil.signIn', async () => {
+  reg('mallard.signIn', async () => {
     await usage.signInGitHub();
   });
 
-  reg('weevil.exportReport', async () => {
+  reg('mallard.exportReport', async () => {
     const snapshot = usage.current;
     if (!snapshot) {
-      void vscode.window.showWarningMessage('Weevil: No data available to export.');
+      void vscode.window.showWarningMessage('Mallard: No data available to export.');
       return;
     }
     const defaultUri = vscode.Uri.file(defaultReportPath());
     const saveUri = await vscode.window.showSaveDialog({
       defaultUri,
       filters: { 'HTML Report': ['html'] },
-      title: 'Save Weevil Usage Report',
+      title: 'Save Mallard Usage Report',
     });
     if (!saveUri) return;
     const html = generateReport(snapshot);
@@ -122,11 +124,11 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     }
   });
 
-  reg('weevil.showLogPath', async () => {
+  reg('mallard.showLogPath', async () => {
     const paths = usage.getLogPaths();
     if (paths.length > 0) {
       void vscode.window.showInformationMessage(
-        `Weevil: Watching ${paths.length} log file(s): ${paths.join(', ')}`,
+        `Mallard: Watching ${paths.length} log file(s): ${paths.join(', ')}`,
       );
       return;
     }
@@ -136,8 +138,8 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     const detail =
       tried.length > 0 ? `\n\nSearched:\n${tried.map((p) => '  ' + p).join('\n')}` : '';
     const pick = await vscode.window.showInformationMessage(
-      'Weevil: No Copilot log files detected. Make sure Copilot is installed and has been used. ' +
-        'You can override the path via the weevil.copilotLogPath setting.' +
+      'Mallard: No Copilot log files detected. Make sure Copilot is installed and has been used. ' +
+        'You can override the path via the mallard.copilotLogPath setting.' +
         detail,
       'Pick log folder…',
     );
@@ -151,14 +153,14 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
       });
       if (uri && uri[0]) {
         await vscode.workspace
-          .getConfiguration('weevil')
+          .getConfiguration('mallard')
           .update('copilotLogPath', uri[0].fsPath, vscode.ConfigurationTarget.Global);
         await usage.refresh();
       }
     }
   });
 
-  reg('weevil.simulateRestriction', async () => {
+  reg('mallard.simulateRestriction', async () => {
     const snapshot = usage.current;
     const cfg = userConfig.get();
     const report = await restriction.simulate({
@@ -168,7 +170,7 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
       ...(cfg.groups !== undefined ? { groups: cfg.groups } : {}),
       signedIn: snapshot?.authStatus === 'signed-in',
     });
-    const channel = vscode.window.createOutputChannel('Weevil Restriction');
+    const channel = vscode.window.createOutputChannel('Mallard Restriction');
     channel.clear();
     channel.appendLine(JSON.stringify(report, null, 2));
     channel.show(true);

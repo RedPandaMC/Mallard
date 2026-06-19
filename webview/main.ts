@@ -1,3 +1,4 @@
+import './styles/fonts.css';
 import './styles/reset.css';
 import './styles/theme.css';
 import './styles/dashboard.css';
@@ -8,11 +9,14 @@ import { lazyChart } from './lazyMount';
 import { mountLayout } from './layout';
 import { DashboardLayout, DEFAULT_DASHBOARD_LAYOUT } from '../src/domain/types';
 import { applyTheme } from './charts/echarts';
+import { applyPalette } from './theme';
 import { mountDailyBars } from './charts/dailyBars';
 import { mountHeatmap } from './charts/heatmap';
 import { mountModelBreakdown } from './charts/modelBreakdown';
 import { mountSankey } from './charts/sankey';
 import { mountCategoryBreakdown } from './charts/categoryBreakdown';
+import { mountCumulativeArea } from './charts/cumulativeArea';
+import { mountWeekdayRadial } from './charts/weekdayRadial';
 import { mountKpiCards } from './components/KpiCards';
 import { mountFilterBar } from './components/FilterBar';
 import { mountGitHubBillingStrip } from './components/GitHubBillingStrip';
@@ -39,6 +43,7 @@ onMessage((msg) => {
   } else if (msg.type === 'restriction') {
     setState({ restriction: msg.value });
   } else if (msg.type === 'theme') {
+    applyPalette(msg.palette, msg.kind);
     applyTheme();
     if (state().snapshot) setState({ snapshot: state().snapshot });
   }
@@ -72,8 +77,8 @@ function mountDashboard(root: HTMLElement): void {
         <div class="wv-brand">
           <img class="wv-brand-logo" src="${LOGO_SRC}" alt="" aria-hidden="true" />
           <div>
-            <div class="wv-brand-name">Weevil</div>
-            <div class="wv-brand-tagline">A little nosey about your Copilot spend.</div>
+            <div class="wv-brand-name">Mallard</div>
+            <div class="wv-brand-meta">Copilot spend · instrument</div>
           </div>
         </div>
         <div class="wv-header-right">
@@ -105,6 +110,8 @@ function mountDashboard(root: HTMLElement): void {
           ${panelHtml('models', 'codicon-symbol-method', 'By model', 'chart-models', 'Usage by model', 'mini')}
           ${panelHtml('sankey', 'codicon-type-hierarchy-sub', 'Flow breakdown', 'chart-sankey', 'Model to surface flow', 'mini')}
           ${panelHtml('category', 'codicon-pie-chart', 'Spend by cost type', 'chart-category', 'Spend by cost type', 'mini')}
+          ${panelHtml('cumulative', 'codicon-graph-line', 'Cumulative spend', 'chart-cumulative', 'Cumulative spend over the month', 'mini')}
+          ${panelHtml('weekday', 'codicon-pulse', 'Usage by weekday', 'chart-weekday', 'Usage by weekday', 'mini')}
         </div>
       </div>
     </div>`;
@@ -121,11 +128,15 @@ function mountDashboard(root: HTMLElement): void {
   const modelsEl = document.getElementById('chart-models')!;
   const sankeyEl = document.getElementById('chart-sankey')!;
   const categoryEl = document.getElementById('chart-category')!;
+  const cumulativeEl = document.getElementById('chart-cumulative')!;
+  const weekdayEl = document.getElementById('chart-weekday')!;
   const daily = lazyChart(dailyEl, () => mountDailyBars(dailyEl));
   const heatmap = lazyChart(heatmapEl, () => mountHeatmap(heatmapEl));
   const models = lazyChart(modelsEl, () => mountModelBreakdown(modelsEl));
   const sankey = lazyChart(sankeyEl, () => mountSankey(sankeyEl));
   const category = lazyChart(categoryEl, () => mountCategoryBreakdown(categoryEl));
+  const cumulative = lazyChart(cumulativeEl, () => mountCumulativeArea(cumulativeEl));
+  const weekday = lazyChart(weekdayEl, () => mountWeekdayRadial(weekdayEl));
   const alertConfig = mountAlertConfigPanel(document.getElementById('alert-config')!);
   const content = document.getElementById('content')!;
 
@@ -138,6 +149,8 @@ function mountDashboard(root: HTMLElement): void {
     models: section('models'),
     sankey: section('sankey'),
     category: section('category'),
+    cumulative: section('cumulative'),
+    weekday: section('weekday'),
   };
 
   const resizeAll = () => {
@@ -146,6 +159,8 @@ function mountDashboard(root: HTMLElement): void {
     models.resize();
     sankey.resize();
     category.resize();
+    cumulative.resize();
+    weekday.resize();
   };
 
   // Dynamic scaling + docking: the layout manager reorders, resizes (span), and
@@ -220,6 +235,9 @@ function mountDashboard(root: HTMLElement): void {
         !snapshot.chartData.categoryBreakdown.available,
       );
       category.render((c) => c.update(snapshot));
+      cumulative.render((c) => c.update(snapshot));
+      sections['weekday']!.classList.toggle('wv-no-data', snapshot.chartData.heatmap.max <= 0);
+      weekday.render((c) => c.update(snapshot));
     }
   });
 }
