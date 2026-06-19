@@ -12,7 +12,7 @@
 [![Docs](https://github.com/RedPandaMC/Mallard/actions/workflows/docs.yml/badge.svg)](https://github.com/RedPandaMC/Mallard/actions/workflows/docs.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-`COPILOT SPEND · INSTRUMENT` — local-first, no sign-in
+`COPILOT SPEND PLUGIN` — local-first, no sign-in
 
 </div>
 
