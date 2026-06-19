@@ -41,6 +41,24 @@ export interface SnapshotOptions {
    * Defaults to the filtered events when omitted.
    */
   dimensionEvents?: UsageEvent[];
+  /** Previous snapshot — used to detect incremental (today-only) updates. */
+  prevSnapshot?: UsageSnapshot;
+}
+
+function isIncrementalUpdate(prev: UsageSnapshot | undefined, next: UsageSnapshot): boolean {
+  if (!prev) return false;
+  if (JSON.stringify(prev.filter) !== JSON.stringify(next.filter)) return false;
+  const prevPts = prev.chartData.dailyBars.points;
+  const nextPts = next.chartData.dailyBars.points;
+  if (prevPts.length !== nextPts.length) return false;
+  for (let i = 0; i < prevPts.length - 1; i++) {
+    const a = prevPts[i]!;
+    const b = nextPts[i]!;
+    if (a.date !== b.date || a.credits !== b.credits) return false;
+  }
+  const lp = prevPts[prevPts.length - 1];
+  const ln = nextPts[nextPts.length - 1];
+  return !!lp && !!ln && lp.date === ln.date;
 }
 
 function computeRange(events: UsageEvent[], now: number): { start: number; end: number } {
@@ -82,7 +100,7 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
   const topModels = topBy(events, 'model', o.filter);
   const dim = o.dimensionEvents ?? events;
 
-  return {
+  const next: UsageSnapshot = {
     generatedAt: o.now,
     source: o.source,
     status: o.status,
@@ -108,6 +126,9 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
       buildCategoryBreakdownData(events, o.filter),
     ),
     authStatus: o.authStatus,
+    isIncremental: false,
     ...(o.githubBilling !== undefined ? { githubBilling: o.githubBilling } : {}),
   };
+  next.isIncremental = isIncrementalUpdate(o.prevSnapshot, next);
+  return next;
 }

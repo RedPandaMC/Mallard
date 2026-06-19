@@ -22,14 +22,26 @@ export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
       // colorIndex 0/1/2 → severity ramp gray → coral → red (duotone).
       const sev = [t.sevOk, t.sevWarn, t.sevOver];
 
+      const barData = points.map((p) => ({
+        value: p.credits,
+        itemStyle: { color: sev[p.colorIndex] ?? t.sevOk },
+      }));
+
+      // Incremental update: only today's bar changed. Animate just the data
+      // series without rebuilding axes, tooltips, or threshold lines.
+      if (s.isIncremental) {
+        chart.setOption(
+          { animation: true, animationDuration: 500, series: [{ data: barData }] },
+          { notMerge: false, lazyUpdate: false },
+        );
+        return;
+      }
+
       const series: echarts.SeriesOption[] = [
         {
           type: 'bar',
           name: 'Credits',
-          data: points.map((p) => ({
-            value: p.credits,
-            itemStyle: { color: sev[p.colorIndex] ?? t.sevOk },
-          })),
+          data: barData,
           emphasis: { itemStyle: { opacity: 0.85 } },
         },
       ];

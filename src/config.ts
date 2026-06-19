@@ -10,6 +10,12 @@ export interface MallardConfig {
   copilotLogPath: string;
   pricingManifestUrl: string;
   palette: PaletteMode;
+  vectorExport: {
+    brokerUrl: string;
+    topic: string;
+    username: string;
+    password: string;
+  };
 }
 
 export const RELEVANT_CONFIG_KEYS = [
@@ -24,5 +30,11 @@ export function readConfig(): MallardConfig {
     copilotLogPath: c.get('copilotLogPath', ''),
     pricingManifestUrl: c.get('pricingManifestUrl', ''),
     palette: c.get<string>('palette', 'swiss') === 'theme' ? 'theme' : 'swiss',
+    vectorExport: {
+      brokerUrl: c.get('vectorExport.brokerUrl', ''),
+      topic: c.get('vectorExport.topic', 'mallard/usage'),
+      username: c.get('vectorExport.username', ''),
+      password: c.get('vectorExport.password', ''),
+    },
   };
 }

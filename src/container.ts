@@ -16,6 +16,7 @@ import { initRepoAttribution } from './ingest/repoResolver';
 import { LogWatcher } from './ingest/LogWatcher';
 import { PricingService } from './pricing/PricingService';
 import { EventStore } from './store/EventStore';
+import { MqttVectorExporter } from './export/VectorExporter';
 
 export interface Container {
   usage: UsageService;
@@ -51,7 +52,15 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const github = new GitHubUsageService(githubSession);
   const userConfig = new UserConfigStore(storageDir);
   const layout = new LayoutStore(context.globalState);
-  const usage = new UsageService(store, pricing, watcher, userConfig, github);
+  const exporter = cfg.vectorExport.brokerUrl
+    ? new MqttVectorExporter(
+        cfg.vectorExport.brokerUrl,
+        cfg.vectorExport.topic,
+        cfg.vectorExport.username || undefined,
+        cfg.vectorExport.password || undefined,
+      )
+    : undefined;
+  const usage = new UsageService(store, pricing, watcher, userConfig, github, exporter);
   const restriction = new RestrictionEngine(storageDir);
 
   // Re-evaluate the restriction on every snapshot fire.
@@ -78,6 +87,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     layout,
     usage,
     restriction,
+    ...(exporter ? [{ dispose: () => exporter.dispose() }] : []),
   );
 
   return { usage, store, userConfig, layout, pricing, restriction };

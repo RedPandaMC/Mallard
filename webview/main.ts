@@ -5,6 +5,7 @@ import './styles/dashboard.css';
 
 import { onMessage, post } from './api';
 import { state, setState, subscribe } from './store';
+import { changed } from './chartDiff';
 import { lazyChart } from './lazyMount';
 import { mountLayout } from './layout';
 import { DashboardLayout, DEFAULT_DASHBOARD_LAYOUT } from '../src/domain/types';
@@ -198,6 +199,15 @@ function mountDashboard(root: HTMLElement): void {
 
   let appliedLayout: DashboardLayout | null = null;
 
+  // Per-chart payload trackers for diff-based render skipping.
+  // Charts only re-render when their specific input data changes.
+  let prevDailyBars: unknown;
+  let prevHeatmap: unknown;
+  let prevModelBreakdown: unknown;
+  let prevSankeyKey: string | undefined;
+  let prevCategory: unknown;
+  let prevMetric: string | undefined;
+
   subscribe((s) => {
     alertConfig.update(s.config);
     if (s.layout !== appliedLayout) {
@@ -224,20 +234,46 @@ function mountDashboard(root: HTMLElement): void {
       kpis.update(snapshot, metric);
       ghStrip.update(snapshot);
       gauge.update(snapshot.budget, snapshot.currency);
-      daily.render((c) => c.update(snapshot));
-      // Data-availability hiding is independent of the user's layout choice.
+
+      // dailyBars drives both the bar chart and the cumulative area view.
+      if (changed(prevDailyBars, snapshot.chartData.dailyBars)) {
+        daily.render((c) => c.update(snapshot));
+        cumulative.render((c) => c.update(snapshot));
+        prevDailyBars = snapshot.chartData.dailyBars;
+      }
+
+      // heatmap data drives both the calendar heatmap and the weekday radial.
+      const heatmapChanged = changed(prevHeatmap, snapshot.chartData.heatmap);
       sections['heatmap']!.classList.toggle('wv-no-data', snapshot.chartData.heatmap.max <= 0);
-      heatmap.render((c) => c.update(snapshot));
-      models.render((c) => c.update(snapshot, metric));
-      sankey.render((c) => c.update(snapshot));
+      sections['weekday']!.classList.toggle('wv-no-data', snapshot.chartData.heatmap.max <= 0);
+      if (heatmapChanged) {
+        heatmap.render((c) => c.update(snapshot));
+        weekday.render((c) => c.update(snapshot));
+        prevHeatmap = snapshot.chartData.heatmap;
+      }
+
+      if (changed(prevModelBreakdown, snapshot.chartData.modelBreakdown) || metric !== prevMetric) {
+        models.render((c) => c.update(snapshot, metric));
+        prevModelBreakdown = snapshot.chartData.modelBreakdown;
+      }
+
+      // Sankey depends on links + dimension lists (no chartData slot).
+      const sankeyKey = JSON.stringify([snapshot.sankeyLinks, snapshot.allModels, snapshot.allSurfaces]);
+      if (sankeyKey !== prevSankeyKey) {
+        sankey.render((c) => c.update(snapshot));
+        prevSankeyKey = sankeyKey;
+      }
+
       sections['category']!.classList.toggle(
         'wv-no-data',
         !snapshot.chartData.categoryBreakdown.available,
       );
-      category.render((c) => c.update(snapshot));
-      cumulative.render((c) => c.update(snapshot));
-      sections['weekday']!.classList.toggle('wv-no-data', snapshot.chartData.heatmap.max <= 0);
-      weekday.render((c) => c.update(snapshot));
+      if (changed(prevCategory, snapshot.chartData.categoryBreakdown)) {
+        category.render((c) => c.update(snapshot));
+        prevCategory = snapshot.chartData.categoryBreakdown;
+      }
+
+      prevMetric = metric;
     }
   });
 }

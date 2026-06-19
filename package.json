@@ -141,6 +141,30 @@
           ],
           "default": "swiss",
           "description": "Dashboard chart palette. Both modes keep the duotone structure and are checked for accessibility."
+        },
+        "mallard.vectorExport.brokerUrl": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "MQTT broker URL to publish usage feature vectors to (e.g. mqtts://broker.example.com:8883 or wss://...). Only mqtts:// and wss:// (TLS) are accepted. Leave empty to disable."
+        },
+        "mallard.vectorExport.topic": {
+          "type": "string",
+          "default": "mallard/usage",
+          "scope": "machine-overridable",
+          "description": "MQTT topic prefix. A stable anonymous instance hash is appended automatically."
+        },
+        "mallard.vectorExport.username": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "MQTT username (optional)."
+        },
+        "mallard.vectorExport.password": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "MQTT password (optional). Use machine-scoped settings to avoid syncing credentials."
         }
       }
     }
@@ -166,6 +190,7 @@
     "chalk": "2.4.2",
     "echarts": "^5.5.1",
     "monaco-editor": "^0.52.0",
+    "mqtt": "^5.15.1",
     "neverthrow": "^8.2.0",
     "p-retry": "^8.0.0",
     "zod": "^4.4.3"

@@ -351,6 +351,8 @@ export interface ChartData {
 export interface UsageSnapshot {
   generatedAt: number;
   source: SourceKind;
+  /** True when only the current day's bar changed since the previous snapshot. */
+  isIncremental: boolean;
   status: ProviderStatus;
   currency: string;
   pricePerCredit: number;

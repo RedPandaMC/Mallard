@@ -14,6 +14,8 @@ import { LogWatcher } from '../ingest/LogWatcher';
 import { PricingService } from '../pricing/PricingService';
 import { EventStore } from '../store/EventStore';
 import { UserConfigStore } from './UserConfigStore';
+import { VectorExporter } from '../export/VectorExporter';
+import { vectorize } from '../export/vectorize';
 
 /** Keep ~1h of recent samples for velocity alerting. */
 const HISTORY_WINDOW_MS = 60 * 60 * 1000;
@@ -30,6 +32,7 @@ export class UsageService implements vscode.Disposable {
   private authStatus: AuthStatus = 'signed-out';
   private githubBilling: GitHubBillingData | undefined = undefined;
   private readonly subs: vscode.Disposable[] = [];
+  private readonly exporter: VectorExporter | undefined;
 
   constructor(
     private readonly store: EventStore,
@@ -37,7 +40,9 @@ export class UsageService implements vscode.Disposable {
     private readonly watcher: LogWatcher,
     private readonly userConfig: UserConfigStore,
     private readonly github?: GitHubUsageService,
+    exporter?: VectorExporter,
   ) {
+    this.exporter = exporter;
     if (github) {
       // Re-fetch billing whenever the GitHub session changes.
       this.subs.push(github.session.onDidChange(() => void this.refreshGitHub()));
@@ -148,12 +153,14 @@ export class UsageService implements vscode.Disposable {
       authStatus: this.authStatus,
       ...(this.githubBilling !== undefined ? { githubBilling: this.githubBilling } : {}),
       dimensionEvents: universe,
+      ...(this.snapshot !== undefined ? { prevSnapshot: this.snapshot } : {}),
     };
 
     this.snapshot = buildSnapshot(filteredEvents, options);
     this.recordSample(now, this.snapshot);
     this.fireAlerts(this.snapshot, uc, now);
     this._onDidChange.fire(this.snapshot);
+    this.exporter?.export(vectorize(this.snapshot));
   }
 
   private recordSample(now: number, s: UsageSnapshot): void {
