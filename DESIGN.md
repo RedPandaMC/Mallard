@@ -1,11 +1,11 @@
-# Weevil — Design Spec (for design review)
+# Mallard — Design Spec (for design review)
 
-A working inventory of **graph types** and **UI components** across Weevil's two
+A working inventory of **graph types** and **UI components** across Mallard's two
 surfaces, written to brief a design specialist. It deliberately describes
 *function and data*, not implementation, so a stylistic direction can be layered
 on top cleanly.
 
-Weevil is a VS Code extension that reads GitHub Copilot's local usage logs and
+Mallard is a VS Code extension that reads GitHub Copilot's local usage logs and
 shows what you're spending. Two surfaces:
 
 1. **Dashboard** — a webview rendered inside VS Code (editor tab + sidebar).

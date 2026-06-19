@@ -5,4 +5,4 @@
  * the build simple.
  */
 
-(self as unknown as { __weevilMonacoWorkersLoaded?: boolean }).__weevilMonacoWorkersLoaded = true;
+(self as unknown as { __mallardMonacoWorkersLoaded?: boolean }).__mallardMonacoWorkersLoaded = true;

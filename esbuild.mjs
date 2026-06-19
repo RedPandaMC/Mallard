@@ -52,14 +52,14 @@ async function main() {
     const ctxWeb = await esbuild.context(webviewConfig);
     const ctxWorkers = await esbuild.context(monacoWorkersConfig);
     await Promise.all([ctxHost.watch(), ctxWeb.watch(), ctxWorkers.watch()]);
-    console.log('[weevil] watching host + webview bundles...');
+    console.log('[mallard] watching host + webview bundles...');
   } else {
     await Promise.all([
       esbuild.build(hostConfig),
       esbuild.build(webviewConfig),
       esbuild.build(monacoWorkersConfig),
     ]);
-    console.log('[weevil] build complete.');
+    console.log('[mallard] build complete.');
   }
 }
 

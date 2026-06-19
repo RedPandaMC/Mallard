@@ -11,7 +11,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const { usage, restriction } = container;
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBar.command = 'weevil.openDashboard';
+  statusBar.command = 'mallard.openDashboard';
   context.subscriptions.push(statusBar);
   const updateStatusBar = () => {
     const s = usage.current;
@@ -69,15 +69,15 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
   const reg = (id: string, fn: (...args: unknown[]) => unknown) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
 
-  reg('weevil.openDashboard', () =>
+  reg('mallard.openDashboard', () =>
     DashboardPanel.show(context, usage, userConfig, layout, restriction),
   );
 
-  reg('weevil.refresh', async () => {
+  reg('mallard.refresh', async () => {
     await usage.refresh();
   });
 
-  reg('weevil.clearData', async () => {
+  reg('mallard.clearData', async () => {
     const ok = await vscode.window.showWarningMessage(
       'Clear all Mallard data? This wipes recorded usage, your budget and alert ' +
         'settings, the saved dashboard layout, the cached pricing manifest, and ' +
@@ -96,11 +96,11 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     }
   });
 
-  reg('weevil.signIn', async () => {
+  reg('mallard.signIn', async () => {
     await usage.signInGitHub();
   });
 
-  reg('weevil.exportReport', async () => {
+  reg('mallard.exportReport', async () => {
     const snapshot = usage.current;
     if (!snapshot) {
       void vscode.window.showWarningMessage('Mallard: No data available to export.');
@@ -124,7 +124,7 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     }
   });
 
-  reg('weevil.showLogPath', async () => {
+  reg('mallard.showLogPath', async () => {
     const paths = usage.getLogPaths();
     if (paths.length > 0) {
       void vscode.window.showInformationMessage(
@@ -139,7 +139,7 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
       tried.length > 0 ? `\n\nSearched:\n${tried.map((p) => '  ' + p).join('\n')}` : '';
     const pick = await vscode.window.showInformationMessage(
       'Mallard: No Copilot log files detected. Make sure Copilot is installed and has been used. ' +
-        'You can override the path via the weevil.copilotLogPath setting.' +
+        'You can override the path via the mallard.copilotLogPath setting.' +
         detail,
       'Pick log folder…',
     );
@@ -153,14 +153,14 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
       });
       if (uri && uri[0]) {
         await vscode.workspace
-          .getConfiguration('weevil')
+          .getConfiguration('mallard')
           .update('copilotLogPath', uri[0].fsPath, vscode.ConfigurationTarget.Global);
         await usage.refresh();
       }
     }
   });
 
-  reg('weevil.simulateRestriction', async () => {
+  reg('mallard.simulateRestriction', async () => {
     const snapshot = usage.current;
     const cfg = userConfig.get();
     const report = await restriction.simulate({

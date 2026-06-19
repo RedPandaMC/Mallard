@@ -78,7 +78,7 @@ first, then uninstall.
 
 There are two, for cases where auto-detection does not fit.
 
-### `weevil.copilotLogPath`
+### `mallard.copilotLogPath`
 
 Type `string`, default `""` (auto-detect).
 
@@ -88,10 +88,10 @@ every case. Set it only if your logs live in a non-standard location, such as a
 portable VS Code install.
 
 ```json
-"weevil.copilotLogPath": "/custom/path/to/vscode/logs"
+"mallard.copilotLogPath": "/custom/path/to/vscode/logs"
 ```
 
-### `weevil.pricingManifestUrl`
+### `mallard.pricingManifestUrl`
 
 Type `string`, default `""` (built-in URL).
 
@@ -102,7 +102,7 @@ unavailable. Set this only if you host a custom manifest for a non-standard
 plan.
 
 ```json
-"weevil.pricingManifestUrl": "https://example.com/my-pricing.json"
+"mallard.pricingManifestUrl": "https://example.com/my-pricing.json"
 ```
 
 ## Notes

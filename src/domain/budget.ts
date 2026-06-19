@@ -1,6 +1,6 @@
 /**
  * Pure budget / pace math. Drives KPI cards, the status-bar tint, and
- * notification evaluation. (No pet — the weevil is branding only.)
+ * notification evaluation. (No pet — the mallard is branding only.)
  */
 import { BudgetState, Forecast, PaceStatus } from './types';
 

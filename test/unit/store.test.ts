@@ -7,7 +7,7 @@ import { DAY_MS, startOf } from '../../src/util/time';
 import { makeEvent } from './helpers';
 
 async function tmpDir(): Promise<string> {
-  return fs.mkdtemp(path.join(os.tmpdir(), 'weevil-store-'));
+  return fs.mkdtemp(path.join(os.tmpdir(), 'mallard-store-'));
 }
 
 describe('EventStore', () => {

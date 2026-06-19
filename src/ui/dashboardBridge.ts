@@ -49,7 +49,7 @@ export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vsc
         await vscode.window.showTextDocument(userConfig.uri);
         break;
       case 'command':
-        if (raw.id === 'openDashboard') void vscode.commands.executeCommand('weevil.openDashboard');
+        if (raw.id === 'openDashboard') void vscode.commands.executeCommand('mallard.openDashboard');
         else if (raw.id === 'signIn') void usage.signInGitHub();
         break;
       case 'restrictSnooze':

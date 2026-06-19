@@ -21,7 +21,7 @@ From the Marketplace:
 Or from the CLI:
 
 ```bash
-code --install-extension RedPandaMC.weevil
+code --install-extension RedPandaMC.mallard
 ```
 
 ## First run
@@ -35,7 +35,7 @@ Mallard activates automatically:
 If the dashboard shows the empty state, Copilot may not have written logs yet.
 Use Copilot for a few minutes, then click Refresh in the dashboard. To see where
 Mallard is looking, run "Mallard: Show Detected Log Path". If the path is wrong,
-set `weevil.copilotLogPath`.
+set `mallard.copilotLogPath`.
 
 ## What Mallard tracks
 

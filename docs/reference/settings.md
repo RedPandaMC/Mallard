@@ -6,7 +6,7 @@ thresholds are not settings; you edit them in the dashboard (see
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `weevil.copilotLogPath` | `string` | `""` | Override the log directory. Blank means auto-detect via `vscode.env.logUri`. |
-| `weevil.pricingManifestUrl` | `string` | `""` | Override the pricing manifest URL. Blank means use the built-in URL. |
+| `mallard.copilotLogPath` | `string` | `""` | Override the log directory. Blank means auto-detect via `vscode.env.logUri`. |
+| `mallard.pricingManifestUrl` | `string` | `""` | Override the pricing manifest URL. Blank means use the built-in URL. |
 
 See [Configuration](/guide/configuration) for full descriptions and examples.

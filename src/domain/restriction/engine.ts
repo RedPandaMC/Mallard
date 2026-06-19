@@ -192,7 +192,7 @@ export class RestrictionEngine {
   }
 
   private customExtensions(): string[] {
-    const raw = vscode.workspace.getConfiguration('weevil').get<unknown>('copilotExtensions');
+    const raw = vscode.workspace.getConfiguration('mallard').get<unknown>('copilotExtensions');
     return Array.isArray(raw) ? (raw as string[]) : [];
   }
 

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "weevil",
+      "name": "mallard",
       "dependencies": {
         "@duckdb/node-api": "^1.5.3-r.3",
         "chalk": "2.4.2",

@@ -1,16 +1,16 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 
-const EXT_ID = 'jurreandenys.weevil';
+const EXT_ID = 'jurreandenys.mallard';
 
 const EXPECTED_COMMANDS = [
-  'weevil.openDashboard',
-  'weevil.refresh',
-  'weevil.clearData',
-  'weevil.showLogPath',
-  'weevil.signIn',
-  'weevil.exportReport',
-  'weevil.simulateRestriction',
+  'mallard.openDashboard',
+  'mallard.refresh',
+  'mallard.clearData',
+  'mallard.showLogPath',
+  'mallard.signIn',
+  'mallard.exportReport',
+  'mallard.simulateRestriction',
 ];
 
 describe('Mallard extension (integration)', () => {
@@ -21,35 +21,35 @@ describe('Mallard extension (integration)', () => {
     assert.strictEqual(ext!.isActive, true);
   });
 
-  it('registers exactly the seven contributed weevil.* commands', async () => {
+  it('registers exactly the seven contributed mallard.* commands', async () => {
     const ext = vscode.extensions.getExtension(EXT_ID);
     await ext!.activate();
     const all = await vscode.commands.getCommands(true);
     for (const cmd of EXPECTED_COMMANDS) {
       assert.ok(all.includes(cmd), `command ${cmd} should be registered`);
     }
-    // VS Code auto-registers per-view commands for the contributed `weevil.trigger`
+    // VS Code auto-registers per-view commands for the contributed `mallard.trigger`
     // tree view (focus/open/removeView/resetViewLocation/toggleVisibility); those
     // are framework-generated, not part of the extension's command contract.
     const contributed = all
-      .filter((c) => c.startsWith('weevil.') && !c.startsWith('weevil.trigger.'))
+      .filter((c) => c.startsWith('mallard.') && !c.startsWith('mallard.trigger.'))
       .sort();
     assert.deepStrictEqual(
       contributed,
       [...EXPECTED_COMMANDS].sort(),
-      `unexpected weevil commands: ${contributed.join(', ')}`,
+      `unexpected mallard commands: ${contributed.join(', ')}`,
     );
   });
 
   it('opens the dashboard without throwing', async () => {
     const ext = vscode.extensions.getExtension(EXT_ID);
     await ext!.activate();
-    await vscode.commands.executeCommand('weevil.openDashboard');
+    await vscode.commands.executeCommand('mallard.openDashboard');
     assert.ok(true);
   });
 
   it('runs refresh without throwing', async () => {
-    await vscode.commands.executeCommand('weevil.refresh');
+    await vscode.commands.executeCommand('mallard.refresh');
     assert.ok(true);
   });
 
@@ -57,8 +57,8 @@ describe('Mallard extension (integration)', () => {
     const ext = vscode.extensions.getExtension(EXT_ID)!;
     const props = ext.packageJSON.contributes.configuration.properties as Record<string, unknown>;
     assert.deepStrictEqual(Object.keys(props).sort(), [
-      'weevil.copilotLogPath',
-      'weevil.pricingManifestUrl',
+      'mallard.copilotLogPath',
+      'mallard.pricingManifestUrl',
     ]);
   });
 });

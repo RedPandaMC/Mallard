@@ -84,7 +84,7 @@
     var(--w-te-red) 75% 100%
   );
 
-  /* weevil-shell gradient — marketplace logo art only, never UI chrome */
+  /* mallard-shell gradient — marketplace logo art only, never UI chrome */
   --w-ink-grad: linear-gradient(100deg, #ffb454 0%, #ff6b81 50%, #b45cff 100%);
 
   /* Geometric grotesque display (system fonts only — CSP-safe). */

@@ -1,5 +1,5 @@
 {
-  "name": "weevil",
+  "name": "mallard",
   "displayName": "Mallard",
   "description": "Get your Copilot spend all in a row. A live dashboard of cost, model usage, and where every credit goes — read from Copilot's local logs. No sign-in, no telemetry.",
   "version": "0.2.0",
@@ -10,10 +10,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/RedPandaMC/weevil.git"
+    "url": "https://github.com/RedPandaMC/mallard.git"
   },
   "bugs": {
-    "url": "https://github.com/RedPandaMC/weevil/issues"
+    "url": "https://github.com/RedPandaMC/mallard/issues"
   },
   "engines": {
     "vscode": "^1.95.0"
@@ -44,41 +44,41 @@
   "contributes": {
     "commands": [
       {
-        "command": "weevil.openDashboard",
+        "command": "mallard.openDashboard",
         "title": "Open Mallard Dashboard",
         "category": "Mallard",
         "icon": "$(graph)"
       },
       {
-        "command": "weevil.refresh",
+        "command": "mallard.refresh",
         "title": "Refresh Now",
         "category": "Mallard",
         "icon": "$(refresh)"
       },
       {
-        "command": "weevil.clearData",
+        "command": "mallard.clearData",
         "title": "Clear All Data",
-        "category": "Weevil"
+        "category": "Mallard"
       },
       {
-        "command": "weevil.showLogPath",
+        "command": "mallard.showLogPath",
         "title": "Show Detected Log Path",
-        "category": "Weevil"
+        "category": "Mallard"
       },
       {
-        "command": "weevil.signIn",
+        "command": "mallard.signIn",
         "title": "Sign In to GitHub",
         "category": "Mallard",
         "icon": "$(account)"
       },
       {
-        "command": "weevil.exportReport",
+        "command": "mallard.exportReport",
         "title": "Export Monthly Report",
         "category": "Mallard",
         "icon": "$(export)"
       },
       {
-        "command": "weevil.simulateRestriction",
+        "command": "mallard.simulateRestriction",
         "title": "Simulate Restriction State",
         "category": "Mallard",
         "icon": "$(debug-start)"
@@ -87,7 +87,7 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "weevil.simulateRestriction",
+          "command": "mallard.simulateRestriction",
           "when": "false"
         }
       ]
@@ -95,36 +95,36 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "weevil",
+          "id": "mallard",
           "title": "Mallard",
           "icon": "media/mallard-icon.svg"
         }
       ]
     },
     "views": {
-      "weevil": [
+      "mallard": [
         {
           "type": "tree",
-          "id": "weevil.trigger",
+          "id": "mallard.trigger",
           "name": "Mallard"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "weevil.trigger",
-        "contents": "Mallard tracks your Copilot spend in real time.\n\n[Open Dashboard](command:weevil.openDashboard)"
+        "view": "mallard.trigger",
+        "contents": "Mallard tracks your Copilot spend in real time.\n\n[Open Dashboard](command:mallard.openDashboard)"
       }
     ],
     "configuration": {
       "title": "Mallard",
       "properties": {
-        "weevil.copilotLogPath": {
+        "mallard.copilotLogPath": {
           "type": "string",
           "default": "",
           "description": "Override path to the Copilot log directory (blank = auto-detect via VS Code logUri)."
         },
-        "weevil.pricingManifestUrl": {
+        "mallard.pricingManifestUrl": {
           "type": "string",
           "default": "",
           "description": "Override URL for the pricing manifest JSON. Leave blank to use the auto-refreshed default."

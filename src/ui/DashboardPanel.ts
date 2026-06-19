@@ -12,7 +12,7 @@ import { renderHtml } from './webviewHtml';
 
 export class DashboardPanel {
   static current: DashboardPanel | undefined;
-  private static readonly viewType = 'weevil.dashboard';
+  private static readonly viewType = 'mallard.dashboard';
 
   private readonly disposables: vscode.Disposable[] = [];
 

@@ -36,7 +36,7 @@ real-time per-model cost, with optional GitHub billing reconciliation.
 
 - Model-switching suggestions.
 - Sample and synthetic data; the dashboard degrades to "not enough data".
-- The `@weevil` chat participant and JSON notification rule schemas.
+- The `@mallard` chat participant and JSON notification rule schemas.
 
 ## 0.1.x
 

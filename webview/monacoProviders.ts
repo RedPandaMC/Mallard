@@ -254,7 +254,7 @@ function hoverProvider(): monaco.languages.HoverProvider {
 }
 
 const RULE_DOC_SCHEMA: monaco.languages.json.JSONSchema = {
-  $id: 'weevil/alert-rules',
+  $id: 'mallard/alert-rules',
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -358,7 +358,7 @@ export function installMonacoProviders(): void {
     allowComments: true,
     schemas: [
       {
-        uri: 'weevil/alert-rules.json',
+        uri: 'mallard/alert-rules.json',
         fileMatch: ['*'],
         schema: RULE_DOC_SCHEMA,
       },

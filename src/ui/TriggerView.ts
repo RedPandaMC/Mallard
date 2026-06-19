@@ -3,11 +3,11 @@
  * this (empty) tree view, which immediately opens the dashboard in the editor
  * area. The view itself renders nothing but a welcome button (see the
  * `viewsWelcome` contribution in package.json); it exists only to turn a click
- * on the activity-bar icon into the `weevil.openDashboard` command.
+ * on the activity-bar icon into the `mallard.openDashboard` command.
  */
 import * as vscode from 'vscode';
 
-const TRIGGER_VIEW_ID = 'weevil.trigger';
+const TRIGGER_VIEW_ID = 'mallard.trigger';
 
 /**
  * Ignore visibility events fired within this window after activation, so a
@@ -35,7 +35,7 @@ export function registerTriggerView(): vscode.Disposable[] {
   const visibilitySub = treeView.onDidChangeVisibility((e) => {
     if (!e.visible) return;
     if (Date.now() - activatedAt < STARTUP_GUARD_MS) return;
-    void vscode.commands.executeCommand('weevil.openDashboard');
+    void vscode.commands.executeCommand('mallard.openDashboard');
   });
 
   return [treeView, visibilitySub];

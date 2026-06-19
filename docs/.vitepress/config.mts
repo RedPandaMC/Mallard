@@ -1,23 +1,23 @@
 import { defineConfig } from 'vitepress';
 
-// NOTE: the GitHub repo is still named "Weevil"; Pages serves the site at
-// /Weevil/. After the repo is renamed to "Mallard", flip `base` and the
-// absolute URLs below to /Mallard/ in one commit.
-const site = 'https://redpandamc.github.io/Weevil';
+// NOTE: these URLs assume the GitHub repo has been renamed to "Mallard"
+// (Pages then serves the site at /Mallard/). The rename happens right after
+// this lands on main; until then the published docs link may 404 briefly.
+const site = 'https://redpandamc.github.io/Mallard';
 const ogImage = `${site}/brand/og-dark.png`;
 const desc = "Mallard reads Copilot's local usage logs and shows a live dashboard of spend, model usage, and where every credit goes. No sign-in, no telemetry.";
 
 export default defineConfig({
   title: 'Mallard',
   description: desc,
-  base: '/Weevil/',
+  base: '/Mallard/',
 
   appearance: true,
   cleanUrls: true,
 
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/Weevil/favicon.svg' }],
-    ['link', { rel: 'alternate icon', href: '/Weevil/favicon.ico', sizes: 'any' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/Mallard/favicon.svg' }],
+    ['link', { rel: 'alternate icon', href: '/Mallard/favicon.ico', sizes: 'any' }],
     ['meta', { name: 'theme-color', content: '#E5231B' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:title', content: 'Mallard — Copilot spend tracker' }],
@@ -58,7 +58,7 @@ export default defineConfig({
       { text: 'Changelog', link: '/changelog' },
     ],
 
-    socialLinks: [{ icon: 'github', link: 'https://github.com/RedPandaMC/Weevil' }],
+    socialLinks: [{ icon: 'github', link: 'https://github.com/RedPandaMC/Mallard' }],
 
     footer: {
       message: 'Mallard · v2.0 — Built for VS Code · MIT License',

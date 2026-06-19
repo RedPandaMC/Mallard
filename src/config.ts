@@ -10,10 +10,10 @@ export interface MallardConfig {
   pricingManifestUrl: string;
 }
 
-export const RELEVANT_CONFIG_KEYS = ['weevil.copilotLogPath', 'weevil.pricingManifestUrl'];
+export const RELEVANT_CONFIG_KEYS = ['mallard.copilotLogPath', 'mallard.pricingManifestUrl'];
 
 export function readConfig(): MallardConfig {
-  const c = vscode.workspace.getConfiguration('weevil');
+  const c = vscode.workspace.getConfiguration('mallard');
   return {
     copilotLogPath: c.get('copilotLogPath', ''),
     pricingManifestUrl: c.get('pricingManifestUrl', ''),

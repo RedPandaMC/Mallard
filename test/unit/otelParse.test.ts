@@ -95,8 +95,8 @@ describe('parseOtelContent', () => {
 
   it('attributes events to ctx.repo when provided, and omits it otherwise', () => {
     const line = JSON.stringify({ model: 'gpt-4o', input_tokens: 10 });
-    const withRepo = parseOtelContent(line, { ...ctx, repo: 'octo/weevil' });
-    assert.strictEqual(withRepo[0]!.repo, 'octo/weevil');
+    const withRepo = parseOtelContent(line, { ...ctx, repo: 'octo/mallard' });
+    assert.strictEqual(withRepo[0]!.repo, 'octo/mallard');
     const withoutRepo = parseOtelContent(line, ctx);
     assert.strictEqual(withoutRepo[0]!.repo, undefined);
   });

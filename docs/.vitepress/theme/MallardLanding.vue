@@ -19,7 +19,7 @@ const features = [
         <p class="ml-sub">Mallard reads Copilot's local usage logs and shows a live dashboard of spend, model usage, and where every credit goes. No sign-in, no telemetry.</p>
         <div class="ml-cta">
           <a class="ml-btn ml-btn-primary" href="/guide/getting-started">Get started</a>
-          <a class="ml-btn ml-btn-ghost" href="https://github.com/RedPandaMC/Weevil">View on GitHub</a>
+          <a class="ml-btn ml-btn-ghost" href="https://github.com/RedPandaMC/Mallard">View on GitHub</a>
         </div>
         <div class="ml-install">
           <span class="ml-install-cmd"><span class="ml-red">$</span> code --install-extension mallard</span>

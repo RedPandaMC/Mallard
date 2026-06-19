@@ -8,8 +8,8 @@
 
 <br /><br />
 
-[![CI](https://github.com/RedPandaMC/Weevil/actions/workflows/ci.yml/badge.svg)](https://github.com/RedPandaMC/Weevil/actions/workflows/ci.yml)
-[![Docs](https://github.com/RedPandaMC/Weevil/actions/workflows/docs.yml/badge.svg)](https://github.com/RedPandaMC/Weevil/actions/workflows/docs.yml)
+[![CI](https://github.com/RedPandaMC/Mallard/actions/workflows/ci.yml/badge.svg)](https://github.com/RedPandaMC/Mallard/actions/workflows/ci.yml)
+[![Docs](https://github.com/RedPandaMC/Mallard/actions/workflows/docs.yml/badge.svg)](https://github.com/RedPandaMC/Mallard/actions/workflows/docs.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 `COPILOT SPEND · INSTRUMENT` — local-first, no sign-in
@@ -64,7 +64,7 @@ optionally connect to GitHub's billing API for the authoritative charge.
 1. Install from the Extensions view, or:
 
    ```bash
-   code --install-extension RedPandaMC.weevil
+   code --install-extension RedPandaMC.mallard
    ```
 
 2. Use Copilot as normal. Mallard starts collecting immediately, no sign-in
@@ -75,7 +75,7 @@ optionally connect to GitHub's billing API for the authoritative charge.
 
 If the dashboard shows "not enough data", Copilot has not written logs yet, or
 Mallard cannot find them. Run "Mallard: Show Detected Log Path" to check, and set
-`weevil.copilotLogPath` if needed.
+`mallard.copilotLogPath` if needed.
 
 ## How it works
 
@@ -97,8 +97,8 @@ edited in the dashboard, not here.
 
 | Setting                     | Default | Description                                                                  |
 | --------------------------- | ------- | ---------------------------------------------------------------------------- |
-| `weevil.copilotLogPath`     | `""`    | Override the log directory. Blank means auto-detect via `vscode.env.logUri`. |
-| `weevil.pricingManifestUrl` | `""`    | Override the pricing manifest URL. Blank means use the built-in URL.         |
+| `mallard.copilotLogPath`     | `""`    | Override the log directory. Blank means auto-detect via `vscode.env.logUri`. |
+| `mallard.pricingManifestUrl` | `""`    | Override the pricing manifest URL. Blank means use the built-in URL.         |
 
 ## Commands
 
