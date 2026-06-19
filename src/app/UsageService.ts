@@ -16,6 +16,7 @@ import { EventStore } from '../store/EventStore';
 import { UserConfigStore } from './UserConfigStore';
 import { VectorExporter } from '../export/VectorExporter';
 import { vectorize } from '../export/vectorize';
+import { activeBranch } from '../util/repo';
 
 /** Keep ~1h of recent samples for velocity alerting. */
 const HISTORY_WINDOW_MS = 60 * 60 * 1000;
@@ -141,6 +142,7 @@ export class UsageService implements vscode.Disposable {
           : 'lm'
         : 'local';
 
+    const branch = activeBranch();
     const options: SnapshotOptions = {
       now,
       currency: 'USD',
@@ -154,6 +156,8 @@ export class UsageService implements vscode.Disposable {
       ...(this.githubBilling !== undefined ? { githubBilling: this.githubBilling } : {}),
       dimensionEvents: universe,
       ...(this.snapshot !== undefined ? { prevSnapshot: this.snapshot } : {}),
+      manifest: this.pricing.currentManifest,
+      ...(branch !== undefined ? { currentBranch: branch } : {}),
     };
 
     this.snapshot = buildSnapshot(filteredEvents, options);

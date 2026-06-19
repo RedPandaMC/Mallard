@@ -11,8 +11,9 @@ import {
   topBy,
 } from './aggregate';
 import { computeBudget } from './budget';
-import { buildCategoryBreakdownData, buildChartData } from './chartData';
+import { buildCategoryBreakdownData, buildChartData, buildHourlyTimelineData } from './chartData';
 import { forecastMonth } from './forecast';
+import { PricingManifest } from './pricing';
 import {
   AuthStatus,
   Filter,
@@ -43,6 +44,10 @@ export interface SnapshotOptions {
   dimensionEvents?: UsageEvent[];
   /** Previous snapshot — used to detect incremental (today-only) updates. */
   prevSnapshot?: UsageSnapshot;
+  /** Pricing manifest for cheapest-equivalent model comparison. */
+  manifest?: PricingManifest;
+  /** Currently active git branch, for per-branch credit tracking. */
+  currentBranch?: string;
 }
 
 function isIncrementalUpdate(prev: UsageSnapshot | undefined, next: UsageSnapshot): boolean {
@@ -100,6 +105,10 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
   const topModels = topBy(events, 'model', o.filter);
   const dim = o.dimensionEvents ?? events;
 
+  const currentBranchCredits = o.currentBranch
+    ? events.filter((e) => e.branch === o.currentBranch).reduce((sum, e) => sum + e.credits, 0)
+    : 0;
+
   const next: UsageSnapshot = {
     generatedAt: o.now,
     source: o.source,
@@ -124,9 +133,14 @@ export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSn
       forecast,
       o.now,
       buildCategoryBreakdownData(events, o.filter),
+      buildHourlyTimelineData(events, o.filter),
+      o.pricePerCredit,
+      o.manifest,
     ),
     authStatus: o.authStatus,
     isIncremental: false,
+    currentBranchCredits,
+    ...(o.currentBranch !== undefined ? { currentBranch: o.currentBranch } : {}),
     ...(o.githubBilling !== undefined ? { githubBilling: o.githubBilling } : {}),
   };
   next.isIncremental = isIncrementalUpdate(o.prevSnapshot, next);

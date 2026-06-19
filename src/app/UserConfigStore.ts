@@ -67,6 +67,7 @@ const ConfigSchema = z
         includedCredits: z.number(),
       })
       .optional(),
+    branchBudgets: z.record(z.string(), z.number()).optional(),
   })
   .partial();
 

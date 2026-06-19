@@ -64,16 +64,18 @@ const CREATE_SQL = `
     completionTokens INTEGER,
     estimated BOOLEAN NOT NULL DEFAULT TRUE,
     repo VARCHAR,
-    costByCategory VARCHAR
+    costByCategory VARCHAR,
+    branch VARCHAR
   );
   CREATE INDEX IF NOT EXISTS idx_ts ON events(ts);
   CREATE INDEX IF NOT EXISTS idx_model ON events(modelId);
   CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR);
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS branch VARCHAR;
 `;
 
 const INSERT_SQL = `INSERT OR IGNORE INTO events
-  (id, ts, modelId, surface, source, credits, cost, promptTokens, completionTokens, estimated, repo, costByCategory)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`;
+  (id, ts, modelId, surface, source, credits, cost, promptTokens, completionTokens, estimated, repo, costByCategory, branch)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`;
 
 type Row = Record<string, unknown>;
 
@@ -98,6 +100,7 @@ function rowToEvent(row: Row): UsageEvent {
     ...(row.promptTokens != null ? { promptTokens: Number(row.promptTokens) } : {}),
     ...(row.completionTokens != null ? { completionTokens: Number(row.completionTokens) } : {}),
     ...(typeof row.repo === 'string' ? { repo: row.repo } : {}),
+    ...(typeof row.branch === 'string' ? { branch: row.branch } : {}),
     ...(costByCategory !== undefined ? { costByCategory } : {}),
   };
 }
@@ -267,4 +270,6 @@ function bindEvent(stmt: DuckDBPreparedStatement, e: UsageEvent): void {
   else stmt.bindNull(11);
   if (e.costByCategory) stmt.bindVarchar(12, JSON.stringify(e.costByCategory));
   else stmt.bindNull(12);
+  if (e.branch != null) stmt.bindVarchar(13, e.branch);
+  else stmt.bindNull(13);
 }

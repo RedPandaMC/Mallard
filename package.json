@@ -165,6 +165,24 @@
           "default": "",
           "scope": "machine-overridable",
           "description": "MQTT password (optional). Use machine-scoped settings to avoid syncing credentials."
+        },
+        "mallard.vectorExport.certPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "Path to client certificate PEM file for mTLS auth. When set alongside keyPath, overrides username/password."
+        },
+        "mallard.vectorExport.keyPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "Path to client private key PEM file for mTLS auth."
+        },
+        "mallard.vectorExport.caPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "Path to broker CA certificate PEM file. Pins the broker CA to prevent MITM attacks."
         }
       }
     }

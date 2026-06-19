@@ -13,11 +13,13 @@ import {
   Filter,
   Forecast,
   HeatmapData,
+  HourlyTimelineData,
   ModelBreakdownData,
   TopEntry,
   UsageAggregate,
   UsageEvent,
 } from './types';
+import { PricingManifest } from './pricing';
 import { matchesFilter } from './aggregate';
 import { bucketKey, DAY_MS, startOf } from '../util/time';
 
@@ -65,14 +67,32 @@ export function buildDailyBarsData(
   return { points, budgetLine, projectedLine };
 }
 
-export function buildModelBreakdownData(topModels: TopEntry[]): ModelBreakdownData {
+export function buildModelBreakdownData(
+  topModels: TopEntry[],
+  pricePerCredit: number,
+  manifest?: PricingManifest,
+): ModelBreakdownData {
   const top = topModels.slice(0, 8);
+  const multipliers = manifest?.models ?? {};
+  const allMultipliers = Object.values(multipliers).filter((v) => v > 0);
+  const minMultiplier = allMultipliers.length > 0 ? Math.min(...allMultipliers) : 1;
   return {
     labels: top.map((m) => shortModelName(m.key)),
     credits: top.map((m) => m.credits),
     costs: top.map((m) => m.cost),
     tokens: top.map((m) => m.tokens),
+    cheapestEquivalentCosts: top.map((m) => m.tokens * minMultiplier * pricePerCredit),
   };
+}
+
+export function buildHourlyTimelineData(events: UsageEvent[], filter?: Filter): HourlyTimelineData {
+  const hours = new Array(24).fill(0) as number[];
+  for (const e of events) {
+    if (!matchesFilter(e, filter)) continue;
+    hours[new Date(e.ts).getHours()]! += e.credits;
+  }
+  const peakHour = hours.indexOf(Math.max(...hours));
+  return { hours, peakHour };
 }
 
 export function buildHeatmapData(dayAggregates: UsageAggregate[], now: number): HeatmapData {
@@ -131,11 +151,15 @@ export function buildChartData(
   forecast: Forecast,
   now: number,
   categoryBreakdown: CategoryBreakdownData,
+  hourlyTimeline: HourlyTimelineData,
+  pricePerCredit: number,
+  manifest?: PricingManifest,
 ): ChartData {
   return {
     dailyBars: buildDailyBarsData(dayAggregates, budget, forecast, now),
-    modelBreakdown: buildModelBreakdownData(topModels),
+    modelBreakdown: buildModelBreakdownData(topModels, pricePerCredit, manifest),
     heatmap: buildHeatmapData(dayAggregates, now),
     categoryBreakdown,
+    hourlyTimeline,
   };
 }

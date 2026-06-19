@@ -5,9 +5,13 @@
  *
  * Only mqtts:// and wss:// (TLS) URLs are accepted. Plain mqtt:// is rejected
  * with a one-time warning to keep data in transit encrypted.
+ *
+ * mTLS: when certPath + keyPath are both set, client-certificate auth is used
+ * instead of username/password. caPath pins the broker CA to prevent MITM.
  */
 import * as mqtt from 'mqtt';
 import * as crypto from 'crypto';
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import type { VectorPayload } from './vectorize';
 
@@ -20,7 +24,15 @@ export class MqttVectorExporter implements VectorExporter {
   private client: mqtt.MqttClient | null = null;
   private topic: string = '';
 
-  constructor(brokerUrl: string, topicPrefix: string, username?: string, password?: string) {
+  constructor(
+    brokerUrl: string,
+    topicPrefix: string,
+    username?: string,
+    password?: string,
+    certPath?: string,
+    keyPath?: string,
+    caPath?: string,
+  ) {
     if (!brokerUrl.startsWith('mqtts://') && !brokerUrl.startsWith('wss://')) {
       void vscode.window.showWarningMessage(
         'Mallard: mallard.vectorExport.brokerUrl must use mqtts:// or wss:// (TLS required). ' +
@@ -36,9 +48,32 @@ export class MqttVectorExporter implements VectorExporter {
       .slice(0, 12);
     this.topic = `${topicPrefix}/${instanceHash}`;
 
+    const useMtls = certPath && keyPath;
+    if ((certPath && !keyPath) || (!certPath && keyPath)) {
+      console.warn('[mallard] vector export: certPath and keyPath must both be set for mTLS');
+    }
+
+    let cert: Buffer | undefined;
+    let key: Buffer | undefined;
+    let ca: Buffer | undefined;
+    if (useMtls) {
+      try {
+        cert = fs.readFileSync(certPath!);
+        key = fs.readFileSync(keyPath!);
+        if (caPath) ca = fs.readFileSync(caPath);
+      } catch (err) {
+        console.error('[mallard] vector export: failed to read mTLS cert files:', (err as Error).message);
+        return;
+      }
+    }
+
     this.client = mqtt.connect(brokerUrl, {
-      ...(username ? { username } : {}),
-      ...(password ? { password } : {}),
+      ...(useMtls
+        ? { cert, key, ...(ca ? { ca } : {}) }
+        : {
+            ...(username ? { username } : {}),
+            ...(password ? { password } : {}),
+          }),
       reconnectPeriod: 5_000,
       keepalive: 60,
     });

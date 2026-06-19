@@ -25,6 +25,8 @@ export interface EvalBuildInput {
   now?: number;
   /** Alert groups from the document; passed through to the rule evaluator. */
   groups?: import('../types').AlertGroup[];
+  /** Per-branch credit budgets from UserConfig. */
+  branchBudgets?: Record<string, number>;
 }
 
 const ZERO_BUDGET = {
@@ -195,6 +197,9 @@ export function buildEvalContext(input: EvalBuildInput): EvalContext {
     billing,
     now: nowInfo,
     signedIn: input.signedIn ?? !!s?.githubBilling,
+    currentBranch: s?.currentBranch ?? null,
+    currentBranchCredits: s?.currentBranchCredits ?? 0,
+    branchBudgets: input.branchBudgets ?? {},
   };
 
   const vars: Record<string, Value> = { ...(input.vars ?? {}) };

@@ -15,6 +15,9 @@ export interface MallardConfig {
     topic: string;
     username: string;
     password: string;
+    certPath: string;
+    keyPath: string;
+    caPath: string;
   };
 }
 
@@ -35,6 +38,9 @@ export function readConfig(): MallardConfig {
       topic: c.get('vectorExport.topic', 'mallard/usage'),
       username: c.get('vectorExport.username', ''),
       password: c.get('vectorExport.password', ''),
+      certPath: c.get('vectorExport.certPath', ''),
+      keyPath: c.get('vectorExport.keyPath', ''),
+      caPath: c.get('vectorExport.caPath', ''),
     },
   };
 }

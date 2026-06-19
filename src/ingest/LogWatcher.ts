@@ -15,6 +15,7 @@ import { PricingService } from '../pricing/PricingService';
 import { findLogFiles, isPathSafe, locateCopilotLogDirs, platformDefaults } from './locate';
 import { parseOtelContent, ParseContext } from './otelParse';
 import { currentRepo } from './repoResolver';
+import { activeBranch } from '../util/repo';
 import { EventStore } from '../store/EventStore';
 
 const DEBOUNCE_MS = 1_500;
@@ -145,11 +146,13 @@ export class LogWatcher implements vscode.Disposable {
 
   private async parseAll(files: string[]): Promise<void> {
     const repo = currentRepo();
+    const branch = activeBranch();
     const baseCtx: ParseContext = {
       pricePerCredit: this.pricing.pricePerCredit,
       manifest: this.pricing.currentManifest,
       now: Date.now(),
       ...(repo !== undefined ? { repo } : {}),
+      ...(branch !== undefined ? { branch } : {}),
     };
 
     let parseError = false;

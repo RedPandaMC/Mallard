@@ -18,6 +18,7 @@ import { mountSankey } from './charts/sankey';
 import { mountCategoryBreakdown } from './charts/categoryBreakdown';
 import { mountCumulativeArea } from './charts/cumulativeArea';
 import { mountWeekdayRadial } from './charts/weekdayRadial';
+import { mountHourlyTimeline } from './charts/hourlyTimeline';
 import { mountKpiCards } from './components/KpiCards';
 import { mountFilterBar } from './components/FilterBar';
 import { mountGitHubBillingStrip } from './components/GitHubBillingStrip';
@@ -113,6 +114,7 @@ function mountDashboard(root: HTMLElement): void {
           ${panelHtml('category', 'codicon-pie-chart', 'Spend by cost type', 'chart-category', 'Spend by cost type', 'mini')}
           ${panelHtml('cumulative', 'codicon-graph-line', 'Cumulative spend', 'chart-cumulative', 'Cumulative spend over the month', 'mini')}
           ${panelHtml('weekday', 'codicon-pulse', 'Usage by weekday', 'chart-weekday', 'Usage by weekday', 'mini')}
+          ${panelHtml('hourly', 'codicon-clock', 'Usage by hour', 'chart-hourly', 'Usage by hour of day', 'mini')}
         </div>
       </div>
     </div>`;
@@ -131,6 +133,7 @@ function mountDashboard(root: HTMLElement): void {
   const categoryEl = document.getElementById('chart-category')!;
   const cumulativeEl = document.getElementById('chart-cumulative')!;
   const weekdayEl = document.getElementById('chart-weekday')!;
+  const hourlyEl = document.getElementById('chart-hourly')!;
   const daily = lazyChart(dailyEl, () => mountDailyBars(dailyEl));
   const heatmap = lazyChart(heatmapEl, () => mountHeatmap(heatmapEl));
   const models = lazyChart(modelsEl, () => mountModelBreakdown(modelsEl));
@@ -138,6 +141,7 @@ function mountDashboard(root: HTMLElement): void {
   const category = lazyChart(categoryEl, () => mountCategoryBreakdown(categoryEl));
   const cumulative = lazyChart(cumulativeEl, () => mountCumulativeArea(cumulativeEl));
   const weekday = lazyChart(weekdayEl, () => mountWeekdayRadial(weekdayEl));
+  const hourly = lazyChart(hourlyEl, () => mountHourlyTimeline(hourlyEl));
   const alertConfig = mountAlertConfigPanel(document.getElementById('alert-config')!);
   const content = document.getElementById('content')!;
 
@@ -152,6 +156,7 @@ function mountDashboard(root: HTMLElement): void {
     category: section('category'),
     cumulative: section('cumulative'),
     weekday: section('weekday'),
+    hourly: section('hourly'),
   };
 
   const resizeAll = () => {
@@ -162,6 +167,7 @@ function mountDashboard(root: HTMLElement): void {
     category.resize();
     cumulative.resize();
     weekday.resize();
+    hourly.resize();
   };
 
   // Dynamic scaling + docking: the layout manager reorders, resizes (span), and
@@ -206,6 +212,7 @@ function mountDashboard(root: HTMLElement): void {
   let prevModelBreakdown: unknown;
   let prevSankeyKey: string | undefined;
   let prevCategory: unknown;
+  let prevHourly: unknown;
   let prevMetric: string | undefined;
 
   subscribe((s) => {
@@ -271,6 +278,11 @@ function mountDashboard(root: HTMLElement): void {
       if (changed(prevCategory, snapshot.chartData.categoryBreakdown)) {
         category.render((c) => c.update(snapshot));
         prevCategory = snapshot.chartData.categoryBreakdown;
+      }
+
+      if (changed(prevHourly, snapshot.chartData.hourlyTimeline)) {
+        hourly.render((c) => c.update(snapshot));
+        prevHourly = snapshot.chartData.hourlyTimeline;
       }
 
       prevMetric = metric;

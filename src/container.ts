@@ -58,6 +58,9 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
         cfg.vectorExport.topic,
         cfg.vectorExport.username || undefined,
         cfg.vectorExport.password || undefined,
+        cfg.vectorExport.certPath || undefined,
+        cfg.vectorExport.keyPath || undefined,
+        cfg.vectorExport.caPath || undefined,
       )
     : undefined;
   const usage = new UsageService(store, pricing, watcher, userConfig, github, exporter);
@@ -75,6 +78,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
           : {}),
         ...(cfg.groups !== undefined ? { groups: cfg.groups } : {}),
         signedIn: snapshot.authStatus === 'signed-in',
+        ...(cfg.branchBudgets !== undefined ? { branchBudgets: cfg.branchBudgets } : {}),
       });
     }),
   );

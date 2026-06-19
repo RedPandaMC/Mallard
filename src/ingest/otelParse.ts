@@ -13,6 +13,8 @@ export interface ParseContext {
   now: number;
   /** Repo to attribute these events to (active workspace repo at parse time). */
   repo?: string;
+  /** Git branch active at parse time. */
+  branch?: string;
   /** Stable per-file key so ids are unique across log files. */
   fileKey?: string;
   /**
@@ -133,6 +135,7 @@ export function parseOtelContent(content: string, ctx: ParseContext): UsageEvent
       cost,
       estimated: true,
       ...(ctx.repo !== undefined ? { repo: ctx.repo } : {}),
+      ...(ctx.branch !== undefined ? { branch: ctx.branch } : {}),
       ...(costByCategory !== undefined ? { costByCategory } : {}),
     });
   }

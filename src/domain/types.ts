@@ -57,6 +57,8 @@ export interface UsageEvent {
   estimated: boolean;
   /** Workspace repo this usage is attributed to, when resolvable. */
   repo?: string;
+  /** Git branch active at parse time, when resolvable. */
+  branch?: string;
   /**
    * Per-category cost split. Optional + partial so the dimension is addable
    * without backfilling old rows; absent → treat the whole event as 'unknown'.
@@ -119,6 +121,8 @@ export interface UserConfig {
   groups?: AlertGroup[];
   rules?: AlertRule[];
   budget?: { monthlyUsd: number; includedCredits: number };
+  /** Per-branch credit caps keyed by branch name. Used in restriction rules. */
+  branchBudgets?: Record<string, number>;
 }
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
@@ -186,6 +190,7 @@ export const DASHBOARD_PANELS = [
   'category',
   'cumulative',
   'weekday',
+  'hourly',
 ] as const;
 
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
@@ -196,6 +201,7 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
   { id: 'category', span: 1, hidden: false },
   { id: 'cumulative', span: 1, hidden: false },
   { id: 'weekday', span: 1, hidden: false },
+  { id: 'hourly', span: 1, hidden: false },
 ];
 
 /** Active filter applied to build the current snapshot. */
@@ -326,6 +332,14 @@ export interface ModelBreakdownData {
   credits: number[];
   costs: number[];
   tokens: number[];
+  /** Cost if each request had used the cheapest available model (same token count). */
+  cheapestEquivalentCosts: number[];
+}
+
+/** Credits bucketed by hour-of-day (0–23), summed across the filter window. */
+export interface HourlyTimelineData {
+  hours: number[];
+  peakHour: number;
 }
 
 export interface HeatmapData {
@@ -345,6 +359,7 @@ export interface ChartData {
   modelBreakdown: ModelBreakdownData;
   heatmap: HeatmapData;
   categoryBreakdown: CategoryBreakdownData;
+  hourlyTimeline: HourlyTimelineData;
 }
 
 /** The single object every piece of UI consumes. */
@@ -378,4 +393,8 @@ export interface UsageSnapshot {
   authStatus: AuthStatus;
   /** Authoritative billing data from the GitHub API, when signed in. */
   githubBilling?: GitHubBillingData;
+  /** Currently active git branch, when detectable. */
+  currentBranch?: string;
+  /** Total credits attributed to the current branch in the visible window. */
+  currentBranchCredits: number;
 }
