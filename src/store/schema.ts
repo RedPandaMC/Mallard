@@ -1,3 +1,4 @@
+// stub — wire up a migration runner before 1.0
 export const STORE_SCHEMA_VERSION = 2;
 
 /** Keep this many days of raw, per-request events before rolling up. */

@@ -61,6 +61,93 @@ function toSurface(v: unknown): Surface {
   return 'unknown';
 }
 
+/**
+ * Parse Claude Code JSONL session logs into UsageEvents.
+ *
+ * Claude Code writes one JSON object per line. Assistant turns that include a
+ * `usage` block (with `input_tokens` / `output_tokens`) represent actual model
+ * requests and are mapped to UsageEvents tagged `source: 'claude-code'`.
+ *
+ * Format (per line):
+ *   { "type": "assistant", "message": { "model": "...", "usage": { "input_tokens": N, "output_tokens": N } }, ... }
+ *   or the flattened variant:
+ *   { "type": "assistant", "model": "...", "usage": { ... }, "timestamp": "..." }
+ */
+export function parseClaudeCodeContent(content: string, ctx: ParseContext): UsageEvent[] {
+  const events: UsageEvent[] = [];
+  const fileKey = ctx.fileKey ?? 'cc';
+  let offset = ctx.baseOffset ?? 0;
+
+  for (const line of content.split('\n')) {
+    const lineStart = offset;
+    offset += line.length + 1;
+
+    const trimmed = line.trim();
+    if (!trimmed || trimmed[0] !== '{') continue;
+
+    let rec: AnyRecord;
+    try {
+      rec = JSON.parse(trimmed) as AnyRecord;
+    } catch {
+      continue;
+    }
+
+    // Only process assistant turns
+    if (rec['type'] !== 'assistant') continue;
+
+    // Usage can be nested under rec.message or at the top level
+    const msg   = (rec['message'] as AnyRecord | undefined) ?? rec;
+    const usage = (msg['usage'] as AnyRecord | undefined) ?? (rec['usage'] as AnyRecord | undefined);
+    if (!usage) continue;
+
+    const model = pick(
+      { ...(msg as AnyRecord), ...(rec as AnyRecord) },
+      ['model', 'gen_ai.request.model', 'gen_ai.response.model'],
+    );
+    if (!model) continue;
+
+    const prompt     = num(usage['input_tokens']  ?? usage['prompt_tokens']);
+    const completion = num(usage['output_tokens'] ?? usage['completion_tokens']);
+
+    const tsRaw = rec['timestamp'] ?? rec['time'] ?? (msg as AnyRecord)['timestamp'];
+    let ts =
+      typeof tsRaw === 'string'
+        ? Date.parse(tsRaw)
+        : typeof tsRaw === 'number'
+          ? tsRaw
+          : ctx.now;
+    if (Number.isNaN(ts)) ts = ctx.now;
+
+    const { credits, cost } = priceRequest(String(model), {
+      pricePerCredit: ctx.pricePerCredit,
+      currency: 'USD',
+      ...(ctx.manifest !== undefined ? { manifest: ctx.manifest } : {}),
+    });
+
+    const totalTok = (prompt ?? 0) + (completion ?? 0);
+    const costByCategory =
+      cost > 0 && totalTok > 0 ? splitCost(cost, prompt ?? 0, totalTok) : undefined;
+
+    events.push({
+      id: `claude-code:${fileKey}:${lineStart}`,
+      ts,
+      modelId: String(model),
+      surface: 'chat',  // Claude Code sessions are always chat-mode interactions
+      source: 'claude-code',
+      ...(prompt     !== undefined ? { promptTokens:     prompt     } : {}),
+      ...(completion !== undefined ? { completionTokens: completion } : {}),
+      credits,
+      cost,
+      estimated: true,
+      ...(ctx.repo   !== undefined ? { repo:   ctx.repo   } : {}),
+      ...(ctx.branch !== undefined ? { branch: ctx.branch } : {}),
+      ...(costByCategory !== undefined ? { costByCategory } : {}),
+    });
+  }
+
+  return events;
+}
+
 export function parseOtelContent(content: string, ctx: ParseContext): UsageEvent[] {
   const events: UsageEvent[] = [];
   const fileKey = ctx.fileKey ?? 'f';

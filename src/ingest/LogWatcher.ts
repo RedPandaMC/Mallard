@@ -1,6 +1,6 @@
 /**
- * Watches Copilot log directories for new writes, debounces re-parses,
- * and appends new events to the EventStore.
+ * Watches Copilot and Claude Code log directories for new writes, debounces
+ * re-parses, and appends new events to the EventStore.
  *
  * Lifecycle:
  *   1. start()  — full initial parse of all discovered log files
@@ -12,8 +12,15 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { ProviderStatus } from '../domain/types';
 import { PricingService } from '../pricing/PricingService';
-import { findLogFiles, isPathSafe, locateCopilotLogDirs, platformDefaults } from './locate';
-import { parseOtelContent, ParseContext } from './otelParse';
+import {
+  findLogFiles,
+  isPathSafe,
+  isClaudeCodeLogFilename,
+  locateCopilotLogDirs,
+  locateClaudeCodeLogDirs,
+  platformDefaults,
+} from './locate';
+import { parseOtelContent, parseClaudeCodeContent, ParseContext } from './otelParse';
 import { currentRepo } from './repoResolver';
 import { activeBranch } from '../util/repo';
 import { EventStore } from '../store/EventStore';
@@ -92,20 +99,26 @@ export class LogWatcher implements vscode.Disposable {
   }
 
   async start(): Promise<void> {
-    const dirs = await locateCopilotLogDirs(this.logUriPath, this.overridePath || undefined);
-    this.allowedRoots = dirs;
+    const copilotDirs = await locateCopilotLogDirs(this.logUriPath, this.overridePath || undefined);
+    const claudeDirs = await locateClaudeCodeLogDirs();
+    const allDirs = [...new Set([...copilotDirs, ...claudeDirs])];
+    this.allowedRoots = allDirs;
     this.searchedDirs = this.allCandidates();
 
     const files: string[] = [];
-    for (const dir of dirs) {
-      const found = await findLogFiles(dir, dirs);
+    for (const dir of copilotDirs) {
+      const found = await findLogFiles(dir, copilotDirs);
+      files.push(...found);
+    }
+    for (const dir of claudeDirs) {
+      const found = await findLogFiles(dir, claudeDirs, 5, 300, isClaudeCodeLogFilename);
       files.push(...found);
     }
 
     this.logPaths = files;
 
     if (files.length === 0) {
-      this.status = { kind: 'empty', reason: 'No Copilot log files found' };
+      this.status = { kind: 'empty', reason: 'No Copilot or Claude Code log files found' };
       return;
     }
 
@@ -131,13 +144,18 @@ export class LogWatcher implements vscode.Disposable {
   }
 
   private async reparse(): Promise<void> {
-    // Re-discover files (Copilot may have created new log files).
-    const dirs = await locateCopilotLogDirs(this.logUriPath, this.overridePath || undefined);
-    if (dirs.length === 0) return;
-    this.allowedRoots = dirs;
+    const copilotDirs = await locateCopilotLogDirs(this.logUriPath, this.overridePath || undefined);
+    const claudeDirs = await locateClaudeCodeLogDirs();
+    const allDirs = [...new Set([...copilotDirs, ...claudeDirs])];
+    if (allDirs.length === 0) return;
+    this.allowedRoots = allDirs;
     const files: string[] = [];
-    for (const dir of dirs) {
-      const found = await findLogFiles(dir, dirs);
+    for (const dir of copilotDirs) {
+      const found = await findLogFiles(dir, copilotDirs);
+      files.push(...found);
+    }
+    for (const dir of claudeDirs) {
+      const found = await findLogFiles(dir, claudeDirs, 5, 300, isClaudeCodeLogFilename);
       files.push(...found);
     }
     this.logPaths = files;
@@ -170,11 +188,11 @@ export class LogWatcher implements vscode.Disposable {
         // Per-line offsets keyed by file make event ids stable across full and
         // incremental re-parses, so INSERT OR IGNORE dedups instead of
         // re-inserting the same event under a new id.
-        const events = parseOtelContent(content.slice(offset), {
-          ...baseCtx,
-          fileKey: fileKeyOf(file),
-          baseOffset: offset,
-        });
+        const fileCtx: ParseContext = { ...baseCtx, fileKey: fileKeyOf(file), baseOffset: offset };
+        const parser = isClaudeCodeLogFilename(path.basename(file)) && file.includes('.claude')
+          ? parseClaudeCodeContent
+          : parseOtelContent;
+        const events = parser(content.slice(offset), fileCtx);
         if (events.length > 0) await this.store.append(events);
         this.fileOffsets.set(file, stat.size);
         changed = true;

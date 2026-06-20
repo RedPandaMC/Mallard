@@ -805,7 +805,7 @@ body {
 }
 .wv-panel-btn:hover { color: var(--w-fg); background: var(--w-bg-card); }
 .wv-chart-section.wv-dragging { opacity: 0.6; }
-.wv-chart-section.wv-hidden-panel .wv-panel-btn[data-act='hide'] { color: var(--w-brand); }
+.wv-chart-section.wv-hidden-panel .wv-panel-btn[data-act='hide'] { color: var(--vscode-foreground); opacity: 0.45; }
 
 /* ─────────────────────────────────────────
    Responsive

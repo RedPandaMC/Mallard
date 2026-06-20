@@ -8,12 +8,12 @@ export type Granularity = 'day' | 'week' | 'month';
 export const GRANULARITIES: readonly Granularity[] = ['day', 'week', 'month'];
 
 /** Where a usage event came from (kept broad for backward-compat with stored events). */
-export type SourceKind = 'lm' | 'local' | 'github';
+export type SourceKind = 'lm' | 'local' | 'github' | 'claude-code';
 
 /** Which Copilot surface produced the event. */
 export type Surface = 'chat' | 'inline' | 'agent' | 'edit' | 'unknown';
 export const SURFACES = new Set<Surface>(['chat', 'inline', 'agent', 'edit', 'unknown']);
-export const SOURCE_KINDS = new Set<SourceKind>(['lm', 'local', 'github']);
+export const SOURCE_KINDS = new Set<SourceKind>(['lm', 'local', 'github', 'claude-code']);
 
 export type Metric = 'cost' | 'credits' | 'tokens';
 
@@ -238,6 +238,10 @@ export interface Filter {
   models?: string[];
   surfaces?: Surface[];
   repos?: string[];
+  /** Filter to specific git branches. */
+  branches?: string[];
+  /** Filter to specific sources (e.g. 'local', 'claude-code'). */
+  sources?: SourceKind[];
 }
 
 export interface Bucket {

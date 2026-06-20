@@ -1,18 +1,18 @@
 /**
- * Tests for the MetricExporter DI orchestrator pattern and VectorSerializer.
+ * Tests for the MetricExporter DI orchestrator pattern and MetricPayloadSerializer.
  *
  * MetricExporter.ts imports `vscode` (for MqttProtocol), so we cannot import
  * that file in the node unit-test runner. Instead:
  *   - The MetricExporter orchestrator is trivial (two lines); we test the DI
  *     contract with a local re-implementation using fakes.
- *   - VectorSerializer lives in vectorize.ts which has only a type-only import
+ *   - MetricPayloadSerializer lives in payload.ts which has only a type-only import
  *     of MetricSerializer, so it is safe to import here.
  *
  * MqttProtocol and createMetricExporter (which both need vscode) are covered
  * by the integration test suite.
  */
 import { strict as assert } from 'assert';
-import { VectorSerializer } from '../../src/export/vectorize';
+import { MetricPayloadSerializer } from '../../src/export/payload';
 import { buildSnapshot } from '../../src/domain/snapshot';
 import { makeEvent } from './helpers';
 import type { MetricProtocol, MetricSerializer } from '../../src/export/MetricExporter';
@@ -116,20 +116,23 @@ describe('MetricExporter (DI orchestrator)', () => {
   });
 });
 
-// ── VectorSerializer ──────────────────────────────────────────────────────────
+// ── MetricPayloadSerializer ───────────────────────────────────────────────────
 
-describe('VectorSerializer', () => {
-  const serializer = new VectorSerializer();
+describe('MetricPayloadSerializer', () => {
+  const serializer = new MetricPayloadSerializer();
 
-  it('topic is "mallard/metrics"', () => {
-    assert.equal(serializer.topic, 'mallard/metrics');
+  it('topic is "mallard/v2/metrics"', () => {
+    assert.equal(serializer.topic, 'mallard/v2/metrics');
   });
 
-  it('serialize returns an object with all 7 vector keys', () => {
+  it('serialize returns an object with all expected metric keys', () => {
     const payload = serializer.serialize(makeSnapshot());
     const EXPECTED_KEYS = [
       'ts', 'model_dist', 'surface_dist', 'input_cost_ratio',
       'credits_velocity_per_hour', 'mtd_budget_pct', 'repo_count',
+      'peak_usage_hour', 'daily_credit_variance', 'model_count',
+      'surface_concentration', 'estimated_event_ratio', 'forecast_basis',
+      'budget_trend', 'token_per_credit', 'forecast_low', 'forecast_high',
     ];
     for (const key of EXPECTED_KEYS) {
       assert.ok(key in payload, `missing key: ${key}`);
