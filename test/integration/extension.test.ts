@@ -58,6 +58,13 @@ describe('Mallard extension (integration)', () => {
     const props = ext.packageJSON.contributes.configuration.properties as Record<string, unknown>;
     assert.deepStrictEqual(Object.keys(props).sort(), [
       'mallard.copilotLogPath',
+      'mallard.metricExport.brokerUrl',
+      'mallard.metricExport.caPath',
+      'mallard.metricExport.certPath',
+      'mallard.metricExport.keyPath',
+      'mallard.metricExport.password',
+      'mallard.metricExport.topic',
+      'mallard.metricExport.username',
       'mallard.palette',
       'mallard.pricingManifestUrl',
     ]);
