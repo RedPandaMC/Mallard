@@ -150,7 +150,7 @@
         },
         "mallard.metricExport.topic": {
           "type": "string",
-          "default": "mallard/metrics",
+          "default": "mallard/v2/metrics",
           "scope": "machine-overridable",
           "description": "MQTT topic prefix. A stable anonymous instance hash is appended automatically."
         },
@@ -183,6 +183,32 @@
           "default": "",
           "scope": "machine-overridable",
           "description": "Path to broker CA certificate PEM file. Pins the broker CA to prevent MITM attacks."
+        },
+        "mallard.metricExport.webhook.url": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "HTTP webhook URL to POST metric payloads to. Only https:// accepted. Leave empty to disable."
+        },
+        "mallard.metricExport.webhook.secret": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "HMAC-SHA256 signing secret. Each POST includes an X-Mallard-Signature-256 header so receivers can verify authenticity."
+        },
+        "mallard.metricExport.webhook.headers": {
+          "type": "object",
+          "default": {},
+          "scope": "machine-overridable",
+          "description": "Extra HTTP headers to include in webhook requests. Example: { \"Authorization\": \"Bearer token\" }."
+        },
+        "mallard.metricExport.webhook.retries": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 10,
+          "scope": "machine-overridable",
+          "description": "Number of retries on 5xx or network errors with exponential backoff."
         }
       }
     },
