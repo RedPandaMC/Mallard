@@ -105,18 +105,21 @@ export class GitHubUsageService implements vscode.Disposable {
       return this.cache.data;
     }
 
-    const githubSession = await this.session.get(false);
-    if (!githubSession) throw new Error('Not signed in');
+    const auth = await this.session.getToken(false);
+    if (!auth) throw new Error('Not signed in');
 
-    const token = githubSession.accessToken;
-    const username = githubSession.account.label;
+    const { token } = auth;
+    const org = this.session.org;
+
+    const billingUrl = org
+      ? `${GH_API}/orgs/${encodeURIComponent(org)}/settings/billing/ai_credit/usage?apiVersion=${API_VERSION}`
+      : auth.username
+        ? `${GH_API}/users/${encodeURIComponent(auth.username)}/settings/billing/ai_credit/usage?apiVersion=${API_VERSION}`
+        : null;
 
     const [quotaRaw, billingRaw] = await Promise.all([
       fetchWithRetry(`${GH_API}/copilot_internal/user`, token).catch(() => null),
-      fetchWithRetry(
-        `${GH_API}/users/${encodeURIComponent(username)}/settings/billing/ai_credit/usage?apiVersion=${API_VERSION}`,
-        token,
-      ).catch(() => null),
+      billingUrl ? fetchWithRetry(billingUrl, token).catch(() => null) : Promise.resolve(null),
     ]);
 
     const quota = parseQuota(quotaRaw);

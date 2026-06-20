@@ -151,6 +151,34 @@ export interface UserConfig {
   budget?: { monthlyUsd: number; includedCredits: number };
   /** Per-branch credit caps keyed by branch name. Used in restriction rules. */
   branchBudgets?: Record<string, number>;
+  /** Config-driven dashboard layout (CSS grid syntax). Overrides globalState order/sizing. */
+  dashboard?: ConfigDashboard;
+  /** GitHub billing auth configuration (PAT or VS Code session). */
+  githubBilling?: GitHubBillingConfig;
+}
+
+/**
+ * GitHub billing authentication and scope configuration.
+ * All fields are machine-scoped and never synced.
+ */
+export interface GitHubBillingConfig {
+  /**
+   * Auth mode:
+   *  - `"vscode-session"` (default): use VS Code's built-in GitHub OAuth session.
+   *  - `"pat"`: use the provided personal access token (`pat` field).
+   */
+  mode?: 'vscode-session' | 'pat';
+  /**
+   * Personal access token. Required when `mode` is `"pat"`.
+   * Scopes needed: `read:user` for user billing, `read:org` for org billing.
+   */
+  pat?: string;
+  /**
+   * GitHub organization slug. When set, fetches org-level billing instead of
+   * the individual user's billing. Requires `read:org` scope on the token or
+   * session.
+   */
+  org?: string;
 }
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
@@ -208,6 +236,28 @@ export interface DashboardPanelLayout {
 }
 
 export type DashboardLayout = DashboardPanelLayout[];
+
+/**
+ * Dashboard panel entry from config.json, using CSS grid shorthand syntax so
+ * the values map directly to the `grid-column` and `grid-row` CSS properties.
+ * Example: `{ "id": "daily", "gridColumn": "span 2", "gridRow": "span 1" }`
+ */
+export interface ConfigPanelLayout {
+  id: string;
+  /** CSS grid-column shorthand. E.g. "span 1" or "span 2". */
+  gridColumn?: string;
+  /** CSS grid-row shorthand. E.g. "span 1" or "span 2". Optional. */
+  gridRow?: string;
+  hidden?: boolean;
+}
+
+/** Dashboard block in config.json — sets column count and panel order/sizing. */
+export interface ConfigDashboard {
+  /** Number of columns in the grid (1–4). Default: 2. */
+  columns?: number;
+  /** Panel declarations. Unlisted panels fall back to globalState defaults. */
+  panels?: ConfigPanelLayout[];
+}
 
 /** The analysis panels that can be reordered, resized, and hidden. */
 export const DASHBOARD_PANELS = [
