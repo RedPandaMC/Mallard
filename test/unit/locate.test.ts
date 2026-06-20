@@ -103,4 +103,16 @@ describe('isPathSafe', () => {
   it('rejects paths containing ..', () => {
     assert.equal(isPathSafe('/x/../etc/passwd', ['/x']), false);
   });
+  it('accepts the exact root path', () => {
+    assert.ok(isPathSafe('/allowed', ['/allowed']));
+  });
+  it('rejects a path on a completely different root', () => {
+    assert.equal(isPathSafe('/other/file.log', ['/allowed']), false);
+  });
+  it('rejects any path when allowedRoots is empty', () => {
+    assert.equal(isPathSafe('/x/y.log', []), false);
+  });
+  it('accepts when one of multiple roots matches', () => {
+    assert.ok(isPathSafe('/b/file.log', ['/a', '/b']));
+  });
 });

@@ -69,7 +69,7 @@ a small JSON condition language. Rules live in the same `config.json` under the
 | --- | --- | --- |
 | `id` | yes | Unique identifier. Used for cooldown bookkeeping. |
 | `severity` | yes | `"info"`, `"warning"`, or `"critical"`. |
-| `message` | yes | Text shown in the notification. Supports `{{ field.path }}` templates. |
+| `message` | yes | Text shown in the notification. Supports <code v-pre>{{ field.path }}</code> templates. |
 | `when` | yes | JSON condition that must be true for the rule to fire. |
 | `active` | no | Optional gate — rule is skipped unless this condition is true. |
 | `cooldown` | no | Minimum time between firings: `"30m"`, `"4h"`, `"1d"`, `"1w"`. Default `1h`. |
@@ -195,7 +195,7 @@ These fields are available as `{ "var": "..." }` operands in every rule.
 
 ### Message templates
 
-Rule messages support `{{ field.path }}` placeholders. They resolve the same
+Rule messages support <code v-pre>{{ field.path }}</code> placeholders. They resolve the same
 dot-path into the evaluation context and format numbers to two decimal places
 (or as integers when the value is whole):
 
@@ -203,7 +203,7 @@ dot-path into the evaluation context and format numbers to two decimal places
 "message": "{{today.credits}} credits used ({{budget.percentOfBudget | round}}% of budget)"
 ```
 
-Only simple dot-paths are supported. There is no arithmetic inside `{{ }}`.
+Only simple dot-paths are supported. There is no arithmetic inside <code v-pre>{{ }}</code>.
 
 ### User-defined variables
 
