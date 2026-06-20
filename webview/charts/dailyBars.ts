@@ -1,7 +1,8 @@
 /**
  * 30-day daily bar chart — consumes pre-computed DailyBarsData from the host.
  */
-import { echarts, initChart } from './echarts';
+import { initChart } from './echarts';
+import type { TooltipComponentOption, SeriesOption } from './echarts';
 import { readTheme } from '../theme';
 import { UsageSnapshot } from '../../src/domain/types';
 import { formatMoney, formatCredits } from '../../src/domain/format';
@@ -37,7 +38,7 @@ export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
         return;
       }
 
-      const series: echarts.SeriesOption[] = [
+      const series: SeriesOption[] = [
         {
           type: 'bar',
           name: 'Credits',
@@ -54,7 +55,7 @@ export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
           lineStyle: { type: 'dashed', color: t.sevWarn, width: 1 },
           symbol: 'none',
           silent: true,
-        } as echarts.SeriesOption);
+        } as SeriesOption);
       }
 
       if (projectedLine !== null) {
@@ -65,7 +66,7 @@ export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
           lineStyle: { type: 'dotted', color: t.accent, width: 1.5 },
           symbol: 'none',
           silent: true,
-        } as echarts.SeriesOption);
+        } as SeriesOption);
       }
 
       chart.setOption(
@@ -73,7 +74,7 @@ export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
           animation: false,
           tooltip: {
             trigger: 'axis',
-            formatter(params: echarts.TooltipComponentOption) {
+            formatter(params: TooltipComponentOption) {
               const p = (params as unknown as Array<{ dataIndex: number }>)[0];
               if (!p) return '';
               const pt = points[p.dataIndex];

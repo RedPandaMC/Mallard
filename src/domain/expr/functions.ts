@@ -69,10 +69,10 @@ registerFunction({
   returnType: 'number',
   argTypes: ['number', 'number'],
   impl: (args) => {
-    const n = asNumber(args[0]!, 'round');
-    const d = args.length > 1 ? asNumber(args[1]!, 'round') : 0;
-    const m = Math.pow(10, d);
-    return Math.round(n * m) / m;
+    const num = asNumber(args[0]!, 'round');
+    const decimalPlaces = args.length > 1 ? asNumber(args[1]!, 'round') : 0;
+    const magnitude = Math.pow(10, decimalPlaces);
+    return Math.round(num * magnitude) / magnitude;
   },
   description: 'round a number to `n` decimal places (default 0)',
 });
@@ -191,9 +191,9 @@ registerFunction({
   returnType: 'string',
   argTypes: ['number', 'number'],
   impl: (args) => {
-    const n = asNumber(args[0]!, 'percent');
-    const d = args.length > 1 ? asNumber(args[1]!, 'percent') : 0;
-    return `${(n * 100).toFixed(d)}%`;
+    const num = asNumber(args[0]!, 'percent');
+    const decimalPlaces = args.length > 1 ? asNumber(args[1]!, 'percent') : 0;
+    return `${(num * 100).toFixed(decimalPlaces)}%`;
   },
   description: 'format a fraction (0.83) as "83%" (used in message templates)',
 });

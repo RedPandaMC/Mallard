@@ -3,7 +3,8 @@
  * In cost mode a ghost bar shows what the same token count would have cost
  * using the cheapest available model, making the premium model premium visible.
  */
-import { echarts, initChart } from './echarts';
+import { initChart } from './echarts';
+import type { TooltipComponentOption } from './echarts';
 import { Metric, UsageSnapshot } from '../../src/domain/types';
 import { formatCredits, formatMoney, formatTokens } from '../../src/domain/format';
 
@@ -38,31 +39,29 @@ export function mountModelBreakdown(el: HTMLElement): ModelBreakdownHandle {
       const reversedValues = [...values].reverse();
       const reversedCheapest = [...cheapestEquivalentCosts].reverse();
 
-      const series: echarts.EChartsOption['series'] = [
-        {
-          type: 'bar',
-          data: reversedValues,
-          label: {
-            show: true,
-            position: 'right',
-            formatter: (p: { value: number }) => fmt(p.value),
-            fontSize: 10,
-          },
-          z: 2,
+      const mainSeries = {
+        type: 'bar' as const,
+        data: reversedValues,
+        label: {
+          show: true,
+          position: 'right' as const,
+          formatter: (p: { value?: unknown }) => fmt((p.value ?? 0) as number),
+          fontSize: 10,
         },
-      ];
+        z: 2,
+      };
 
-      if (showGhost) {
-        series.push({
-          type: 'bar',
-          data: reversedCheapest,
-          barGap: '-100%',
-          itemStyle: { opacity: 0.18, color: 'currentColor', borderType: 'dashed', borderWidth: 1 },
-          label: { show: false },
-          tooltip: { show: false },
-          z: 1,
-        });
-      }
+      const ghostSeries = showGhost
+        ? [{
+            type: 'bar' as const,
+            data: reversedCheapest,
+            barGap: '-100%',
+            itemStyle: { opacity: 0.18, color: 'currentColor', borderType: 'dashed' as const, borderWidth: 1 },
+            label: { show: false },
+            tooltip: { show: false },
+            z: 1,
+          }]
+        : [];
 
       chart.setOption(
         {
@@ -70,7 +69,7 @@ export function mountModelBreakdown(el: HTMLElement): ModelBreakdownHandle {
           tooltip: {
             trigger: 'axis',
             axisPointer: { type: 'none' },
-            formatter(params: echarts.TooltipComponentOption) {
+            formatter(params: TooltipComponentOption) {
               const items = params as unknown as Array<{ name: string; value: number; seriesIndex: number }>;
               const main = items.find((p) => p.seriesIndex === 0);
               if (!main) return '';
@@ -90,7 +89,7 @@ export function mountModelBreakdown(el: HTMLElement): ModelBreakdownHandle {
             data: reversedLabels,
             axisLabel: { fontSize: 11 },
           },
-          series,
+          series: [mainSeries, ...ghostSeries],
         },
         { notMerge: false, lazyUpdate: true },
       );

@@ -56,21 +56,21 @@ function toFiniteNumber(v: unknown, fallback = 0): number {
 }
 
 function safePath(obj: unknown, parts: { name?: string; index?: Value }[]): Value {
-  let cur: unknown = obj;
+  let current: unknown = obj;
   for (const p of parts) {
-    if (cur === null || cur === undefined) return null;
+    if (current === null || current === undefined) return null;
     if (p.name !== undefined) {
-      if (typeof cur !== 'object') return null;
-      cur = (cur as Record<string, unknown>)[p.name];
+      if (typeof current !== 'object') return null;
+      current = (current as Record<string, unknown>)[p.name];
     } else if (p.index !== undefined) {
       const k = String(p.index);
-      if (Array.isArray(cur)) {
+      if (Array.isArray(current)) {
         const i = Number(p.index);
         if (!Number.isInteger(i)) return null;
-        const idx = i < 0 ? cur.length + i : i;
-        cur = cur[idx];
-      } else if (cur && typeof cur === 'object') {
-        cur = (cur as Record<string, unknown>)[k];
+        const idx = i < 0 ? current.length + i : i;
+        current = current[idx];
+      } else if (current && typeof current === 'object') {
+        current = (current as Record<string, unknown>)[k];
       } else {
         return null;
       }
@@ -78,25 +78,25 @@ function safePath(obj: unknown, parts: { name?: string; index?: Value }[]): Valu
       return null;
     }
   }
-  return cur === undefined ? null : (cur as Value);
+  return current === undefined ? null : (current as Value);
 }
 
 export function buildEvalContext(input: EvalBuildInput): EvalContext {
   const now = input.now ?? Date.now();
-  const s = input.snapshot;
+  const snapshot = input.snapshot;
 
   // Derive a 7-day window from today — the snapshot doesn't carry it
   // pre-computed but the host can pre-fill window7d via the vars/snapshot
   // channel. For the simulator we leave it zero.
-  const today = s?.today ?? { credits: 0, cost: 0, tokens: 0 };
+  const today = snapshot?.today ?? { credits: 0, cost: 0, tokens: 0 };
   const window7d = { credits: today.credits, cost: today.cost, tokens: today.tokens };
 
-  const month = s
-    ? { credits: s.budget.usedCredits, cost: s.budget.usedCost, tokens: 0 }
+  const month = snapshot
+    ? { credits: snapshot.budget.usedCredits, cost: snapshot.budget.usedCost, tokens: 0 }
     : { credits: 0, cost: 0, tokens: 0 };
 
-  const budget = s?.budget ?? ZERO_BUDGET;
-  const forecast = s?.forecast ?? ZERO_FORECAST;
+  const budget = snapshot?.budget ?? ZERO_BUDGET;
+  const forecast = snapshot?.forecast ?? ZERO_FORECAST;
 
   // Velocity from history (credits/hour over the available window)
   let velocityCreditsPerHour = 0;
@@ -114,38 +114,38 @@ export function buildEvalContext(input: EvalBuildInput): EvalContext {
     }
   }
 
-  const topModel = s?.topModels?.[0] ?? null;
-  const topSurface = s?.allSurfaces?.[0] ? { id: s.allSurfaces[0]!, credits: 0, cost: 0 } : null;
-  const topRepo = s?.byRepo?.[0] ?? null;
+  const topModel = snapshot?.topModels?.[0] ?? null;
+  const topSurface = snapshot?.allSurfaces?.[0] ? { id: snapshot.allSurfaces[0]!, credits: 0, cost: 0 } : null;
+  const topRepo = snapshot?.byRepo?.[0] ?? null;
 
   const model: Record<string, { credits: number; cost: number; tokens: number }> = {};
-  for (const m of s?.topModels ?? [])
-    model[m.key] = { credits: m.credits, cost: m.cost, tokens: 0 };
-  for (const k of s?.allModels ?? []) {
-    if (!model[k]) model[k] = { credits: 0, cost: 0, tokens: 0 };
+  for (const modelEntry of snapshot?.topModels ?? [])
+    model[modelEntry.key] = { credits: modelEntry.credits, cost: modelEntry.cost, tokens: 0 };
+  for (const modelKey of snapshot?.allModels ?? []) {
+    if (!model[modelKey]) model[modelKey] = { credits: 0, cost: 0, tokens: 0 };
   }
 
   const surface: Record<string, { credits: number; cost: number; tokens: number }> = {};
-  for (const k of s?.allSurfaces ?? []) surface[k] = { credits: 0, cost: 0, tokens: 0 };
+  for (const surfaceKey of snapshot?.allSurfaces ?? []) surface[surfaceKey] = { credits: 0, cost: 0, tokens: 0 };
 
   const repo: Record<string, { credits: number; cost: number; tokens: number }> = {};
-  for (const r of s?.byRepo ?? []) repo[r.key] = { credits: r.credits, cost: r.cost, tokens: 0 };
-  for (const k of s?.allRepos ?? []) {
-    if (!repo[k]) repo[k] = { credits: 0, cost: 0, tokens: 0 };
+  for (const repoEntry of snapshot?.byRepo ?? []) repo[repoEntry.key] = { credits: repoEntry.credits, cost: repoEntry.cost, tokens: 0 };
+  for (const repoKey of snapshot?.allRepos ?? []) {
+    if (!repo[repoKey]) repo[repoKey] = { credits: 0, cost: 0, tokens: 0 };
   }
 
-  const billing = s?.githubBilling
+  const billing = snapshot?.githubBilling
     ? {
-        netAmount: s.githubBilling.totalNetAmount,
-        grossAmount: s.githubBilling.items.reduce((a, i) => a + i.grossAmount, 0),
-        quotaPercentRemaining: s.githubBilling.quota
-          ? toFiniteNumber(s.githubBilling.quota.entitlement) > 0
+        netAmount: snapshot.githubBilling.totalNetAmount,
+        grossAmount: snapshot.githubBilling.items.reduce((acc, item) => acc + item.grossAmount, 0),
+        quotaPercentRemaining: snapshot.githubBilling.quota
+          ? toFiniteNumber(snapshot.githubBilling.quota.entitlement) > 0
             ? 1 -
-              toFiniteNumber(s.githubBilling.quota.used) /
-                toFiniteNumber(s.githubBilling.quota.entitlement)
+              toFiniteNumber(snapshot.githubBilling.quota.used) /
+                toFiniteNumber(snapshot.githubBilling.quota.entitlement)
             : 1
           : 1,
-        unlimited: s.githubBilling.quota?.unlimited ?? false,
+        unlimited: snapshot.githubBilling.quota?.unlimited ?? false,
       }
     : null;
 
@@ -196,9 +196,9 @@ export function buildEvalContext(input: EvalBuildInput): EvalContext {
     repo,
     billing,
     now: nowInfo,
-    signedIn: input.signedIn ?? !!s?.githubBilling,
-    currentBranch: s?.currentBranch ?? null,
-    currentBranchCredits: s?.currentBranchCredits ?? 0,
+    signedIn: input.signedIn ?? !!snapshot?.githubBilling,
+    currentBranch: snapshot?.currentBranch ?? null,
+    currentBranchCredits: snapshot?.currentBranchCredits ?? 0,
     branchBudgets: input.branchBudgets ?? {},
   };
 

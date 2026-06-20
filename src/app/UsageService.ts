@@ -17,6 +17,7 @@ import { UserConfigStore } from './UserConfigStore';
 import { VectorExporter } from '../export/VectorExporter';
 import { vectorize } from '../export/vectorize';
 import { activeBranch } from '../util/repo';
+import { defaultVscodeHost, VscodeHost } from '../util/vscodeHost';
 
 /** Keep ~1h of recent samples for velocity alerting. */
 const HISTORY_WINDOW_MS = 60 * 60 * 1000;
@@ -42,6 +43,7 @@ export class UsageService implements vscode.Disposable {
     private readonly userConfig: UserConfigStore,
     private readonly github?: GitHubUsageService,
     exporter?: VectorExporter,
+    private readonly host: VscodeHost = defaultVscodeHost,
   ) {
     this.exporter = exporter;
     if (github) {
@@ -123,8 +125,10 @@ export class UsageService implements vscode.Disposable {
   }
 
   private async compute(): Promise<void> {
-    const uc = this.userConfig.get();
+    const userConfig = this.userConfig.get();
     const now = Date.now();
+    for (const [key, ts] of this.alertFired)
+      if (now - ts > 86_400_000) this.alertFired.delete(key);
 
     // Query by date range only, then apply the model/surface/repo selection in
     // memory. `universe` (range-only) drives the filter dropdowns so selecting a
@@ -147,8 +151,8 @@ export class UsageService implements vscode.Disposable {
       now,
       currency: 'USD',
       pricePerCredit: this.pricing.pricePerCredit,
-      monthlyBudget: uc.monthlyBudget > 0 ? uc.monthlyBudget : null,
-      includedCredits: uc.includedCredits,
+      monthlyBudget: userConfig.monthlyBudget > 0 ? userConfig.monthlyBudget : null,
+      includedCredits: userConfig.includedCredits,
       filter: this.filter,
       source,
       status: filteredEvents.length === 0 ? this.watcher.getStatus() : { kind: 'ok' },
@@ -162,7 +166,7 @@ export class UsageService implements vscode.Disposable {
 
     this.snapshot = buildSnapshot(filteredEvents, options);
     this.recordSample(now, this.snapshot);
-    this.fireAlerts(this.snapshot, uc, now);
+    this.fireAlerts(this.snapshot, userConfig, now);
     this._onDidChange.fire(this.snapshot);
     this.exporter?.export(vectorize(this.snapshot));
   }
@@ -176,7 +180,7 @@ export class UsageService implements vscode.Disposable {
   private fireAlerts(s: UsageSnapshot, uc: ReturnType<UserConfigStore['get']>, now: number): void {
     const alerts = evaluateAlerts(s, this.history, uc, this.alertFired, now);
     for (const a of alerts) {
-      void vscode.window.showWarningMessage(a.message);
+      void this.host.showWarningMessage(a.message);
       this.alertFired.set(a.key, now);
     }
   }

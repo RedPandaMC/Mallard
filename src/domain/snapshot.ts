@@ -57,16 +57,16 @@ function isIncrementalUpdate(prev: UsageSnapshot | undefined, next: UsageSnapsho
   const nextPts = next.chartData.dailyBars.points;
   if (prevPts.length !== nextPts.length) return false;
   for (let i = 0; i < prevPts.length - 1; i++) {
-    const a = prevPts[i]!;
-    const b = nextPts[i]!;
-    if (a.date !== b.date || a.credits !== b.credits) return false;
+    const prevPoint = prevPts[i]!;
+    const nextPoint = nextPts[i]!;
+    if (prevPoint.date !== nextPoint.date || prevPoint.credits !== nextPoint.credits) return false;
   }
-  const lp = prevPts[prevPts.length - 1];
-  const ln = nextPts[nextPts.length - 1];
-  return !!lp && !!ln && lp.date === ln.date;
+  const prevLastPoint = prevPts[prevPts.length - 1];
+  const nextLastPoint = nextPts[nextPts.length - 1];
+  return !!prevLastPoint && !!nextLastPoint && prevLastPoint.date === nextLastPoint.date;
 }
 
-function computeRange(events: UsageEvent[], now: number): { start: number; end: number } {
+function computeRange(events: readonly UsageEvent[], now: number): { start: number; end: number } {
   if (events.length === 0) {
     return { start: startOf(now - 29 * DAY_MS, 'day'), end: now };
   }
@@ -79,70 +79,70 @@ function computeRange(events: UsageEvent[], now: number): { start: number; end: 
   return { start: min, end: max };
 }
 
-export function buildSnapshot(events: UsageEvent[], o: SnapshotOptions): UsageSnapshot {
-  const aggregates = aggregateAll(events, o.filter);
+export function buildSnapshot(events: readonly UsageEvent[], opts: SnapshotOptions): UsageSnapshot {
+  const aggregates = aggregateAll(events, opts.filter);
   const dayAggregates = aggregates.day;
-  const forecast = forecastMonth(dayAggregates, o.now, o.pricePerCredit);
+  const forecast = forecastMonth(dayAggregates, opts.now, opts.pricePerCredit);
 
-  const monthStart = startOf(o.now, 'month');
-  const monthEnd = nextBucketStart(o.now, 'month');
-  const mtdFilter: Filter = { ...o.filter, range: { start: monthStart, end: monthEnd } };
+  const monthStart = startOf(opts.now, 'month');
+  const monthEnd = nextBucketStart(opts.now, 'month');
+  const mtdFilter: Filter = { ...opts.filter, range: { start: monthStart, end: monthEnd } };
   const mtd = sumEvents(events, mtdFilter);
 
-  const todayStart = startOf(o.now, 'day');
-  const todayEnd = nextBucketStart(o.now, 'day');
-  const todayFilter: Filter = { ...o.filter, range: { start: todayStart, end: todayEnd } };
+  const todayStart = startOf(opts.now, 'day');
+  const todayEnd = nextBucketStart(opts.now, 'day');
+  const todayFilter: Filter = { ...opts.filter, range: { start: todayStart, end: todayEnd } };
   const todayTotals = sumEvents(events, todayFilter);
 
   const budget = computeBudget({
-    monthlyBudget: o.monthlyBudget,
-    includedCredits: o.includedCredits,
+    monthlyBudget: opts.monthlyBudget,
+    includedCredits: opts.includedCredits,
     mtdCredits: mtd.credits,
     mtdCost: mtd.cost,
     forecast,
   });
 
-  const topModels = topBy(events, 'model', o.filter);
-  const dim = o.dimensionEvents ?? events;
+  const topModels = topBy(events, 'model', opts.filter);
+  const dim = opts.dimensionEvents ?? events;
 
-  const currentBranchCredits = o.currentBranch
-    ? events.filter((e) => e.branch === o.currentBranch).reduce((sum, e) => sum + e.credits, 0)
+  const currentBranchCredits = opts.currentBranch
+    ? events.filter((e) => e.branch === opts.currentBranch).reduce((sum, e) => sum + e.credits, 0)
     : 0;
 
   const next: UsageSnapshot = {
-    generatedAt: o.now,
-    source: o.source,
-    status: o.status,
-    currency: o.currency,
-    pricePerCredit: o.pricePerCredit,
-    filter: o.filter,
-    range: computeRange(events, o.now),
+    generatedAt: opts.now,
+    source: opts.source,
+    status: opts.status,
+    currency: opts.currency,
+    pricePerCredit: opts.pricePerCredit,
+    filter: opts.filter,
+    range: computeRange(events, opts.now),
     forecast,
     budget,
     topModels,
     today: { credits: todayTotals.credits, cost: todayTotals.cost, tokens: todayTotals.tokens },
     allModels: distinctModels(dim),
     allSurfaces: distinctSurfaces(dim),
-    sankeyLinks: sankeyLinksFor(events, o.filter),
+    sankeyLinks: sankeyLinksFor(events, opts.filter),
     allRepos: distinctRepos(dim),
-    byRepo: topBy(events, 'repo', o.filter),
+    byRepo: topBy(events, 'repo', opts.filter),
     chartData: buildChartData(
       dayAggregates,
       topModels,
       budget,
       forecast,
-      o.now,
-      buildCategoryBreakdownData(events, o.filter),
-      buildHourlyTimelineData(events, o.filter),
-      o.pricePerCredit,
-      o.manifest,
+      opts.now,
+      buildCategoryBreakdownData(events, opts.filter),
+      buildHourlyTimelineData(events, opts.filter),
+      opts.pricePerCredit,
+      opts.manifest,
     ),
-    authStatus: o.authStatus,
+    authStatus: opts.authStatus,
     isIncremental: false,
     currentBranchCredits,
-    ...(o.currentBranch !== undefined ? { currentBranch: o.currentBranch } : {}),
-    ...(o.githubBilling !== undefined ? { githubBilling: o.githubBilling } : {}),
+    ...(opts.currentBranch !== undefined ? { currentBranch: opts.currentBranch } : {}),
+    ...(opts.githubBilling !== undefined ? { githubBilling: opts.githubBilling } : {}),
   };
-  next.isIncremental = isIncrementalUpdate(o.prevSnapshot, next);
+  next.isIncremental = isIncrementalUpdate(opts.prevSnapshot, next);
   return next;
 }

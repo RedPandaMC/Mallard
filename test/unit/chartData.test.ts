@@ -86,7 +86,7 @@ describe('buildModelBreakdownData', () => {
       { key: 'anthropic/claude-sonnet-4', credits: 5, cost: 0.2, tokens: 500 },
       { key: 'models/gemini-pro', credits: 2, cost: 0.08, tokens: 200 },
     ];
-    const data = buildModelBreakdownData(tops);
+    const data = buildModelBreakdownData(tops, 0.04);
     assert.deepStrictEqual(data.labels, ['gpt-4o', 'claude-sonnet-4', 'gemini-pro']);
     assert.deepStrictEqual(data.credits, [10, 5, 2]);
     assert.deepStrictEqual(data.costs, [0.4, 0.2, 0.08]);
@@ -99,7 +99,7 @@ describe('buildModelBreakdownData', () => {
       cost: i * 0.04,
       tokens: i * 100,
     }));
-    const data = buildModelBreakdownData(tops);
+    const data = buildModelBreakdownData(tops, 0.04);
     assert.strictEqual(data.labels.length, 8);
   });
 });

@@ -12,6 +12,8 @@ export type SourceKind = 'lm' | 'local' | 'github';
 
 /** Which Copilot surface produced the event. */
 export type Surface = 'chat' | 'inline' | 'agent' | 'edit' | 'unknown';
+export const SURFACES = new Set<Surface>(['chat', 'inline', 'agent', 'edit', 'unknown']);
+export const SOURCE_KINDS = new Set<SourceKind>(['lm', 'local', 'github']);
 
 export type Metric = 'cost' | 'credits' | 'tokens';
 

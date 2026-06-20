@@ -41,16 +41,16 @@ function describe(v: Value): string {
 }
 
 function evalRangeList(start: Value, end: Value): Value[] {
-  const s = toNumber(start, 'range');
-  const e = toNumber(end, 'range');
-  if (!Number.isInteger(s) || !Number.isInteger(e)) {
+  const startVal = toNumber(start, 'range');
+  const endVal = toNumber(end, 'range');
+  if (!Number.isInteger(startVal) || !Number.isInteger(endVal)) {
     throw new ExprEvalError({ message: 'Range bounds must be integers' });
   }
-  if (e < s) {
+  if (endVal < startVal) {
     throw new ExprEvalError({ message: 'Range end must be ≥ start' });
   }
   const out: number[] = [];
-  for (let i = s; i <= e; i++) out.push(i);
+  for (let i = startVal; i <= endVal; i++) out.push(i);
   return out;
 }
 
@@ -105,29 +105,29 @@ export function evaluate(expr: Expr, ctx: EvalContext): Value {
       return out;
     }
     case 'range': {
-      const s = evaluate(expr.start, ctx);
-      const e = evaluate(expr.end, ctx);
-      return evalRangeList(s, e);
+      const startVal = evaluate(expr.start, ctx);
+      const endVal = evaluate(expr.end, ctx);
+      return evalRangeList(startVal, endVal);
     }
     case 'unary': {
-      const v = evaluate(expr.arg, ctx);
-      if (expr.op === '-') return -toNumber(v, 'unary -');
-      if (expr.op === 'not') return !isTruthy(v);
+      const value = evaluate(expr.arg, ctx);
+      if (expr.op === '-') return -toNumber(value, 'unary -');
+      if (expr.op === 'not') return !isTruthy(value);
       throw new ExprEvalError({ message: `Unknown unary op '${expr.op}'` });
     }
     case 'binary': {
       // Short-circuit 'and' / 'or'
       if (expr.op === 'and') {
-        const l = evaluate(expr.left, ctx);
-        return isTruthy(l) ? isTruthy(evaluate(expr.right, ctx)) : false;
+        const left = evaluate(expr.left, ctx);
+        return isTruthy(left) ? isTruthy(evaluate(expr.right, ctx)) : false;
       }
       if (expr.op === 'or') {
-        const l = evaluate(expr.left, ctx);
-        return isTruthy(l) ? true : isTruthy(evaluate(expr.right, ctx));
+        const left = evaluate(expr.left, ctx);
+        return isTruthy(left) ? true : isTruthy(evaluate(expr.right, ctx));
       }
-      const l = evaluate(expr.left, ctx);
-      const r = evaluate(expr.right, ctx);
-      return applyBinary(expr.op, l, r, ctx);
+      const left = evaluate(expr.left, ctx);
+      const right = evaluate(expr.right, ctx);
+      return applyBinary(expr.op, left, right, ctx);
     }
     case 'call': {
       const args = expr.args.map((a) => evaluate(a, ctx));
@@ -151,60 +151,60 @@ function arityText(spec: { minArity: number; maxArity: number }): string {
   return `${spec.minArity}..${spec.maxArity}`;
 }
 
-function applyBinary(op: string, l: Value, r: Value, _ctx: EvalContext): Value {
+function applyBinary(op: string, left: Value, right: Value, _ctx: EvalContext): Value {
   switch (op) {
     case '+':
-      if (typeof l === 'string' || typeof r === 'string') return String(l ?? '') + String(r ?? '');
-      return toNumber(l, '+') + toNumber(r, '+');
+      if (typeof left === 'string' || typeof right === 'string') return String(left ?? '') + String(right ?? '');
+      return toNumber(left, '+') + toNumber(right, '+');
     case '-':
-      return toNumber(l, '-') - toNumber(r, '-');
+      return toNumber(left, '-') - toNumber(right, '-');
     case '*':
-      return toNumber(l, '*') * toNumber(r, '*');
+      return toNumber(left, '*') * toNumber(right, '*');
     case '/': {
-      const d = toNumber(r, '/');
-      if (d === 0) throw new ExprEvalError({ message: 'Division by zero' });
-      return toNumber(l, '/') / d;
+      const divisor = toNumber(right, '/');
+      if (divisor === 0) throw new ExprEvalError({ message: 'Division by zero' });
+      return toNumber(left, '/') / divisor;
     }
     case '%':
-      return toNumber(l, '%') % toNumber(r, '%');
+      return toNumber(left, '%') % toNumber(right, '%');
     case '==':
-      return looseEq(l, r);
+      return looseEq(left, right);
     case '!=':
-      return !looseEq(l, r);
+      return !looseEq(left, right);
     case '>':
-      return cmp(l, r) > 0;
+      return cmp(left, right) > 0;
     case '>=':
-      return cmp(l, r) >= 0;
+      return cmp(left, right) >= 0;
     case '<':
-      return cmp(l, r) < 0;
+      return cmp(left, right) < 0;
     case '<=':
-      return cmp(l, r) <= 0;
+      return cmp(left, right) <= 0;
     case '??':
-      return l === null || l === undefined ? r : l;
+      return left === null || left === undefined ? right : left;
     case 'in': {
-      if (Array.isArray(r)) {
-        for (const x of r) if (looseEq(x, l)) return true;
+      if (Array.isArray(right)) {
+        for (const x of right) if (looseEq(x, left)) return true;
         return false;
       }
-      if (typeof r === 'string' && typeof l === 'string') {
-        return r.includes(l);
+      if (typeof right === 'string' && typeof left === 'string') {
+        return right.includes(left);
       }
-      throw new ExprEvalError({ message: `'in' expects a list on the right, got ${describe(r)}` });
+      throw new ExprEvalError({ message: `'in' expects a list on the right, got ${describe(right)}` });
     }
     case 'contains':
-      if (typeof l === 'string' && typeof r === 'string') return l.includes(r);
-      if (Array.isArray(l)) return l.some((x) => looseEq(x, r));
+      if (typeof left === 'string' && typeof right === 'string') return left.includes(right);
+      if (Array.isArray(left)) return left.some((x) => looseEq(x, right));
       throw new ExprEvalError({ message: `'contains' expects a string or list on the left` });
     case 'startsWith':
-      if (typeof l !== 'string' || typeof r !== 'string') {
+      if (typeof left !== 'string' || typeof right !== 'string') {
         throw new ExprEvalError({ message: `'startsWith' expects two strings` });
       }
-      return l.startsWith(r);
+      return left.startsWith(right);
     case 'endsWith':
-      if (typeof l !== 'string' || typeof r !== 'string') {
+      if (typeof left !== 'string' || typeof right !== 'string') {
         throw new ExprEvalError({ message: `'endsWith' expects two strings` });
       }
-      return l.endsWith(r);
+      return left.endsWith(right);
   }
   throw new ExprEvalError({ message: `Unknown operator '${op}'` });
 }

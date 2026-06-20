@@ -12,6 +12,7 @@
  */
 import { mkdirSync } from 'fs';
 import * as path from 'path';
+import { z } from 'zod';
 import { DuckDBConnection, DuckDBInstance, DuckDBPreparedStatement } from '@duckdb/node-api';
 import { CostCategory, Filter, SourceKind, Surface, UsageEvent } from '../domain/types';
 import { UNATTRIBUTED_REPO } from '../domain/aggregate';
@@ -19,6 +20,22 @@ import { DAY_MS, startOf } from '../util/time';
 import { MAX_RAW_EVENTS, RAW_WINDOW_DAYS } from './schema';
 
 type Categories = Partial<Record<CostCategory, number>>;
+
+const EventRow = z.object({
+  id: z.string(),
+  ts: z.union([z.number(), z.bigint()]).transform(Number),
+  modelId: z.string(),
+  surface: z.enum(['chat', 'inline', 'agent', 'edit', 'unknown']).catch('unknown'),
+  source: z.enum(['lm', 'local', 'github']).catch('local'),
+  credits: z.number(),
+  cost: z.number(),
+  estimated: z.boolean().catch(true),
+  promptTokens: z.number().nullish(),
+  completionTokens: z.number().nullish(),
+  repo: z.string().nullish(),
+  branch: z.string().nullish(),
+  costByCategory: z.string().nullish(),
+});
 
 /** Sum two optional category maps; returns undefined when both are absent. */
 function addCategories(a?: Categories, b?: Categories): Categories | undefined {
@@ -79,28 +96,34 @@ const INSERT_SQL = `INSERT OR IGNORE INTO events
 
 type Row = Record<string, unknown>;
 
-function rowToEvent(row: Row): UsageEvent {
+function rowToEvent(row: Row): UsageEvent | null {
+  const result = EventRow.safeParse(row);
+  if (!result.success) {
+    console.warn('[mallard] EventStore: skipping malformed row', result.error.issues[0]?.message, row);
+    return null;
+  }
+  const r = result.data;
   let costByCategory: Categories | undefined;
-  if (typeof row.costByCategory === 'string') {
+  if (typeof r.costByCategory === 'string') {
     try {
-      costByCategory = JSON.parse(row.costByCategory) as Categories;
+      costByCategory = JSON.parse(r.costByCategory) as Categories;
     } catch {
       costByCategory = undefined;
     }
   }
   return {
-    id: String(row.id),
-    ts: Number(row.ts),
-    modelId: String(row.modelId),
-    surface: row.surface as Surface,
-    source: row.source as SourceKind,
-    credits: Number(row.credits),
-    cost: Number(row.cost),
-    estimated: row.estimated !== false,
-    ...(row.promptTokens != null ? { promptTokens: Number(row.promptTokens) } : {}),
-    ...(row.completionTokens != null ? { completionTokens: Number(row.completionTokens) } : {}),
-    ...(typeof row.repo === 'string' ? { repo: row.repo } : {}),
-    ...(typeof row.branch === 'string' ? { branch: row.branch } : {}),
+    id: r.id,
+    ts: r.ts,
+    modelId: r.modelId,
+    surface: r.surface as Surface,
+    source: r.source as SourceKind,
+    credits: r.credits,
+    cost: r.cost,
+    estimated: r.estimated,
+    ...(r.promptTokens != null ? { promptTokens: r.promptTokens } : {}),
+    ...(r.completionTokens != null ? { completionTokens: r.completionTokens } : {}),
+    ...(r.repo != null ? { repo: r.repo } : {}),
+    ...(r.branch != null ? { branch: r.branch } : {}),
     ...(costByCategory !== undefined ? { costByCategory } : {}),
   };
 }
@@ -137,11 +160,11 @@ export class EventStore {
 
   async append(incoming: UsageEvent[]): Promise<number> {
     if (incoming.length === 0) return 0;
-    const before = await this.count();
+    const dupes = await this.countExistingIds(incoming.map((e) => e.id));
     await this.insertAll(incoming);
-    const added = (await this.count()) - before;
-    if ((await this.count()) > MAX_RAW_EVENTS) await this.rollup();
-    return added;
+    const total = await this.count();
+    if (total > MAX_RAW_EVENTS) await this.rollup();
+    return incoming.length - dupes;
   }
 
   async query(filter?: Filter): Promise<UsageEvent[]> {
@@ -219,6 +242,16 @@ export class EventStore {
     this.instance.closeSync();
   }
 
+  /** Count how many of the given ids already exist (scoped query, not full scan). */
+  private async countExistingIds(ids: string[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const placeholders = ids.map(() => '?').join(',');
+    const prep = await this.conn.prepare(`SELECT count(*) AS c FROM events WHERE id IN (${placeholders})`);
+    ids.forEach((id, i) => prep.bindVarchar(i + 1, id));
+    const rows = (await prep.runAndReadAll()).getRowObjects();
+    return Number(rows[0]?.c ?? 0);
+  }
+
   /** Bulk insert with dedup (INSERT OR IGNORE) inside a single transaction. */
   private async insertAll(events: UsageEvent[]): Promise<void> {
     if (events.length === 0) return;
@@ -237,12 +270,14 @@ export class EventStore {
   }
 
   private async select(sql: string, params: unknown[] = []): Promise<UsageEvent[]> {
+    const toEvents = (rows: Record<string, unknown>[]): UsageEvent[] =>
+      rows.map((r) => rowToEvent(r as Row)).filter((e): e is UsageEvent => e !== null);
     if (params.length === 0) {
-      return (await this.conn.runAndReadAll(sql)).getRowObjects().map((r) => rowToEvent(r as Row));
+      return toEvents((await this.conn.runAndReadAll(sql)).getRowObjects());
     }
     const prep = await this.conn.prepare(sql);
     params.forEach((p, i) => bindParam(prep, i + 1, p));
-    return (await prep.runAndReadAll()).getRowObjects().map((r) => rowToEvent(r as Row));
+    return toEvents((await prep.runAndReadAll()).getRowObjects());
   }
 }
 

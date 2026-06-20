@@ -22,9 +22,9 @@ const DEBOUNCE_MS = 1_500;
 
 /** Short, stable key for a file path (djb2) used to namespace event ids. */
 function fileKeyOf(filePath: string): string {
-  let h = 5381;
-  for (let i = 0; i < filePath.length; i++) h = ((h << 5) + h + filePath.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(36);
+  let hash = 5381;
+  for (let i = 0; i < filePath.length; i++) hash = ((hash << 5) + hash + filePath.charCodeAt(i)) | 0;
+  return (hash >>> 0).toString(36);
 }
 
 export class LogWatcher implements vscode.Disposable {
@@ -76,12 +76,12 @@ export class LogWatcher implements vscode.Disposable {
     if (this.logUriPath) {
       // mirror locateCopilotLogDirs's logic for the session root
       const root = (() => {
-        let q = this.logUriPath!;
+        let pathToWalk = this.logUriPath!;
         for (let i = 0; i < 4; i++) {
-          const parent = path.dirname(q);
-          if (parent === q) break;
+          const parent = path.dirname(pathToWalk);
+          if (parent === pathToWalk) break;
           if (path.basename(parent).toLowerCase() === 'logs') return parent;
-          q = parent;
+          pathToWalk = parent;
         }
         return path.dirname(this.logUriPath!);
       })();
@@ -117,8 +117,8 @@ export class LogWatcher implements vscode.Disposable {
     const watchedDirs = new Set(files.map((f) => path.dirname(f)));
     for (const dir of watchedDirs) {
       try {
-        const w = fsWatch(dir, { recursive: false }, () => this.scheduleReparse());
-        this.watchers.push(w);
+        const watcher = fsWatch(dir, { recursive: false }, () => this.scheduleReparse());
+        this.watchers.push(watcher);
       } catch {
         // Watch unavailable in some environments — fall back to interval polling in UsageService.
       }
@@ -178,12 +178,17 @@ export class LogWatcher implements vscode.Disposable {
         if (events.length > 0) await this.store.append(events);
         this.fileOffsets.set(file, stat.size);
         changed = true;
-      } catch {
+      } catch (err) {
+        console.warn('[mallard] LogWatcher: error parsing', file, err);
         parseError = true;
       }
     }
 
-    if (changed) await this.saveOffsets();
+    if (changed) {
+      await this.saveOffsets();
+      for (const filePath of this.fileOffsets.keys())
+        if (!this.logPaths.includes(filePath)) this.fileOffsets.delete(filePath);
+    }
 
     const total = await this.store.count();
     if (total > 0) {
@@ -200,7 +205,8 @@ export class LogWatcher implements vscode.Disposable {
     try {
       const raw = await this.store.getMeta('fileOffsets');
       this.fileOffsets = raw ? new Map(JSON.parse(raw) as [string, number][]) : new Map();
-    } catch {
+    } catch (err) {
+      console.warn('[mallard] LogWatcher: failed to load file offsets, starting fresh', err);
       this.fileOffsets = new Map();
     }
   }

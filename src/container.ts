@@ -16,7 +16,7 @@ import { initRepoAttribution } from './ingest/repoResolver';
 import { LogWatcher } from './ingest/LogWatcher';
 import { PricingService } from './pricing/PricingService';
 import { EventStore } from './store/EventStore';
-import { MqttVectorExporter } from './export/VectorExporter';
+import { createExporter } from './export/ExporterFactory';
 
 export interface Container {
   usage: UsageService;
@@ -52,17 +52,16 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const github = new GitHubUsageService(githubSession);
   const userConfig = new UserConfigStore(storageDir);
   const layout = new LayoutStore(context.globalState);
-  const exporter = cfg.vectorExport.brokerUrl
-    ? new MqttVectorExporter(
-        cfg.vectorExport.brokerUrl,
-        cfg.vectorExport.topic,
-        cfg.vectorExport.username || undefined,
-        cfg.vectorExport.password || undefined,
-        cfg.vectorExport.certPath || undefined,
-        cfg.vectorExport.keyPath || undefined,
-        cfg.vectorExport.caPath || undefined,
-      )
-    : undefined;
+  const ve = cfg.vectorExport;
+  const exporter = createExporter({
+    ...(ve.brokerUrl ? { brokerUrl: ve.brokerUrl } : {}),
+    ...(ve.topic ? { topic: ve.topic } : {}),
+    ...(ve.username ? { username: ve.username } : {}),
+    ...(ve.password ? { password: ve.password } : {}),
+    ...(ve.certPath ? { certPath: ve.certPath } : {}),
+    ...(ve.keyPath ? { keyPath: ve.keyPath } : {}),
+    ...(ve.caPath ? { caPath: ve.caPath } : {}),
+  }) ?? undefined;
   const usage = new UsageService(store, pricing, watcher, userConfig, github, exporter);
   const restriction = new RestrictionEngine(storageDir);
 

@@ -2,10 +2,11 @@
  * Model → surface Sankey chart.
  *
  * Only rendered when ≥2 models and ≥2 surfaces are present in the current
- * filtered data. Defers ECharts init until the element scrolls into view
- * (IntersectionObserver).
+ * filtered data. Lazy init is handled by lazyChart() in main.ts — no internal
+ * IntersectionObserver needed here.
  */
-import { echarts, initChart } from './echarts';
+import { initChart } from './echarts';
+import type { TooltipComponentOption } from './echarts';
 import { UsageSnapshot } from '../../src/domain/types';
 import { formatCredits } from '../../src/domain/format';
 
@@ -21,19 +22,9 @@ function shortName(id: string): string {
 }
 
 export function mountSankey(el: HTMLElement): SankeyHandle {
-  let chart: ReturnType<typeof initChart> | null = null;
-  let pending: UsageSnapshot | null = null;
-
-  const io = new IntersectionObserver((entries) => {
-    if (!entries[0]?.isIntersecting) return;
-    io.disconnect();
-    chart = initChart(el);
-    if (pending) render(pending);
-  });
-  io.observe(el);
+  const chart = initChart(el);
 
   function render(s: UsageSnapshot): void {
-    if (!chart) { pending = s; return; }
 
     const { sankeyLinks, allModels, allSurfaces } = s;
     if (allModels.length < 2 || allSurfaces.length < 2 || sankeyLinks.length === 0) {
@@ -60,7 +51,7 @@ export function mountSankey(el: HTMLElement): SankeyHandle {
         animation: false,
         tooltip: {
           trigger: 'item',
-          formatter(params: echarts.TooltipComponentOption) {
+          formatter(params: TooltipComponentOption) {
             const p = params as unknown as {
               dataType: string;
               name: string;
@@ -92,6 +83,6 @@ export function mountSankey(el: HTMLElement): SankeyHandle {
 
   return {
     update: render,
-    resize() { chart?.resize(); },
+    resize() { chart.resize(); },
   };
 }

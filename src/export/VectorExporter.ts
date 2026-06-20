@@ -53,10 +53,10 @@ export class MqttVectorExporter implements VectorExporter {
       console.warn('[mallard] vector export: certPath and keyPath must both be set for mTLS');
     }
 
-    let cert: Buffer | undefined;
-    let key: Buffer | undefined;
-    let ca: Buffer | undefined;
     if (useMtls) {
+      let cert: Buffer;
+      let key: Buffer;
+      let ca: Buffer | undefined;
       try {
         cert = fs.readFileSync(certPath!);
         key = fs.readFileSync(keyPath!);
@@ -65,18 +65,21 @@ export class MqttVectorExporter implements VectorExporter {
         console.error('[mallard] vector export: failed to read mTLS cert files:', (err as Error).message);
         return;
       }
+      this.client = mqtt.connect(brokerUrl, {
+        cert,
+        key,
+        ...(ca ? { ca } : {}),
+        reconnectPeriod: 5_000,
+        keepalive: 60,
+      });
+    } else {
+      this.client = mqtt.connect(brokerUrl, {
+        ...(username ? { username } : {}),
+        ...(password ? { password } : {}),
+        reconnectPeriod: 5_000,
+        keepalive: 60,
+      });
     }
-
-    this.client = mqtt.connect(brokerUrl, {
-      ...(useMtls
-        ? { cert, key, ...(ca ? { ca } : {}) }
-        : {
-            ...(username ? { username } : {}),
-            ...(password ? { password } : {}),
-          }),
-      reconnectPeriod: 5_000,
-      keepalive: 60,
-    });
 
     this.client.on('error', (err: Error) => {
       console.error('[mallard] vector export connection error:', err.message);

@@ -39,8 +39,8 @@ export async function initRepoAttribution(): Promise<void> {
 
 function slugFromRemote(url?: string): string | undefined {
   if (!url) return undefined;
-  const m = /[/:]([^/:]+\/[^/]+?)(?:\.git)?\/?$/.exec(url.trim());
-  return m ? m[1] : undefined;
+  const remoteMatch = /[/:]([^/:]+\/[^/]+?)(?:\.git)?\/?$/.exec(url.trim());
+  return remoteMatch ? remoteMatch[1] : undefined;
 }
 
 export interface RepoAttribution {

@@ -85,7 +85,7 @@ export function buildModelBreakdownData(
   };
 }
 
-export function buildHourlyTimelineData(events: UsageEvent[], filter?: Filter): HourlyTimelineData {
+export function buildHourlyTimelineData(events: readonly UsageEvent[], filter?: Filter): HourlyTimelineData {
   const hours = new Array(24).fill(0) as number[];
   for (const e of events) {
     if (!matchesFilter(e, filter)) continue;
@@ -121,7 +121,7 @@ export function buildHeatmapData(dayAggregates: UsageAggregate[], now: number): 
  * hides the chart rather than showing a misleading single bucket.
  */
 export function buildCategoryBreakdownData(
-  events: UsageEvent[],
+  events: readonly UsageEvent[],
   f?: Filter,
 ): CategoryBreakdownData {
   const totals = new Map<CostCategory, number>();

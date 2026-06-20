@@ -3,7 +3,8 @@
  * Consumes pre-computed HeatmapData from the host.
  * Only rendered when there is at least one non-zero day.
  */
-import { echarts, initChart } from './echarts';
+import { initChart } from './echarts';
+import type { TooltipComponentOption } from './echarts';
 import { readTheme } from '../theme';
 import { UsageSnapshot } from '../../src/domain/types';
 import { formatCredits } from '../../src/domain/format';
@@ -33,7 +34,7 @@ export function mountHeatmap(el: HTMLElement): HeatmapHandle {
         {
           animation: false,
           tooltip: {
-            formatter(params: echarts.TooltipComponentOption) {
+            formatter(params: TooltipComponentOption) {
               const p = params as unknown as { value: [string, number] };
               const [date, credits] = p.value;
               return `${date}<br/>${formatCredits(credits)} cr`;

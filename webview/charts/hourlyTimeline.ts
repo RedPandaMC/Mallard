@@ -3,7 +3,8 @@
  * Helps developers see whether spend peaks at standups, late-night sessions, etc.
  * Peak hour is highlighted in the theme accent; all others stay grayscale.
  */
-import { echarts, initChart } from './echarts';
+import { initChart } from './echarts';
+import type { TooltipComponentOption } from './echarts';
 import { readTheme } from '../theme';
 import { UsageSnapshot } from '../../src/domain/types';
 import { formatCredits } from '../../src/domain/format';
@@ -41,7 +42,7 @@ export function mountHourlyTimeline(el: HTMLElement): HourlyTimelineHandle {
           tooltip: {
             trigger: 'axis',
             axisPointer: { type: 'shadow' },
-            formatter(params: echarts.TooltipComponentOption) {
+            formatter(params: TooltipComponentOption) {
               const p = (params as unknown as Array<{ dataIndex: number; value: number }>)[0];
               if (!p) return '';
               return `${p.dataIndex}:00 – ${p.dataIndex + 1}:00<br/>${formatCredits(p.value)} cr`;

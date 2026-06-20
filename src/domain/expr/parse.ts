@@ -33,12 +33,12 @@ function expectPunct(p: Parser, ch: string): Token {
 }
 
 export function parseExpr(input: string): Expr {
-  const p: Parser = { tokens: tokenize(input), pos: 0 };
-  const e = parseOr(p);
-  if (peek(p).kind !== 'eof') {
-    throw new ExprEvalError({ message: 'Unexpected token', pointer: String(peek(p).start) });
+  const parser: Parser = { tokens: tokenize(input), pos: 0 };
+  const expr = parseOr(parser);
+  if (peek(parser).kind !== 'eof') {
+    throw new ExprEvalError({ message: 'Unexpected token', pointer: String(peek(parser).start) });
   }
-  return e;
+  return expr;
 }
 
 function parseOr(p: Parser): Expr {
@@ -125,8 +125,8 @@ function parseMul(p: Parser): Expr {
 }
 
 function parseUnary(p: Parser): Expr {
-  const t = peek(p);
-  if (t.kind === 'op' && t.value === '-') {
+  const token = peek(p);
+  if (token.kind === 'op' && token.value === '-') {
     advance(p);
     return { kind: 'unary', op: '-' as UnaryOp, arg: parseUnary(p) };
   }
@@ -134,39 +134,39 @@ function parseUnary(p: Parser): Expr {
 }
 
 function parsePrimary(p: Parser): Expr {
-  const t = peek(p);
+  const token = peek(p);
 
-  if (t.kind === 'number') {
+  if (token.kind === 'number') {
     advance(p);
-    const raw = t.value;
+    const raw = token.value;
     if (/[mhdw]$/.test(raw)) {
       return { kind: 'string', value: raw };
     }
     return { kind: 'number', value: Number(raw) };
   }
-  if (t.kind === 'string') {
+  if (token.kind === 'string') {
     advance(p);
-    return { kind: 'string', value: t.value };
+    return { kind: 'string', value: token.value };
   }
-  if (isKeyword(t, 'true')) {
+  if (isKeyword(token, 'true')) {
     advance(p);
     return { kind: 'bool', value: true };
   }
-  if (isKeyword(t, 'false')) {
+  if (isKeyword(token, 'false')) {
     advance(p);
     return { kind: 'bool', value: false };
   }
-  if (isKeyword(t, 'null')) {
+  if (isKeyword(token, 'null')) {
     advance(p);
     return { kind: 'null' };
   }
-  if (t.kind === 'punct' && t.value === '(') {
+  if (token.kind === 'punct' && token.value === '(') {
     advance(p);
-    const e = parseOr(p);
+    const expr = parseOr(p);
     expectPunct(p, ')');
-    return e;
+    return expr;
   }
-  if (t.kind === 'punct' && t.value === '[') {
+  if (token.kind === 'punct' && token.value === '[') {
     advance(p);
     if (peek(p).kind === 'punct' && peek(p).value === ']') {
       advance(p);
@@ -187,7 +187,7 @@ function parsePrimary(p: Parser): Expr {
     expectPunct(p, ']');
     return { kind: 'list', items };
   }
-  if (t.kind === 'punct' && t.value === '$') {
+  if (token.kind === 'punct' && token.value === '$') {
     advance(p);
     const id = peek(p);
     if (id.kind !== 'ident') {
@@ -215,7 +215,7 @@ function parsePrimary(p: Parser): Expr {
     }
     return { kind: 'var', name };
   }
-  if (t.kind === 'ident') {
+  if (token.kind === 'ident') {
     const id = advance(p);
     // function call
     if (peek(p).kind === 'punct' && peek(p).value === '(') {
@@ -259,7 +259,7 @@ function parsePrimary(p: Parser): Expr {
   }
 
   throw new ExprEvalError({
-    message: `Unexpected token '${t.text || t.value}'`,
-    pointer: String(t.start),
+    message: `Unexpected token '${token.text || token.value}'`,
+    pointer: String(token.start),
   });
 }

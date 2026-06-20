@@ -1,4 +1,21 @@
 import { SourceKind, Surface, UsageEvent } from '../../src/domain/types';
+import { VscodeHost } from '../../src/util/vscodeHost';
+
+export interface StubVscodeHost extends VscodeHost {
+  warnings: string[];
+  commands: Array<{ command: string; args: unknown[] }>;
+}
+
+export function makeStubVscodeHost(): StubVscodeHost {
+  const warnings: string[] = [];
+  const commands: Array<{ command: string; args: unknown[] }> = [];
+  return {
+    warnings,
+    commands,
+    showWarningMessage: (msg) => { warnings.push(msg); return Promise.resolve(undefined); },
+    executeCommand: (cmd, ...args) => { commands.push({ command: cmd, args }); return Promise.resolve(undefined); },
+  };
+}
 
 let counter = 0;
 

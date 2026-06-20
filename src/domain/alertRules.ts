@@ -59,28 +59,28 @@ const DocSchema = z
   })
   .partial();
 
-export interface ParseAlertRulesResult {
-  ok: true;
-  doc: { version: 1 | 2; vars: Record<string, Value>; groups: AlertGroup[]; rules: AlertRule[] };
-  /** Parse errors per rule, populated when expressions fail to parse. */
-  errors: { ruleId: string; field: 'when' | 'active' | 'derived' | string; message: string }[];
-}
+type ParseRuleError = { ruleId: string; field: 'when' | 'active' | 'derived' | string; message: string };
+type ParsedDoc = { version: 1 | 2; vars: Record<string, Value>; groups: AlertGroup[]; rules: AlertRule[] };
+
+export type ParseAlertRulesResult =
+  | { ok: true; doc: ParsedDoc; errors: ParseRuleError[] }
+  | { ok: false; doc: ParsedDoc; errors: ParseRuleError[] };
 
 export function parseAlertRules(input: unknown): ParseAlertRulesResult {
   const parsed = DocSchema.safeParse(input);
   if (!parsed.success) {
     return {
-      ok: false as unknown as true,
+      ok: false,
       doc: { version: 1, vars: {}, groups: [], rules: [] },
       errors: parsed.error.issues.map((i) => ({
         ruleId: '<document>',
         field: i.path.join('.'),
         message: i.message,
       })),
-    } as unknown as ParseAlertRulesResult;
+    };
   }
-  const d = parsed.data;
-  const rules: AlertRule[] = (d.rules ?? []).map((r) => ({
+  const parsedDoc = parsed.data;
+  const rules: AlertRule[] = (parsedDoc.rules ?? []).map((r) => ({
     id: r.id,
     severity: r.severity,
     ...(r.cooldown !== undefined ? { cooldown: r.cooldown } : {}),
@@ -105,7 +105,7 @@ export function parseAlertRules(input: unknown): ParseAlertRulesResult {
         }
       : {}),
   }));
-  const groups: AlertGroup[] = (d.groups ?? []).map((g) => ({
+  const groups: AlertGroup[] = (parsedDoc.groups ?? []).map((g) => ({
     id: g.id,
     active: g.active,
     ...(g.label !== undefined ? { label: g.label } : {}),
@@ -113,8 +113,8 @@ export function parseAlertRules(input: unknown): ParseAlertRulesResult {
   return {
     ok: true,
     doc: {
-      version: (d.version ?? 1) as 1 | 2,
-      vars: (d.vars as Record<string, Value> | undefined) ?? {},
+      version: (parsedDoc.version ?? 1) as 1 | 2,
+      vars: (parsedDoc.vars as Record<string, Value> | undefined) ?? {},
       groups,
       rules,
     },
@@ -132,15 +132,15 @@ export interface AlertFireResult {
   rule: AlertRule;
 }
 
-function durationToMs(d: string | undefined, fallback: number): number {
-  if (!d) return fallback;
-  const m = /^(\d+)\s*([mhdw])$/.exec(d.trim());
-  if (!m) return fallback;
-  const n = Number(m[1]);
-  const unit = m[2]!;
+function durationToMs(duration: string | undefined, fallback: number): number {
+  if (!duration) return fallback;
+  const match = /^(\d+)\s*([mhdw])$/.exec(duration.trim());
+  if (!match) return fallback;
+  const numericPart = Number(match[1]);
+  const unit = match[2]!;
   const mult =
     unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : unit === 'd' ? 86_400_000 : 604_800_000;
-  return n * mult;
+  return numericPart * mult;
 }
 
 function renderTemplate(msg: string, ctx: EvalContext): string {
@@ -150,15 +150,15 @@ function renderTemplate(msg: string, ctx: EvalContext): string {
       // The user types `today.credits` inside `{{...}}`; prepend `vars` only
       // when the inner expression starts with `$` (explicit var reference).
       const expr = parseExpr(src);
-      const v = evaluate(expr, ctx);
-      if (v === null || v === undefined) return '';
-      if (typeof v === 'string') return v;
-      if (typeof v === 'number') {
-        if (Number.isInteger(v)) return String(v);
-        return v.toFixed(2);
+      const value = evaluate(expr, ctx);
+      if (value === null || value === undefined) return '';
+      if (typeof value === 'string') return value;
+      if (typeof value === 'number') {
+        if (Number.isInteger(value)) return String(value);
+        return value.toFixed(2);
       }
-      if (typeof v === 'boolean') return v ? 'true' : 'false';
-      return JSON.stringify(v);
+      if (typeof value === 'boolean') return value ? 'true' : 'false';
+      return JSON.stringify(value);
     } catch {
       return `?{${inner}}`;
     }
@@ -172,10 +172,10 @@ function tryEvalBool(
   if (!src) return { ok: true, value: true };
   try {
     const expr = parseExpr(src);
-    const v = evaluate(expr, ctx);
-    return { ok: true, value: Boolean(v) };
-  } catch (e) {
-    return { ok: false, error: e instanceof ExprEvalError ? e.message : String(e) };
+    const value = evaluate(expr, ctx);
+    return { ok: true, value: Boolean(value) };
+  } catch (error) {
+    return { ok: false, error: error instanceof ExprEvalError ? error.message : String(error) };
   }
 }
 
@@ -187,93 +187,83 @@ export interface EvaluateInput extends EvalBuildInput {
   now?: number;
 }
 
+function evaluateRule(
+  rule: AlertRule,
+  ctx: EvalContext,
+  firedMap: Map<string, number>,
+  now: number,
+): AlertFireResult | null {
+  if (rule.requiresAuth && !ctx.resolve([{ name: 'signedIn' }])) return null;
+
+  const ruleCtxVars: Record<string, Value> = { ...ctx.vars };
+  const ruleCtx: EvalContext = {
+    ...ctx,
+    vars: ruleCtxVars,
+    resolve: (parts) => {
+      const v = ctx.resolve(parts);
+      if (v !== null) return v;
+      let cur: Value | undefined = ruleCtxVars[parts[0]?.name ?? ''];
+      for (let i = 1; i < parts.length && cur !== undefined; i++) {
+        if (cur === null || typeof cur !== 'object' || Array.isArray(cur)) return null;
+        cur = (cur as Record<string, Value>)[parts[i]?.name ?? ''];
+      }
+      return cur ?? null;
+    },
+  };
+
+  if (rule.derived) {
+    for (const [name, src] of Object.entries(rule.derived)) {
+      try {
+        ruleCtxVars[name] = evaluate(parseExpr(src), ruleCtx);
+      } catch {
+        ruleCtxVars[name] = null;
+      }
+    }
+  }
+
+  if (rule.active) {
+    const res = tryEvalBool(rule.active, ruleCtx);
+    if (!res.ok || !res.value) return null;
+  }
+
+  const key = `${rule.id}#${rule.severity}`;
+  const lastFired = firedMap.get(key);
+  const cooldownMs = durationToMs(rule.cooldown, 60 * 60_000);
+  if (lastFired !== undefined && now - lastFired < cooldownMs) return null;
+
+  try {
+    const v = evaluate(parseExpr(rule.when), ruleCtx);
+    if (!v) return null;
+  } catch {
+    return null;
+  }
+
+  firedMap.set(key, now);
+  return {
+    key,
+    ruleId: rule.id,
+    severity: rule.severity,
+    message: renderTemplate(rule.message, ruleCtx),
+    rule,
+  };
+}
+
 export function evaluateAlertRules(input: EvaluateInput): AlertFireResult[] {
   const now = input.now ?? Date.now();
-  const fired: AlertFireResult[] = [];
 
-  // Resolve group expressions once, then expose under `vars.group`.
   const baseCtx = buildEvalContext(input);
   const groupVars: Record<string, Value> = {};
   for (const g of input.groups ?? []) {
     const res = tryEvalBool(g.active, baseCtx);
-    const active = res.ok ? res.value : true;
-    groupVars[g.id] = active as unknown as Value;
+    groupVars[g.id] = res.ok ? res.value : true;
   }
   const ctx: EvalContext = {
     ...baseCtx,
     vars: { ...baseCtx.vars, group: groupVars as unknown as Value },
   };
 
-  for (const rule of input.rules) {
-    if (rule.requiresAuth && !ctx.resolve([{ name: 'signedIn' }])) continue;
-
-    // Per-rule derived values, then evaluate the rule.
-    const ruleCtxVars: Record<string, Value> = { ...ctx.vars };
-    // Derived names live alongside the top-level context tree so a bare
-    // identifier in the `when` expression (e.g. `premiumShare > 0.5`)
-    // resolves correctly.
-    const ruleCtx: EvalContext = {
-      ...ctx,
-      vars: ruleCtxVars,
-      resolve: (parts) => {
-        const v = ctx.resolve(parts);
-        if (v !== null) return v;
-        // Fall back to vars (covers derived values and `$vars.x` lookups
-        // expressed as a bare path).
-        let cur: Value | undefined = ruleCtxVars[parts[0]?.name ?? ''];
-        for (let i = 1; i < parts.length && cur !== undefined; i++) {
-          if (cur === null || typeof cur !== 'object' || Array.isArray(cur)) return null;
-          cur = (cur as Record<string, Value>)[parts[i]?.name ?? ''];
-        }
-        return cur ?? null;
-      },
-    };
-    if (rule.derived) {
-      for (const [name, src] of Object.entries(rule.derived)) {
-        try {
-          const expr = parseExpr(src);
-          ruleCtxVars[name] = evaluate(expr, ruleCtx);
-        } catch {
-          // Surface as warning; treat as null so the rest of the rule still runs.
-          ruleCtxVars[name] = null;
-        }
-      }
-    }
-
-    // Group check (if rule references a group)
-    if (rule.restrict?.scope === 'custom' && rule.restrict) {
-      // Allow custom extensions list from vars.copilotExtensions
-    }
-
-    if (rule.active) {
-      const res = tryEvalBool(rule.active, ruleCtx);
-      if (!res.ok || !res.value) continue;
-    }
-
-    const key = `${rule.id}#${rule.severity}`;
-    const lastFired = input.fired.get(key);
-    const cooldownMs = durationToMs(rule.cooldown, 60 * 60_000);
-    if (lastFired !== undefined && now - lastFired < cooldownMs) continue;
-
-    let passed = false;
-    try {
-      const expr = parseExpr(rule.when);
-      const v = evaluate(expr, ruleCtx);
-      if (!v) continue;
-      passed = true;
-    } catch {
-      continue;
-    }
-    if (!passed) continue;
-
-    input.fired.set(key, now);
-    fired.push({
-      key,
-      ruleId: rule.id,
-      severity: rule.severity,
-      message: renderTemplate(rule.message, ruleCtx),
-      rule,
-    });
-  }
-  return fired;
+  return input.rules.flatMap((rule) => {
+    const result = evaluateRule(rule, ctx, input.fired, now);
+    return result ? [result] : [];
+  });
 }
