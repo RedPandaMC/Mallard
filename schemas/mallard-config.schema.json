@@ -214,6 +214,46 @@
           "active": { "$ref": "#/$defs/JsonCondition", "description": "Optional gate — rule is only evaluated when this is true. Omit to always evaluate." },
           "requiresAuth": { "type": "boolean", "description": "Skip this rule unless the user is signed in to GitHub." },
           "notify": { "type": "boolean", "description": "Whether to surface a VS Code notification when the rule fires." },
+          "thresholds": {
+            "type": "array",
+            "description": "Severity escalation: instead of a single condition, declare multiple threshold levels. The highest-severity level whose condition fires wins.",
+            "items": {
+              "type": "object",
+              "required": ["field", "op", "value", "severity"],
+              "properties": {
+                "field": { "type": "string", "description": "Dot-path into the rule context." },
+                "op": {
+                  "type": "string",
+                  "enum": [">", ">=", "<", "<=", "==", "!=", "in", "matches"],
+                  "description": "Comparison operator."
+                },
+                "value": {
+                  "description": "Value to compare against.",
+                  "oneOf": [
+                    { "type": "number" },
+                    { "type": "string" },
+                    { "type": "boolean" },
+                    { "type": "array", "items": { "oneOf": [{ "type": "string" }, { "type": "number" }] } }
+                  ]
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": ["info", "warning", "critical"],
+                  "description": "Severity to fire when this threshold is met."
+                },
+                "cooldown": {
+                  "type": "string",
+                  "pattern": "^\\d+[mhdw]$",
+                  "description": "Per-level cooldown. Overrides the rule-level cooldown for this severity."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "snoozeUntil": {
+            "type": "string",
+            "description": "ISO 8601 timestamp. The rule is suppressed until this time. Typically managed via the dashboard UI."
+          },
           "restrict": {
             "type": "object",
             "required": ["mode", "scope"],

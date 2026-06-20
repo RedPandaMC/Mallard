@@ -132,6 +132,16 @@ export interface SimpleCondition {
   value: number | string | boolean | (string | number)[];
 }
 
+/**
+ * A single severity level in a threshold escalation rule.
+ * The highest-severity threshold whose condition fires wins.
+ */
+export interface ThresholdLevel extends SimpleCondition {
+  severity: 'info' | 'warning' | 'critical';
+  /** Per-level cooldown (overrides the rule-level cooldown for this severity). */
+  cooldown?: string;
+}
+
 export interface AlertRule {
   id: string;
   severity: 'info' | 'warning' | 'critical';
@@ -155,6 +165,17 @@ export interface AlertRule {
   requiresAuth?: boolean;
   notify?: boolean;
   restrict?: RuleRestrict;
+  /**
+   * Severity escalation: instead of a single `when`, declare multiple threshold
+   * levels. The highest-severity level whose condition fires wins. Each level
+   * can have its own cooldown.
+   */
+  thresholds?: ThresholdLevel[];
+  /**
+   * Snooze this rule until an ISO 8601 timestamp. The rule is suppressed while
+   * the current time is before `snoozeUntil`. Typically set via the UI.
+   */
+  snoozeUntil?: string;
 }
 
 export interface AlertGroup {
