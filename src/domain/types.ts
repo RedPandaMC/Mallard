@@ -117,12 +117,40 @@ export interface RuleRestrict {
   graceMinutes?: number;
 }
 
+/**
+ * A single condition in the structured `conditions` shorthand.
+ * More approachable than raw JSONLogic — no nested prefix notation required.
+ *
+ * Supported operators: `>` `>=` `<` `<=` `==` `!=` `in` `matches`
+ */
+export interface SimpleCondition {
+  /** Dot-path into the rule context. E.g. "today.credits", "budget.percentOfBudget". */
+  field: string;
+  /** Comparison operator. */
+  op: '>' | '>=' | '<' | '<=' | '==' | '!=' | 'in' | 'matches';
+  /** Value to compare against. For `in`, provide an array. */
+  value: number | string | boolean | (string | number)[];
+}
+
 export interface AlertRule {
   id: string;
   severity: 'info' | 'warning' | 'critical';
   cooldown?: string;
   message: string;
-  when: JsonCondition;
+  /**
+   * JSONLogic condition tree (original syntax). Required unless `conditions` is provided.
+   */
+  when?: JsonCondition;
+  /**
+   * Structured conditions shorthand. Easier to read and write than JSONLogic.
+   * Use `match` to control how conditions are combined.
+   */
+  conditions?: SimpleCondition[];
+  /**
+   * How to combine `conditions`. Defaults to "all" (AND).
+   * Ignored when `when` is used.
+   */
+  match?: 'all' | 'any' | 'none';
   active?: JsonCondition;
   requiresAuth?: boolean;
   notify?: boolean;

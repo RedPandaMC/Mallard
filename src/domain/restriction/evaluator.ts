@@ -8,7 +8,7 @@
  * future, no rule will re-fire while it lasts.
  */
 import { AlertRule } from '../types';
-import { evalCondition } from '../expr/jsonCondition';
+import { evalCondition, evalRule } from '../expr/jsonCondition';
 
 export interface RestrictionDesired {
   active: AlertRule | null;
@@ -35,7 +35,7 @@ export function evaluateRestrictionState(
     if (!r.restrict) continue;
     if (r.requiresAuth && !ctx['signedIn']) continue;
     if (r.active !== undefined && !evalCondition(r.active, ctx)) continue;
-    if (!evalCondition(r.when, ctx)) continue;
+    if (!evalRule(r, ctx)) continue;
     matching.push(r);
     if (r.restrict.reEnableWhen) canClear.push(r);
   }

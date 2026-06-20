@@ -191,3 +191,78 @@ describe('JsonConditionSchema', () => {
     assert.equal(r.success, false);
   });
 });
+
+describe('evalSimpleCondition', () => {
+  const { evalSimpleCondition } = require('../../src/domain/expr/jsonCondition');
+  const ctx = { today: { credits: 75 }, topModel: { id: 'claude-sonnet-4' } };
+
+  it('evaluates numeric comparison', () => {
+    assert.equal(evalSimpleCondition({ field: 'today.credits', op: '>', value: 50 }, ctx), true);
+    assert.equal(evalSimpleCondition({ field: 'today.credits', op: '>', value: 100 }, ctx), false);
+  });
+
+  it('evaluates in operator', () => {
+    assert.equal(evalSimpleCondition({ field: 'topModel.id', op: 'in', value: ['claude-sonnet-4', 'gpt-4o'] }, ctx), true);
+    assert.equal(evalSimpleCondition({ field: 'topModel.id', op: 'in', value: ['gpt-4o'] }, ctx), false);
+  });
+
+  it('evaluates matches operator with regex', () => {
+    assert.equal(evalSimpleCondition({ field: 'topModel.id', op: 'matches', value: '^claude-' }, ctx), true);
+    assert.equal(evalSimpleCondition({ field: 'topModel.id', op: 'matches', value: '^gpt-' }, ctx), false);
+  });
+
+  it('returns false for matches with invalid regex', () => {
+    assert.equal(evalSimpleCondition({ field: 'topModel.id', op: 'matches', value: '[invalid(' }, ctx), false);
+  });
+});
+
+describe('compileConditions', () => {
+  const { compileConditions, evalCondition } = require('../../src/domain/expr/jsonCondition');
+  const ctx = { today: { credits: 75 } };
+
+  it('returns true for empty conditions', () => {
+    assert.equal(evalCondition(compileConditions([]), ctx), true);
+  });
+
+  it('all match = AND', () => {
+    const cond = compileConditions([
+      { field: 'today.credits', op: '>', value: 50 },
+      { field: 'today.credits', op: '<', value: 100 },
+    ], 'all');
+    assert.equal(evalCondition(cond, ctx), true);
+  });
+
+  it('any match = OR', () => {
+    const cond = compileConditions([
+      { field: 'today.credits', op: '>', value: 100 },
+      { field: 'today.credits', op: '>', value: 50 },
+    ], 'any');
+    assert.equal(evalCondition(cond, ctx), true);
+  });
+
+  it('none match = NOR', () => {
+    const cond = compileConditions([
+      { field: 'today.credits', op: '>', value: 100 },
+    ], 'none');
+    assert.equal(evalCondition(cond, ctx), true);
+  });
+});
+
+describe('evalRule', () => {
+  const { evalRule } = require('../../src/domain/expr/jsonCondition');
+  const ctx = { today: { credits: 75 } };
+
+  it('uses "when" when present', () => {
+    const rule = { when: { '>': [{ var: 'today.credits' }, 50] } };
+    assert.equal(evalRule(rule, ctx), true);
+  });
+
+  it('uses "conditions" when "when" is absent', () => {
+    const rule = { conditions: [{ field: 'today.credits', op: '>', value: 50 }] };
+    assert.equal(evalRule(rule, ctx), true);
+  });
+
+  it('returns false when neither when nor conditions', () => {
+    assert.equal(evalRule({}, ctx), false);
+  });
+});

@@ -5,10 +5,11 @@
  * VS Code's JSON language server validates them against the bundled schema.
  *
  * Supported operators: >, >=, <, <=, ==, !=, and, or, not, var (truthy check)
+ * Also: in, matches (via compileConditions / evalSimpleCondition)
  * Operands: number | string | boolean | { "var": "dot.path" }
  */
 import { z } from 'zod';
-import type { JsonCondition, JsonOperand } from '../types';
+import type { JsonCondition, JsonOperand, SimpleCondition } from '../types';
 
 // ── Zod schemas (used in alertRules.ts and UserConfigStore.ts) ───────────────
 
@@ -81,4 +82,97 @@ export function evalCondition(cond: JsonCondition, ctx: Record<string, unknown>)
     }
   }
   return false;
+}
+
+// ── SimpleCondition evaluator ────────────────────────────────────────────────
+
+/**
+ * Evaluate a single structured condition against the rule context.
+ * Supports all JSONLogic operators plus `in` and `matches`.
+ */
+export function evalSimpleCondition(c: SimpleCondition, ctx: Record<string, unknown>): boolean {
+  const fieldValue = resolveVar(c.field, ctx);
+
+  if (c.op === 'in') {
+    const allowed = Array.isArray(c.value) ? c.value : [c.value];
+    return allowed.includes(fieldValue as string | number);
+  }
+
+  if (c.op === 'matches') {
+    try {
+      return new RegExp(String(c.value)).test(String(fieldValue ?? ''));
+    } catch {
+      return false;
+    }
+  }
+
+  return compare(fieldValue, c.value, c.op);
+}
+
+/**
+ * Compile a structured `conditions` array + `match` mode into a `JsonCondition`
+ * that can be stored or evaluated by `evalCondition()`.
+ *
+ * `match: "all"` → `{ "and": [...] }` (default)
+ * `match: "any"` → `{ "or": [...] }`
+ * `match: "none"` → `{ "not": { "or": [...] } }`
+ *
+ * `in` and `matches` conditions are evaluated via `evalSimpleCondition()` and
+ * represented as a boolean literal after pre-evaluation, or left as-is when
+ * no context is available (they have no direct JSONLogic encoding).
+ */
+export function compileConditions(
+  conditions: SimpleCondition[],
+  match: 'all' | 'any' | 'none' = 'all',
+  ctx?: Record<string, unknown>,
+): JsonCondition {
+  if (conditions.length === 0) return true;
+
+  // Map each SimpleCondition to a JsonCondition, handling in/matches specially.
+  const parts: JsonCondition[] = conditions.map((c) => {
+    if (c.op === 'in' || c.op === 'matches') {
+      // No direct JSONLogic encoding — if context is available, pre-evaluate.
+      return ctx !== undefined ? evalSimpleCondition(c, ctx) : true;
+    }
+    const val = Array.isArray(c.value) ? c.value[0] ?? 0 : c.value;
+    const fieldRef: JsonOperand = { var: c.field };
+    const valRef: JsonOperand = val as JsonOperand;
+    return { [c.op]: [fieldRef, valRef] } as JsonCondition;
+  });
+
+  if (parts.length === 1) {
+    const single = parts[0]!;
+    if (match === 'none') return { not: single };
+    return single;
+  }
+
+  if (match === 'any') return { or: parts };
+  if (match === 'none') return { not: { or: parts } };
+  return { and: parts };
+}
+
+/**
+ * Evaluate a rule's condition, supporting both `when` (JSONLogic) and
+ * `conditions` (SimpleCondition array) fields. Returns false when neither is set.
+ */
+export function evalRule(
+  rule: { when?: JsonCondition; conditions?: SimpleCondition[]; match?: 'all' | 'any' | 'none' },
+  ctx: Record<string, unknown>,
+): boolean {
+  if (rule.when !== undefined) return evalCondition(rule.when, ctx);
+  if (rule.conditions?.length) {
+    return evalRuleConditions(rule.conditions, rule.match ?? 'all', ctx);
+  }
+  return false;
+}
+
+function evalRuleConditions(
+  conditions: SimpleCondition[],
+  match: 'all' | 'any' | 'none',
+  ctx: Record<string, unknown>,
+): boolean {
+  const results = conditions.map((c) => evalSimpleCondition(c, ctx));
+  if (match === 'any')  return results.some(Boolean);
+  if (match === 'none') return results.every((r) => !r);
+  return results.every(Boolean); // 'all'
 }

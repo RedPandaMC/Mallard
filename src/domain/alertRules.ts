@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 import { AlertRule, AlertGroup, JsonCondition } from './types';
-import { evalCondition, JsonConditionSchema, resolveVar } from './expr/jsonCondition';
+import { evalCondition, evalRule, JsonConditionSchema, resolveVar } from './expr/jsonCondition';
 import { buildRuleContext, EvalBuildInput } from './expr/context';
 
 const RestrictSchema = z.object({
@@ -18,17 +18,35 @@ const RestrictSchema = z.object({
     .optional(),
 });
 
-const RuleSchema = z.object({
-  id: z.string().min(1),
-  severity: z.enum(['info', 'warning', 'critical']).default('warning'),
-  cooldown: z.string().optional(),
-  message: z.string(),
-  when: JsonConditionSchema,
-  active: JsonConditionSchema.optional(),
-  requiresAuth: z.boolean().optional(),
-  notify: z.boolean().optional(),
-  restrict: RestrictSchema.optional(),
+const SimpleConditionSchema = z.object({
+  field: z.string().min(1),
+  op: z.enum(['>', '>=', '<', '<=', '==', '!=', 'in', 'matches']),
+  value: z.union([
+    z.number(),
+    z.string(),
+    z.boolean(),
+    z.array(z.union([z.string(), z.number()])),
+  ]),
 });
+
+const RuleSchema = z
+  .object({
+    id: z.string().min(1),
+    severity: z.enum(['info', 'warning', 'critical']).default('warning'),
+    cooldown: z.string().optional(),
+    message: z.string(),
+    when: JsonConditionSchema.optional(),
+    conditions: z.array(SimpleConditionSchema).optional(),
+    match: z.enum(['all', 'any', 'none']).optional(),
+    active: JsonConditionSchema.optional(),
+    requiresAuth: z.boolean().optional(),
+    notify: z.boolean().optional(),
+    restrict: RestrictSchema.optional(),
+  })
+  .refine(
+    (r) => r.when !== undefined || (r.conditions !== undefined && r.conditions.length > 0),
+    { message: 'A rule must have either "when" or "conditions"' },
+  );
 
 const GroupSchema = z.object({
   id: z.string().min(1),
@@ -82,7 +100,9 @@ export function parseAlertRules(input: unknown): ParseAlertRulesResult {
     severity: r.severity,
     ...(r.cooldown !== undefined ? { cooldown: r.cooldown } : {}),
     message: r.message,
-    when: r.when,
+    ...(r.when !== undefined ? { when: r.when } : {}),
+    ...(r.conditions !== undefined ? { conditions: r.conditions } : {}),
+    ...(r.match !== undefined ? { match: r.match } : {}),
     ...(r.active !== undefined ? { active: r.active } : {}),
     ...(r.requiresAuth !== undefined ? { requiresAuth: r.requiresAuth } : {}),
     ...(r.notify !== undefined ? { notify: r.notify } : {}),
@@ -170,7 +190,7 @@ function evaluateRule(
   const cooldownMs = durationToMs(rule.cooldown, 60 * 60_000);
   if (lastFired !== undefined && now - lastFired < cooldownMs) return null;
 
-  if (!evalCondition(rule.when, ctx)) return null;
+  if (!evalRule(rule, ctx)) return null;
 
   firedMap.set(key, now);
   return {
