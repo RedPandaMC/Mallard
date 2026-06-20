@@ -167,7 +167,7 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
   }
 
   modelFilterBtn.addEventListener('click', () => {
-    modelDropdown.hidden ? openDropdown() : closeDropdown(false);
+    if (modelDropdown.hidden) { openDropdown(); } else { closeDropdown(false); }
   });
 
   modelFilterBtn.addEventListener('keydown', (e) => {
