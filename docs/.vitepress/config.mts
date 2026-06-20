@@ -35,6 +35,7 @@ export default defineConfig({
     logo: '/icon.svg',
     siteTitle: 'MALLARD',
     nav: [
+      { text: 'Features', link: '/guide/features' },
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Reference', link: '/reference/commands' },
       { text: 'Changelog', link: '/changelog' },
@@ -44,6 +45,7 @@ export default defineConfig({
       {
         text: 'Guide',
         items: [
+          { text: 'Features', link: '/guide/features' },
           { text: 'Getting Started', link: '/guide/getting-started' },
           { text: 'Configuration', link: '/guide/configuration' },
         ],

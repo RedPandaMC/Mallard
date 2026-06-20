@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="media/mallard-icon.svg" alt="Mallard" width="96" />
-
-# Mallard
+<img src="media/brand/readme-banner.svg" alt="Mallard" width="480" />
 
 **Know exactly what GitHub Copilot is costing you.**
 
