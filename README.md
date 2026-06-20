@@ -96,11 +96,16 @@ it went and *when* — live, locally, without opening a browser.
   Entirely opt-in.
 - **Exportable report.** Save a standalone HTML report from the current
   snapshot. No external requests — PDF export works in any browser.
-- **Metric streaming.** After each snapshot Mallard can push a metric payload
-  to an MQTT broker (`mqtts://` or `wss://`) over TLS or mTLS. The payload
-  includes model distribution, surface distribution, spend velocity, MTD budget
-  fraction, hourly peak, and forecast bounds. See
-  [Settings reference](docs/reference/settings.md) for broker examples.
+- **Metric streaming.** After each snapshot Mallard pushes a metric payload to
+  an MQTT broker (`mqtts://` or `wss://`) and/or an HTTP webhook (`https://`).
+  Webhook posts are signed with HMAC-SHA256 (`X-Mallard-Signature-256` header).
+  The payload includes model distribution, surface distribution, spend velocity,
+  MTD budget fraction, hourly peak, and forecast bounds — all GDPR-safe (no
+  repo names, branch names, or user identifiers). See
+  [Settings reference](docs/reference/settings.md) for examples.
+- **Claude Code log ingestion.** Mallard reads Claude Code's JSONL session logs
+  from `~/.claude/projects/` using the same file-watching pipeline as Copilot
+  OTel logs. Filter by source (`Copilot | Claude Code | All`) in the dashboard.
 
 ## Quick start
 
@@ -146,21 +151,31 @@ edited in `config.json` via "Edit alert rules" in the dashboard.
 
 ### Metric export settings
 
-Configure MQTT metric streaming with `mallard.metricExport.*`. All settings
-are machine-scoped so credentials are never synced.
+Two transports are available: MQTT and HTTP webhook. Both are disabled by default.
+All settings are machine-scoped so credentials are never synced.
+
+**MQTT** (`mallard.metricExport.*`):
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `mallard.metricExport.brokerUrl` | `""` | MQTT broker URL. Only `mqtts://` and `wss://` accepted. Empty = disabled. |
-| `mallard.metricExport.topic` | `"mallard/v2/metrics"` | MQTT topic prefix. A stable instance hash is appended. |
+| `mallard.metricExport.brokerUrl` | `""` | Broker URL. Only `mqtts://` and `wss://` accepted. |
+| `mallard.metricExport.topic` | `"mallard/v2/metrics"` | Topic prefix. A stable instance hash is appended. |
 | `mallard.metricExport.username` | `""` | MQTT username (optional). |
-| `mallard.metricExport.password` | `""` | MQTT password (machine-scoped, not synced). |
+| `mallard.metricExport.password` | `""` | MQTT password (not synced). |
 | `mallard.metricExport.certPath` | `""` | Client certificate PEM path for mTLS. |
 | `mallard.metricExport.keyPath` | `""` | Client private key PEM path for mTLS. |
-| `mallard.metricExport.caPath` | `""` | Broker CA certificate PEM path (CA pinning). |
+| `mallard.metricExport.caPath` | `""` | Broker CA PEM path (CA pinning). |
 
-See [Settings reference](docs/reference/settings.md) for payload schema and
-broker connection examples.
+**HTTP webhook** (`mallard.metricExport.webhook.*`):
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `mallard.metricExport.webhook.url` | `""` | Endpoint URL. Only `https://` accepted. |
+| `mallard.metricExport.webhook.secret` | `""` | HMAC-SHA256 signing secret. Each POST includes `X-Mallard-Signature-256: sha256=<hex>`. |
+| `mallard.metricExport.webhook.headers` | `{}` | Extra headers, e.g. `{ "Authorization": "Bearer token" }`. |
+| `mallard.metricExport.webhook.retries` | `3` | Retry count on 5xx / network errors (exponential backoff). |
+
+See [Settings reference](docs/reference/settings.md) for payload schema and examples.
 
 ## Commands
 
