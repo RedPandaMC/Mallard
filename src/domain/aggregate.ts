@@ -19,41 +19,41 @@ export function tokensOf(e: UsageEvent): number {
   return (e.promptTokens ?? 0) + (e.completionTokens ?? 0);
 }
 
-export function matchesFilter(e: UsageEvent, f?: Filter): boolean {
-  if (!f) return true;
-  if (f.range && (e.ts < f.range.start || e.ts >= f.range.end)) return false;
-  if (f.models?.length && !f.models.includes(e.modelId)) return false;
-  if (f.surfaces?.length && !f.surfaces.includes(e.surface)) return false;
-  if (f.repos?.length && !f.repos.includes(e.repo ?? UNATTRIBUTED_REPO)) return false;
+export function matchesFilter(event: UsageEvent, filter?: Filter): boolean {
+  if (!filter) return true;
+  if (filter.range && (event.ts < filter.range.start || event.ts >= filter.range.end)) return false;
+  if (filter.models?.length && !filter.models.includes(event.modelId)) return false;
+  if (filter.surfaces?.length && !filter.surfaces.includes(event.surface)) return false;
+  if (filter.repos?.length && !filter.repos.includes(event.repo ?? UNATTRIBUTED_REPO)) return false;
   return true;
 }
 
 /** Key used for events that could not be attributed to a workspace repo. */
 export const UNATTRIBUTED_REPO = 'unattributed';
 
-function addTo(rec: Record<string, Bucket>, key: string, e: UsageEvent, tk: number): void {
-  const b = rec[key] ?? (rec[key] = { credits: 0, cost: 0, tokens: 0 });
-  b.credits += e.credits;
-  b.cost += e.cost;
-  b.tokens += tk;
+function addTo(rec: Record<string, Bucket>, key: string, entry: UsageEvent, tokenCount: number): void {
+  const bucket = rec[key] ?? (rec[key] = { credits: 0, cost: 0, tokens: 0 });
+  bucket.credits += entry.credits;
+  bucket.cost += entry.cost;
+  bucket.tokens += tokenCount;
 }
 
 export function aggregateBy(
-  events: UsageEvent[],
-  g: Granularity,
-  f?: Filter,
+  events: readonly UsageEvent[],
+  granularity: Granularity,
+  filter?: Filter,
 ): UsageAggregate[] {
   const map = new Map<string, UsageAggregate>();
-  for (const e of events) {
-    if (!matchesFilter(e, f)) continue;
-    const key = bucketKey(e.ts, g);
+  for (const entry of events) {
+    if (!matchesFilter(entry, filter)) continue;
+    const key = bucketKey(entry.ts, granularity);
     let agg = map.get(key);
     if (!agg) {
       agg = {
-        granularity: g,
+        granularity,
         bucketKey: key,
-        start: startOf(e.ts, g),
-        end: nextBucketStart(e.ts, g),
+        start: startOf(entry.ts, granularity),
+        end: nextBucketStart(entry.ts, granularity),
         credits: 0,
         cost: 0,
         tokens: 0,
@@ -63,46 +63,46 @@ export function aggregateBy(
       };
       map.set(key, agg);
     }
-    const tk = tokensOf(e);
-    agg.credits += e.credits;
-    agg.cost += e.cost;
-    agg.tokens += tk;
+    const tokenCount = tokensOf(entry);
+    agg.credits += entry.credits;
+    agg.cost += entry.cost;
+    agg.tokens += tokenCount;
     agg.eventCount += 1;
-    agg.estimated = agg.estimated || e.estimated;
-    addTo(agg.byModel, e.modelId, e, tk);
+    agg.estimated = agg.estimated || entry.estimated;
+    addTo(agg.byModel, entry.modelId, entry, tokenCount);
   }
   return [...map.values()].sort((a, b) => a.start - b.start);
 }
 
 export function aggregateAll(
-  events: UsageEvent[],
-  f?: Filter,
+  events: readonly UsageEvent[],
+  filter?: Filter,
 ): Record<Granularity, UsageAggregate[]> {
   const out = {} as Record<Granularity, UsageAggregate[]>;
-  for (const g of GRANULARITIES) out[g] = aggregateBy(events, g, f);
+  for (const granularity of GRANULARITIES) out[granularity] = aggregateBy(events, granularity, filter);
   return out;
 }
 
 export function topBy(
-  events: UsageEvent[],
+  events: readonly UsageEvent[],
   dimension: 'model' | 'surface' | 'repo',
-  f?: Filter,
+  filter?: Filter,
   limit = 8,
 ): TopEntry[] {
   const map = new Map<string, TopEntry>();
-  for (const e of events) {
-    if (!matchesFilter(e, f)) continue;
+  for (const entry of events) {
+    if (!matchesFilter(entry, filter)) continue;
     const key =
       dimension === 'model'
-        ? e.modelId
+        ? entry.modelId
         : dimension === 'surface'
-          ? e.surface
-          : (e.repo ?? UNATTRIBUTED_REPO);
-    const t = map.get(key) ?? { key, credits: 0, cost: 0, tokens: 0 };
-    t.credits += e.credits;
-    t.cost += e.cost;
-    t.tokens += tokensOf(e);
-    map.set(key, t);
+          ? entry.surface
+          : (entry.repo ?? UNATTRIBUTED_REPO);
+    const topEntry = map.get(key) ?? { key, credits: 0, cost: 0, tokens: 0 };
+    topEntry.credits += entry.credits;
+    topEntry.cost += entry.cost;
+    topEntry.tokens += tokensOf(entry);
+    map.set(key, topEntry);
   }
   return [...map.values()]
     .sort((a, b) => b.credits - a.credits || b.cost - a.cost)
@@ -111,18 +111,18 @@ export function topBy(
 
 /** Sum a metric across events matching the filter. */
 export function sumEvents(
-  events: UsageEvent[],
-  f?: Filter,
+  events: readonly UsageEvent[],
+  filter?: Filter,
 ): { credits: number; cost: number; tokens: number; count: number } {
   let credits = 0;
   let cost = 0;
   let tokens = 0;
   let count = 0;
-  for (const e of events) {
-    if (!matchesFilter(e, f)) continue;
-    credits += e.credits;
-    cost += e.cost;
-    tokens += tokensOf(e);
+  for (const entry of events) {
+    if (!matchesFilter(entry, filter)) continue;
+    credits += entry.credits;
+    cost += entry.cost;
+    tokens += tokensOf(entry);
     count += 1;
   }
   return { credits, cost, tokens, count };
@@ -132,13 +132,13 @@ export function sumEvents(
  * Build Sankey links for the model → surface flow chart.
  * Only includes links with value > 0.
  */
-export function sankeyLinksFor(events: UsageEvent[], f?: Filter): SankeyLink[] {
+export function sankeyLinksFor(events: readonly UsageEvent[], filter?: Filter): SankeyLink[] {
   const map = new Map<string, number>();
-  for (const e of events) {
-    if (!matchesFilter(e, f)) continue;
-    if (e.credits <= 0) continue;
-    const key = `${e.modelId}|||${e.surface}`;
-    map.set(key, (map.get(key) ?? 0) + e.credits);
+  for (const entry of events) {
+    if (!matchesFilter(entry, filter)) continue;
+    if (entry.credits <= 0) continue;
+    const key = `${entry.modelId}|||${entry.surface}`;
+    map.set(key, (map.get(key) ?? 0) + entry.credits);
   }
   return [...map.entries()]
     .filter(([, v]) => v > 0)
@@ -150,32 +150,32 @@ export function sankeyLinksFor(events: UsageEvent[], f?: Filter): SankeyLink[] {
 }
 
 /** All distinct model IDs in the filtered event set. */
-export function distinctModels(events: UsageEvent[], f?: Filter): string[] {
+export function distinctModels(events: readonly UsageEvent[], filter?: Filter): string[] {
   const set = new Set<string>();
-  for (const e of events) {
-    if (!matchesFilter(e, f)) continue;
-    set.add(e.modelId);
+  for (const entry of events) {
+    if (!matchesFilter(entry, filter)) continue;
+    set.add(entry.modelId);
   }
   return [...set].sort();
 }
 
 /** All distinct repos in the filtered event set. */
-export function distinctRepos(events: UsageEvent[], f?: Filter): string[] {
+export function distinctRepos(events: readonly UsageEvent[], filter?: Filter): string[] {
   const set = new Set<string>();
-  for (const e of events) {
-    if (!matchesFilter(e, f)) continue;
-    set.add(e.repo ?? UNATTRIBUTED_REPO);
+  for (const entry of events) {
+    if (!matchesFilter(entry, filter)) continue;
+    set.add(entry.repo ?? UNATTRIBUTED_REPO);
   }
   return [...set].sort();
 }
 
 /** All distinct surfaces in the filtered event set. */
-export function distinctSurfaces(events: UsageEvent[], f?: Filter): Surface[] {
+export function distinctSurfaces(events: readonly UsageEvent[], filter?: Filter): Surface[] {
   const set = new Set<Surface>();
-  for (const e of events) {
-    if (!matchesFilter(e, f)) continue;
-    set.add(e.surface);
+  for (const entry of events) {
+    if (!matchesFilter(entry, filter)) continue;
+    set.add(entry.surface);
   }
   const order: Surface[] = ['chat', 'inline', 'agent', 'edit', 'unknown'];
-  return order.filter((s) => set.has(s));
+  return order.filter((surface) => set.has(surface));
 }

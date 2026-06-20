@@ -44,6 +44,10 @@ function presetToRange(preset: DatePreset, now: number): { start: number; end: n
     }
     case 'all':
       return undefined;
+    default: {
+      const _exhaustive: never = preset;
+      throw new Error(`Unknown preset: ${String(_exhaustive)}`);
+    }
   }
 }
 
@@ -149,17 +153,48 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
   const modelDropdown = el.querySelector<HTMLElement>('#model-dropdown')!;
   const modelLabel = el.querySelector<HTMLElement>('#model-filter-label')!;
 
+  function openDropdown(): void {
+    modelDropdown.hidden = false;
+    modelFilterBtn.setAttribute('aria-expanded', 'true');
+    const first = modelDropdown.querySelector<HTMLElement>('[role="option"]');
+    first?.focus();
+  }
+
+  function closeDropdown(returnFocus = true): void {
+    modelDropdown.hidden = true;
+    modelFilterBtn.setAttribute('aria-expanded', 'false');
+    if (returnFocus) modelFilterBtn.focus();
+  }
+
   modelFilterBtn.addEventListener('click', () => {
-    const nowHidden = modelDropdown.hidden;
-    modelDropdown.hidden = !nowHidden;
-    modelFilterBtn.setAttribute('aria-expanded', String(nowHidden));
+    if (modelDropdown.hidden) { openDropdown(); } else { closeDropdown(false); }
+  });
+
+  modelFilterBtn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDropdown(); }
+  });
+
+  modelDropdown.addEventListener('keydown', (e) => {
+    const options = [...modelDropdown.querySelectorAll<HTMLElement>('[role="option"]')];
+    const focused = document.activeElement as HTMLElement;
+    const idx = options.indexOf(focused);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      options[Math.min(idx + 1, options.length - 1)]?.focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (idx <= 0) closeDropdown();
+      else options[idx - 1]?.focus();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      focused.click();
+    } else if (e.key === 'Escape' || e.key === 'Tab') {
+      closeDropdown(e.key === 'Escape');
+    }
   });
 
   document.addEventListener('click', (e) => {
-    if (!modelFilterEl.contains(e.target as Node)) {
-      modelDropdown.hidden = true;
-      modelFilterBtn.setAttribute('aria-expanded', 'false');
-    }
+    if (!modelFilterEl.contains(e.target as Node)) closeDropdown(false);
   });
 
   function updateModelLabel() {
@@ -178,9 +213,13 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
     const allOpt = document.createElement('div');
     allOpt.className = 'wv-model-option';
     allOpt.setAttribute('role', 'option');
+    allOpt.setAttribute('tabindex', '-1');
+    allOpt.id = 'model-opt-all';
+    allOpt.setAttribute('aria-selected', String(activeModels.length === 0));
     allOpt.dataset.model = '__all__';
     const allIcon = document.createElement('i');
     allIcon.className = `codicon codicon-${activeModels.length === 0 ? 'check' : 'blank'}`;
+    allIcon.setAttribute('aria-hidden', 'true');
     allOpt.appendChild(allIcon);
     allOpt.append(' All models');
     allOpt.addEventListener('click', () => {
@@ -191,13 +230,17 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
     });
     modelDropdown.appendChild(allOpt);
 
-    for (const m of allModels) {
+    allModels.forEach((m, i) => {
       const opt = document.createElement('div');
       opt.className = 'wv-model-option';
       opt.setAttribute('role', 'option');
+      opt.setAttribute('tabindex', '-1');
+      opt.id = `model-opt-${i}`;
+      opt.setAttribute('aria-selected', String(activeModels.includes(m)));
       opt.dataset.model = m;
       const icon = document.createElement('i');
       icon.className = `codicon codicon-${activeModels.includes(m) ? 'check' : 'blank'}`;
+      icon.setAttribute('aria-hidden', 'true');
       opt.appendChild(icon);
       opt.append(` ${m.replace(/^(models\/|gpt-|claude-|gemini-)/, '').slice(0, 30)}`);
       opt.addEventListener('click', () => {
@@ -211,7 +254,7 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
         dispatchFilter();
       });
       modelDropdown.appendChild(opt);
-    }
+    });
   }
 
   const surfaceChips = el.querySelector<HTMLElement>('#surface-chips')!;

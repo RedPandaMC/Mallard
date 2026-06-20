@@ -3,7 +3,8 @@
  * with the monthly budget drawn as a reference line. Webview-only: derived
  * from the same DailyBarsData the host already sends.
  */
-import { echarts, initChart } from './echarts';
+import { initChart } from './echarts';
+import type { TooltipComponentOption } from './echarts';
 import { readTheme } from '../theme';
 import { UsageSnapshot } from '../../src/domain/types';
 import { formatMoney } from '../../src/domain/format';
@@ -38,7 +39,7 @@ export function mountCumulativeArea(el: HTMLElement): CumulativeAreaHandle {
           animation: false,
           tooltip: {
             trigger: 'axis',
-            formatter(params: echarts.TooltipComponentOption) {
+            formatter(params: TooltipComponentOption) {
               const p = (params as unknown as Array<{ dataIndex: number }>)[0];
               if (!p) return '';
               const date = points[p.dataIndex]?.date ?? '';

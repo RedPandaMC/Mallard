@@ -3,32 +3,12 @@ import { evaluateRestrictionState } from '../../src/domain/restriction/evaluator
 import { scopeIds, customIdsFor, knownScopeNames } from '../../src/domain/restriction/scopes';
 import { AlertRule } from '../../src/domain/types';
 
-function evalCtx(snapshot: Record<string, unknown> | null) {
-  return {
-    vars: {},
-    resolve: (parts: { name?: string; index?: unknown }[]) => {
-      let cur: unknown = snapshot;
-      for (const p of parts) {
-        if (cur === null || cur === undefined) return null;
-        if (p.name !== undefined) {
-          if (typeof cur !== 'object') return null;
-          cur = (cur as Record<string, unknown>)[p.name];
-        } else if (p.index !== undefined) {
-          cur = (cur as Record<string, unknown>)[String(p.index)] ?? null;
-        }
-      }
-      return cur === undefined ? null : (cur as never);
-    },
-    lookupVar: () => null,
-  };
-}
-
 describe('evaluateRestrictionState', () => {
   it('returns null when no rule has a restrict block', () => {
     const rules: AlertRule[] = [
-      { id: 'r', severity: 'warning', message: '', when: 'today.credits > 0' },
+      { id: 'r', severity: 'warning', message: '', when: { '>': [{ var: 'today.credits' }, 0] } },
     ];
-    const out = evaluateRestrictionState(rules, evalCtx({ today: { credits: 100 } }), Date.now());
+    const out = evaluateRestrictionState(rules, { today: { credits: 100 } }, Date.now());
     assert.equal(out.active, null);
     assert.equal(out.matching.length, 0);
   });
@@ -39,11 +19,11 @@ describe('evaluateRestrictionState', () => {
         id: 'hard',
         severity: 'warning',
         message: 'too high',
-        when: 'today.credits > 50',
+        when: { '>': [{ var: 'today.credits' }, 50] },
         restrict: { mode: 'hard', scope: 'copilot' },
       },
     ];
-    const out = evaluateRestrictionState(rules, evalCtx({ today: { credits: 100 } }), Date.now());
+    const out = evaluateRestrictionState(rules, { today: { credits: 100 } }, Date.now());
     assert.ok(out.active);
     assert.equal(out.active!.id, 'hard');
   });
@@ -54,18 +34,18 @@ describe('evaluateRestrictionState', () => {
         id: 'soft',
         severity: 'warning',
         message: '',
-        when: 'today.credits > 0',
+        when: { '>': [{ var: 'today.credits' }, 0] },
         restrict: { mode: 'soft', scope: 'copilot' },
       },
       {
         id: 'hard',
         severity: 'warning',
         message: '',
-        when: 'today.credits > 0',
+        when: { '>': [{ var: 'today.credits' }, 0] },
         restrict: { mode: 'hard', scope: 'copilot' },
       },
     ];
-    const out = evaluateRestrictionState(rules, evalCtx({ today: { credits: 100 } }), Date.now());
+    const out = evaluateRestrictionState(rules, { today: { credits: 100 } }, Date.now());
     assert.equal(out.active!.id, 'hard');
   });
 
@@ -75,12 +55,12 @@ describe('evaluateRestrictionState', () => {
         id: 'r',
         severity: 'warning',
         message: '',
-        when: 'today.credits > 0',
-        active: 'false',
+        when: { '>': [{ var: 'today.credits' }, 0] },
+        active: false,
         restrict: { mode: 'hard', scope: 'copilot' },
       },
     ];
-    const out = evaluateRestrictionState(rules, evalCtx({ today: { credits: 100 } }), Date.now());
+    const out = evaluateRestrictionState(rules, { today: { credits: 100 } }, Date.now());
     assert.equal(out.active, null);
   });
 
@@ -90,14 +70,14 @@ describe('evaluateRestrictionState', () => {
         id: 'r',
         severity: 'warning',
         message: '',
-        when: 'today.credits > 0',
+        when: { '>': [{ var: 'today.credits' }, 0] },
         requiresAuth: true,
         restrict: { mode: 'hard', scope: 'copilot' },
       },
     ];
     const out = evaluateRestrictionState(
       rules,
-      evalCtx({ today: { credits: 100 }, signedIn: false }),
+      { today: { credits: 100 }, signedIn: false },
       Date.now(),
     );
     assert.equal(out.active, null);
@@ -109,11 +89,15 @@ describe('evaluateRestrictionState', () => {
         id: 'r',
         severity: 'warning',
         message: '',
-        when: 'today.credits > 50',
-        restrict: { mode: 'hard', scope: 'copilot', reEnableWhen: 'today.credits < 25' },
+        when: { '>': [{ var: 'today.credits' }, 50] },
+        restrict: {
+          mode: 'hard',
+          scope: 'copilot',
+          reEnableWhen: { '<': [{ var: 'today.credits' }, 25] },
+        },
       },
     ];
-    const out = evaluateRestrictionState(rules, evalCtx({ today: { credits: 100 } }), Date.now());
+    const out = evaluateRestrictionState(rules, { today: { credits: 100 } }, Date.now());
     assert.equal(out.matching.length, 1);
     assert.equal(out.canClear.length, 1);
   });

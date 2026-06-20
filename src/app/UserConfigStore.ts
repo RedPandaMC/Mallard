@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { UserConfig } from '../domain/types';
+import { JsonConditionSchema } from '../domain/expr/jsonCondition';
 import { mergeConfig } from './mergeConfig';
 
 export { mergeConfig } from './mergeConfig';
@@ -34,7 +35,7 @@ const ConfigSchema = z
         z.object({
           id: z.string(),
           label: z.string().optional(),
-          active: z.string(),
+          active: JsonConditionSchema,
         }),
       )
       .optional(),
@@ -45,16 +46,15 @@ const ConfigSchema = z
           severity: z.enum(['info', 'warning', 'critical']),
           cooldown: z.string().optional(),
           message: z.string(),
-          when: z.string(),
-          active: z.string().optional(),
-          derived: z.record(z.string(), z.string()).optional(),
+          when: JsonConditionSchema,
+          active: JsonConditionSchema.optional(),
           requiresAuth: z.boolean().optional(),
           notify: z.boolean().optional(),
           restrict: z
             .object({
               mode: z.enum(['soft', 'hard']),
               scope: z.enum(['copilot', 'copilot+lab', 'custom']),
-              reEnableWhen: z.string().optional(),
+              reEnableWhen: JsonConditionSchema.optional(),
               graceMinutes: z.number().optional(),
             })
             .optional(),
@@ -67,6 +67,7 @@ const ConfigSchema = z
         includedCredits: z.number(),
       })
       .optional(),
+    branchBudgets: z.record(z.string(), z.number()).optional(),
   })
   .partial();
 

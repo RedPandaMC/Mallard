@@ -1,8 +1,10 @@
 /**
  * Horizontal bar chart — top models by credits/cost/tokens.
- * Consumes pre-computed ModelBreakdownData from the host.
+ * In cost mode a ghost bar shows what the same token count would have cost
+ * using the cheapest available model, making the premium model premium visible.
  */
-import { echarts, initChart } from './echarts';
+import { initChart } from './echarts';
+import type { TooltipComponentOption } from './echarts';
 import { Metric, UsageSnapshot } from '../../src/domain/types';
 import { formatCredits, formatMoney, formatTokens } from '../../src/domain/format';
 
@@ -16,7 +18,8 @@ export function mountModelBreakdown(el: HTMLElement): ModelBreakdownHandle {
 
   return {
     update(s: UsageSnapshot, metric: Metric) {
-      const { labels, credits, costs, tokens } = s.chartData.modelBreakdown;
+      const { labels, credits, costs, tokens, cheapestEquivalentCosts } =
+        s.chartData.modelBreakdown;
       if (labels.length === 0) {
         chart.clear();
         return;
@@ -31,36 +34,62 @@ export function mountModelBreakdown(el: HTMLElement): ModelBreakdownHandle {
         return `${formatTokens(v)} tok`;
       }
 
+      const showGhost = metric === 'cost';
+      const reversedLabels = [...labels].reverse();
+      const reversedValues = [...values].reverse();
+      const reversedCheapest = [...cheapestEquivalentCosts].reverse();
+
+      const mainSeries = {
+        type: 'bar' as const,
+        data: reversedValues,
+        label: {
+          show: true,
+          position: 'right' as const,
+          formatter: (p: { value?: unknown }) => fmt((p.value ?? 0) as number),
+          fontSize: 10,
+        },
+        z: 2,
+      };
+
+      const ghostSeries = showGhost
+        ? [{
+            type: 'bar' as const,
+            data: reversedCheapest,
+            barGap: '-100%',
+            itemStyle: { opacity: 0.18, color: 'currentColor', borderType: 'dashed' as const, borderWidth: 1 },
+            label: { show: false },
+            tooltip: { show: false },
+            z: 1,
+          }]
+        : [];
+
       chart.setOption(
         {
           animation: false,
           tooltip: {
             trigger: 'axis',
             axisPointer: { type: 'none' },
-            formatter(params: echarts.TooltipComponentOption) {
-              const p = (params as unknown as Array<{ name: string; value: number }>)[0];
-              return p ? `${p.name}: ${fmt(p.value)}` : '';
+            formatter(params: TooltipComponentOption) {
+              const items = params as unknown as Array<{ name: string; value: number; seriesIndex: number }>;
+              const main = items.find((p) => p.seriesIndex === 0);
+              if (!main) return '';
+              if (!showGhost) return `${main.name}: ${fmt(main.value)}`;
+              const cheapIdx = reversedLabels.indexOf(main.name);
+              const cheapCost = cheapIdx >= 0 ? (reversedCheapest[cheapIdx] ?? 0) : 0;
+              const saving = main.value - cheapCost;
+              const cheapLine = `Cheapest equivalent: ${formatMoney(cheapCost, currency)}`;
+              const saveLine = saving > 0.0001 ? `<br/>Save ${formatMoney(saving, currency)}` : '';
+              return `${main.name}: ${fmt(main.value)}<br/>${cheapLine}${saveLine}`;
             },
           },
           grid: { left: 120, right: 48, top: 8, bottom: 8, containLabel: false },
           xAxis: { type: 'value', axisLabel: { formatter: (v: number) => fmt(v), fontSize: 10 } },
           yAxis: {
             type: 'category',
-            data: [...labels].reverse(),
+            data: reversedLabels,
             axisLabel: { fontSize: 11 },
           },
-          series: [
-            {
-              type: 'bar',
-              data: [...values].reverse(),
-              label: {
-                show: true,
-                position: 'right',
-                formatter: (p: { value: number }) => fmt(p.value),
-                fontSize: 10,
-              },
-            },
-          ],
+          series: [mainSeries, ...ghostSeries],
         },
         { notMerge: false, lazyUpdate: true },
       );

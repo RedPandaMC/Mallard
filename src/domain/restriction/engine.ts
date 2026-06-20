@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import * as path from 'path';
 import { AlertRule, DEFAULT_RESTRICTION_STATE, RestrictionState } from '../types';
-import { buildEvalContext, EvalBuildInput } from '../expr/context';
+import { buildRuleContext, EvalBuildInput } from '../expr/context';
 import { evaluateRestrictionState } from './evaluator';
 import { resolveScopeIds } from './hostScopes';
 
@@ -82,7 +82,7 @@ export class RestrictionEngine {
     input: EvalBuildInput & { rules: AlertRule[]; now?: number },
   ): Promise<RestrictionState> {
     const now = input.now ?? Date.now();
-    const ctx = buildEvalContext(input);
+    const ctx = buildRuleContext(input);
     const desired = evaluateRestrictionState(input.rules, ctx, now);
     const customIds = this.customExtensions();
     const state = this.state;
@@ -177,7 +177,7 @@ export class RestrictionEngine {
   async simulate(
     input: EvalBuildInput & { rules: AlertRule[] },
   ): Promise<RestrictionSimulateReport> {
-    const ctx = buildEvalContext(input);
+    const ctx = buildRuleContext(input);
     const desired = evaluateRestrictionState(input.rules, ctx, Date.now());
     return {
       state: this.getState(),

@@ -4,7 +4,6 @@ import { buildContainer, Container } from './container';
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
 import { registerTriggerView } from './ui/TriggerView';
-import { Value } from './domain/expr/ast';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const container = await buildContainer(context);
@@ -166,7 +165,7 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     const report = await restriction.simulate({
       snapshot: snapshot ?? null,
       rules: cfg.rules ?? [],
-      ...(cfg.vars !== undefined ? { vars: cfg.vars as Record<string, Value> } : {}),
+      ...(cfg.vars !== undefined ? { vars: cfg.vars } : {}),
       ...(cfg.groups !== undefined ? { groups: cfg.groups } : {}),
       signedIn: snapshot?.authStatus === 'signed-in',
     });

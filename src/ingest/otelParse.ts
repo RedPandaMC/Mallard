@@ -13,6 +13,8 @@ export interface ParseContext {
   now: number;
   /** Repo to attribute these events to (active workspace repo at parse time). */
   repo?: string;
+  /** Git branch active at parse time. */
+  branch?: string;
   /** Stable per-file key so ids are unique across log files. */
   fileKey?: string;
   /**
@@ -26,8 +28,8 @@ export interface ParseContext {
 type AnyRecord = Record<string, unknown>;
 
 function num(v: unknown): number | undefined {
-  const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : undefined;
-  return n != null && !Number.isNaN(n) ? n : undefined;
+  const numericValue = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : undefined;
+  return numericValue != null && !Number.isNaN(numericValue) ? numericValue : undefined;
 }
 
 function pick(attrs: AnyRecord, keys: string[]): unknown {
@@ -51,11 +53,11 @@ function splitCost(
 }
 
 function toSurface(v: unknown): Surface {
-  const s = String(v ?? '').toLowerCase();
-  if (s.includes('inline') || s.includes('completion')) return 'inline';
-  if (s.includes('agent')) return 'agent';
-  if (s.includes('edit')) return 'edit';
-  if (s.includes('chat')) return 'chat';
+  const surfaceStr = String(v ?? '').toLowerCase();
+  if (surfaceStr.includes('inline') || surfaceStr.includes('completion')) return 'inline';
+  if (surfaceStr.includes('agent')) return 'agent';
+  if (surfaceStr.includes('edit')) return 'edit';
+  if (surfaceStr.includes('chat')) return 'chat';
   return 'unknown';
 }
 
@@ -133,6 +135,7 @@ export function parseOtelContent(content: string, ctx: ParseContext): UsageEvent
       cost,
       estimated: true,
       ...(ctx.repo !== undefined ? { repo: ctx.repo } : {}),
+      ...(ctx.branch !== undefined ? { branch: ctx.branch } : {}),
       ...(costByCategory !== undefined ? { costByCategory } : {}),
     });
   }

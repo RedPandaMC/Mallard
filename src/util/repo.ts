@@ -13,7 +13,10 @@ interface GitRemote {
 }
 interface GitRepository {
   rootUri: vscode.Uri;
-  state: { remotes: GitRemote[] };
+  state: {
+    remotes: GitRemote[];
+    HEAD?: { name?: string };
+  };
 }
 interface GitAPI {
   repositories: GitRepository[];
@@ -36,8 +39,8 @@ export async function initRepoAttribution(): Promise<void> {
 
 function slugFromRemote(url?: string): string | undefined {
   if (!url) return undefined;
-  const m = /[/:]([^/:]+\/[^/]+?)(?:\.git)?\/?$/.exec(url.trim());
-  return m ? m[1] : undefined;
+  const remoteMatch = /[/:]([^/:]+\/[^/]+?)(?:\.git)?\/?$/.exec(url.trim());
+  return remoteMatch ? remoteMatch[1] : undefined;
 }
 
 export interface RepoAttribution {
@@ -70,4 +73,9 @@ export function activeAttribution(): RepoAttribution {
   const uri =
     vscode.window.activeTextEditor?.document.uri ?? vscode.workspace.workspaceFolders?.[0]?.uri;
   return attribute(uri);
+}
+
+/** Name of the HEAD branch in the first detected repository, if available. */
+export function activeBranch(): string | undefined {
+  return gitApi?.repositories[0]?.state.HEAD?.name;
 }

@@ -3,7 +3,8 @@
  * (heavy weekdays, light weekends) reads at a glance. Webview-only: binned
  * from the calendar HeatmapData the host already sends (full YYYY-MM-DD dates).
  */
-import { echarts, initChart } from './echarts';
+import { initChart } from './echarts';
+import type { TooltipComponentOption } from './echarts';
 import { readTheme } from '../theme';
 import { UsageSnapshot } from '../../src/domain/types';
 import { formatCredits } from '../../src/domain/format';
@@ -52,7 +53,7 @@ export function mountWeekdayRadial(el: HTMLElement): WeekdayRadialHandle {
           animation: false,
           tooltip: {
             trigger: 'item',
-            formatter(p: echarts.TooltipComponentOption) {
+            formatter(p: TooltipComponentOption) {
               const item = p as unknown as { name: string; value: number };
               return `${item.name}<br/>${formatCredits(item.value)} cr`;
             },

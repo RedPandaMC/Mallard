@@ -15,12 +15,12 @@ import * as path from 'path';
 export function vscodeLogRoot(logUriPath: string): string {
   // logUri typically: .../logs/20260612T123456/window1/exthost
   // Walk up to find the "logs" ancestor.
-  let p = logUriPath;
+  let logPath = logUriPath;
   for (let i = 0; i < 4; i++) {
-    const parent = path.dirname(p);
-    if (parent === p) break;
+    const parent = path.dirname(logPath);
+    if (parent === logPath) break;
     if (path.basename(parent).toLowerCase() === 'logs') return parent;
-    p = parent;
+    logPath = parent;
   }
   // Fallback: use the direct parent of the provided path.
   return path.dirname(logUriPath);

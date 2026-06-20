@@ -12,6 +12,7 @@ export function mountStatusBanner(el: HTMLElement): StatusBannerHandle {
     </div>`;
 
   const banner = el.querySelector<HTMLElement>('.wv-banner')!;
+  const dot = banner.querySelector<HTMLElement>('.wv-banner-dot')!;
   const text = banner.querySelector<HTMLElement>('.wv-banner-text')!;
 
   return {
@@ -32,6 +33,13 @@ export function mountStatusBanner(el: HTMLElement): StatusBannerHandle {
 
       banner.dataset.kind = kind;
       text.textContent = msg;
+
+      // Briefly flash the dot when a live incremental update arrives.
+      if (s.isIncremental && kind === 'ok') {
+        dot.classList.remove('wv-banner-dot--flash');
+        void dot.offsetWidth; // force reflow to restart the animation
+        dot.classList.add('wv-banner-dot--flash');
+      }
     },
   };
 }

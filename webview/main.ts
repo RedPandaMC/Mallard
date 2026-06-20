@@ -5,9 +5,24 @@ import './styles/dashboard.css';
 
 import { onMessage, post } from './api';
 import { state, setState, subscribe } from './store';
+import {
+  dailyBarsChanged,
+  heatmapChanged,
+  modelBreakdownChanged,
+  categoryBreakdownChanged,
+  hourlyChanged,
+} from './chartDiff';
 import { lazyChart } from './lazyMount';
 import { mountLayout } from './layout';
-import { DashboardLayout, DEFAULT_DASHBOARD_LAYOUT } from '../src/domain/types';
+import {
+  CategoryBreakdownData,
+  DailyBarsData,
+  DashboardLayout,
+  DEFAULT_DASHBOARD_LAYOUT,
+  HeatmapData,
+  HourlyTimelineData,
+  ModelBreakdownData,
+} from '../src/domain/types';
 import { applyTheme } from './charts/echarts';
 import { applyPalette } from './theme';
 import { mountDailyBars } from './charts/dailyBars';
@@ -17,6 +32,7 @@ import { mountSankey } from './charts/sankey';
 import { mountCategoryBreakdown } from './charts/categoryBreakdown';
 import { mountCumulativeArea } from './charts/cumulativeArea';
 import { mountWeekdayRadial } from './charts/weekdayRadial';
+import { mountHourlyTimeline } from './charts/hourlyTimeline';
 import { mountKpiCards } from './components/KpiCards';
 import { mountFilterBar } from './components/FilterBar';
 import { mountGitHubBillingStrip } from './components/GitHubBillingStrip';
@@ -25,8 +41,14 @@ import { mountEmptyState } from './components/EmptyState';
 import { mountSpendGauge } from './components/SpendGauge';
 import { mountAlertConfigPanel } from './components/AlertConfigPanel';
 import { mountRestrictionBanner } from './components/RestrictionBanner';
+import { formatCredits, formatMoney } from '../src/domain/format';
 
 const LOGO_SRC = document.body.dataset.logo ?? '';
+
+function setSrDesc(bodyId: string, text: string): void {
+  const el = document.getElementById(`desc-${bodyId}`);
+  if (el) el.textContent = text;
+}
 
 applyTheme();
 mountDashboard(document.getElementById('app')!);
@@ -61,12 +83,14 @@ function panelHtml(
   ariaLabel: string,
   bodyClass = '',
 ): string {
+  const descId = `desc-${bodyId}`;
   return `
     <section class="wv-chart-section" data-panel="${id}" aria-label="${title}">
       <div class="wv-chart-header">
         <span class="wv-chart-title"><i class="codicon ${icon}"></i> ${title}</span>
       </div>
-      <div class="wv-chart-body ${bodyClass}" id="${bodyId}" role="img" aria-label="${ariaLabel}"></div>
+      <p id="${descId}" class="wv-sr-only"></p>
+      <div class="wv-chart-body ${bodyClass}" id="${bodyId}" role="img" aria-label="${ariaLabel}" aria-describedby="${descId}"></div>
     </section>`;
 }
 
@@ -112,6 +136,7 @@ function mountDashboard(root: HTMLElement): void {
           ${panelHtml('category', 'codicon-pie-chart', 'Spend by cost type', 'chart-category', 'Spend by cost type', 'mini')}
           ${panelHtml('cumulative', 'codicon-graph-line', 'Cumulative spend', 'chart-cumulative', 'Cumulative spend over the month', 'mini')}
           ${panelHtml('weekday', 'codicon-pulse', 'Usage by weekday', 'chart-weekday', 'Usage by weekday', 'mini')}
+          ${panelHtml('hourly', 'codicon-clock', 'Usage by hour', 'chart-hourly', 'Usage by hour of day', 'mini')}
         </div>
       </div>
     </div>`;
@@ -130,6 +155,7 @@ function mountDashboard(root: HTMLElement): void {
   const categoryEl = document.getElementById('chart-category')!;
   const cumulativeEl = document.getElementById('chart-cumulative')!;
   const weekdayEl = document.getElementById('chart-weekday')!;
+  const hourlyEl = document.getElementById('chart-hourly')!;
   const daily = lazyChart(dailyEl, () => mountDailyBars(dailyEl));
   const heatmap = lazyChart(heatmapEl, () => mountHeatmap(heatmapEl));
   const models = lazyChart(modelsEl, () => mountModelBreakdown(modelsEl));
@@ -137,6 +163,7 @@ function mountDashboard(root: HTMLElement): void {
   const category = lazyChart(categoryEl, () => mountCategoryBreakdown(categoryEl));
   const cumulative = lazyChart(cumulativeEl, () => mountCumulativeArea(cumulativeEl));
   const weekday = lazyChart(weekdayEl, () => mountWeekdayRadial(weekdayEl));
+  const hourly = lazyChart(hourlyEl, () => mountHourlyTimeline(hourlyEl));
   const alertConfig = mountAlertConfigPanel(document.getElementById('alert-config')!);
   const content = document.getElementById('content')!;
 
@@ -151,6 +178,7 @@ function mountDashboard(root: HTMLElement): void {
     category: section('category'),
     cumulative: section('cumulative'),
     weekday: section('weekday'),
+    hourly: section('hourly'),
   };
 
   const resizeAll = () => {
@@ -161,6 +189,7 @@ function mountDashboard(root: HTMLElement): void {
     category.resize();
     cumulative.resize();
     weekday.resize();
+    hourly.resize();
   };
 
   // Dynamic scaling + docking: the layout manager reorders, resizes (span), and
@@ -188,15 +217,25 @@ function mountDashboard(root: HTMLElement): void {
   alertConfig.update(state().config);
 
   let resizeFrame: number | undefined;
-  const ro = new ResizeObserver(() => {
+  const resizeObserver = new ResizeObserver(() => {
     if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
     resizeFrame = requestAnimationFrame(resizeAll);
   });
-  for (const el of Object.values(sections)) ro.observe(el);
+  for (const el of Object.values(sections)) resizeObserver.observe(el);
 
   emptyState.update(false);
 
   let appliedLayout: DashboardLayout | null = null;
+
+  // Per-chart payload trackers for diff-based render skipping.
+  // Charts only re-render when their specific input data changes.
+  let prevDailyBars: DailyBarsData | undefined;
+  let prevHeatmap: HeatmapData | undefined;
+  let prevModelBreakdown: ModelBreakdownData | undefined;
+  let prevSankeyKey: string | undefined;
+  let prevCategory: CategoryBreakdownData | undefined;
+  let prevHourly: HourlyTimelineData | undefined;
+  let prevMetric: string | undefined;
 
   subscribe((s) => {
     alertConfig.update(s.config);
@@ -224,20 +263,97 @@ function mountDashboard(root: HTMLElement): void {
       kpis.update(snapshot, metric);
       ghStrip.update(snapshot);
       gauge.update(snapshot.budget, snapshot.currency);
-      daily.render((c) => c.update(snapshot));
-      // Data-availability hiding is independent of the user's layout choice.
+
+      // dailyBars drives both the bar chart and the cumulative area view.
+      if (dailyBarsChanged(prevDailyBars, snapshot.chartData.dailyBars)) {
+        daily.render((c) => c.update(snapshot));
+        cumulative.render((c) => c.update(snapshot));
+        prevDailyBars = snapshot.chartData.dailyBars;
+      }
+
+      // heatmap data drives both the calendar heatmap and the weekday radial.
+      const heatmapDirty = heatmapChanged(prevHeatmap, snapshot.chartData.heatmap);
       sections['heatmap']!.classList.toggle('wv-no-data', snapshot.chartData.heatmap.max <= 0);
-      heatmap.render((c) => c.update(snapshot));
-      models.render((c) => c.update(snapshot, metric));
-      sankey.render((c) => c.update(snapshot));
+      sections['weekday']!.classList.toggle('wv-no-data', snapshot.chartData.heatmap.max <= 0);
+      if (heatmapDirty) {
+        heatmap.render((c) => c.update(snapshot));
+        weekday.render((c) => c.update(snapshot));
+        prevHeatmap = snapshot.chartData.heatmap;
+      }
+
+      if (modelBreakdownChanged(prevModelBreakdown, snapshot.chartData.modelBreakdown) || metric !== prevMetric) {
+        models.render((c) => c.update(snapshot, metric));
+        prevModelBreakdown = snapshot.chartData.modelBreakdown;
+      }
+
+      // Sankey depends on links + dimension lists (no chartData slot).
+      const sankeyKey = JSON.stringify([snapshot.sankeyLinks, snapshot.allModels, snapshot.allSurfaces]);
+      if (sankeyKey !== prevSankeyKey) {
+        sankey.render((c) => c.update(snapshot));
+        prevSankeyKey = sankeyKey;
+      }
+
       sections['category']!.classList.toggle(
         'wv-no-data',
         !snapshot.chartData.categoryBreakdown.available,
       );
-      category.render((c) => c.update(snapshot));
-      cumulative.render((c) => c.update(snapshot));
-      sections['weekday']!.classList.toggle('wv-no-data', snapshot.chartData.heatmap.max <= 0);
-      weekday.render((c) => c.update(snapshot));
+      if (categoryBreakdownChanged(prevCategory, snapshot.chartData.categoryBreakdown)) {
+        category.render((c) => c.update(snapshot));
+        prevCategory = snapshot.chartData.categoryBreakdown;
+      }
+
+      if (hourlyChanged(prevHourly, snapshot.chartData.hourlyTimeline)) {
+        hourly.render((c) => c.update(snapshot));
+        prevHourly = snapshot.chartData.hourlyTimeline;
+      }
+
+      prevMetric = metric;
+      updateSrDescriptions(snapshot);
     }
   });
+}
+
+function updateSrDescriptions(snapshot: import('../src/domain/types').UsageSnapshot): void {
+  const { dailyBars, heatmap, modelBreakdown, categoryBreakdown, hourlyTimeline } = snapshot.chartData;
+
+  const peakDay = dailyBars.points.reduce(
+    (best, p) => (p.credits > (best?.credits ?? -1) ? p : best),
+    dailyBars.points[0] ?? null,
+  );
+  setSrDesc(
+    'chart-daily',
+    peakDay
+      ? `30-day bar chart. Peak: ${formatCredits(peakDay.credits)} cr on ${peakDay.date}. Today: ${formatCredits(snapshot.today.credits)} cr.`
+      : '30-day bar chart. No data.',
+  );
+
+  setSrDesc(
+    'chart-heatmap',
+    heatmap.max > 0
+      ? `Activity heatmap, last 12 weeks. Max daily usage: ${formatCredits(heatmap.max)} cr.`
+      : 'Activity heatmap. No usage data.',
+  );
+
+  const topModel = modelBreakdown.labels[0];
+  setSrDesc(
+    'chart-models',
+    topModel
+      ? `Model breakdown. Top model: ${topModel} with ${formatCredits(modelBreakdown.credits[0] ?? 0)} cr.`
+      : 'Model breakdown. No data.',
+  );
+
+  setSrDesc(
+    'chart-category',
+    categoryBreakdown.available
+      ? `Cost by category: ${categoryBreakdown.categories.map((c, i) => `${c} ${formatMoney(categoryBreakdown.costs[i] ?? 0, snapshot.currency)}`).join(', ')}.`
+      : 'Cost category breakdown unavailable.',
+  );
+
+  const peak = hourlyTimeline.peakHour;
+  setSrDesc(
+    'chart-hourly',
+    hourlyTimeline.hours.some((h) => h > 0)
+      ? `Usage by hour. Peak hour: ${peak}:00.`
+      : 'Usage by hour. No data.',
+  );
 }

@@ -16,6 +16,7 @@ import { initRepoAttribution } from './ingest/repoResolver';
 import { LogWatcher } from './ingest/LogWatcher';
 import { PricingService } from './pricing/PricingService';
 import { EventStore } from './store/EventStore';
+import { createMetricExporter } from './export/ExporterFactory';
 
 export interface Container {
   usage: UsageService;
@@ -51,7 +52,17 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const github = new GitHubUsageService(githubSession);
   const userConfig = new UserConfigStore(storageDir);
   const layout = new LayoutStore(context.globalState);
-  const usage = new UsageService(store, pricing, watcher, userConfig, github);
+  const ve = cfg.metricExport;
+  const exporter = createMetricExporter({
+    ...(ve.brokerUrl ? { brokerUrl: ve.brokerUrl } : {}),
+    ...(ve.topic ? { topic: ve.topic } : {}),
+    ...(ve.username ? { username: ve.username } : {}),
+    ...(ve.password ? { password: ve.password } : {}),
+    ...(ve.certPath ? { certPath: ve.certPath } : {}),
+    ...(ve.keyPath ? { keyPath: ve.keyPath } : {}),
+    ...(ve.caPath ? { caPath: ve.caPath } : {}),
+  }) ?? undefined;
+  const usage = new UsageService(store, pricing, watcher, userConfig, github, exporter);
   const restriction = new RestrictionEngine(storageDir);
 
   // Re-evaluate the restriction on every snapshot fire.
@@ -62,10 +73,11 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
         snapshot,
         rules: cfg.rules ?? [],
         ...(cfg.vars !== undefined
-          ? { vars: cfg.vars as Record<string, import('./domain/expr/ast').Value> }
+          ? { vars: cfg.vars }
           : {}),
         ...(cfg.groups !== undefined ? { groups: cfg.groups } : {}),
         signedIn: snapshot.authStatus === 'signed-in',
+        ...(cfg.branchBudgets !== undefined ? { branchBudgets: cfg.branchBudgets } : {}),
       });
     }),
   );
@@ -78,6 +90,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     layout,
     usage,
     restriction,
+    ...(exporter ? [{ dispose: () => exporter.dispose() }] : []),
   );
 
   return { usage, store, userConfig, layout, pricing, restriction };

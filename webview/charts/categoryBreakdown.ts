@@ -3,7 +3,8 @@
  * Consumes pre-computed CategoryBreakdownData from the host. When the data is
  * not available the caller hides the section; this chart only paints.
  */
-import { echarts, initChart } from './echarts';
+import { initChart } from './echarts';
+import type { TooltipComponentOption } from './echarts';
 import { UsageSnapshot } from '../../src/domain/types';
 import { formatMoney } from '../../src/domain/format';
 
@@ -38,7 +39,7 @@ export function mountCategoryBreakdown(el: HTMLElement): CategoryBreakdownHandle
           animation: false,
           tooltip: {
             trigger: 'item',
-            formatter(p: echarts.TooltipComponentOption) {
+            formatter(p: TooltipComponentOption) {
               const item = p as unknown as { name: string; value: number; percent: number };
               return `${item.name}: ${formatMoney(item.value, currency)} (${item.percent}%)`;
             },

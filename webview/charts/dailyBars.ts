@@ -1,7 +1,8 @@
 /**
  * 30-day daily bar chart — consumes pre-computed DailyBarsData from the host.
  */
-import { echarts, initChart } from './echarts';
+import { initChart } from './echarts';
+import type { TooltipComponentOption, SeriesOption } from './echarts';
 import { readTheme } from '../theme';
 import { UsageSnapshot } from '../../src/domain/types';
 import { formatMoney, formatCredits } from '../../src/domain/format';
@@ -22,14 +23,26 @@ export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
       // colorIndex 0/1/2 → severity ramp gray → coral → red (duotone).
       const sev = [t.sevOk, t.sevWarn, t.sevOver];
 
-      const series: echarts.SeriesOption[] = [
+      const barData = points.map((p) => ({
+        value: p.credits,
+        itemStyle: { color: sev[p.colorIndex] ?? t.sevOk },
+      }));
+
+      // Incremental update: only today's bar changed. Animate just the data
+      // series without rebuilding axes, tooltips, or threshold lines.
+      if (s.isIncremental) {
+        chart.setOption(
+          { animation: true, animationDuration: 500, series: [{ data: barData }] },
+          { notMerge: false, lazyUpdate: false },
+        );
+        return;
+      }
+
+      const series: SeriesOption[] = [
         {
           type: 'bar',
           name: 'Credits',
-          data: points.map((p) => ({
-            value: p.credits,
-            itemStyle: { color: sev[p.colorIndex] ?? t.sevOk },
-          })),
+          data: barData,
           emphasis: { itemStyle: { opacity: 0.85 } },
         },
       ];
@@ -42,7 +55,7 @@ export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
           lineStyle: { type: 'dashed', color: t.sevWarn, width: 1 },
           symbol: 'none',
           silent: true,
-        } as echarts.SeriesOption);
+        } as SeriesOption);
       }
 
       if (projectedLine !== null) {
@@ -53,7 +66,7 @@ export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
           lineStyle: { type: 'dotted', color: t.accent, width: 1.5 },
           symbol: 'none',
           silent: true,
-        } as echarts.SeriesOption);
+        } as SeriesOption);
       }
 
       chart.setOption(
@@ -61,7 +74,7 @@ export function mountDailyBars(el: HTMLElement): DailyBarsHandle {
           animation: false,
           tooltip: {
             trigger: 'axis',
-            formatter(params: echarts.TooltipComponentOption) {
+            formatter(params: TooltipComponentOption) {
               const p = (params as unknown as Array<{ dataIndex: number }>)[0];
               if (!p) return '';
               const pt = points[p.dataIndex];

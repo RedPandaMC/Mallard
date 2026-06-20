@@ -150,8 +150,20 @@ body {
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 
+/* One-shot brightness flash when a live incremental update arrives. */
+.wv-banner-dot--flash {
+  animation: wv-flash 0.7s ease forwards !important;
+}
+
+@keyframes wv-flash {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--w-action) 80%, transparent); opacity: 1; }
+  40%  { box-shadow: 0 0 0 7px transparent; opacity: 0.6; }
+  100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wv-banner[data-kind='ok'] .wv-banner-dot { animation: none; }
+  .wv-banner-dot--flash { animation: none !important; }
 }
 
 /* ─────────────────────────────────────────
@@ -936,4 +948,17 @@ body {
   font-size: 11px;
   color: var(--w-fg-muted);
   margin-top: var(--w-s1);
+}
+
+/* Visually hidden but readable by screen readers */
+.wv-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

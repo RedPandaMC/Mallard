@@ -137,13 +137,13 @@ export class GitHubUsageService implements vscode.Disposable {
 function parseQuota(raw: unknown): GitHubQuota | null {
   const parsed = QuotaSchema.safeParse(raw);
   if (!parsed.success) return null;
-  const d = parsed.data;
-  const pi = d.quota_snapshots?.premium_interactions;
+  const parsedData = parsed.data;
+  const pi = parsedData.quota_snapshots?.premium_interactions;
   if (!pi) return null;
   const used = Math.round(pi.entitlement * (1 - pi.percent_remaining));
-  const resetDate = d.quota_reset_date ? new Date(d.quota_reset_date).getTime() : null;
+  const resetDate = parsedData.quota_reset_date ? new Date(parsedData.quota_reset_date).getTime() : null;
   return {
-    plan: d.copilot_plan ?? 'unknown',
+    plan: parsedData.copilot_plan ?? 'unknown',
     entitlement: pi.entitlement,
     used,
     resetDate: Number.isFinite(resetDate) ? resetDate : null,
