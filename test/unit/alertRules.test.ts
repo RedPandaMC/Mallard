@@ -11,10 +11,10 @@ function snap(todayCredits = 0): UsageSnapshot {
 }
 
 describe('parseAlertRules', () => {
-  it('returns ok: true for a valid document', () => {
+  it('returns ok: true for a valid document with JSON condition', () => {
     const result = parseAlertRules({
       version: 1,
-      rules: [{ id: 'r1', severity: 'warning', message: 'hi', when: 'today.credits > 10' }],
+      rules: [{ id: 'r1', severity: 'warning', message: 'hi', when: { '>': [{ var: 'today.credits' }, 10] } }],
     });
     assert.equal(result.ok, true);
     assert.equal(result.errors.length, 0);
@@ -36,7 +36,7 @@ describe('parseAlertRules', () => {
     const result = parseAlertRules({
       version: 2,
       vars: { threshold: 50 },
-      groups: [{ id: 'g1', active: 'true', label: 'Group 1' }],
+      groups: [{ id: 'g1', active: true, label: 'Group 1' }],
       rules: [],
     });
     assert.equal(result.ok, true);
@@ -57,9 +57,9 @@ describe('evaluateAlertRules — groups', () => {
 
   it('group active=false suppresses rules referencing that group', () => {
     const rules: AlertRule[] = [
-      { id: 'r', severity: 'warning', message: '', when: 'today.credits > 0', active: 'group.g1' },
+      { id: 'r', severity: 'warning', message: '', when: { '>': [{ var: 'today.credits' }, 0] }, active: { var: 'group.g1' } },
     ];
-    const groups = [{ id: 'g1', active: 'false' }];
+    const groups = [{ id: 'g1', active: false as const }];
     const fired = new Map<string, number>();
     const out = evaluateAlertRules({ snapshot: snap(100), rules, groups, fired, now });
     assert.equal(out.length, 0, 'group inactive suppresses rule');
@@ -67,22 +67,24 @@ describe('evaluateAlertRules — groups', () => {
 
   it('group active=true allows rule to fire', () => {
     const rules: AlertRule[] = [
-      { id: 'r', severity: 'warning', message: '', when: 'today.credits > 0', active: 'group.g1' },
+      { id: 'r', severity: 'warning', message: '', when: { '>': [{ var: 'today.credits' }, 0] }, active: { var: 'group.g1' } },
     ];
-    const groups = [{ id: 'g1', active: 'true' }];
+    const groups = [{ id: 'g1', active: true as const }];
     const fired = new Map<string, number>();
     const out = evaluateAlertRules({ snapshot: snap(100), rules, groups, fired, now });
     assert.equal(out.length, 1);
   });
 
-  it('derived values are available in the when expression', () => {
+  it('compound condition fires when both sides true', () => {
     const rules: AlertRule[] = [
       {
         id: 'r',
         severity: 'info',
         message: '',
-        when: 'doubled > 100',
-        derived: { doubled: 'today.credits * 2' },
+        when: { 'and': [
+          { '>': [{ var: 'today.credits' }, 50] },
+          { '<': [{ var: 'budget.percentOfBudget' }, 1] },
+        ] },
       },
     ];
     const fired = new Map<string, number>();
@@ -90,13 +92,13 @@ describe('evaluateAlertRules — groups', () => {
     assert.equal(out.length, 1);
   });
 
-  it('template renders {{expr}} using the rule context', () => {
+  it('template renders {{field.path}} using the rule context', () => {
     const rules: AlertRule[] = [
       {
         id: 'r',
         severity: 'info',
         message: 'Credits: {{today.credits}}',
-        when: 'today.credits > 0',
+        when: { '>': [{ var: 'today.credits' }, 0] },
       },
     ];
     const fired = new Map<string, number>();

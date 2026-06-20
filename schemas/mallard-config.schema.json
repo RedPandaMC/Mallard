@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mallard-config",
+  "title": "Mallard Configuration",
+  "description": "Budget, alert rules, and metric export configuration for the Mallard VS Code extension.",
+  "type": "object",
+  "$defs": {
+    "JsonOperand": {
+      "description": "A value or context field reference used as a comparison operand.",
+      "oneOf": [
+        { "type": "number" },
+        { "type": "string" },
+        { "type": "boolean" },
+        {
+          "type": "object",
+          "required": ["var"],
+          "properties": {
+            "var": {
+              "type": "string",
+              "description": "Dot-separated path into the rule context. Examples: \"today.credits\", \"budget.percentOfBudget\", \"velocity.creditsPerHour\", \"vars.myThreshold\""
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "JsonCondition": {
+      "description": "A boolean condition tree. Evaluated at runtime against the live usage snapshot.",
+      "oneOf": [
+        { "type": "boolean", "description": "Literal true (always fires) or false (never fires)." },
+        {
+          "type": "object",
+          "required": [">"],
+          "properties": { ">": { "type": "array", "items": { "$ref": "#/$defs/JsonOperand" }, "minItems": 2, "maxItems": 2, "description": "Left > right" } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [">="],
+          "properties": { ">=": { "type": "array", "items": { "$ref": "#/$defs/JsonOperand" }, "minItems": 2, "maxItems": 2, "description": "Left >= right" } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["<"],
+          "properties": { "<": { "type": "array", "items": { "$ref": "#/$defs/JsonOperand" }, "minItems": 2, "maxItems": 2, "description": "Left < right" } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["<="],
+          "properties": { "<=": { "type": "array", "items": { "$ref": "#/$defs/JsonOperand" }, "minItems": 2, "maxItems": 2, "description": "Left <= right" } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["=="],
+          "properties": { "==": { "type": "array", "items": { "$ref": "#/$defs/JsonOperand" }, "minItems": 2, "maxItems": 2, "description": "Strict equality" } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["!="],
+          "properties": { "!=": { "type": "array", "items": { "$ref": "#/$defs/JsonOperand" }, "minItems": 2, "maxItems": 2, "description": "Strict inequality" } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["and"],
+          "properties": { "and": { "type": "array", "items": { "$ref": "#/$defs/JsonCondition" }, "description": "All sub-conditions must be true (short-circuit AND)." } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["or"],
+          "properties": { "or": { "type": "array", "items": { "$ref": "#/$defs/JsonCondition" }, "description": "At least one sub-condition must be true (short-circuit OR)." } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["not"],
+          "properties": { "not": { "$ref": "#/$defs/JsonCondition", "description": "Negates the sub-condition." } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["var"],
+          "properties": {
+            "var": {
+              "type": "string",
+              "description": "Truthy check on a context field. Example: {\"var\": \"group.g1\"} — fires when group g1 is active."
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "properties": {
+    "monthlyBudget": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Monthly budget in USD. Set to 0 to disable budget tracking."
+    },
+    "includedCredits": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Premium requests included in the Copilot plan (used to colour the spend gauge)."
+    },
+    "dailyCreditAlert": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Warn once per day when daily credit usage exceeds this threshold. Set to 0 to disable."
+    },
+    "alerts": {
+      "type": "object",
+      "description": "Built-in alert thresholds (independent of the custom rules system).",
+      "properties": {
+        "velocityEnabled": { "type": "boolean", "description": "Enable the spending velocity alert." },
+        "velocityCreditsPerHour": { "type": "number", "minimum": 0, "description": "Alert when spending rate exceeds this credits/hour." }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "description": "Budget settings (alternative to top-level monthlyBudget).",
+      "properties": {
+        "monthlyUsd": { "type": "number", "minimum": 0 },
+        "includedCredits": { "type": "number", "minimum": 0 }
+      }
+    },
+    "vars": {
+      "type": "object",
+      "description": "User-defined variables. Reference in conditions as {\"var\": \"vars.myThreshold\"}.",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "number" },
+          { "type": "string" },
+          { "type": "boolean" }
+        ]
+      }
+    },
+    "groups": {
+      "type": "array",
+      "description": "Named groups of rules. Set a group inactive to suppress all rules in it.",
+      "items": {
+        "type": "object",
+        "required": ["id", "active"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique group identifier. Referenced in rule active conditions as {\"var\": \"group.<id>\"}." },
+          "label": { "type": "string", "description": "Human-readable group name (optional)." },
+          "active": { "$ref": "#/$defs/JsonCondition", "description": "Condition that must be true for this group's rules to be evaluated." }
+        },
+        "additionalProperties": false
+      }
+    },
+    "rules": {
+      "type": "array",
+      "description": "Custom alert and restriction rules evaluated against the live usage snapshot.",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "message", "when"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique rule identifier. Used for cooldown bookkeeping." },
+          "severity": {
+            "type": "string",
+            "enum": ["info", "warning", "critical"],
+            "description": "Alert severity level."
+          },
+          "cooldown": {
+            "type": "string",
+            "pattern": "^\\d+[mhdw]$",
+            "description": "Minimum time between firings. Examples: \"1h\", \"30m\", \"1d\". Defaults to 1h."
+          },
+          "message": {
+            "type": "string",
+            "description": "Alert message. Use {{ today.credits }} to insert live values via dot-path."
+          },
+          "when": { "$ref": "#/$defs/JsonCondition", "description": "Condition that triggers the alert when true." },
+          "active": { "$ref": "#/$defs/JsonCondition", "description": "Optional gate — rule is only evaluated when this is true. Omit to always evaluate." },
+          "requiresAuth": { "type": "boolean", "description": "Skip this rule unless the user is signed in to GitHub." },
+          "notify": { "type": "boolean", "description": "Whether to surface a VS Code notification when the rule fires." },
+          "restrict": {
+            "type": "object",
+            "required": ["mode", "scope"],
+            "description": "Optional Copilot restriction to apply when this rule fires.",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": ["soft", "hard"],
+                "description": "soft: show a warning banner only. hard: disable Copilot extensions."
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["copilot", "copilot+lab", "custom"],
+                "description": "Which extensions are affected by a hard restriction."
+              },
+              "graceMinutes": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1440,
+                "description": "Grace period (minutes) before a hard restriction takes effect."
+              },
+              "reEnableWhen": {
+                "$ref": "#/$defs/JsonCondition",
+                "description": "Condition that, when true, automatically clears this restriction."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "branchBudgets": {
+      "type": "object",
+      "description": "Per-branch credit caps keyed by branch name. Reference as {\"var\": \"currentBranchCredits\"}.",
+      "additionalProperties": { "type": "number", "minimum": 0 }
+    }
+  },
+  "additionalProperties": false
+}

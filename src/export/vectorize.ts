@@ -11,6 +11,7 @@
  * and can be consumed directly by a Neo4j importer without transformation here.
  */
 import type { UsageSnapshot } from '../domain/types';
+import type { MetricSerializer } from './MetricExporter';
 
 export interface VectorPayload {
   /** ISO timestamp of the snapshot. */
@@ -68,4 +69,12 @@ export function vectorize(s: UsageSnapshot): VectorPayload {
     mtd_budget_pct: s.budget.percentOfBudget,
     repo_count: s.allRepos.length,
   };
+}
+
+/** Default MetricSerializer — emits the usage feature vector. */
+export class VectorSerializer implements MetricSerializer {
+  readonly topic = 'mallard/metrics';
+  serialize(snapshot: UsageSnapshot): Record<string, unknown> {
+    return vectorize(snapshot) as unknown as Record<string, unknown>;
+  }
 }

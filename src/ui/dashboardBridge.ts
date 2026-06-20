@@ -86,9 +86,7 @@ export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vsc
           await restriction.reconcile({
             snapshot: s ?? null,
             rules: cfg.rules ?? [],
-            ...(cfg.vars !== undefined
-              ? { vars: cfg.vars as Record<string, import('../domain/expr/ast').Value> }
-              : {}),
+            ...(cfg.vars !== undefined ? { vars: cfg.vars } : {}),
             ...(cfg.groups !== undefined ? { groups: cfg.groups } : {}),
             signedIn: s?.authStatus === 'signed-in',
           });

@@ -83,10 +83,37 @@ export type RestrictionMode = 'soft' | 'hard';
 
 export type RestrictionScope = 'copilot' | 'copilot+lab' | 'custom';
 
+// ── JSON condition types ─────────────────────────────────────────────────────
+
+/** A value that can appear on either side of a comparison operator. */
+export type JsonOperand = number | string | boolean | { var: string };
+
+/**
+ * A JSONLogic-inspired condition tree. Evaluated by `evalCondition()`.
+ *
+ * Examples:
+ *   `true` — always fires
+ *   `{ ">": [{ "var": "today.credits" }, 50] }` — fires when today > 50 cr
+ *   `{ "and": [ ... ] }` — all sub-conditions must be true
+ *   `{ "var": "group.g1" }` — truthy check (used for group gates)
+ */
+export type JsonCondition =
+  | boolean
+  | { '>':  [JsonOperand, JsonOperand] }
+  | { '>=': [JsonOperand, JsonOperand] }
+  | { '<':  [JsonOperand, JsonOperand] }
+  | { '<=': [JsonOperand, JsonOperand] }
+  | { '==': [JsonOperand, JsonOperand] }
+  | { '!=': [JsonOperand, JsonOperand] }
+  | { 'and': JsonCondition[] }
+  | { 'or':  JsonCondition[] }
+  | { 'not': JsonCondition }
+  | { 'var': string };
+
 export interface RuleRestrict {
   mode: RestrictionMode;
   scope: RestrictionScope;
-  reEnableWhen?: string;
+  reEnableWhen?: JsonCondition;
   graceMinutes?: number;
 }
 
@@ -95,9 +122,8 @@ export interface AlertRule {
   severity: 'info' | 'warning' | 'critical';
   cooldown?: string;
   message: string;
-  when: string;
-  active?: string;
-  derived?: Record<string, string>;
+  when: JsonCondition;
+  active?: JsonCondition;
   requiresAuth?: boolean;
   notify?: boolean;
   restrict?: RuleRestrict;
@@ -106,7 +132,7 @@ export interface AlertRule {
 export interface AlertGroup {
   id: string;
   label?: string;
-  active: string;
+  active: JsonCondition;
 }
 
 export interface UserConfig {

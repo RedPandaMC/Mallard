@@ -14,8 +14,7 @@ import { LogWatcher } from '../ingest/LogWatcher';
 import { PricingService } from '../pricing/PricingService';
 import { EventStore } from '../store/EventStore';
 import { UserConfigStore } from './UserConfigStore';
-import { VectorExporter } from '../export/VectorExporter';
-import { vectorize } from '../export/vectorize';
+import { MetricExporter } from '../export/MetricExporter';
 import { activeBranch } from '../util/repo';
 import { defaultVscodeHost, VscodeHost } from '../util/vscodeHost';
 
@@ -34,7 +33,7 @@ export class UsageService implements vscode.Disposable {
   private authStatus: AuthStatus = 'signed-out';
   private githubBilling: GitHubBillingData | undefined = undefined;
   private readonly subs: vscode.Disposable[] = [];
-  private readonly exporter: VectorExporter | undefined;
+  private readonly exporter: MetricExporter | undefined;
 
   constructor(
     private readonly store: EventStore,
@@ -42,7 +41,7 @@ export class UsageService implements vscode.Disposable {
     private readonly watcher: LogWatcher,
     private readonly userConfig: UserConfigStore,
     private readonly github?: GitHubUsageService,
-    exporter?: VectorExporter,
+    exporter?: MetricExporter,
     private readonly host: VscodeHost = defaultVscodeHost,
   ) {
     this.exporter = exporter;
@@ -168,7 +167,7 @@ export class UsageService implements vscode.Disposable {
     this.recordSample(now, this.snapshot);
     this.fireAlerts(this.snapshot, userConfig, now);
     this._onDidChange.fire(this.snapshot);
-    this.exporter?.export(vectorize(this.snapshot));
+    this.exporter?.export(this.snapshot);
   }
 
   private recordSample(now: number, s: UsageSnapshot): void {

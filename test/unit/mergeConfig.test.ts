@@ -18,8 +18,8 @@ describe('mergeConfig', () => {
     const out = mergeConfig({
       version: 2,
       vars: { x: 1 },
-      groups: [{ id: 'g', active: 'true' }],
-      rules: [{ id: 'r', severity: 'warning', message: '', when: 'true' }],
+      groups: [{ id: 'g', active: true as const }],
+      rules: [{ id: 'r', severity: 'warning' as const, message: '', when: true as const }],
       budget: { monthlyUsd: 50, includedCredits: 300 },
     });
     assert.equal(out.version, 2);

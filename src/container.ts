@@ -16,7 +16,7 @@ import { initRepoAttribution } from './ingest/repoResolver';
 import { LogWatcher } from './ingest/LogWatcher';
 import { PricingService } from './pricing/PricingService';
 import { EventStore } from './store/EventStore';
-import { createExporter } from './export/ExporterFactory';
+import { createMetricExporter } from './export/ExporterFactory';
 
 export interface Container {
   usage: UsageService;
@@ -52,8 +52,8 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const github = new GitHubUsageService(githubSession);
   const userConfig = new UserConfigStore(storageDir);
   const layout = new LayoutStore(context.globalState);
-  const ve = cfg.vectorExport;
-  const exporter = createExporter({
+  const ve = cfg.metricExport;
+  const exporter = createMetricExporter({
     ...(ve.brokerUrl ? { brokerUrl: ve.brokerUrl } : {}),
     ...(ve.topic ? { topic: ve.topic } : {}),
     ...(ve.username ? { username: ve.username } : {}),
@@ -73,7 +73,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
         snapshot,
         rules: cfg.rules ?? [],
         ...(cfg.vars !== undefined
-          ? { vars: cfg.vars as Record<string, import('./domain/expr/ast').Value> }
+          ? { vars: cfg.vars }
           : {}),
         ...(cfg.groups !== undefined ? { groups: cfg.groups } : {}),
         signedIn: snapshot.authStatus === 'signed-in',

@@ -10,7 +10,7 @@ export interface MallardConfig {
   copilotLogPath: string;
   pricingManifestUrl: string;
   palette: PaletteMode;
-  vectorExport: {
+  metricExport: {
     brokerUrl: string;
     topic: string;
     username: string;
@@ -33,14 +33,14 @@ export function readConfig(): MallardConfig {
     copilotLogPath: c.get('copilotLogPath', ''),
     pricingManifestUrl: c.get('pricingManifestUrl', ''),
     palette: c.get<string>('palette', 'swiss') === 'theme' ? 'theme' : 'swiss',
-    vectorExport: {
-      brokerUrl: c.get('vectorExport.brokerUrl', ''),
-      topic: c.get('vectorExport.topic', 'mallard/usage'),
-      username: c.get('vectorExport.username', ''),
-      password: c.get('vectorExport.password', ''),
-      certPath: c.get('vectorExport.certPath', ''),
-      keyPath: c.get('vectorExport.keyPath', ''),
-      caPath: c.get('vectorExport.caPath', ''),
+    metricExport: {
+      brokerUrl: c.get('metricExport.brokerUrl', ''),
+      topic: c.get('metricExport.topic', 'mallard/metrics'),
+      username: c.get('metricExport.username', ''),
+      password: c.get('metricExport.password', ''),
+      certPath: c.get('metricExport.certPath', ''),
+      keyPath: c.get('metricExport.keyPath', ''),
+      caPath: c.get('metricExport.caPath', ''),
     },
   };
 }

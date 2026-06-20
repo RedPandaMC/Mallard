@@ -1,10 +1,8 @@
 /**
- * Builds the evaluation context for an alert rule. The context is a plain
- * object tree; `evaluate()` walks it via the `resolve` callback.
+ * Builds the rule evaluation context — a plain nested object that
+ * evalCondition() and renderTemplate() walk via dot-path resolution.
  */
 import { UsageSnapshot } from '../types';
-import { EvalContext } from './eval';
-import { Value } from './ast';
 
 export interface HistorySample {
   ts: number;
@@ -16,7 +14,7 @@ export interface EvalBuildInput {
   /** History of past snapshots for velocity. May be empty. */
   history?: HistorySample[];
   /** User-defined variables from the rule document `vars` block. */
-  vars?: Record<string, Value>;
+  vars?: Record<string, unknown>;
   /** Sign-in state — needed by `requiresAuth` rules. */
   signedIn?: boolean;
   /** Cooldown bookkeeping (ruleId → last fired timestamp). */
@@ -55,39 +53,10 @@ function toFiniteNumber(v: unknown, fallback = 0): number {
   return fallback;
 }
 
-function safePath(obj: unknown, parts: { name?: string; index?: Value }[]): Value {
-  let current: unknown = obj;
-  for (const p of parts) {
-    if (current === null || current === undefined) return null;
-    if (p.name !== undefined) {
-      if (typeof current !== 'object') return null;
-      current = (current as Record<string, unknown>)[p.name];
-    } else if (p.index !== undefined) {
-      const k = String(p.index);
-      if (Array.isArray(current)) {
-        const i = Number(p.index);
-        if (!Number.isInteger(i)) return null;
-        const idx = i < 0 ? current.length + i : i;
-        current = current[idx];
-      } else if (current && typeof current === 'object') {
-        current = (current as Record<string, unknown>)[k];
-      } else {
-        return null;
-      }
-    } else {
-      return null;
-    }
-  }
-  return current === undefined ? null : (current as Value);
-}
-
-export function buildEvalContext(input: EvalBuildInput): EvalContext {
+export function buildRuleContext(input: EvalBuildInput): Record<string, unknown> {
   const now = input.now ?? Date.now();
   const snapshot = input.snapshot;
 
-  // Derive a 7-day window from today — the snapshot doesn't carry it
-  // pre-computed but the host can pre-fill window7d via the vars/snapshot
-  // channel. For the simulator we leave it zero.
   const today = snapshot?.today ?? { credits: 0, cost: 0, tokens: 0 };
   const window7d = { credits: today.credits, cost: today.cost, tokens: today.tokens };
 
@@ -98,7 +67,6 @@ export function buildEvalContext(input: EvalBuildInput): EvalContext {
   const budget = snapshot?.budget ?? ZERO_BUDGET;
   const forecast = snapshot?.forecast ?? ZERO_FORECAST;
 
-  // Velocity from history (credits/hour over the available window)
   let velocityCreditsPerHour = 0;
   let velocityWindowMinutes = 0;
   if (input.history && input.history.length >= 2) {
@@ -149,15 +117,7 @@ export function buildEvalContext(input: EvalBuildInput): EvalContext {
       }
     : null;
 
-  const nowInfo = {
-    weekday: new Date(now).getDay(),
-    hour: new Date(now).getHours(),
-    minute: new Date(now).getMinutes(),
-    iso: new Date(now).toISOString(),
-    ts: now,
-  };
-
-  const tree: Record<string, unknown> = {
+  return {
     today,
     month,
     window7d,
@@ -195,21 +155,17 @@ export function buildEvalContext(input: EvalBuildInput): EvalContext {
     surface,
     repo,
     billing,
-    now: nowInfo,
+    now: {
+      weekday: new Date(now).getDay(),
+      hour: new Date(now).getHours(),
+      minute: new Date(now).getMinutes(),
+      iso: new Date(now).toISOString(),
+      ts: now,
+    },
     signedIn: input.signedIn ?? !!snapshot?.githubBilling,
     currentBranch: snapshot?.currentBranch ?? null,
     currentBranchCredits: snapshot?.currentBranchCredits ?? 0,
     branchBudgets: input.branchBudgets ?? {},
-  };
-
-  const vars: Record<string, Value> = { ...(input.vars ?? {}) };
-
-  return {
-    vars,
-    resolve: (parts) => safePath(tree, parts),
-    lookupVar: (name) => (name in vars ? vars[name]! : null),
-    data: { now },
+    vars: input.vars ?? {},
   };
 }
-
-export const _internal = { safePath };

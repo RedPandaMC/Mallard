@@ -33,7 +33,7 @@ describe('evaluateAlertRules', () => {
         id: 'daily-50',
         severity: 'warning',
         message: 'Daily 50',
-        when: 'today.credits >= 50',
+        when: { '>=': [{ var: 'today.credits' }, 50] },
       },
     ];
     const out = evaluateAlertRules({ snapshot: snap(0, 60), rules, fired, now });
@@ -43,7 +43,7 @@ describe('evaluateAlertRules', () => {
 
   it('respects cooldown', () => {
     const rules: AlertRule[] = [
-      { id: 'r1', severity: 'warning', cooldown: '4h', message: '', when: 'today.credits > 0' },
+      { id: 'r1', severity: 'warning', cooldown: '4h', message: '', when: { '>': [{ var: 'today.credits' }, 0] } },
     ];
     const f = new Map<string, number>();
     const a = evaluateAlertRules({ snapshot: snap(0, 100), rules, fired: f, now });
@@ -65,8 +65,8 @@ describe('evaluateAlertRules', () => {
         id: 'r1',
         severity: 'warning',
         message: '',
-        when: 'today.credits > 0',
-        active: 'now.weekday == 0',
+        when: { '>': [{ var: 'today.credits' }, 0] },
+        active: { '==': [{ var: 'now.weekday' }, 0] },
       },
     ];
     const out = evaluateAlertRules({ snapshot: snap(0, 100), rules, fired, now });
@@ -82,7 +82,7 @@ describe('evaluateAlertRules', () => {
         severity: 'warning',
         requiresAuth: true,
         message: '',
-        when: 'today.credits > 0',
+        when: { '>': [{ var: 'today.credits' }, 0] },
       },
     ];
     const out = evaluateAlertRules({ snapshot: snap(0, 100), rules, fired, now, signedIn: false });
@@ -95,30 +95,29 @@ describe('evaluateAlertRules', () => {
         id: 'r',
         severity: 'info',
         message: 'Used {{today.credits}} credits',
-        when: 'today.credits > 0',
+        when: { '>': [{ var: 'today.credits' }, 0] },
       },
     ];
     const out = evaluateAlertRules({ snapshot: snap(0, 73), rules, fired, now });
     assert.equal(out[0]!.message, 'Used 73 credits');
   });
 
-  it('per-rule `derived` values land in the context', () => {
+  it('user vars are accessible in when conditions', () => {
     const rules: AlertRule[] = [
       {
         id: 'r',
         severity: 'warning',
-        message: '{{premiumShare}}',
-        when: 'premiumShare > 0.5',
-        derived: { premiumShare: 'today.credits / 100' },
+        message: '',
+        when: { '>': [{ var: 'today.credits' }, { var: 'vars.threshold' }] },
       },
     ];
-    const out = evaluateAlertRules({ snapshot: snap(0, 80), rules, fired, now });
+    const out = evaluateAlertRules({ snapshot: snap(0, 80), rules, fired, now, vars: { threshold: 50 } });
     assert.equal(out.length, 1);
   });
 
-  it('skips rules with a malformed `when`', () => {
+  it('never fires when `when` is literal false', () => {
     const rules: AlertRule[] = [
-      { id: 'r', severity: 'warning', message: '', when: 'this is not valid +' },
+      { id: 'r', severity: 'warning', message: '', when: false },
     ];
     const out = evaluateAlertRules({ snapshot: snap(0, 100), rules, fired, now });
     assert.equal(out.length, 0);
@@ -126,13 +125,13 @@ describe('evaluateAlertRules', () => {
 
   it('per-severity cooldown keys are independent', () => {
     const rules: AlertRule[] = [
-      { id: 'shared', severity: 'warning', cooldown: '1h', message: '', when: 'today.credits > 0' },
+      { id: 'shared', severity: 'warning', cooldown: '1h', message: '', when: { '>': [{ var: 'today.credits' }, 0] } },
       {
         id: 'shared',
         severity: 'critical',
         cooldown: '1h',
         message: '',
-        when: 'today.credits > 0',
+        when: { '>': [{ var: 'today.credits' }, 0] },
       },
     ];
     const f = new Map<string, number>();
