@@ -7,7 +7,7 @@
  */
 import { post } from '../api';
 import { setState, state } from '../store';
-import { DatePreset, Filter, Metric, Surface, UsageSnapshot } from '../../src/domain/types';
+import { DatePreset, Filter, Metric, SourceKind, Surface, UsageSnapshot } from '../../src/domain/types';
 import { DAY_MS, nextBucketStart, startOf } from '../../src/util/time';
 
 export interface FilterBarHandle {
@@ -51,11 +51,15 @@ function presetToRange(preset: DatePreset, now: number): { start: number; end: n
   }
 }
 
+/** Copilot-type sources (LM calls, local OTel logs, GitHub billing). */
+const COPILOT_SOURCES: SourceKind[] = ['lm', 'local', 'github'];
+
 function buildFilter(
   preset: DatePreset,
   models: string[],
   surface: Surface | null,
   repos: string[],
+  sources: SourceKind[],
 ): Filter {
   const now = Date.now();
   const range = presetToRange(preset, now);
@@ -64,6 +68,7 @@ function buildFilter(
     ...(models.length ? { models } : {}),
     ...(surface ? { surfaces: [surface] } : {}),
     ...(repos.length ? { repos } : {}),
+    ...(sources.length ? { sources } : {}),
   } as Filter;
 }
 
@@ -91,12 +96,14 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
         `).join('')}
       </div>
     </div>
-    <div class="wv-surface-chips" id="surface-chips" hidden role="group" aria-label="Surface"></div>`;
+    <div class="wv-surface-chips" id="surface-chips" hidden role="group" aria-label="Surface"></div>
+    <div class="wv-source-chips" id="source-chips" hidden role="group" aria-label="Source"></div>`;
 
   let activePreset: DatePreset = state().datePreset;
   let activeModels: string[] = [];
   let activeSurface: Surface | null = null;
   let activeRepos: string[] = [];
+  let activeSources: SourceKind[] = [];
 
   function updatePresetUI() {
     el.querySelectorAll<HTMLElement>('[data-preset]').forEach((btn) => {
@@ -111,7 +118,7 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
   }
 
   function dispatchFilter() {
-    const filter = buildFilter(activePreset, activeModels, activeSurface, activeRepos);
+    const filter = buildFilter(activePreset, activeModels, activeSurface, activeRepos, activeSources);
     setState({ filter, datePreset: activePreset });
     post({ type: 'setFilter', value: filter });
   }
@@ -258,6 +265,7 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
   }
 
   const surfaceChips = el.querySelector<HTMLElement>('#surface-chips')!;
+  const sourceChips = el.querySelector<HTMLElement>('#source-chips')!;
 
   function updateSurfaceUI() {
     surfaceChips.querySelectorAll<HTMLElement>('[data-surface]').forEach((c) => {
@@ -266,6 +274,21 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
         'aria-pressed',
         String(sv === '__all__' ? activeSurface === null : activeSurface === sv),
       );
+    });
+  }
+
+  function updateSourceUI() {
+    sourceChips.querySelectorAll<HTMLElement>('[data-source-group]').forEach((c) => {
+      const grp = c.dataset.sourceGroup;
+      let pressed: boolean;
+      if (grp === '__all__') {
+        pressed = activeSources.length === 0;
+      } else if (grp === 'copilot') {
+        pressed = activeSources.length > 0 && !activeSources.includes('claude-code');
+      } else {
+        pressed = activeSources.includes('claude-code') && activeSources.length === 1;
+      }
+      c.setAttribute('aria-pressed', String(pressed));
     });
   }
 
@@ -323,6 +346,37 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
       } else {
         surfaceChips.hidden = true;
         activeSurface = null;
+      }
+
+      // Show the source filter only when both Copilot and Claude Code are present.
+      const hasCopilot = s.allSources.some((src) => COPILOT_SOURCES.includes(src));
+      const hasClaudeCode = s.allSources.includes('claude-code');
+      if (hasCopilot && hasClaudeCode) {
+        sourceChips.hidden = false;
+        sourceChips.innerHTML = '';
+
+        const sourceOptions: Array<{ group: string; label: string; sources: SourceKind[] }> = [
+          { group: '__all__', label: 'All', sources: [] },
+          { group: 'copilot', label: 'Copilot', sources: COPILOT_SOURCES },
+          { group: 'claude-code', label: 'Claude Code', sources: ['claude-code'] },
+        ];
+        for (const opt of sourceOptions) {
+          const chip = document.createElement('button');
+          chip.className = 'wv-source-chip';
+          chip.dataset.sourceGroup = opt.group;
+          chip.setAttribute('aria-pressed', 'false');
+          chip.textContent = opt.label;
+          chip.addEventListener('click', () => {
+            activeSources = opt.sources;
+            updateSourceUI();
+            dispatchFilter();
+          });
+          sourceChips.appendChild(chip);
+        }
+        updateSourceUI();
+      } else {
+        sourceChips.hidden = true;
+        activeSources = [];
       }
     },
   };

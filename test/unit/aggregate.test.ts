@@ -3,6 +3,7 @@ import {
   aggregateAll,
   aggregateBy,
   distinctRepos,
+  distinctSources,
   sankeyLinksFor,
   sumEvents,
   topBy,
@@ -87,5 +88,35 @@ describe('aggregate', () => {
   it('handles empty input', () => {
     assert.deepEqual(aggregateBy([], 'day'), []);
     assert.deepEqual(sumEvents([]), { credits: 0, cost: 0, tokens: 0, count: 0 });
+  });
+
+  it('filters by source', () => {
+    const mixed = [
+      makeEvent({ ts: d1, credits: 5, source: 'local' }),
+      makeEvent({ ts: d2, credits: 3, source: 'claude-code' }),
+    ];
+    const copilotOnly = sumEvents(mixed, { sources: ['local'] });
+    assert.equal(copilotOnly.credits, 5);
+    const claudeOnly = sumEvents(mixed, { sources: ['claude-code'] });
+    assert.equal(claudeOnly.credits, 3);
+  });
+
+  it('filters by branch', () => {
+    const branched = [
+      makeEvent({ ts: d1, credits: 4, branch: 'main' }),
+      makeEvent({ ts: d2, credits: 2, branch: 'feature/x' }),
+    ];
+    const mainOnly = sumEvents(branched, { branches: ['main'] });
+    assert.equal(mainOnly.credits, 4);
+  });
+
+  it('distinctSources returns source kinds in canonical order', () => {
+    const mixed = [
+      makeEvent({ ts: d1, source: 'claude-code' }),
+      makeEvent({ ts: d2, source: 'lm' }),
+      makeEvent({ ts: d2, source: 'local' }),
+    ];
+    const sources = distinctSources(mixed);
+    assert.deepEqual(sources, ['lm', 'local', 'claude-code']);
   });
 });

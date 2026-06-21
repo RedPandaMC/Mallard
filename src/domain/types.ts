@@ -512,6 +512,8 @@ export interface UsageSnapshot {
   allModels: string[];
   /** All distinct surfaces in current data (for surface toggle). */
   allSurfaces: Surface[];
+  /** All distinct source kinds in current data (for source filter). */
+  allSources: SourceKind[];
   /** Model → surface flow for the Sankey chart. */
   sankeyLinks: SankeyLink[];
   /** All distinct repos in current data (for the repo filter). */

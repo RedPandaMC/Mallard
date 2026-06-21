@@ -8,6 +8,7 @@ import {
   Granularity,
   GRANULARITIES,
   SankeyLink,
+  SourceKind,
   Surface,
   TopEntry,
   UsageAggregate,
@@ -25,6 +26,8 @@ export function matchesFilter(event: UsageEvent, filter?: Filter): boolean {
   if (filter.models?.length && !filter.models.includes(event.modelId)) return false;
   if (filter.surfaces?.length && !filter.surfaces.includes(event.surface)) return false;
   if (filter.repos?.length && !filter.repos.includes(event.repo ?? UNATTRIBUTED_REPO)) return false;
+  if (filter.branches?.length && !filter.branches.includes(event.branch ?? '')) return false;
+  if (filter.sources?.length && !filter.sources.includes(event.source)) return false;
   return true;
 }
 
@@ -178,4 +181,15 @@ export function distinctSurfaces(events: readonly UsageEvent[], filter?: Filter)
   }
   const order: Surface[] = ['chat', 'inline', 'agent', 'edit', 'unknown'];
   return order.filter((surface) => set.has(surface));
+}
+
+/** All distinct source kinds in the filtered event set. */
+export function distinctSources(events: readonly UsageEvent[], filter?: Filter): SourceKind[] {
+  const set = new Set<SourceKind>();
+  for (const entry of events) {
+    if (!matchesFilter(entry, filter)) continue;
+    set.add(entry.source);
+  }
+  const order: SourceKind[] = ['lm', 'local', 'github', 'claude-code'];
+  return order.filter((s) => set.has(s));
 }
