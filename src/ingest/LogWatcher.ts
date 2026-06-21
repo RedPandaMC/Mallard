@@ -21,7 +21,7 @@ import {
   platformDefaults,
 } from './locate';
 import { ParseContext } from './otelParse';
-import { LogParserRegistry } from './LogParserRegistry';
+import { LogParser } from './LogParser';
 import { currentRepo } from './repoResolver';
 import { activeBranch, repoForFolder, branchForFolder } from '../util/repo';
 import { EventStore } from '../store/EventStore';
@@ -47,7 +47,7 @@ export class LogWatcher implements vscode.Disposable {
   constructor(
     private readonly store: EventStore,
     private readonly pricing: PricingService,
-    private readonly registry: LogParserRegistry,
+    private readonly parsers: readonly LogParser[],
     private readonly logUriPath?: string,
     private readonly overridePath?: string,
   ) {}
@@ -170,7 +170,7 @@ export class LogWatcher implements vscode.Disposable {
     for (const file of files) {
       if (!isPathSafe(file, this.allowedRoots)) continue;
 
-      const parser = this.registry.forFile(file);
+      const parser = this.parsers.find((p) => p.canParse(file));
       if (!parser) continue;
 
       try {
