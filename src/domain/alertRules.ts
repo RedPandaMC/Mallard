@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 import { AlertRule, AlertGroup, JsonCondition } from './types';
-import { evalCondition, JsonConditionSchema, resolveVar } from './expr/jsonCondition';
+import { evalCondition, evalRule, evalSimpleCondition, JsonConditionSchema, resolveVar } from './expr/jsonCondition';
 import { buildRuleContext, EvalBuildInput } from './expr/context';
 
 const RestrictSchema = z.object({
@@ -18,17 +18,45 @@ const RestrictSchema = z.object({
     .optional(),
 });
 
-const RuleSchema = z.object({
-  id: z.string().min(1),
-  severity: z.enum(['info', 'warning', 'critical']).default('warning'),
-  cooldown: z.string().optional(),
-  message: z.string(),
-  when: JsonConditionSchema,
-  active: JsonConditionSchema.optional(),
-  requiresAuth: z.boolean().optional(),
-  notify: z.boolean().optional(),
-  restrict: RestrictSchema.optional(),
+const SimpleConditionSchema = z.object({
+  field: z.string().min(1),
+  op: z.enum(['>', '>=', '<', '<=', '==', '!=', 'in', 'matches']),
+  value: z.union([
+    z.number(),
+    z.string(),
+    z.boolean(),
+    z.array(z.union([z.string(), z.number()])),
+  ]),
 });
+
+const ThresholdLevelSchema = SimpleConditionSchema.extend({
+  severity: z.enum(['info', 'warning', 'critical']),
+  cooldown: z.string().optional(),
+});
+
+const RuleSchema = z
+  .object({
+    id: z.string().min(1),
+    severity: z.enum(['info', 'warning', 'critical']).default('warning'),
+    cooldown: z.string().optional(),
+    message: z.string(),
+    when: JsonConditionSchema.optional(),
+    conditions: z.array(SimpleConditionSchema).optional(),
+    match: z.enum(['all', 'any', 'none']).optional(),
+    active: JsonConditionSchema.optional(),
+    requiresAuth: z.boolean().optional(),
+    notify: z.boolean().optional(),
+    restrict: RestrictSchema.optional(),
+    thresholds: z.array(ThresholdLevelSchema).optional(),
+    snoozeUntil: z.string().optional(),
+  })
+  .refine(
+    (r) =>
+      r.when !== undefined ||
+      (r.conditions !== undefined && r.conditions.length > 0) ||
+      (r.thresholds !== undefined && r.thresholds.length > 0),
+    { message: 'A rule must have "when", "conditions", or "thresholds"' },
+  );
 
 const GroupSchema = z.object({
   id: z.string().min(1),
@@ -82,7 +110,9 @@ export function parseAlertRules(input: unknown): ParseAlertRulesResult {
     severity: r.severity,
     ...(r.cooldown !== undefined ? { cooldown: r.cooldown } : {}),
     message: r.message,
-    when: r.when,
+    ...(r.when !== undefined ? { when: r.when } : {}),
+    ...(r.conditions !== undefined ? { conditions: r.conditions } : {}),
+    ...(r.match !== undefined ? { match: r.match } : {}),
     ...(r.active !== undefined ? { active: r.active } : {}),
     ...(r.requiresAuth !== undefined ? { requiresAuth: r.requiresAuth } : {}),
     ...(r.notify !== undefined ? { notify: r.notify } : {}),
@@ -100,6 +130,18 @@ export function parseAlertRules(input: unknown): ParseAlertRulesResult {
           },
         }
       : {}),
+    ...(r.thresholds !== undefined
+      ? {
+          thresholds: r.thresholds.map((t) => ({
+            field: t.field,
+            op: t.op,
+            value: t.value,
+            severity: t.severity,
+            ...(t.cooldown !== undefined ? { cooldown: t.cooldown } : {}),
+          })),
+        }
+      : {}),
+    ...(r.snoozeUntil !== undefined ? { snoozeUntil: r.snoozeUntil } : {}),
   }));
   const groups: AlertGroup[] = (parsedDoc.groups ?? []).map((g) => ({
     id: g.id,
@@ -155,6 +197,8 @@ export interface EvaluateInput extends EvalBuildInput {
   now?: number;
 }
 
+const SEVERITY_RANK: Record<string, number> = { info: 0, warning: 1, critical: 2 };
+
 function evaluateRule(
   rule: AlertRule,
   ctx: Record<string, unknown>,
@@ -162,15 +206,38 @@ function evaluateRule(
   now: number,
 ): AlertFireResult | null {
   if (rule.requiresAuth && !ctx['signedIn']) return null;
-
   if (rule.active !== undefined && !evalCondition(rule.active, ctx)) return null;
+
+  // Snooze check
+  if (rule.snoozeUntil) {
+    const snoozeUntilMs = new Date(rule.snoozeUntil).getTime();
+    if (!isNaN(snoozeUntilMs) && now < snoozeUntilMs) return null;
+  }
+
+  // Threshold escalation: evaluate each level, fire the highest-severity match.
+  if (rule.thresholds?.length) {
+    let best: { level: typeof rule.thresholds[0]; rank: number } | null = null;
+    for (const level of rule.thresholds) {
+      if (!evalSimpleCondition(level, ctx)) continue;
+      const r = SEVERITY_RANK[level.severity] ?? 0;
+      if (!best || r > best.rank) best = { level, rank: r };
+    }
+    if (!best) return null;
+    const severity = best.level.severity;
+    const key = `${rule.id}#${severity}`;
+    const lastFired = firedMap.get(key);
+    const cooldownMs = durationToMs(best.level.cooldown ?? rule.cooldown, 60 * 60_000);
+    if (lastFired !== undefined && now - lastFired < cooldownMs) return null;
+    firedMap.set(key, now);
+    return { key, ruleId: rule.id, severity, message: renderTemplate(rule.message, ctx), rule };
+  }
 
   const key = `${rule.id}#${rule.severity}`;
   const lastFired = firedMap.get(key);
   const cooldownMs = durationToMs(rule.cooldown, 60 * 60_000);
   if (lastFired !== undefined && now - lastFired < cooldownMs) return null;
 
-  if (!evalCondition(rule.when, ctx)) return null;
+  if (!evalRule(rule, ctx)) return null;
 
   firedMap.set(key, now);
   return {

@@ -1,6 +1,6 @@
 /**
- * Watches Copilot log directories for new writes, debounces re-parses,
- * and appends new events to the EventStore.
+ * Watches Copilot and Claude Code log directories for new writes, debounces
+ * re-parses, and appends new events to the EventStore.
  *
  * Lifecycle:
  *   1. start()  — full initial parse of all discovered log files
@@ -12,10 +12,18 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { ProviderStatus } from '../domain/types';
 import { PricingService } from '../pricing/PricingService';
-import { findLogFiles, isPathSafe, locateCopilotLogDirs, platformDefaults } from './locate';
-import { parseOtelContent, ParseContext } from './otelParse';
+import {
+  findLogFiles,
+  isPathSafe,
+  isClaudeCodeLogFilename,
+  locateCopilotLogDirs,
+  locateClaudeCodeLogDirs,
+  platformDefaults,
+} from './locate';
+import { ParseContext } from './otelParse';
+import { LogParser } from './LogParser';
 import { currentRepo } from './repoResolver';
-import { activeBranch } from '../util/repo';
+import { activeBranch, repoForFolder, branchForFolder } from '../util/repo';
 import { EventStore } from '../store/EventStore';
 
 const DEBOUNCE_MS = 1_500;
@@ -39,6 +47,7 @@ export class LogWatcher implements vscode.Disposable {
   constructor(
     private readonly store: EventStore,
     private readonly pricing: PricingService,
+    private readonly parsers: readonly LogParser[],
     private readonly logUriPath?: string,
     private readonly overridePath?: string,
   ) {}
@@ -74,7 +83,6 @@ export class LogWatcher implements vscode.Disposable {
     };
     push(this.overridePath);
     if (this.logUriPath) {
-      // mirror locateCopilotLogDirs's logic for the session root
       const root = (() => {
         let pathToWalk = this.logUriPath!;
         for (let i = 0; i < 4; i++) {
@@ -91,29 +99,36 @@ export class LogWatcher implements vscode.Disposable {
     return out;
   }
 
-  async start(): Promise<void> {
-    const dirs = await locateCopilotLogDirs(this.logUriPath, this.overridePath || undefined);
-    this.allowedRoots = dirs;
-    this.searchedDirs = this.allCandidates();
-
+  private async discoverFiles(): Promise<{ files: string[]; allowedRoots: string[] }> {
+    const copilotDirs = await locateCopilotLogDirs(this.logUriPath, this.overridePath || undefined);
+    const claudeDirs = await locateClaudeCodeLogDirs();
+    const allowedRoots = [...new Set([...copilotDirs, ...claudeDirs])];
     const files: string[] = [];
-    for (const dir of dirs) {
-      const found = await findLogFiles(dir, dirs);
+    for (const dir of copilotDirs) {
+      const found = await findLogFiles(dir, copilotDirs);
       files.push(...found);
     }
+    for (const dir of claudeDirs) {
+      const found = await findLogFiles(dir, claudeDirs, 5, 300, isClaudeCodeLogFilename);
+      files.push(...found);
+    }
+    return { files, allowedRoots };
+  }
 
+  async start(): Promise<void> {
+    const { files, allowedRoots } = await this.discoverFiles();
+    this.allowedRoots = allowedRoots;
+    this.searchedDirs = this.allCandidates();
     this.logPaths = files;
 
     if (files.length === 0) {
-      this.status = { kind: 'empty', reason: 'No Copilot log files found' };
+      this.status = { kind: 'empty', reason: 'No Copilot or Claude Code log files found' };
       return;
     }
 
-    // Resume from persisted read offsets so startup only parses new log bytes.
     await this.loadOffsets();
     await this.parseAll(files);
 
-    // Watch each log directory (not individual files — Copilot rotates logs).
     const watchedDirs = new Set(files.map((f) => path.dirname(f)));
     for (const dir of watchedDirs) {
       try {
@@ -131,28 +146,22 @@ export class LogWatcher implements vscode.Disposable {
   }
 
   private async reparse(): Promise<void> {
-    // Re-discover files (Copilot may have created new log files).
-    const dirs = await locateCopilotLogDirs(this.logUriPath, this.overridePath || undefined);
-    if (dirs.length === 0) return;
-    this.allowedRoots = dirs;
-    const files: string[] = [];
-    for (const dir of dirs) {
-      const found = await findLogFiles(dir, dirs);
-      files.push(...found);
-    }
+    const { files, allowedRoots } = await this.discoverFiles();
+    if (allowedRoots.length === 0) return;
+    this.allowedRoots = allowedRoots;
     this.logPaths = files;
     await this.parseAll(files);
   }
 
   private async parseAll(files: string[]): Promise<void> {
-    const repo = currentRepo();
-    const branch = activeBranch();
+    const globalRepo = currentRepo();
+    const globalBranch = activeBranch();
     const baseCtx: ParseContext = {
       pricePerCredit: this.pricing.pricePerCredit,
       manifest: this.pricing.currentManifest,
       now: Date.now(),
-      ...(repo !== undefined ? { repo } : {}),
-      ...(branch !== undefined ? { branch } : {}),
+      ...(globalRepo !== undefined ? { repo: globalRepo } : {}),
+      ...(globalBranch !== undefined ? { branch: globalBranch } : {}),
     };
 
     let parseError = false;
@@ -160,21 +169,33 @@ export class LogWatcher implements vscode.Disposable {
 
     for (const file of files) {
       if (!isPathSafe(file, this.allowedRoots)) continue;
+
+      const parser = this.parsers.find((p) => p.canParse(file));
+      if (!parser) continue;
+
       try {
         const stat = await fs.stat(file);
         let offset = this.fileOffsets.get(file) ?? 0;
-        if (stat.size < offset) offset = 0; // file was rotated/truncated; re-read
+        if (stat.size < offset) offset = 0; // file rotated/truncated; re-read
         if (stat.size <= offset) continue; // nothing new
 
         const content = await fs.readFile(file, 'utf8');
-        // Per-line offsets keyed by file make event ids stable across full and
-        // incremental re-parses, so INSERT OR IGNORE dedups instead of
-        // re-inserting the same event under a new id.
-        const events = parseOtelContent(content.slice(offset), {
+
+        // Workspace-level attribution overrides the global active-editor context
+        // when the parser can resolve the file to a specific workspace folder.
+        const wf = parser.resolveWorkspace(file) as vscode.WorkspaceFolder | undefined;
+        const fileRepo   = wf ? repoForFolder(wf)   : globalRepo;
+        const fileBranch = wf ? branchForFolder(wf) : globalBranch;
+
+        const fileCtx: ParseContext = {
           ...baseCtx,
           fileKey: fileKeyOf(file),
           baseOffset: offset,
-        });
+          ...(fileRepo   !== undefined ? { repo:   fileRepo   } : {}),
+          ...(fileBranch !== undefined ? { branch: fileBranch } : {}),
+        };
+
+        const events = parser.parse(content.slice(offset), fileCtx);
         if (events.length > 0) await this.store.append(events);
         this.fileOffsets.set(file, stat.size);
         changed = true;
@@ -200,7 +221,6 @@ export class LogWatcher implements vscode.Disposable {
     }
   }
 
-  /** Restore persisted per-file read offsets so a restart resumes incrementally. */
   private async loadOffsets(): Promise<void> {
     try {
       const raw = await this.store.getMeta('fileOffsets');

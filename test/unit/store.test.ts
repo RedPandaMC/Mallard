@@ -121,7 +121,7 @@ describe('EventStore', () => {
     await store.setMeta('fileOffsets', '[["x",1]]');
     await store.clear();
     assert.strictEqual(await store.count(), 0);
-    assert.strictEqual(await store.getMeta('fileOffsets'), undefined);
+    assert.strictEqual(await store.getMeta('fileOffsets'), null);
     store.dispose();
   });
 

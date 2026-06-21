@@ -14,6 +14,8 @@ import { RestrictionEngine } from './domain/restriction/engine';
 import { PricingManifest } from './domain/pricing';
 import { initRepoAttribution } from './ingest/repoResolver';
 import { LogWatcher } from './ingest/LogWatcher';
+import { OtelParser } from './ingest/parsers/OtelParser';
+import { ClaudeCodeParser } from './ingest/parsers/ClaudeCodeParser';
 import { PricingService } from './pricing/PricingService';
 import { EventStore } from './store/EventStore';
 import { createMetricExporter } from './export/ExporterFactory';
@@ -44,6 +46,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const watcher = new LogWatcher(
     store,
     pricing,
+    [new OtelParser(), new ClaudeCodeParser(() => vscode.workspace.workspaceFolders)],
     context.logUri?.fsPath,
     cfg.copilotLogPath || undefined,
   );

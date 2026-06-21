@@ -9,7 +9,7 @@ import { evaluateAlerts, SnapshotSample } from '../domain/alerts';
 import { buildSnapshot, SnapshotOptions } from '../domain/snapshot';
 import { AuthStatus, Filter, GitHubBillingData, UsageSnapshot } from '../domain/types';
 import { DAY_MS, startOf } from '../util/time';
-import { GitHubUsageService } from '../billing/GitHubUsageService';
+import type { IBillingProvider } from '../billing/IBillingProvider';
 import { LogWatcher } from '../ingest/LogWatcher';
 import { PricingService } from '../pricing/PricingService';
 import { EventStore } from '../store/EventStore';
@@ -40,14 +40,14 @@ export class UsageService implements vscode.Disposable {
     private readonly pricing: PricingService,
     private readonly watcher: LogWatcher,
     private readonly userConfig: UserConfigStore,
-    private readonly github?: GitHubUsageService,
+    private readonly github?: IBillingProvider,
     exporter?: MetricExporter,
     private readonly host: VscodeHost = defaultVscodeHost,
   ) {
     this.exporter = exporter;
     if (github) {
-      // Re-fetch billing whenever the GitHub session changes.
-      this.subs.push(github.session.onDidChange(() => void this.refreshGitHub()));
+      // Re-fetch billing whenever the underlying auth state changes.
+      this.subs.push(github.onDidChange(() => void this.refreshGitHub()));
     }
     // Budget/included credits feed the snapshot, so recompute on config change.
     this.subs.push(userConfig.onDidChange(() => this.compute()));
@@ -105,7 +105,7 @@ export class UsageService implements vscode.Disposable {
   /** Trigger explicit GitHub sign-in (shows a prompt). */
   async signInGitHub(): Promise<void> {
     if (!this.github) return;
-    await this.github.session.get(true);
+    await this.github.signIn?.();
     await this.refreshGitHub();
   }
 

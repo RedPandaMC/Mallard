@@ -65,6 +65,10 @@ describe('Mallard extension (integration)', () => {
       'mallard.metricExport.password',
       'mallard.metricExport.topic',
       'mallard.metricExport.username',
+      'mallard.metricExport.webhook.headers',
+      'mallard.metricExport.webhook.retries',
+      'mallard.metricExport.webhook.secret',
+      'mallard.metricExport.webhook.url',
       'mallard.palette',
       'mallard.pricingManifestUrl',
     ]);

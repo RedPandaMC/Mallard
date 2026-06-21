@@ -46,6 +46,12 @@ function desktopDefaults(): string[] {
     path.join(home, '.config', 'Code', 'logs'),
     path.join(home, '.config', 'Code - Insiders', 'logs'),
     path.join(home, '.config', 'VSCodium', 'logs'),
+    // Flatpak (common on Fedora/GNOME)
+    path.join(home, '.var', 'app', 'com.visualstudio.code', 'config', 'Code', 'logs'),
+    path.join(home, '.var', 'app', 'com.visualstudio.code.insiders', 'config', 'Code - Insiders', 'logs'),
+    // Snap (common on Ubuntu)
+    path.join(home, 'snap', 'code', 'current', '.config', 'Code', 'logs'),
+    path.join(home, 'snap', 'code-insiders', 'current', '.config', 'Code - Insiders', 'logs'),
   ];
 }
 
@@ -117,6 +123,7 @@ export async function findLogFiles(
   allowedRoots: string[],
   maxDepth = 5,
   maxFiles = 300,
+  filter: (name: string) => boolean = isCopilotLogFilename,
 ): Promise<string[]> {
   const out: string[] = [];
 
@@ -135,11 +142,44 @@ export async function findLogFiles(
       if (entry.isDirectory()) {
         await walk(full, depth + 1);
       } else if (entry.isFile()) {
-        if (isCopilotLogFilename(full)) out.push(full);
+        if (filter(full)) out.push(full);
       }
     }
   }
 
   await walk(dir, 0);
   return out;
+}
+
+// ── Claude Code log discovery ─────────────────────────────────────────────────
+
+/**
+ * Platform-default directories where Claude Code writes its JSONL session logs.
+ * Claude Code stores one `.jsonl` file per session under
+ * `~/.claude/projects/<hashed-workspace-path>/`.
+ */
+export function claudeCodeLogRoots(): string[] {
+  const home = os.homedir();
+  const base = path.join(home, '.claude', 'projects');
+  // Windows: Claude Code follows XDG/home convention even on Windows
+  return [base];
+}
+
+/** Returns directories that actually exist on disk. */
+export async function locateClaudeCodeLogDirs(): Promise<string[]> {
+  const existing: string[] = [];
+  for (const dir of claudeCodeLogRoots()) {
+    try {
+      const st = await fs.stat(dir);
+      if (st.isDirectory()) existing.push(dir);
+    } catch {
+      // not present
+    }
+  }
+  return existing;
+}
+
+/** Returns true for Claude Code session log files (`*.jsonl`). */
+export function isClaudeCodeLogFilename(name: string): boolean {
+  return name.toLowerCase().endsWith('.jsonl');
 }

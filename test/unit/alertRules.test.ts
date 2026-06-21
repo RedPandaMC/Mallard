@@ -106,3 +106,88 @@ describe('evaluateAlertRules — groups', () => {
     assert.equal(out[0]?.message, 'Credits: 42');
   });
 });
+
+describe('alertRules — conditions shorthand', () => {
+  const now = Date.now();
+  it('fires when conditions array matches', () => {
+    const rules: AlertRule[] = [{
+      id: 'r', severity: 'warning', message: '',
+      conditions: [{ field: 'today.credits', op: '>', value: 50 }],
+    }];
+    const out = evaluateAlertRules({ snapshot: snap(60), rules, fired: new Map(), now });
+    assert.equal(out.length, 1);
+  });
+
+  it('does not fire when conditions do not match', () => {
+    const rules: AlertRule[] = [{
+      id: 'r', severity: 'warning', message: '',
+      conditions: [{ field: 'today.credits', op: '>', value: 100 }],
+    }];
+    const out = evaluateAlertRules({ snapshot: snap(60), rules, fired: new Map(), now });
+    assert.equal(out.length, 0);
+  });
+
+  it('match:any fires when at least one condition matches', () => {
+    const rules: AlertRule[] = [{
+      id: 'r', severity: 'info', message: '',
+      conditions: [
+        { field: 'today.credits', op: '>', value: 999 },
+        { field: 'today.credits', op: '>', value: 10 },
+      ],
+      match: 'any',
+    }];
+    const out = evaluateAlertRules({ snapshot: snap(60), rules, fired: new Map(), now });
+    assert.equal(out.length, 1);
+  });
+});
+
+describe('alertRules — snooze', () => {
+  const now = Date.now();
+  it('suppresses a snoozed rule', () => {
+    const futureIso = new Date(now + 60_000).toISOString();
+    const rules: AlertRule[] = [{
+      id: 'r', severity: 'warning', message: '',
+      when: { '>': [{ var: 'today.credits' }, 0] },
+      snoozeUntil: futureIso,
+    }];
+    const out = evaluateAlertRules({ snapshot: snap(60), rules, fired: new Map(), now });
+    assert.equal(out.length, 0);
+  });
+
+  it('fires after snooze has expired', () => {
+    const pastIso = new Date(now - 60_000).toISOString();
+    const rules: AlertRule[] = [{
+      id: 'r', severity: 'warning', message: '',
+      when: { '>': [{ var: 'today.credits' }, 0] },
+      snoozeUntil: pastIso,
+    }];
+    const out = evaluateAlertRules({ snapshot: snap(60), rules, fired: new Map(), now });
+    assert.equal(out.length, 1);
+  });
+});
+
+describe('alertRules — threshold escalation', () => {
+  const now = Date.now();
+  it('fires the highest matching severity', () => {
+    const rules: AlertRule[] = [{
+      id: 'r', severity: 'info', message: 'spend {{today.credits}}',
+      thresholds: [
+        { field: 'today.credits', op: '>', value: 50, severity: 'info' },
+        { field: 'today.credits', op: '>', value: 80, severity: 'warning' },
+        { field: 'today.credits', op: '>', value: 100, severity: 'critical' },
+      ],
+    }];
+    const out = evaluateAlertRules({ snapshot: snap(90), rules, fired: new Map(), now });
+    assert.equal(out.length, 1);
+    assert.equal(out[0]?.severity, 'warning');
+  });
+
+  it('does not fire when no threshold matches', () => {
+    const rules: AlertRule[] = [{
+      id: 'r', severity: 'info', message: '',
+      thresholds: [{ field: 'today.credits', op: '>', value: 200, severity: 'info' }],
+    }];
+    const out = evaluateAlertRules({ snapshot: snap(60), rules, fired: new Map(), now });
+    assert.equal(out.length, 0);
+  });
+});

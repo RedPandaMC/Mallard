@@ -8,12 +8,12 @@ export type Granularity = 'day' | 'week' | 'month';
 export const GRANULARITIES: readonly Granularity[] = ['day', 'week', 'month'];
 
 /** Where a usage event came from (kept broad for backward-compat with stored events). */
-export type SourceKind = 'lm' | 'local' | 'github';
+export type SourceKind = 'lm' | 'local' | 'github' | 'claude-code';
 
 /** Which Copilot surface produced the event. */
 export type Surface = 'chat' | 'inline' | 'agent' | 'edit' | 'unknown';
 export const SURFACES = new Set<Surface>(['chat', 'inline', 'agent', 'edit', 'unknown']);
-export const SOURCE_KINDS = new Set<SourceKind>(['lm', 'local', 'github']);
+export const SOURCE_KINDS = new Set<SourceKind>(['lm', 'local', 'github', 'claude-code']);
 
 export type Metric = 'cost' | 'credits' | 'tokens';
 
@@ -117,16 +117,65 @@ export interface RuleRestrict {
   graceMinutes?: number;
 }
 
+/**
+ * A single condition in the structured `conditions` shorthand.
+ * More approachable than raw JSONLogic — no nested prefix notation required.
+ *
+ * Supported operators: `>` `>=` `<` `<=` `==` `!=` `in` `matches`
+ */
+export interface SimpleCondition {
+  /** Dot-path into the rule context. E.g. "today.credits", "budget.percentOfBudget". */
+  field: string;
+  /** Comparison operator. */
+  op: '>' | '>=' | '<' | '<=' | '==' | '!=' | 'in' | 'matches';
+  /** Value to compare against. For `in`, provide an array. */
+  value: number | string | boolean | (string | number)[];
+}
+
+/**
+ * A single severity level in a threshold escalation rule.
+ * The highest-severity threshold whose condition fires wins.
+ */
+export interface ThresholdLevel extends SimpleCondition {
+  severity: 'info' | 'warning' | 'critical';
+  /** Per-level cooldown (overrides the rule-level cooldown for this severity). */
+  cooldown?: string;
+}
+
 export interface AlertRule {
   id: string;
   severity: 'info' | 'warning' | 'critical';
   cooldown?: string;
   message: string;
-  when: JsonCondition;
+  /**
+   * JSONLogic condition tree (original syntax). Required unless `conditions` is provided.
+   */
+  when?: JsonCondition;
+  /**
+   * Structured conditions shorthand. Easier to read and write than JSONLogic.
+   * Use `match` to control how conditions are combined.
+   */
+  conditions?: SimpleCondition[];
+  /**
+   * How to combine `conditions`. Defaults to "all" (AND).
+   * Ignored when `when` is used.
+   */
+  match?: 'all' | 'any' | 'none';
   active?: JsonCondition;
   requiresAuth?: boolean;
   notify?: boolean;
   restrict?: RuleRestrict;
+  /**
+   * Severity escalation: instead of a single `when`, declare multiple threshold
+   * levels. The highest-severity level whose condition fires wins. Each level
+   * can have its own cooldown.
+   */
+  thresholds?: ThresholdLevel[];
+  /**
+   * Snooze this rule until an ISO 8601 timestamp. The rule is suppressed while
+   * the current time is before `snoozeUntil`. Typically set via the UI.
+   */
+  snoozeUntil?: string;
 }
 
 export interface AlertGroup {
@@ -151,6 +200,34 @@ export interface UserConfig {
   budget?: { monthlyUsd: number; includedCredits: number };
   /** Per-branch credit caps keyed by branch name. Used in restriction rules. */
   branchBudgets?: Record<string, number>;
+  /** Config-driven dashboard layout (CSS grid syntax). Overrides globalState order/sizing. */
+  dashboard?: ConfigDashboard;
+  /** GitHub billing auth configuration (PAT or VS Code session). */
+  githubBilling?: GitHubBillingConfig;
+}
+
+/**
+ * GitHub billing authentication and scope configuration.
+ * All fields are machine-scoped and never synced.
+ */
+export interface GitHubBillingConfig {
+  /**
+   * Auth mode:
+   *  - `"vscode-session"` (default): use VS Code's built-in GitHub OAuth session.
+   *  - `"pat"`: use the provided personal access token (`pat` field).
+   */
+  mode?: 'vscode-session' | 'pat';
+  /**
+   * Personal access token. Required when `mode` is `"pat"`.
+   * Scopes needed: `read:user` for user billing, `read:org` for org billing.
+   */
+  pat?: string;
+  /**
+   * GitHub organization slug. When set, fetches org-level billing instead of
+   * the individual user's billing. Requires `read:org` scope on the token or
+   * session.
+   */
+  org?: string;
 }
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
@@ -209,6 +286,28 @@ export interface DashboardPanelLayout {
 
 export type DashboardLayout = DashboardPanelLayout[];
 
+/**
+ * Dashboard panel entry from config.json, using CSS grid shorthand syntax so
+ * the values map directly to the `grid-column` and `grid-row` CSS properties.
+ * Example: `{ "id": "daily", "gridColumn": "span 2", "gridRow": "span 1" }`
+ */
+export interface ConfigPanelLayout {
+  id: string;
+  /** CSS grid-column shorthand. E.g. "span 1" or "span 2". */
+  gridColumn?: string;
+  /** CSS grid-row shorthand. E.g. "span 1" or "span 2". Optional. */
+  gridRow?: string;
+  hidden?: boolean;
+}
+
+/** Dashboard block in config.json — sets column count and panel order/sizing. */
+export interface ConfigDashboard {
+  /** Number of columns in the grid (1–4). Default: 2. */
+  columns?: number;
+  /** Panel declarations. Unlisted panels fall back to globalState defaults. */
+  panels?: ConfigPanelLayout[];
+}
+
 /** The analysis panels that can be reordered, resized, and hidden. */
 export const DASHBOARD_PANELS = [
   'daily',
@@ -238,6 +337,10 @@ export interface Filter {
   models?: string[];
   surfaces?: Surface[];
   repos?: string[];
+  /** Filter to specific git branches. */
+  branches?: string[];
+  /** Filter to specific sources (e.g. 'local', 'claude-code'). */
+  sources?: SourceKind[];
 }
 
 export interface Bucket {
@@ -409,6 +512,8 @@ export interface UsageSnapshot {
   allModels: string[];
   /** All distinct surfaces in current data (for surface toggle). */
   allSurfaces: Surface[];
+  /** All distinct source kinds in current data (for source filter). */
+  allSources: SourceKind[];
   /** Model → surface flow for the Sankey chart. */
   sankeyLinks: SankeyLink[];
   /** All distinct repos in current data (for the repo filter). */
