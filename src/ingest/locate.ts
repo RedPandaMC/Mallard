@@ -46,6 +46,12 @@ function desktopDefaults(): string[] {
     path.join(home, '.config', 'Code', 'logs'),
     path.join(home, '.config', 'Code - Insiders', 'logs'),
     path.join(home, '.config', 'VSCodium', 'logs'),
+    // Flatpak (common on Fedora/GNOME)
+    path.join(home, '.var', 'app', 'com.visualstudio.code', 'config', 'Code', 'logs'),
+    path.join(home, '.var', 'app', 'com.visualstudio.code.insiders', 'config', 'Code - Insiders', 'logs'),
+    // Snap (common on Ubuntu)
+    path.join(home, 'snap', 'code', 'current', '.config', 'Code', 'logs'),
+    path.join(home, 'snap', 'code-insiders', 'current', '.config', 'Code - Insiders', 'logs'),
   ];
 }
 
