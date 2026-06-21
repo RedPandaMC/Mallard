@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { evalCondition, resolveVar, JsonConditionSchema } from '../../src/domain/expr/jsonCondition';
+import { evalCondition, evalSimpleCondition, evalRule, compileConditions, resolveVar, JsonConditionSchema } from '../../src/domain/expr/jsonCondition';
 import type { JsonCondition } from '../../src/domain/types';
 
 const ctx: Record<string, unknown> = {
@@ -193,7 +193,6 @@ describe('JsonConditionSchema', () => {
 });
 
 describe('evalSimpleCondition', () => {
-  const { evalSimpleCondition } = require('../../src/domain/expr/jsonCondition');
   const ctx = { today: { credits: 75 }, topModel: { id: 'claude-sonnet-4' } };
 
   it('evaluates numeric comparison', () => {
@@ -217,7 +216,6 @@ describe('evalSimpleCondition', () => {
 });
 
 describe('compileConditions', () => {
-  const { compileConditions, evalCondition } = require('../../src/domain/expr/jsonCondition');
   const ctx = { today: { credits: 75 } };
 
   it('returns true for empty conditions', () => {
@@ -249,7 +247,6 @@ describe('compileConditions', () => {
 });
 
 describe('evalRule', () => {
-  const { evalRule } = require('../../src/domain/expr/jsonCondition');
   const ctx = { today: { credits: 75 } };
 
   it('uses "when" when present', () => {
