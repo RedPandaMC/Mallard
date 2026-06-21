@@ -1,13 +1,12 @@
 import * as vscode from 'vscode';
 import type { GitHubBillingConfig } from '../domain/types';
+import type { IAuthProvider } from './IBillingProvider';
 
-/** Thin wrapper around VS Code's GitHub auth that fires onDidChange on session transitions. */
-export class GitHubSession implements vscode.Disposable {
+export class GitHubSession implements IAuthProvider {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChange: vscode.Event<void> = this._onDidChange.event;
   private readonly _sub: vscode.Disposable;
 
-  /** Optional PAT config injected at construction or via configure(). */
   private billingConfig: GitHubBillingConfig | undefined;
 
   constructor() {
@@ -23,11 +22,55 @@ export class GitHubSession implements vscode.Disposable {
   }
 
   /**
-   * Returns the current GitHub session, or undefined if not signed in.
-   * Pass createIfNone=true to trigger a sign-in prompt.
+   * Returns a bearer token. Resolution order:
+   * 1. Workspace-scoped PAT from VS Code settings (if scope provided)
+   * 2. User-level PAT from billing config
+   * 3. VS Code OAuth session
    */
+  async getToken(
+    createIfNone = false,
+    scope?: vscode.WorkspaceFolder,
+  ): Promise<{ token: string; username?: string } | undefined> {
+    if (scope) {
+      const wsPat = vscode.workspace
+        .getConfiguration('mallard', scope)
+        .get<string>('githubBilling.pat')
+        ?.trim();
+      if (wsPat) return { token: wsPat };
+    }
+
+    const pat = this.billingConfig?.pat?.trim();
+    if (pat) return { token: pat };
+
+    if (this.billingConfig?.mode === 'pat') return undefined;
+
+    const session = await this._getSession(createIfNone);
+    if (!session) return undefined;
+    return { token: session.accessToken, username: session.account.label };
+  }
+
+  /**
+   * Org slug resolved for the given scope.
+   * Workspace-scoped org (from VS Code settings) takes priority over user-level config.
+   */
+  getOrg(scope?: vscode.WorkspaceFolder): string | undefined {
+    if (scope) {
+      const wsOrg = vscode.workspace
+        .getConfiguration('mallard', scope)
+        .get<string>('githubBilling.org')
+        ?.trim();
+      if (wsOrg) return wsOrg;
+    }
+    return this.billingConfig?.org?.trim() || undefined;
+  }
+
+  /** Returns the current GitHub OAuth session, or undefined when not signed in. */
   async get(createIfNone: boolean): Promise<vscode.AuthenticationSession | undefined> {
-    if (this.billingConfig?.mode === 'pat') return undefined; // PAT mode bypasses session
+    if (this.billingConfig?.mode === 'pat') return undefined;
+    return this._getSession(createIfNone);
+  }
+
+  private async _getSession(createIfNone: boolean): Promise<vscode.AuthenticationSession | undefined> {
     try {
       return await vscode.authentication.getSession('github', ['read:user'], {
         createIfNone,
@@ -36,32 +79,6 @@ export class GitHubSession implements vscode.Disposable {
     } catch {
       return undefined;
     }
-  }
-
-  /**
-   * Returns a Bearer token. Prefers PAT when configured; falls back to
-   * VS Code session. Returns undefined when neither is available.
-   */
-  async getToken(createIfNone = false): Promise<{ token: string; username?: string } | undefined> {
-    const pat = this.billingConfig?.pat?.trim();
-    if (pat) return { token: pat };
-    const session = await this.get(createIfNone);
-    if (!session) return undefined;
-    return { token: session.accessToken, username: session.account.label };
-  }
-
-  async getUsername(): Promise<string | undefined> {
-    const auth = await this.getToken(false);
-    if (!auth?.username) {
-      // PAT mode: no username from session — org config is the alternative
-      return this.billingConfig?.org ? undefined : undefined;
-    }
-    return auth.username;
-  }
-
-  /** The org slug configured for org-level billing, if any. */
-  get org(): string | undefined {
-    return this.billingConfig?.org?.trim() || undefined;
   }
 
   dispose(): void {

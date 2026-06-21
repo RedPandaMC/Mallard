@@ -80,6 +80,20 @@ export function activeAttribution(): RepoAttribution {
   return attribute(uri);
 }
 
+/** Repo slug for a specific workspace folder (git remote slug or folder name). */
+export function repoForFolder(folder: vscode.WorkspaceFolder): string | undefined {
+  return attribute(folder.uri).repo;
+}
+
+/** HEAD branch name for a specific workspace folder's git repository. */
+export function branchForFolder(folder: vscode.WorkspaceFolder): string | undefined {
+  if (gitApi) {
+    const repo = gitApi.getRepository(folder.uri);
+    if (repo?.state.HEAD?.name) return repo.state.HEAD.name;
+  }
+  return undefined;
+}
+
 /**
  * Name of the HEAD branch in the repository containing the active editor file.
  * Falls back to the first known repository when no editor is active.
