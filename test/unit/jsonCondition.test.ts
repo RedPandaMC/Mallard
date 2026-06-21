@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
 import { evalCondition, evalSimpleCondition, evalRule, compileConditions, resolveVar, JsonConditionSchema } from '../../src/domain/expr/jsonCondition';
-import type { JsonCondition } from '../../src/domain/types';
+import type { JsonCondition, JsonOperand } from '../../src/domain/types';
 
 const ctx: Record<string, unknown> = {
   today: { credits: 50, cost: 2.5, tokens: 1000 },
@@ -250,12 +250,12 @@ describe('evalRule', () => {
   const ctx = { today: { credits: 75 } };
 
   it('uses "when" when present', () => {
-    const rule = { when: { '>': [{ var: 'today.credits' }, 50] } };
+    const rule = { when: { '>': [{ var: 'today.credits' }, 50] as [JsonOperand, JsonOperand] } };
     assert.equal(evalRule(rule, ctx), true);
   });
 
   it('uses "conditions" when "when" is absent', () => {
-    const rule = { conditions: [{ field: 'today.credits', op: '>', value: 50 }] };
+    const rule = { conditions: [{ field: 'today.credits', op: '>' as const, value: 50 }] };
     assert.equal(evalRule(rule, ctx), true);
   });
 
