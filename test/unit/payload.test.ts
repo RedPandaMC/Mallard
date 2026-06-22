@@ -24,15 +24,50 @@ describe('buildMetricPayload', () => {
     const s = buildSnapshot([makeEvent({ ts: Date.now() - 1000, modelId: 'gpt-4o' })], opts());
     const p = buildMetricPayload(s);
     const EXPECTED = [
-      'ts', 'model_dist', 'surface_dist', 'input_cost_ratio',
+      'schema_version',
+      'ts', 'model_dist', 'surface_dist', 'cost_dist', 'input_cost_ratio',
       'credits_velocity_per_hour', 'mtd_budget_pct', 'repo_count',
       'peak_usage_hour', 'daily_credit_variance', 'model_count',
       'surface_concentration', 'estimated_event_ratio', 'forecast_basis',
       'budget_trend', 'token_per_credit', 'forecast_low', 'forecast_high',
+      'source_connector',
     ];
     for (const key of EXPECTED) {
       assert.ok(key in p, `missing key: ${key}`);
     }
+  });
+
+  it('schema_version is always 1', () => {
+    const s = buildSnapshot([makeEvent({ ts: Date.now() - 1000 })], opts());
+    assert.equal(buildMetricPayload(s).schema_version, 1);
+  });
+
+  it('cost_dist fractions sum to ≤1', () => {
+    const now = Date.now();
+    const events = [
+      makeEvent({ ts: now - 1000, credits: 1, cost: 0.1, costByCategory: { input: 0.06, output: 0.04 } }),
+    ];
+    const s = buildSnapshot(events, opts({ now }));
+    const p = buildMetricPayload(s);
+    const total = Object.values(p.cost_dist).reduce((a, x) => a + x, 0);
+    assert.ok(total <= 1.0001, `cost_dist sums to ${total}`);
+  });
+
+  it('source_connector is "none" for empty snapshot', () => {
+    const s = buildSnapshot([], opts());
+    assert.equal(buildMetricPayload(s).source_connector, 'none');
+  });
+
+  it('source_connector is "local" for local-only events', () => {
+    const now = Date.now();
+    const s = buildSnapshot([makeEvent({ ts: now - 1000, source: 'local' })], opts({ now }));
+    assert.equal(buildMetricPayload(s).source_connector, 'local');
+  });
+
+  it('source_connector is "claude-code" for claude-code-only events', () => {
+    const now = Date.now();
+    const s = buildSnapshot([makeEvent({ ts: now - 1000, source: 'claude-code' })], opts({ now }));
+    assert.equal(buildMetricPayload(s).source_connector, 'claude-code');
   });
 
   it('ts is an ISO string', () => {
@@ -187,11 +222,28 @@ describe('buildMetricPayload', () => {
     assert.equal(p.daily_credit_variance, 0);
   });
 
-  it('estimated_event_ratio is 0 when source is github', () => {
+  it('estimated_event_ratio is 0 when all events are from github source', () => {
     const now = Date.now();
-    const s = buildSnapshot([makeEvent({ ts: now - 1000 })], opts({ now, source: 'github' }));
+    const s = buildSnapshot([makeEvent({ ts: now - 1000, source: 'github' })], opts({ now, source: 'github' }));
     const p = buildMetricPayload(s);
     assert.equal(p.estimated_event_ratio, 0);
+  });
+
+  it('estimated_event_ratio is 1 when all events are estimated (local source)', () => {
+    const now = Date.now();
+    const s = buildSnapshot([makeEvent({ ts: now - 1000, source: 'local' })], opts({ now }));
+    const p = buildMetricPayload(s);
+    assert.equal(p.estimated_event_ratio, 1);
+  });
+
+  it('estimated_event_ratio is 0.5 when sources are mixed (github + local)', () => {
+    const now = Date.now();
+    const s = buildSnapshot([
+      makeEvent({ ts: now - 1000, source: 'github' }),
+      makeEvent({ ts: now - 2000, source: 'local' }),
+    ], opts({ now }));
+    const p = buildMetricPayload(s);
+    assert.equal(p.estimated_event_ratio, 0.5);
   });
 
   it('surface_concentration is 0 when there are no sankey links (empty surface_dist)', () => {
@@ -232,5 +284,19 @@ describe('buildMetricPayload', () => {
     const s = buildSnapshot(events, opts({ now }));
     const p = buildMetricPayload(s);
     assert.ok(Math.abs(p.input_cost_ratio - 0.6) < 0.001);
+  });
+
+  it('cost_dist includes cache_creation and cache_read when present', () => {
+    const now = Date.now();
+    const events = [
+      makeEvent({ ts: now - 1000, credits: 1, cost: 0.1,
+        costByCategory: { input: 0.03, output: 0.02, cache_creation: 0.04, cache_read: 0.01 } }),
+    ];
+    const s = buildSnapshot(events, opts({ now }));
+    const p = buildMetricPayload(s);
+    assert.ok('cache_creation' in p.cost_dist, 'cache_creation missing from cost_dist');
+    assert.ok('cache_read' in p.cost_dist, 'cache_read missing from cost_dist');
+    const total = Object.values(p.cost_dist).reduce((a, x) => a + x, 0);
+    assert.ok(total <= 1.0001, `cost_dist total ${total} exceeds 1`);
   });
 });

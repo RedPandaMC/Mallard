@@ -175,6 +175,22 @@ describe('ClaudeCodeParser', () => {
       assert.equal(events[0]!.costByCategory, undefined);
     });
 
+    it('omits costByCategory when model has zero cost (free-tier multiplier)', () => {
+      const manifest = {
+        version: 1 as const,
+        pricePerCredit: 0.04,
+        updatedAt: '2026-01-01',
+        models: { 'claude-sonnet-4': 0 },
+      };
+      const line = JSON.stringify({
+        type: 'assistant',
+        message: { model: 'claude-sonnet-4', usage: { input_tokens: 100, output_tokens: 50 } },
+        timestamp: '2026-01-15T10:00:00.000Z',
+      });
+      const events = parser.parse(line, { pricePerCredit: 0.04, now, manifest });
+      assert.equal(events[0]!.costByCategory, undefined);
+    });
+
     it('converts string input_tokens via num()', () => {
       const line = JSON.stringify({
         type: 'assistant',
@@ -275,6 +291,151 @@ describe('ClaudeCodeParser', () => {
       });
       const events = parser.parse(line, { pricePerCredit: 0.04, now });
       assert.equal(events[0]!.ts, now);
+    });
+
+    // ── Surface detection ──────────────────────────────────────────────────────
+
+    it('defaults surface to "chat" when no tool-use events are present', () => {
+      const events = parser.parse(makeLine({}), { pricePerCredit: 0.04, now });
+      assert.equal(events[0]!.surface, 'chat');
+    });
+
+    it('sets surface to "agent" when a tool-use event is present in the same content', () => {
+      const toolLine = JSON.stringify({ type: 'tool', id: 'toolu_01', name: 'bash', input: { command: 'ls' } });
+      const assistantLine = JSON.stringify({
+        type: 'assistant',
+        message: { model: 'claude-sonnet-4', usage: { input_tokens: 100, output_tokens: 50 } },
+        timestamp: '2026-01-15T10:00:00.000Z',
+      });
+      const events = parser.parse(`${toolLine}\n${assistantLine}`, { pricePerCredit: 0.04, now });
+      assert.equal(events.length, 1);
+      assert.equal(events[0]!.surface, 'agent');
+    });
+
+    it('all assistant events in an agent session share the "agent" surface', () => {
+      const toolLine = JSON.stringify({ type: 'tool', id: 't1', name: 'read_file', input: {} });
+      const assistant1 = JSON.stringify({
+        type: 'assistant',
+        message: { model: 'claude-sonnet-4', usage: { input_tokens: 100, output_tokens: 40 } },
+        timestamp: '2026-01-15T10:00:00.000Z',
+      });
+      const assistant2 = JSON.stringify({
+        type: 'assistant',
+        message: { model: 'claude-sonnet-4', usage: { input_tokens: 200, output_tokens: 80 } },
+        timestamp: '2026-01-15T10:01:00.000Z',
+      });
+      const content = `${assistant1}\n${toolLine}\n${assistant2}`;
+      const events = parser.parse(content, { pricePerCredit: 0.04, now });
+      assert.equal(events.length, 2);
+      assert.equal(events[0]!.surface, 'agent');
+      assert.equal(events[1]!.surface, 'agent');
+    });
+
+    // ── Cache & thinking token parsing ────────────────────────────────────────
+
+    it('parses cache_creation_input_tokens from usage', () => {
+      const line = JSON.stringify({
+        type: 'assistant',
+        message: {
+          model: 'claude-sonnet-4',
+          usage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 200 },
+        },
+        timestamp: '2026-01-15T10:00:00.000Z',
+      });
+      const events = parser.parse(line, { pricePerCredit: 0.04, now });
+      assert.equal(events[0]!.cacheCreationTokens, 200);
+    });
+
+    it('parses cache_read_input_tokens from usage', () => {
+      const line = JSON.stringify({
+        type: 'assistant',
+        message: {
+          model: 'claude-sonnet-4',
+          usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 3000 },
+        },
+        timestamp: '2026-01-15T10:00:00.000Z',
+      });
+      const events = parser.parse(line, { pricePerCredit: 0.04, now });
+      assert.equal(events[0]!.cacheReadTokens, 3000);
+    });
+
+    it('parses thinking_tokens from usage', () => {
+      const line = JSON.stringify({
+        type: 'assistant',
+        message: {
+          model: 'claude-sonnet-4',
+          usage: { input_tokens: 100, output_tokens: 50, thinking_tokens: 80 },
+        },
+        timestamp: '2026-01-15T10:00:00.000Z',
+      });
+      const events = parser.parse(line, { pricePerCredit: 0.04, now });
+      assert.equal(events[0]!.thinkingTokens, 80);
+    });
+
+    it('leaves cacheCreationTokens/cacheReadTokens/thinkingTokens absent when not in usage', () => {
+      const events = parser.parse(makeLine({}), { pricePerCredit: 0.04, now });
+      assert.equal(events[0]!.cacheCreationTokens, undefined);
+      assert.equal(events[0]!.cacheReadTokens, undefined);
+      assert.equal(events[0]!.thinkingTokens, undefined);
+    });
+
+    it('includes cache_creation category in costByCategory when cache_creation_input_tokens present', () => {
+      const manifest = {
+        version: 1 as const,
+        pricePerCredit: 0.04,
+        updatedAt: '2026-01-01',
+        models: { 'claude-sonnet-4': 1 },
+      };
+      const line = JSON.stringify({
+        type: 'assistant',
+        message: {
+          model: 'claude-sonnet-4',
+          usage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 200 },
+        },
+        timestamp: '2026-01-15T10:00:00.000Z',
+      });
+      const events = parser.parse(line, { pricePerCredit: 0.04, now, manifest });
+      assert.ok(events[0]!.costByCategory?.['cache_creation'] !== undefined);
+      assert.ok(events[0]!.costByCategory?.['input'] !== undefined);
+      assert.ok(events[0]!.costByCategory?.['output'] !== undefined);
+    });
+
+    it('includes cache_read category in costByCategory when cache_read_input_tokens present', () => {
+      const manifest = {
+        version: 1 as const,
+        pricePerCredit: 0.04,
+        updatedAt: '2026-01-01',
+        models: { 'claude-sonnet-4': 1 },
+      };
+      const line = JSON.stringify({
+        type: 'assistant',
+        message: {
+          model: 'claude-sonnet-4',
+          usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 3000 },
+        },
+        timestamp: '2026-01-15T10:00:00.000Z',
+      });
+      const events = parser.parse(line, { pricePerCredit: 0.04, now, manifest });
+      assert.ok(events[0]!.costByCategory?.['cache_read'] !== undefined);
+    });
+
+    it('includes thinking category in costByCategory when thinking_tokens present', () => {
+      const manifest = {
+        version: 1 as const,
+        pricePerCredit: 0.04,
+        updatedAt: '2026-01-01',
+        models: { 'claude-sonnet-4': 1 },
+      };
+      const line = JSON.stringify({
+        type: 'assistant',
+        message: {
+          model: 'claude-sonnet-4',
+          usage: { input_tokens: 100, output_tokens: 50, thinking_tokens: 80 },
+        },
+        timestamp: '2026-01-15T10:00:00.000Z',
+      });
+      const events = parser.parse(line, { pricePerCredit: 0.04, now, manifest });
+      assert.ok(events[0]!.costByCategory?.['thinking'] !== undefined);
     });
   });
 

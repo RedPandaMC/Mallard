@@ -59,6 +59,14 @@ export interface MqttProtocolOptions {
   certPath?: string;
   keyPath?: string;
   caPath?: string;
+  /**
+   * Absolute paths of the workspace folders open in this VS Code window.
+   * When provided, a stable 8-char hash of the sorted paths is appended as a
+   * third topic segment so that multiple windows on the same machine each
+   * publish to a distinct sub-topic, enabling wildcard fan-in at the consumer.
+   * Without this, all windows share one topic and overwrite each other.
+   */
+  workspaceFolders?: string[];
 }
 
 export class MqttProtocol implements MetricProtocol {
@@ -75,12 +83,22 @@ export class MqttProtocol implements MetricProtocol {
       return;
     }
 
-    const instanceHash = crypto
+    const machineHash = crypto
       .createHash('sha256')
       .update(vscode.env.machineId)
       .digest('hex')
       .slice(0, 12);
-    this.resolvedTopic = `${opts.topicPrefix}/${instanceHash}`;
+
+    if (opts.workspaceFolders && opts.workspaceFolders.length > 0) {
+      const wsHash = crypto
+        .createHash('sha256')
+        .update([...opts.workspaceFolders].sort().join('\n'))
+        .digest('hex')
+        .slice(0, 8);
+      this.resolvedTopic = `${opts.topicPrefix}/${machineHash}/${wsHash}`;
+    } else {
+      this.resolvedTopic = `${opts.topicPrefix}/${machineHash}`;
+    }
 
     const useMtls = opts.certPath && opts.keyPath;
     if ((opts.certPath && !opts.keyPath) || (!opts.certPath && opts.keyPath)) {
@@ -125,7 +143,7 @@ export class MqttProtocol implements MetricProtocol {
     // The topic passed by MetricExporter is the serializer's logical topic;
     // we publish to the instance-scoped resolved topic instead.
     void topic;
-    this.client.publish(this.resolvedTopic, JSON.stringify(payload), { qos: 0 }, (err?: Error) => {
+    this.client.publish(this.resolvedTopic, JSON.stringify(payload), { qos: 1, retain: true }, (err?: Error) => {
       if (err) console.error('[mallard] metric publish error:', err.message);
     });
   }

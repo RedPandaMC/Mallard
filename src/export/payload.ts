@@ -15,18 +15,34 @@
  * Shape B (graph edges): model→surface relationships live in snapshot.sankeyLinks
  * and can be consumed directly by a Neo4j importer without transformation here.
  */
-import type { UsageSnapshot } from '../domain/types';
+import type { SourceKind, UsageSnapshot } from '../domain/types';
 import type { MetricSerializer } from './MetricExporter';
 /* c8 ignore stop */
 
 export interface MetricPayload {
+  /**
+   * Payload schema version. Additive changes (new optional fields) keep the
+   * same version. Breaking changes (removals, renames, type changes) increment
+   * it so consumers can branch on the value without inspecting the topic string.
+   */
+  schema_version: 1;
   /** ISO timestamp of the snapshot. */
   ts: string;
   /** Fraction of credits attributable to each model (sums to ≤1). */
   model_dist: Record<string, number>;
   /** Fraction of credits attributable to each surface (sums to ≤1). */
   surface_dist: Record<string, number>;
-  /** Fraction of cost attributable to input tokens (0–1, 0 when unavailable). */
+  /**
+   * Fraction of total cost attributable to each cost category (sums to ≤1).
+   * Supersedes `input_cost_ratio` — includes cache_creation, cache_read, and
+   * thinking categories when present (Claude Code sessions).
+   */
+  cost_dist: Record<string, number>;
+  /**
+   * Fraction of cost attributable to input tokens vs (input + output) only.
+   * @deprecated Use cost_dist['input'] instead. Kept for backward compatibility;
+   * does not account for cache_creation, cache_read, or thinking costs.
+   */
   input_cost_ratio: number;
   /** Credits used today divided by hours elapsed since midnight (≥0). */
   credits_velocity_per_hour: number;
@@ -45,7 +61,11 @@ export interface MetricPayload {
    * High values mean usage is concentrated on a single surface.
    */
   surface_concentration: number;
-  /** Fraction of events flagged as estimated rather than precise (0–1). */
+  /**
+   * Fraction of events whose cost is estimated rather than authoritative (0–1).
+   * 0 = all events from GitHub billing (precise); 1 = all events from local logs (estimated).
+   * Values between 0 and 1 occur in mixed sessions.
+   */
   estimated_event_ratio: number;
   /** Which forecaster was used ('linear' | 'seasonal' | 'insufficient-data'). */
   forecast_basis: 'linear' | 'seasonal' | 'insufficient-data';
@@ -60,6 +80,13 @@ export interface MetricPayload {
   forecast_low: number;
   /** Upper confidence bound for month-end projected credits. */
   forecast_high: number;
+  /**
+   * Primary data source in this snapshot. 'mixed' when events from multiple
+   * connector types are present (e.g. both Copilot OTel and Claude Code).
+   * 'none' when the snapshot contains no events yet.
+   * Allows consumers to distinguish Claude-only vs Copilot-only vs blended views.
+   */
+  source_connector: SourceKind | 'mixed' | 'none';
 }
 
 export function buildMetricPayload(s: UsageSnapshot): MetricPayload {
@@ -81,15 +108,22 @@ export function buildMetricPayload(s: UsageSnapshot): MetricPayload {
     if (totalSurface > 0) surface_dist[k] = v / totalSurface;
   }
 
-  // ── input_cost_ratio ────────────────────────────────────────────────────────
+  // ── cost_dist & input_cost_ratio ────────────────────────────────────────────
   const catData = s.chartData.categoryBreakdown;
-  const inputIdx  = catData.categories.indexOf('input');
-  const outputIdx = catData.categories.indexOf('output');
-  /* c8 ignore next 2 */
-  const inputCost   = inputIdx  >= 0 ? (catData.costs[inputIdx]  ?? 0) : 0;
-  const outputCost  = outputIdx >= 0 ? (catData.costs[outputIdx] ?? 0) : 0;
-  const totalCatCost = inputCost + outputCost;
-  const input_cost_ratio = totalCatCost > 0 ? inputCost / totalCatCost : 0;
+  const totalCatCostAll = catData.costs.reduce((a, c) => a + c, 0);
+  const cost_dist: Record<string, number> = {};
+  if (totalCatCostAll > 0) {
+    for (let i = 0; i < catData.categories.length; i++) {
+      const c = catData.costs[i]!;
+      if (c > 0) cost_dist[catData.categories[i]!] = c / totalCatCostAll;
+    }
+  }
+  // Legacy field: input/(input+output) only — does not include cache/thinking.
+  // Derived from already-normalised cost_dist to avoid re-indexing the arrays.
+  const inputFrac  = cost_dist['input']  ?? 0;
+  const outputFrac = cost_dist['output'] ?? 0;
+  const totalInOut = inputFrac + outputFrac;
+  const input_cost_ratio = totalInOut > 0 ? inputFrac / totalInOut : 0;
 
   // ── credits_velocity_per_hour ───────────────────────────────────────────────
   const midnight = new Date(s.generatedAt);
@@ -113,7 +147,12 @@ export function buildMetricPayload(s: UsageSnapshot): MetricPayload {
   const surface_concentration = gini(surfaceValues);
 
   // ── estimated_event_ratio ───────────────────────────────────────────────────
-  const estimated_event_ratio = s.source === 'github' ? 0 : 1;
+  // GitHub billing events are authoritative (estimated=false); all local/claude-code
+  // events are estimated. Derive the ratio from allSources rather than the top-level
+  // source field so mixed sessions produce a fractional value instead of 0 or 1.
+  const githubOnly = s.allSources.length > 0 && s.allSources.every((src) => src === 'github');
+  const noGithub   = s.allSources.every((src) => src !== 'github');
+  const estimated_event_ratio = githubOnly ? 0 : noGithub ? 1 : 0.5;
 
   // ── forecast fields ─────────────────────────────────────────────────────────
   const forecast_basis = s.forecast.basis;
@@ -134,10 +173,19 @@ export function buildMetricPayload(s: UsageSnapshot): MetricPayload {
   const totalTokens = s.topModels.reduce((a, m) => a + m.tokens, 0);
   const token_per_credit = totalCredits > 0 ? totalTokens / totalCredits : 0;
 
+  // ── source_connector ────────────────────────────────────────────────────────
+  const uniqueSources = new Set(s.allSources);
+  let source_connector: SourceKind | 'mixed' | 'none';
+  if (uniqueSources.size === 0) source_connector = 'none';
+  else if (uniqueSources.size === 1) source_connector = [...uniqueSources][0] as SourceKind;
+  else source_connector = 'mixed';
+
   return {
+    schema_version: 1,
     ts: new Date(s.generatedAt).toISOString(),
     model_dist,
     surface_dist,
+    cost_dist,
     input_cost_ratio,
     credits_velocity_per_hour,
     mtd_budget_pct: s.budget.percentOfBudget,
@@ -152,6 +200,7 @@ export function buildMetricPayload(s: UsageSnapshot): MetricPayload {
     token_per_credit,
     forecast_low,
     forecast_high,
+    source_connector,
   };
 }
 

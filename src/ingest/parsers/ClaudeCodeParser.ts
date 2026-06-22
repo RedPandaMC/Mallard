@@ -3,7 +3,7 @@ import * as path from 'path';
 import { FolderLike, LogParser } from '../LogParser';
 import { ParseContext } from '../otelParse';
 import { priceRequest } from '../../domain/pricing';
-import { CostCategory, SourceKind, UsageEvent } from '../../domain/types';
+import { CostCategory, SourceKind, Surface, UsageEvent } from '../../domain/types';
 /* c8 ignore stop */
 
 type AnyRecord = Record<string, unknown>;
@@ -21,12 +21,28 @@ function pick(attrs: AnyRecord, keys: string[]): unknown {
   return undefined;
 }
 
-function splitCost(cost: number, prompt: number, total: number): Partial<Record<CostCategory, number>> {
-  const inputCost = (cost * prompt) / total;
+interface TokenCounts {
+  prompt?: number;
+  completion?: number;
+  cacheCreation?: number;
+  cacheRead?: number;
+  thinking?: number;
+}
+
+function splitCost(cost: number, tokens: TokenCounts): Partial<Record<CostCategory, number>> {
+  const total =
+    (tokens.prompt ?? 0) +
+    (tokens.completion ?? 0) +
+    (tokens.cacheCreation ?? 0) +
+    (tokens.cacheRead ?? 0) +
+    (tokens.thinking ?? 0);
+  if (total === 0) return {};
   const out: Partial<Record<CostCategory, number>> = {};
-  if (inputCost > 0) out.input = inputCost;
-  const outputCost = cost - inputCost;
-  if (outputCost > 0) out.output = outputCost;
+  if (tokens.prompt)       out.input          = (cost * tokens.prompt)       / total;
+  if (tokens.completion)   out.output         = (cost * tokens.completion)   / total;
+  if (tokens.cacheCreation) out.cache_creation = (cost * tokens.cacheCreation) / total;
+  if (tokens.cacheRead)    out.cache_read     = (cost * tokens.cacheRead)    / total;
+  if (tokens.thinking)     out.thinking       = (cost * tokens.thinking)     / total;
   return out;
 }
 
@@ -35,6 +51,25 @@ function matchFolderHash(projectHash: string, folders: ReadonlyArray<FolderLike>
     const hash = encodeURIComponent(wf.uri.fsPath).replace(/%/g, '').toLowerCase();
     return hash === projectHash;
   });
+}
+
+/**
+ * Pre-scan the session lines to detect agent-mode usage.
+ * Claude Code emits `type: 'tool'` entries when the model invokes tools;
+ * their presence indicates the session is an agentic run rather than plain chat.
+ */
+function detectSurface(lines: string[]): Surface {
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed[0] !== '{') continue;
+    try {
+      const r = JSON.parse(trimmed) as AnyRecord;
+      if (r['type'] === 'tool') return 'agent';
+    } catch {
+      // skip invalid JSON
+    }
+  }
+  return 'chat';
 }
 
 export class ClaudeCodeParser implements LogParser {
@@ -71,7 +106,10 @@ export class ClaudeCodeParser implements LogParser {
     const fileKey = ctx.fileKey ?? 'cc';
     let offset = ctx.baseOffset ?? 0;
 
-    for (const line of content.split('\n')) {
+    const lines = content.split('\n');
+    const surface = detectSurface(lines);
+
+    for (const line of lines) {
       const lineStart = offset;
       offset += line.length + 1;
 
@@ -97,8 +135,11 @@ export class ClaudeCodeParser implements LogParser {
       );
       if (!model) continue;
 
-      const prompt     = num(usage['input_tokens']  ?? usage['prompt_tokens']);
-      const completion = num(usage['output_tokens'] ?? usage['completion_tokens']);
+      const prompt        = num(usage['input_tokens']  ?? usage['prompt_tokens']);
+      const completion    = num(usage['output_tokens'] ?? usage['completion_tokens']);
+      const cacheCreation = num(usage['cache_creation_input_tokens']);
+      const cacheRead     = num(usage['cache_read_input_tokens']);
+      const thinking      = num(usage['thinking_tokens'] ?? usage['output_thinking_tokens']);
 
       const tsRaw = rec['timestamp'] ?? rec['time'] ?? (msg as AnyRecord)['timestamp'];
       let ts =
@@ -115,18 +156,29 @@ export class ClaudeCodeParser implements LogParser {
         ...(ctx.manifest !== undefined ? { manifest: ctx.manifest } : {}),
       });
 
-      const totalTok = (prompt ?? 0) + (completion ?? 0);
-      const costByCategory =
-        cost > 0 && totalTok > 0 ? splitCost(cost, prompt ?? 0, totalTok) : undefined;
+      const tokens: TokenCounts = {
+        ...(prompt        !== undefined ? { prompt }        : {}),
+        ...(completion    !== undefined ? { completion }    : {}),
+        ...(cacheCreation !== undefined ? { cacheCreation } : {}),
+        ...(cacheRead     !== undefined ? { cacheRead }     : {}),
+        ...(thinking      !== undefined ? { thinking }      : {}),
+      };
+      const rawCostByCategory = cost > 0 ? splitCost(cost, tokens) : undefined;
+      const costByCategory = rawCostByCategory && Object.keys(rawCostByCategory).length > 0
+        ? rawCostByCategory
+        : undefined;
 
       events.push({
         id: `claude-code:${fileKey}:${lineStart}`,
         ts,
         modelId: String(model),
-        surface: 'chat',
+        surface,
         source: 'claude-code',
-        ...(prompt     !== undefined ? { promptTokens:     prompt     } : {}),
-        ...(completion !== undefined ? { completionTokens: completion } : {}),
+        ...(prompt        !== undefined ? { promptTokens:        prompt        } : {}),
+        ...(completion    !== undefined ? { completionTokens:    completion    } : {}),
+        ...(cacheCreation !== undefined ? { cacheCreationTokens: cacheCreation } : {}),
+        ...(cacheRead     !== undefined ? { cacheReadTokens:     cacheRead     } : {}),
+        ...(thinking      !== undefined ? { thinkingTokens:      thinking      } : {}),
         credits,
         cost,
         estimated: true,
