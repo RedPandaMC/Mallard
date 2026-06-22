@@ -143,7 +143,7 @@ export class MqttProtocol implements MetricProtocol {
     // The topic passed by MetricExporter is the serializer's logical topic;
     // we publish to the instance-scoped resolved topic instead.
     void topic;
-    this.client.publish(this.resolvedTopic, JSON.stringify(payload), { qos: 0 }, (err?: Error) => {
+    this.client.publish(this.resolvedTopic, JSON.stringify(payload), { qos: 1, retain: true }, (err?: Error) => {
       if (err) console.error('[mallard] metric publish error:', err.message);
     });
   }

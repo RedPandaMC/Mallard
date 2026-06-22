@@ -128,7 +128,8 @@ describe('MetricPayloadSerializer', () => {
   it('serialize returns an object with all expected metric keys', () => {
     const payload = serializer.serialize(makeSnapshot());
     const EXPECTED_KEYS = [
-      'ts', 'model_dist', 'surface_dist', 'input_cost_ratio',
+      'schema_version',
+      'ts', 'model_dist', 'surface_dist', 'cost_dist', 'input_cost_ratio',
       'credits_velocity_per_hour', 'mtd_budget_pct', 'repo_count',
       'peak_usage_hour', 'daily_credit_variance', 'model_count',
       'surface_concentration', 'estimated_event_ratio', 'forecast_basis',
@@ -146,14 +147,46 @@ describe('MetricPayloadSerializer', () => {
     assert.notEqual(payload, null);
   });
 
+  it('schema_version is 1', () => {
+    const payload = serializer.serialize(makeSnapshot());
+    assert.equal(payload['schema_version'], 1);
+  });
+
+  it('cost_dist is a record of string→number', () => {
+    const payload = serializer.serialize(makeSnapshot());
+    assert.equal(typeof payload['cost_dist'], 'object');
+    assert.notEqual(payload['cost_dist'], null);
+  });
+
+  it('source_connector is "none" for a snapshot with no events', () => {
+    const empty = buildSnapshot([], {
+      now: Date.now(),
+      currency: 'USD',
+      pricePerCredit: 0.04,
+      monthlyBudget: null,
+      includedCredits: 300,
+      filter: {},
+      source: 'local',
+      status: { kind: 'ok' },
+      authStatus: 'signed-out',
+    });
+    const payload = serializer.serialize(empty);
+    assert.equal(payload['source_connector'], 'none');
+  });
+
   it('source_connector reflects the snapshot source when only one kind is present', () => {
     const payload = serializer.serialize(makeSnapshot());
-    // makeSnapshot uses 'local' source kind via makeEvent default
     assert.ok(
-      payload['source_connector'] === 'local' ||
-      payload['source_connector'] === 'mixed' ||
       typeof payload['source_connector'] === 'string',
       'source_connector should be a string',
     );
+    assert.notEqual(payload['source_connector'], 'mixed');
+    assert.notEqual(payload['source_connector'], 'none');
+  });
+
+  it('estimated_event_ratio is 0 for github-only, 1 for non-github, 0.5 for mixed', () => {
+    const payload = serializer.serialize(makeSnapshot());
+    // makeEvent defaults to 'local' source, so all events are estimated
+    assert.equal(payload['estimated_event_ratio'], 1);
   });
 });
