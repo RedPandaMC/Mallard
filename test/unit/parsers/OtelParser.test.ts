@@ -179,7 +179,7 @@ describe('OtelParser', () => {
 
     it('falls back to attrs.timestamp when rec has no top-level timestamp/time', () => {
       const line = JSON.stringify({
-        attributes: { 'gen_ai.request.model': 'gpt-4o', timestamp: '2026-01-15T10:00:00.000Z', ...baseAttrs },
+        attributes: { timestamp: '2026-01-15T10:00:00.000Z', ...baseAttrs },
       });
       const events = parser.parse(line, { pricePerCredit: 0.04, now });
       assert.equal(events.length, 1);
