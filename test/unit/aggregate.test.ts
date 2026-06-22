@@ -2,17 +2,19 @@ import { strict as assert } from 'assert';
 import {
   aggregateAll,
   aggregateBy,
+  buildFilterPredicate,
   distinctModels,
   distinctRepos,
   distinctSources,
   distinctSurfaces,
+  matchesFilter,
   sankeyLinksFor,
   sumEvents,
   tokensOf,
   topBy,
   UNATTRIBUTED_REPO,
 } from '../../src/domain/aggregate';
-import type { UsageEvent } from '../../src/domain/types';
+import type { Surface, UsageEvent } from '../../src/domain/types';
 import { makeEvent } from './helpers';
 
 describe('aggregate', () => {
@@ -202,5 +204,116 @@ describe('aggregate', () => {
     ];
     const sources = distinctSources(mixed, { sources: ['local'] });
     assert.deepEqual(sources, ['local']);
+  });
+});
+
+// ── matchesFilter ─────────────────────────────────────────────────────────────
+
+describe('matchesFilter', () => {
+  const ts = new Date(2026, 5, 15, 10).getTime();
+
+  it('no filter → always matches', () => {
+    assert.equal(matchesFilter(makeEvent({ ts })), true);
+    assert.equal(matchesFilter(makeEvent({ ts }), undefined), true);
+  });
+
+  it('range filter: event inside range matches', () => {
+    assert.equal(matchesFilter(makeEvent({ ts }), { range: { start: ts - 1000, end: ts + 1000 } }), true);
+  });
+
+  it('range filter: event at start boundary matches (ts >= start)', () => {
+    assert.equal(matchesFilter(makeEvent({ ts }), { range: { start: ts, end: ts + 1000 } }), true);
+  });
+
+  it('range filter: event at end boundary excluded (ts < end)', () => {
+    assert.equal(matchesFilter(makeEvent({ ts }), { range: { start: ts - 1000, end: ts } }), false);
+  });
+
+  it('models filter: exact match', () => {
+    const e = makeEvent({ ts, modelId: 'gpt-4o' });
+    assert.equal(matchesFilter(e, { models: ['gpt-4o'] }), true);
+  });
+
+  it('models filter: non-matching model excluded', () => {
+    const e = makeEvent({ ts, modelId: 'gpt-4o' });
+    assert.equal(matchesFilter(e, { models: ['claude-3-opus'] }), false);
+  });
+
+  it('surfaces filter', () => {
+    const e = makeEvent({ ts, surface: 'chat' });
+    assert.equal(matchesFilter(e, { surfaces: ['chat'] }), true);
+    assert.equal(matchesFilter(e, { surfaces: ['inline'] }), false);
+  });
+
+  it('repos filter: named repo', () => {
+    const e = makeEvent({ ts, repo: 'my-repo' });
+    assert.equal(matchesFilter(e, { repos: ['my-repo'] }), true);
+    assert.equal(matchesFilter(e, { repos: ['other-repo'] }), false);
+  });
+
+  it('repos filter: UNATTRIBUTED_REPO matches event with null repo', () => {
+    const e = makeEvent({ ts });
+    assert.equal(matchesFilter(e, { repos: [UNATTRIBUTED_REPO] }), true);
+    assert.equal(matchesFilter(e, { repos: ['some-repo'] }), false);
+  });
+
+  it('branches filter', () => {
+    const e = makeEvent({ ts, branch: 'main' });
+    assert.equal(matchesFilter(e, { branches: ['main'] }), true);
+    assert.equal(matchesFilter(e, { branches: ['feature/x'] }), false);
+  });
+
+  it('branches filter: event without branch uses empty-string fallback', () => {
+    const e = makeEvent({ ts }); // no branch property
+    // Event has no branch, filter expects 'main' → excluded
+    assert.equal(matchesFilter(e, { branches: ['main'] }), false);
+    // Event has no branch, filter includes '' → included
+    assert.equal(matchesFilter(e, { branches: [''] }), true);
+  });
+
+  it('sources filter', () => {
+    const e = makeEvent({ ts, source: 'local' });
+    assert.equal(matchesFilter(e, { sources: ['local'] }), true);
+    assert.equal(matchesFilter(e, { sources: ['github'] }), false);
+  });
+
+  it('multi-facet: must satisfy ALL specified facets', () => {
+    const e = makeEvent({ ts, modelId: 'gpt-4o', surface: 'chat', source: 'local' });
+    assert.equal(matchesFilter(e, { models: ['gpt-4o'], surfaces: ['inline'] }), false);
+    assert.equal(matchesFilter(e, { models: ['gpt-4o'], surfaces: ['chat'] }), true);
+  });
+
+  it('empty arrays on a facet → same as not specifying the facet', () => {
+    const e = makeEvent({ ts, modelId: 'gpt-4o' });
+    assert.equal(matchesFilter(e, { models: [] }), true);
+    assert.equal(matchesFilter(e, { surfaces: [] }), true);
+  });
+});
+
+// ── buildFilterPredicate ──────────────────────────────────────────────────────
+
+describe('buildFilterPredicate', () => {
+  const ts = new Date(2026, 5, 15, 10).getTime();
+
+  it('returns a function equivalent to matchesFilter(e, filter)', () => {
+    const filter = { models: ['gpt-4o'] };
+    const predicate = buildFilterPredicate(filter);
+    const e1 = makeEvent({ ts, modelId: 'gpt-4o' });
+    const e2 = makeEvent({ ts, modelId: 'claude-3-opus' });
+    assert.equal(predicate(e1), matchesFilter(e1, filter));
+    assert.equal(predicate(e2), matchesFilter(e2, filter));
+  });
+
+  it('same predicate applied to multiple events', () => {
+    const filter = { surfaces: ['chat', 'inline'] as Surface[] };
+    const predicate = buildFilterPredicate(filter);
+    const events = [
+      makeEvent({ ts, surface: 'chat' }),
+      makeEvent({ ts, surface: 'agent' }),
+      makeEvent({ ts, surface: 'inline' }),
+    ];
+    const result = events.filter(predicate);
+    assert.equal(result.length, 2);
+    assert.ok(result.every((e) => e.surface === 'chat' || e.surface === 'inline'));
   });
 });

@@ -28,7 +28,6 @@ export function matchesFilter(event: UsageEvent, filter?: Filter): boolean {
   if (filter.models?.length && !filter.models.includes(event.modelId)) return false;
   if (filter.surfaces?.length && !filter.surfaces.includes(event.surface)) return false;
   if (filter.repos?.length && !filter.repos.includes(event.repo ?? UNATTRIBUTED_REPO)) return false;
-  /* c8 ignore next */
   if (filter.branches?.length && !filter.branches.includes(event.branch ?? '')) return false;
   if (filter.sources?.length && !filter.sources.includes(event.source)) return false;
   return true;
@@ -36,6 +35,11 @@ export function matchesFilter(event: UsageEvent, filter?: Filter): boolean {
 
 /** Key used for events that could not be attributed to a workspace repo. */
 export const UNATTRIBUTED_REPO = 'unattributed';
+
+/** Build a reusable predicate from a filter — call once, apply many times. */
+export function buildFilterPredicate(filter: Filter): (e: UsageEvent) => boolean {
+  return (e: UsageEvent) => matchesFilter(e, filter);
+}
 
 function addTo(rec: Record<string, Bucket>, key: string, entry: UsageEvent, tokenCount: number): void {
   const bucket = rec[key] ?? (rec[key] = { credits: 0, cost: 0, tokens: 0 });

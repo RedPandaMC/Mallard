@@ -3,45 +3,17 @@ import * as path from 'path';
 import { FolderLike, LogParser } from '../LogParser';
 import { ParseContext } from '../otelParse';
 import { priceRequest } from '../../domain/pricing';
-import { CostCategory, SourceKind, Surface, UsageEvent } from '../../domain/types';
+import { SourceKind, UsageEvent } from '../../domain/types';
+import { fileKeyOf, num, splitCost, toSurface } from './parserUtils';
 /* c8 ignore stop */
 
 type AnyRecord = Record<string, unknown>;
-
-function num(v: unknown): number | undefined {
-  const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : undefined;
-  return n != null && !Number.isNaN(n) && n >= 0 ? n : undefined;
-}
 
 function pick(attrs: AnyRecord, keys: string[]): unknown {
   for (const k of keys) {
     if (attrs[k] != null) return attrs[k];
   }
   return undefined;
-}
-
-function splitCost(cost: number, prompt: number, total: number): Partial<Record<CostCategory, number>> {
-  const inputCost = (cost * prompt) / total;
-  const out: Partial<Record<CostCategory, number>> = {};
-  if (inputCost > 0) out.input = inputCost;
-  const outputCost = cost - inputCost;
-  if (outputCost > 0) out.output = outputCost;
-  return out;
-}
-
-function toSurface(v: unknown): Surface {
-  const s = String(v ?? '').toLowerCase();
-  if (s.includes('inline') || s.includes('completion')) return 'inline';
-  if (s.includes('agent')) return 'agent';
-  if (s.includes('edit')) return 'edit';
-  if (s.includes('chat')) return 'chat';
-  return 'unknown';
-}
-
-function fileKeyOf(filePath: string): string {
-  let hash = 5381;
-  for (let i = 0; i < filePath.length; i++) hash = ((hash << 5) + hash + filePath.charCodeAt(i)) | 0;
-  return (hash >>> 0).toString(36);
 }
 
 export class OtelParser implements LogParser {
@@ -108,9 +80,11 @@ export class OtelParser implements LogParser {
         ...(ctx.manifest !== undefined ? { manifest: ctx.manifest } : {}),
       });
 
-      const totalTok = (prompt ?? 0) + (completion ?? 0);
-      const costByCategory =
-        cost > 0 && totalTok > 0 ? splitCost(cost, prompt ?? 0, totalTok) : undefined;
+      const rawCost = cost > 0 ? splitCost(cost, {
+        ...(prompt !== undefined ? { prompt } : {}),
+        ...(completion !== undefined ? { completion } : {}),
+      }) : undefined;
+      const costByCategory = rawCost && Object.keys(rawCost).length > 0 ? rawCost : undefined;
 
       const surfaceHint =
         pick(attrs, ['gen_ai.operation.surface', 'surface', 'gen_ai.operation.name']) ?? rec['name'];

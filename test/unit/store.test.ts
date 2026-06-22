@@ -2,7 +2,8 @@ import * as assert from 'assert';
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { EventStore, rollupEvents } from '../../src/store/EventStore';
+import { EventStore } from '../../src/store/EventStore';
+import { rollupEvents } from '../../src/domain/rollup';
 import { DAY_MS, startOf } from '../../src/util/time';
 import { makeEvent } from './helpers';
 
@@ -330,16 +331,19 @@ describe('EventStore — extended methods', () => {
     store.dispose();
   });
 
-  it('rank() returns top models by credits', async () => {
+  it('rank() returns top models by credits with event_count', async () => {
     const dir = await tmpDir();
     const store = await EventStore.open(dir);
     await store.append([
       makeEvent({ id: 'a', ts: 1000, modelId: 'gpt-4o', credits: 10 }),
-      makeEvent({ id: 'b', ts: 2000, modelId: 'claude-sonnet-4', credits: 5 }),
+      makeEvent({ id: 'b', ts: 2000, modelId: 'gpt-4o', credits: 5 }),
+      makeEvent({ id: 'c', ts: 3000, modelId: 'claude-sonnet-4', credits: 3 }),
     ]);
     const result = await store.rank({}, 'credits', 5);
     assert.strictEqual(result[0]!.key, 'gpt-4o');
     assert.ok(result[0]!.values['credits']! > result[1]!.values['credits']!);
+    assert.strictEqual(result[0]!.values['event_count'], 2);
+    assert.strictEqual(result[1]!.values['event_count'], 1);
     store.dispose();
   });
 
@@ -363,6 +367,45 @@ describe('EventStore — extended methods', () => {
     const removed = await store.remove({});
     assert.strictEqual(removed, 0);
     assert.strictEqual(await store.count(), 1);
+    store.dispose();
+  });
+
+  it('remove() with surfaces filter deletes only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, surface: 'chat' }),
+      makeEvent({ id: 'b', ts: 2000, surface: 'inline' }),
+    ]);
+    const removed = await store.remove({ surfaces: ['chat'] });
+    assert.strictEqual(removed, 1);
+    assert.deepStrictEqual((await store.all()).map((e) => e.id), ['b']);
+    store.dispose();
+  });
+
+  it('remove() with branches filter deletes only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, branch: 'main' }),
+      makeEvent({ id: 'b', ts: 2000, branch: 'feat' }),
+    ]);
+    const removed = await store.remove({ branches: ['main'] });
+    assert.strictEqual(removed, 1);
+    assert.deepStrictEqual((await store.all()).map((e) => e.id), ['b']);
+    store.dispose();
+  });
+
+  it('remove() with sources filter deletes only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, source: 'local' }),
+      makeEvent({ id: 'b', ts: 2000, source: 'claude-code' }),
+    ]);
+    const removed = await store.remove({ sources: ['local'] });
+    assert.strictEqual(removed, 1);
+    assert.deepStrictEqual((await store.all()).map((e) => e.id), ['b']);
     store.dispose();
   });
 
@@ -401,6 +444,154 @@ describe('EventStore — extended methods', () => {
     const result = await store.find({ sources: ['claude-code'] });
     assert.strictEqual(result.length, 1);
     assert.strictEqual(result[0]!.id, 'b');
+    store.dispose();
+  });
+});
+
+describe('EventStore — analytics with filters (buildWhereSql coverage)', () => {
+  it('aggregate() with range filter returns only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, credits: 2 }),
+      makeEvent({ id: 'b', ts: 5000, credits: 8 }),
+    ]);
+    const result = await store.aggregate({ range: { start: 0, end: 3000 } }, ['credits']);
+    assert.strictEqual(result.count, 1);
+    assert.ok(Math.abs(result.sum['credits']! - 2) < 1e-9);
+    store.dispose();
+  });
+
+  it('aggregate() with models filter returns only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, modelId: 'gpt-4o', credits: 3 }),
+      makeEvent({ id: 'b', ts: 2000, modelId: 'claude-3', credits: 5 }),
+    ]);
+    const result = await store.aggregate({ models: ['gpt-4o'] }, ['credits']);
+    assert.strictEqual(result.count, 1);
+    assert.ok(Math.abs(result.sum['credits']! - 3) < 1e-9);
+    store.dispose();
+  });
+
+  it('aggregate() with surfaces filter returns only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, surface: 'chat', credits: 4 }),
+      makeEvent({ id: 'b', ts: 2000, surface: 'inline', credits: 6 }),
+    ]);
+    const result = await store.aggregate({ surfaces: ['chat'] }, ['credits']);
+    assert.strictEqual(result.count, 1);
+    assert.ok(Math.abs(result.sum['credits']! - 4) < 1e-9);
+    store.dispose();
+  });
+
+  it('aggregate() with repos filter (named repo) returns only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, repo: 'org/repo-a', credits: 2 }),
+      makeEvent({ id: 'b', ts: 2000, repo: 'org/repo-b', credits: 7 }),
+    ]);
+    const result = await store.aggregate({ repos: ['org/repo-a'] }, ['credits']);
+    assert.strictEqual(result.count, 1);
+    assert.ok(Math.abs(result.sum['credits']! - 2) < 1e-9);
+    store.dispose();
+  });
+
+  it('aggregate() with repos filter (unattributed + named) returns both', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, credits: 2 }),            // no repo → unattributed
+      makeEvent({ id: 'b', ts: 2000, repo: 'org/x', credits: 3 }),
+      makeEvent({ id: 'c', ts: 3000, repo: 'org/y', credits: 7 }),
+    ]);
+    const result = await store.aggregate({ repos: ['unattributed', 'org/x'] }, ['credits']);
+    assert.strictEqual(result.count, 2);
+    assert.ok(Math.abs(result.sum['credits']! - 5) < 1e-9);
+    store.dispose();
+  });
+
+  it('aggregate() with branches filter returns only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, branch: 'main', credits: 3 }),
+      makeEvent({ id: 'b', ts: 2000, branch: 'feat', credits: 9 }),
+    ]);
+    const result = await store.aggregate({ branches: ['main'] }, ['credits']);
+    assert.strictEqual(result.count, 1);
+    store.dispose();
+  });
+
+  it('aggregate() with sources filter returns only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, source: 'local', credits: 2 }),
+      makeEvent({ id: 'b', ts: 2000, source: 'github', credits: 8 }),
+    ]);
+    const result = await store.aggregate({ sources: ['local'] }, ['credits']);
+    assert.strictEqual(result.count, 1);
+    store.dispose();
+  });
+
+  it('rank() with range filter narrows results', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, modelId: 'gpt-4o', credits: 10 }),
+      makeEvent({ id: 'b', ts: 9000, modelId: 'claude', credits: 50 }),
+    ]);
+    const result = await store.rank({ range: { start: 0, end: 5000 } }, 'credits', 5);
+    assert.strictEqual(result.length, 1);
+    assert.strictEqual(result[0]!.key, 'gpt-4o');
+    store.dispose();
+  });
+
+  it('bucket() with range filter narrows results', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: new Date('2026-06-01T10:00:00Z').getTime(), credits: 1 }),
+      makeEvent({ id: 'b', ts: new Date('2026-06-15T10:00:00Z').getTime(), credits: 2 }),
+    ]);
+    const start = new Date('2026-06-14').getTime();
+    const end   = new Date('2026-06-16').getTime();
+    const buckets = await store.bucket({ range: { start, end } }, 'day');
+    assert.strictEqual(buckets.length, 1);
+    assert.ok(buckets[0]!.key.toString().startsWith('2026-06-15'));
+    store.dispose();
+  });
+
+  it('pivot() with models filter narrows results', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, modelId: 'gpt-4o', surface: 'chat', credits: 5 }),
+      makeEvent({ id: 'b', ts: 2000, modelId: 'claude', surface: 'inline', credits: 3 }),
+    ]);
+    const result = await store.pivot({ models: ['gpt-4o'] }, 'surface', 'credits');
+    assert.strictEqual(result.rows.length, 1);
+    assert.strictEqual(result.rows[0]!['modelId'], 'gpt-4o');
+    store.dispose();
+  });
+
+  it('insert() batch: 100 events in one call, all deduplicated correctly', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const events = Array.from({ length: 100 }, (_, i) =>
+      makeEvent({ id: `batch-${i}`, ts: i * 1000 + 1 }),
+    );
+    const added = await store.insert(events);
+    assert.strictEqual(added, 100);
+    assert.strictEqual(await store.count(), 100);
+    // Re-insert same IDs — should add 0 new
+    const dupes = await store.insert(events);
+    assert.strictEqual(dupes, 0);
     store.dispose();
   });
 });
@@ -476,5 +667,31 @@ describe('EventStore — filter edge cases', () => {
     assert.strictEqual(removed, 1);
     assert.strictEqual(await store.count(), 1);
     store.dispose();
+  });
+
+  it('all() silently drops rows with malformed costByCategory JSON', async () => {
+    // Create the store to establish the schema, then close it so we can
+    // use DuckDB directly to inject a row with deliberately corrupted JSON —
+    // something that cannot happen through the normal store API.
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    store.dispose();
+
+    const { DuckDBInstance } = await import('@duckdb/node-api');
+    const rawInstance = await DuckDBInstance.create(path.join(dir, 'events.duckdb'));
+    const rawConn = await rawInstance.connect();
+    await rawConn.run(
+      `INSERT INTO events (id, ts, modelId, surface, source, credits, cost, estimated, costByCategory)
+       VALUES ('bad-cat', 9999, 'gpt-4o', 'chat', 'local', 1.0, 0.04, true, 'not-valid-json')`,
+    );
+    rawConn.closeSync();
+    rawInstance.closeSync();
+
+    const reloaded = await EventStore.open(dir);
+    const all = await reloaded.all();
+    const bad = all.find((e) => e.id === 'bad-cat');
+    assert.ok(bad, 'row with bad JSON should still be returned');
+    assert.strictEqual(bad!.costByCategory, undefined);
+    reloaded.dispose();
   });
 });

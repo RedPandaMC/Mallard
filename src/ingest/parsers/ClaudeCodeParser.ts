@@ -3,15 +3,11 @@ import * as path from 'path';
 import { FolderLike, LogParser } from '../LogParser';
 import { ParseContext } from '../otelParse';
 import { priceRequest } from '../../domain/pricing';
-import { CostCategory, SourceKind, Surface, UsageEvent } from '../../domain/types';
+import { SourceKind, Surface, UsageEvent } from '../../domain/types';
+import { num, splitCost, TokenCounts } from './parserUtils';
 /* c8 ignore stop */
 
 type AnyRecord = Record<string, unknown>;
-
-function num(v: unknown): number | undefined {
-  const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : undefined;
-  return n != null && !Number.isNaN(n) && n >= 0 ? n : undefined;
-}
 
 function pick(attrs: AnyRecord, keys: string[]): unknown {
   for (const k of keys) {
@@ -19,31 +15,6 @@ function pick(attrs: AnyRecord, keys: string[]): unknown {
   }
   /* c8 ignore next */
   return undefined;
-}
-
-interface TokenCounts {
-  prompt?: number;
-  completion?: number;
-  cacheCreation?: number;
-  cacheRead?: number;
-  thinking?: number;
-}
-
-function splitCost(cost: number, tokens: TokenCounts): Partial<Record<CostCategory, number>> {
-  const total =
-    (tokens.prompt ?? 0) +
-    (tokens.completion ?? 0) +
-    (tokens.cacheCreation ?? 0) +
-    (tokens.cacheRead ?? 0) +
-    (tokens.thinking ?? 0);
-  if (total === 0) return {};
-  const out: Partial<Record<CostCategory, number>> = {};
-  if (tokens.prompt)       out.input          = (cost * tokens.prompt)       / total;
-  if (tokens.completion)   out.output         = (cost * tokens.completion)   / total;
-  if (tokens.cacheCreation) out.cache_creation = (cost * tokens.cacheCreation) / total;
-  if (tokens.cacheRead)    out.cache_read     = (cost * tokens.cacheRead)    / total;
-  if (tokens.thinking)     out.thinking       = (cost * tokens.thinking)     / total;
-  return out;
 }
 
 function matchFolderHash(projectHash: string, folders: ReadonlyArray<FolderLike>): FolderLike | undefined {

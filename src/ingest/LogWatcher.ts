@@ -25,15 +25,9 @@ import { LogParser } from './LogParser';
 import { currentRepo } from './repoResolver';
 import { activeBranch, repoForFolder, branchForFolder } from '../util/repo';
 import { EventStore } from '../store/EventStore';
+import { fileKeyOf } from './parsers/parserUtils';
 
 const DEBOUNCE_MS = 1_500;
-
-/** Short, stable key for a file path (djb2) used to namespace event ids. */
-function fileKeyOf(filePath: string): string {
-  let hash = 5381;
-  for (let i = 0; i < filePath.length; i++) hash = ((hash << 5) + hash + filePath.charCodeAt(i)) | 0;
-  return (hash >>> 0).toString(36);
-}
 
 export class LogWatcher implements vscode.Disposable {
   private watchers: FSWatcher[] = [];

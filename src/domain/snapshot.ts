@@ -4,6 +4,7 @@
  */
 import {
   aggregateAll,
+  buildFilterPredicate,
   distinctModels,
   distinctRepos,
   distinctSources,
@@ -84,19 +85,22 @@ function computeRange(events: readonly UsageEvent[], now: number): { start: numb
 
 /* c8 ignore next */
 export function buildSnapshot(events: readonly UsageEvent[], opts: SnapshotOptions): UsageSnapshot {
-  const aggregates = aggregateAll(events, opts.filter);
+  const predicate = buildFilterPredicate(opts.filter);
+  const filtered = events.filter(predicate);
+
+  const aggregates = aggregateAll(filtered);
   const dayAggregates = aggregates.day;
   const forecast = forecastMonth(dayAggregates, opts.now, opts.pricePerCredit);
 
   const monthStart = startOf(opts.now, 'month');
   const monthEnd = nextBucketStart(opts.now, 'month');
-  const mtdFilter: Filter = { ...opts.filter, range: { start: monthStart, end: monthEnd } };
-  const mtd = sumEvents(events, mtdFilter);
+  const mtdRange: Filter = { range: { start: monthStart, end: monthEnd } };
+  const mtd = sumEvents(filtered, mtdRange);
 
   const todayStart = startOf(opts.now, 'day');
   const todayEnd = nextBucketStart(opts.now, 'day');
-  const todayFilter: Filter = { ...opts.filter, range: { start: todayStart, end: todayEnd } };
-  const todayTotals = sumEvents(events, todayFilter);
+  const todayRange: Filter = { range: { start: todayStart, end: todayEnd } };
+  const todayTotals = sumEvents(filtered, todayRange);
 
   const budget = computeBudget({
     monthlyBudget: opts.monthlyBudget,
@@ -106,11 +110,11 @@ export function buildSnapshot(events: readonly UsageEvent[], opts: SnapshotOptio
     forecast,
   });
 
-  const topModels = topBy(events, 'model', opts.filter);
+  const topModels = topBy(filtered, 'model');
   const dim = opts.dimensionEvents ?? events;
 
   const currentBranchCredits = opts.currentBranch
-    ? events.filter((e) => e.branch === opts.currentBranch).reduce((sum, e) => sum + e.credits, 0)
+    ? filtered.filter((e) => e.branch === opts.currentBranch).reduce((sum, e) => sum + e.credits, 0)
     : 0;
 
   const next: UsageSnapshot = {
@@ -120,7 +124,7 @@ export function buildSnapshot(events: readonly UsageEvent[], opts: SnapshotOptio
     currency: opts.currency,
     pricePerCredit: opts.pricePerCredit,
     filter: opts.filter,
-    range: computeRange(events, opts.now),
+    range: computeRange(filtered, opts.now),
     forecast,
     budget,
     topModels,
@@ -128,17 +132,17 @@ export function buildSnapshot(events: readonly UsageEvent[], opts: SnapshotOptio
     allModels: distinctModels(dim),
     allSurfaces: distinctSurfaces(dim),
     allSources: distinctSources(dim),
-    sankeyLinks: sankeyLinksFor(events, opts.filter),
+    sankeyLinks: sankeyLinksFor(filtered),
     allRepos: distinctRepos(dim),
-    byRepo: topBy(events, 'repo', opts.filter),
+    byRepo: topBy(filtered, 'repo'),
     chartData: buildChartData(
       dayAggregates,
       topModels,
       budget,
       forecast,
       opts.now,
-      buildCategoryBreakdownData(events, opts.filter),
-      buildHourlyTimelineData(events, opts.filter),
+      buildCategoryBreakdownData(filtered),
+      buildHourlyTimelineData(filtered),
       opts.pricePerCredit,
       opts.manifest,
     ),
