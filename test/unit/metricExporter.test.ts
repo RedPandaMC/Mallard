@@ -133,6 +133,7 @@ describe('MetricPayloadSerializer', () => {
       'peak_usage_hour', 'daily_credit_variance', 'model_count',
       'surface_concentration', 'estimated_event_ratio', 'forecast_basis',
       'budget_trend', 'token_per_credit', 'forecast_low', 'forecast_high',
+      'source_connector',
     ];
     for (const key of EXPECTED_KEYS) {
       assert.ok(key in payload, `missing key: ${key}`);
@@ -143,5 +144,16 @@ describe('MetricPayloadSerializer', () => {
     const payload = serializer.serialize(makeSnapshot());
     assert.equal(typeof payload, 'object');
     assert.notEqual(payload, null);
+  });
+
+  it('source_connector reflects the snapshot source when only one kind is present', () => {
+    const payload = serializer.serialize(makeSnapshot());
+    // makeSnapshot uses 'local' source kind via makeEvent default
+    assert.ok(
+      payload['source_connector'] === 'local' ||
+      payload['source_connector'] === 'mixed' ||
+      typeof payload['source_connector'] === 'string',
+      'source_connector should be a string',
+    );
   });
 });

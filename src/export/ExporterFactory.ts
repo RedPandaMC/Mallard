@@ -10,6 +10,8 @@ export interface MqttExporterConfig {
   certPath?: string;
   keyPath?: string;
   caPath?: string;
+  /** See MqttProtocolOptions.workspaceFolders. */
+  workspaceFolders?: string[];
 }
 
 export interface WebhookExporterConfig {
@@ -30,6 +32,7 @@ export function createMetricExporter(cfg: Partial<MqttExporterConfig>): MetricEx
     ...(cfg.certPath ? { certPath: cfg.certPath } : {}),
     ...(cfg.keyPath ? { keyPath: cfg.keyPath } : {}),
     ...(cfg.caPath ? { caPath: cfg.caPath } : {}),
+    ...(cfg.workspaceFolders ? { workspaceFolders: cfg.workspaceFolders } : {}),
   });
   return new MetricExporter(protocol, new MetricPayloadSerializer());
 }

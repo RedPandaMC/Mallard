@@ -15,7 +15,7 @@
  * Shape B (graph edges): model→surface relationships live in snapshot.sankeyLinks
  * and can be consumed directly by a Neo4j importer without transformation here.
  */
-import type { UsageSnapshot } from '../domain/types';
+import type { SourceKind, UsageSnapshot } from '../domain/types';
 import type { MetricSerializer } from './MetricExporter';
 /* c8 ignore stop */
 
@@ -60,6 +60,12 @@ export interface MetricPayload {
   forecast_low: number;
   /** Upper confidence bound for month-end projected credits. */
   forecast_high: number;
+  /**
+   * Primary data source in this snapshot. 'mixed' when events from multiple
+   * connector types are present (e.g. both Copilot OTel and Claude Code).
+   * Allows consumers to distinguish Claude-only vs Copilot-only vs blended views.
+   */
+  source_connector: SourceKind | 'mixed';
 }
 
 export function buildMetricPayload(s: UsageSnapshot): MetricPayload {
@@ -134,6 +140,11 @@ export function buildMetricPayload(s: UsageSnapshot): MetricPayload {
   const totalTokens = s.topModels.reduce((a, m) => a + m.tokens, 0);
   const token_per_credit = totalCredits > 0 ? totalTokens / totalCredits : 0;
 
+  // ── source_connector ────────────────────────────────────────────────────────
+  const uniqueSources = new Set(s.allSources);
+  const source_connector: SourceKind | 'mixed' =
+    uniqueSources.size === 1 ? ([...uniqueSources][0] as SourceKind) : 'mixed';
+
   return {
     ts: new Date(s.generatedAt).toISOString(),
     model_dist,
@@ -152,6 +163,7 @@ export function buildMetricPayload(s: UsageSnapshot): MetricPayload {
     token_per_credit,
     forecast_low,
     forecast_high,
+    source_connector,
   };
 }
 

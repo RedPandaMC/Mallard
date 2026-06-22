@@ -31,13 +31,15 @@ export type Metric = 'cost' | 'credits' | 'tokens';
  * source (e.g. GitHub billing SKUs). When nothing is attributable the category
  * chart reports `available: false`.
  */
-export type CostCategory = 'input' | 'output' | 'tool' | 'thinking' | 'unknown';
+export type CostCategory = 'input' | 'output' | 'tool' | 'thinking' | 'cache_creation' | 'cache_read' | 'unknown';
 
 export const COST_CATEGORIES: readonly CostCategory[] = [
   'input',
   'output',
   'tool',
   'thinking',
+  'cache_creation',
+  'cache_read',
   'unknown',
 ];
 
@@ -56,6 +58,9 @@ export interface UsageEvent {
   source: SourceKind;
   promptTokens?: number;
   completionTokens?: number;
+  cacheCreationTokens?: number;
+  cacheReadTokens?: number;
+  thinkingTokens?: number;
   credits: number;
   cost: number;
   estimated: boolean;

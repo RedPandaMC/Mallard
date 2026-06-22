@@ -56,6 +56,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const userConfig = new UserConfigStore(storageDir);
   const layout = new LayoutStore(context.globalState);
   const ve = cfg.metricExport;
+  const workspaceFolders = vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath);
   const exporter = createMetricExporter({
     ...(ve.brokerUrl ? { brokerUrl: ve.brokerUrl } : {}),
     ...(ve.topic ? { topic: ve.topic } : {}),
@@ -64,6 +65,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     ...(ve.certPath ? { certPath: ve.certPath } : {}),
     ...(ve.keyPath ? { keyPath: ve.keyPath } : {}),
     ...(ve.caPath ? { caPath: ve.caPath } : {}),
+    ...(workspaceFolders?.length ? { workspaceFolders } : {}),
   }) ?? undefined;
   const usage = new UsageService(store, pricing, watcher, userConfig, github, exporter);
   const restriction = new RestrictionEngine(storageDir);
