@@ -255,6 +255,18 @@ describe('ClaudeCodeParser', () => {
       assert.ok(events[0]!.costByCategory!['output'] !== undefined);
     });
 
+    it('rejects negative token counts — stored as undefined, not negative', () => {
+      const line = JSON.stringify({
+        type: 'assistant',
+        message: { model: 'claude-sonnet-4', usage: { input_tokens: -100, output_tokens: 50 } },
+        timestamp: '2026-01-15T10:00:00.000Z',
+      });
+      const events = parser.parse(line, { pricePerCredit: 0.04, now });
+      assert.equal(events.length, 1);
+      assert.equal(events[0]!.promptTokens, undefined); // negative rejected
+      assert.equal(events[0]!.completionTokens, 50);    // positive kept
+    });
+
     it('uses ctx.now when timestamp is an object (neither string nor number)', () => {
       const line = JSON.stringify({
         type: 'assistant',

@@ -8,9 +8,11 @@ import {
   distinctSurfaces,
   sankeyLinksFor,
   sumEvents,
+  tokensOf,
   topBy,
   UNATTRIBUTED_REPO,
 } from '../../src/domain/aggregate';
+import type { UsageEvent } from '../../src/domain/types';
 import { makeEvent } from './helpers';
 
 describe('aggregate', () => {
@@ -171,6 +173,26 @@ describe('aggregate', () => {
   it('distinctSurfaces rejects events not matching filter', () => {
     const surfaces = distinctSurfaces(events, { surfaces: ['chat'] });
     assert.deepEqual(surfaces, ['chat']);
+  });
+
+  it('matchesFilter rejects all events when range is inverted (start > end)', () => {
+    const result = sumEvents([makeEvent({ ts: d1, credits: 5 })], { range: { start: d2, end: d1 } });
+    assert.equal(result.count, 0);
+    assert.equal(result.credits, 0);
+  });
+
+  it('tokensOf sums negative token values (documents raw summation behavior)', () => {
+    const e = { ...makeEvent({ ts: Date.now() - 1000 }), promptTokens: -50, completionTokens: 30 } as UsageEvent;
+    assert.equal(tokensOf(e), -20);
+  });
+
+  it('topBy stable-sorts ties by cost when credits are equal', () => {
+    const tied = [
+      makeEvent({ ts: d1, credits: 5, cost: 0.10, modelId: 'model-a' }),
+      makeEvent({ ts: d1, credits: 5, cost: 0.20, modelId: 'model-b' }),
+    ];
+    const top = topBy(tied, 'model');
+    assert.equal(top[0]!.key, 'model-b'); // higher cost wins tie
   });
 
   it('distinctSources rejects events not matching filter', () => {

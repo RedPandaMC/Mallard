@@ -10,7 +10,7 @@ type AnyRecord = Record<string, unknown>;
 
 function num(v: unknown): number | undefined {
   const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : undefined;
-  return n != null && !Number.isNaN(n) ? n : undefined;
+  return n != null && !Number.isNaN(n) && n >= 0 ? n : undefined;
 }
 
 function pick(attrs: AnyRecord, keys: string[]): unknown {

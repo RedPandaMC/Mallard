@@ -39,6 +39,28 @@ describe('forecast', () => {
   });
 });
 
+describe('forecast — edge cases', () => {
+  it('returns insufficient-data for empty dayAggregates', () => {
+    const f = forecastMonth([], Date.now(), 0.04);
+    assert.equal(f.basis, 'insufficient-data');
+    assert.equal(f.projectedCredits, 0);
+    assert.equal(f.projectedCost, 0);
+    assert.equal(f.low, 0);
+    assert.equal(f.high, 0);
+  });
+
+  it('projectedCost is 0 when pricePerCredit is 0', () => {
+    const events = Array.from({ length: 5 }, (_, d) =>
+      makeEvent({ ts: new Date(2026, 5, 1 + d, 12).getTime(), credits: 10 }),
+    );
+    const dayAggs = aggregateBy(events, 'day');
+    const f = forecastMonth(dayAggs, new Date(2026, 5, 5, 18).getTime(), 0);
+    assert.equal(f.basis, 'linear');
+    assert.equal(f.projectedCost, 0);
+    assert.ok(f.projectedCredits > 0);
+  });
+});
+
 describe('selectForecaster', () => {
   it('returns linearForecaster when activeDays < 14', () => {
     assert.equal(selectForecaster(0), linearForecaster);

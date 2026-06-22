@@ -119,4 +119,12 @@ describe('buildSnapshot', () => {
     const second = buildSnapshot(eventsB, opts({ now: now + 100, prevSnapshot: first }));
     assert.equal(second.isIncremental, false);
   });
+
+  it('currentBranch empty string is falsy — no branch credits are tracked', () => {
+    const now = Date.now();
+    const events = [makeEvent({ ts: now - 1000, branch: '', credits: 5 })];
+    const s = buildSnapshot(events, opts({ now, currentBranch: '' }));
+    assert.equal(s.currentBranchCredits, 0);
+    assert.equal(s.currentBranch, '');
+  });
 });

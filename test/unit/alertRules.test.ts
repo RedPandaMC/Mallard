@@ -372,3 +372,39 @@ describe('alertRules — evaluateAlertRules without now', () => {
     assert.equal(out.length, 1);
   });
 });
+
+describe('alertRules — edge cases', () => {
+  const now = Date.now();
+
+  it('very large cooldown duration does not crash (effectively suppresses re-fire)', () => {
+    const rules: AlertRule[] = [{
+      id: 'r', severity: 'warning', message: 'hi',
+      when: true,
+      cooldown: '999999999d',
+    }];
+    const fired = new Map<string, number>();
+    fired.set('r#warning', now - 1000); // fired 1s ago, inside the enormous cooldown
+    const out = evaluateAlertRules({ snapshot: snap(0), rules, fired, now });
+    assert.equal(out.length, 0);
+  });
+
+  it('snooze with malformed ISO date fires the rule (invalid date → NaN check → expired)', () => {
+    const rules: AlertRule[] = [{
+      id: 'r', severity: 'warning', message: '',
+      when: true,
+      snoozeUntil: 'not-a-valid-date',
+    }];
+    const out = evaluateAlertRules({ snapshot: snap(0), rules, fired: new Map(), now });
+    assert.equal(out.length, 1);
+  });
+
+  it('duplicate rule IDs — first fires and sets cooldown, second is suppressed', () => {
+    const rules: AlertRule[] = [
+      { id: 'r', severity: 'warning', message: 'first', when: true },
+      { id: 'r', severity: 'warning', message: 'second', when: true },
+    ];
+    const out = evaluateAlertRules({ snapshot: snap(0), rules, fired: new Map(), now });
+    assert.equal(out.length, 1);
+    assert.equal(out[0]!.message, 'first');
+  });
+});

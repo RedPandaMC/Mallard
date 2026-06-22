@@ -204,6 +204,21 @@ describe('OtelParser', () => {
       assert.equal(events[0]!.costByCategory, undefined); // cost=0, so undefined
     });
 
+    it('rejects negative token counts — stored as undefined, not negative', () => {
+      const line = JSON.stringify({
+        timestamp: '2026-01-15T10:00:00.000Z',
+        attributes: {
+          'gen_ai.request.model': 'gpt-4o',
+          'gen_ai.usage.input_tokens': -100,
+          'gen_ai.usage.output_tokens': 50,
+        },
+      });
+      const events = parser.parse(line, { pricePerCredit: 0.04, now });
+      assert.equal(events.length, 1);
+      assert.equal(events[0]!.promptTokens, undefined); // negative rejected
+      assert.equal(events[0]!.completionTokens, 50);    // positive kept
+    });
+
     it('covers prompt ?? 0 in splitCost when only completion tokens exist', () => {
       const line = JSON.stringify({
         timestamp: '2026-01-15T10:00:00.000Z',

@@ -29,11 +29,13 @@ export function computeBudget(input: BudgetInput): BudgetState {
     const overage = projectedCost - monthlyBudget;
     projectedOverage = overage > 0 ? overage : null;
 
-    const projectedRatio = projectedCost / monthlyBudget;
-    if (projectedRatio <= 0.8) pace = 'under';
-    else if (projectedRatio <= 1.0) pace = 'on-track';
-    else if (projectedRatio <= 1.25) pace = 'warning';
-    else pace = 'over';
+    if (Number.isFinite(projectedCost)) {
+      const projectedRatio = projectedCost / monthlyBudget;
+      if (projectedRatio <= 0.8) pace = 'under';
+      else if (projectedRatio <= 1.0) pace = 'on-track';
+      else if (projectedRatio <= 1.25) pace = 'warning';
+      else pace = 'over';
+    }
   }
 
   return {

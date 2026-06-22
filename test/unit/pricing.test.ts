@@ -54,6 +54,22 @@ describe('pricing', () => {
     assert.equal(resolveMultiplier('gpt-4', { 'gpt': 5, 'gpt-4o': 2 }), 5); // shorter match wins for 'gpt-4'
   });
 
+  it('override key comparison is case-insensitive (key is lowercased before matching)', () => {
+    assert.equal(resolveMultiplier('gpt-4o', { 'GPT-4O': 2.5 }), 2.5);
+  });
+
+  it('negative multiplier from override produces negative credits (document behavior)', () => {
+    const credits = resolveMultiplier('gpt-4o', { 'gpt-4o': -2 });
+    assert.equal(credits, -2);
+    assert.equal(costForCredits(-2, 0.04), -0.08);
+  });
+
+  it('priceRequest with pricePerCredit=0 returns zero cost', () => {
+    const result = priceRequest('gpt-4o', { pricePerCredit: 0, currency: 'USD' });
+    assert.equal(result.credits, 1);
+    assert.equal(result.cost, 0);
+  });
+
   it('computes cost from credits', () => {
     assert.equal(costForCredits(10, 0.04), 0.4);
     const priced = priceRequest('claude-opus-4', { pricePerCredit: 0.04, currency: 'USD' });

@@ -287,6 +287,36 @@ describe('compileConditions', () => {
   });
 });
 
+describe('resolveVar — edge cases', () => {
+  it('resolves __proto__ path without throwing (read-only access to prototype)', () => {
+    assert.doesNotThrow(() => resolveVar('__proto__', {}));
+    assert.doesNotThrow(() => resolveVar('__proto__.toString', {}));
+  });
+
+  it('returns undefined when mid-path value is a primitive (stops traversal)', () => {
+    assert.equal(resolveVar('a.b.c.d.e', { a: { b: 42 } }), undefined);
+  });
+
+  it('handles an empty-string path segment when key is absent on the object', () => {
+    // 'a..b' splits to ['a', '', 'b'] — the '' key does not exist here → undefined
+    assert.equal(resolveVar('a..b', { a: { noEmptyKey: 1 } }), undefined);
+  });
+});
+
+describe('evalCondition — non-numeric string operands', () => {
+  it('returns false for > when left side is a non-numeric string', () => {
+    assert.equal(evalCondition({ '>': ['abc', 5] }, {}), false);
+  });
+
+  it('returns false for < when both sides are non-numeric strings', () => {
+    assert.equal(evalCondition({ '<': ['abc', 'def'] }, {}), false);
+  });
+
+  it('== does not coerce non-numeric strings to numbers', () => {
+    assert.equal(evalCondition({ '==': ['5', 5] }, {}), false);
+  });
+});
+
 describe('evalRule', () => {
   const ctx = { today: { credits: 75 } };
 

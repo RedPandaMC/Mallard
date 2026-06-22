@@ -194,6 +194,36 @@ describe('buildMetricPayload', () => {
     assert.equal(p.estimated_event_ratio, 0);
   });
 
+  it('surface_concentration is 0 when there are no sankey links (empty surface_dist)', () => {
+    const s = buildSnapshot([], opts());
+    const p = buildMetricPayload(s);
+    assert.equal(p.surface_concentration, 0);
+  });
+
+  it('surface_concentration is 0 for a single surface (gini of one value = 0)', () => {
+    const now = Date.now();
+    const events = [makeEvent({ ts: now - 1000, credits: 5, surface: 'chat' })];
+    const s = buildSnapshot(events, opts({ now }));
+    const p = buildMetricPayload(s);
+    assert.equal(p.surface_concentration, 0);
+  });
+
+  it('token_per_credit is 0 when totalCredits is 0 (no events)', () => {
+    const s = buildSnapshot([], opts());
+    const p = buildMetricPayload(s);
+    assert.equal(p.token_per_credit, 0);
+  });
+
+  it('daily_credit_variance is 0 when all last-7-day values are identical', () => {
+    const now = new Date(2026, 5, 10, 12).getTime();
+    const events = Array.from({ length: 7 }, (_, i) =>
+      makeEvent({ ts: new Date(2026, 5, 4 + i, 12).getTime(), credits: 5 }),
+    );
+    const s = buildSnapshot(events, opts({ now }));
+    const p = buildMetricPayload(s);
+    assert.equal(p.daily_credit_variance, 0);
+  });
+
   it('input_cost_ratio reflects actual input/output category breakdown', () => {
     const now = Date.now();
     const events = [
