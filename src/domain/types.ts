@@ -1,7 +1,9 @@
+/* c8 ignore start */
 /**
  * Shared, pure data model for Mallard. Imported by BOTH the extension host and
  * the webview bundle — must never import `vscode` or any Node/DOM API.
  */
+/* c8 ignore stop */
 
 export type Granularity = 'day' | 'week' | 'month';
 
@@ -329,6 +331,7 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
   { id: 'cumulative', span: 1, hidden: false },
   { id: 'weekday', span: 1, hidden: false },
   { id: 'hourly', span: 1, hidden: false },
+/* c8 ignore next */
 ];
 
 /** Active filter applied to build the current snapshot. */

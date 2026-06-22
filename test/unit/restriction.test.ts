@@ -83,6 +83,39 @@ describe('evaluateRestrictionState', () => {
     assert.equal(out.active, null);
   });
 
+  it('processes rules where active is a JsonCondition that evaluates to true', () => {
+    const rules: AlertRule[] = [
+      {
+        id: 'r',
+        severity: 'warning',
+        message: '',
+        when: { '>': [{ var: 'today.credits' }, 0] },
+        // active condition evaluates to true with credits=100
+        active: { '>': [{ var: 'today.credits' }, 0] },
+        restrict: { mode: 'hard', scope: 'copilot' },
+      },
+    ];
+    const out = evaluateRestrictionState(rules, { today: { credits: 100 } }, Date.now());
+    assert.notEqual(out.active, null);
+  });
+
+  it('skips rules where active is a JsonCondition that evaluates to false', () => {
+    const rules: AlertRule[] = [
+      {
+        id: 'r',
+        severity: 'warning',
+        message: '',
+        when: { '>': [{ var: 'today.credits' }, 0] },
+        // active condition: credits > 999 — evaluates to false with credits=1
+        active: { '>': [{ var: 'today.credits' }, 999] },
+        restrict: { mode: 'hard', scope: 'copilot' },
+      },
+    ];
+    const out = evaluateRestrictionState(rules, { today: { credits: 1 } }, Date.now());
+    assert.equal(out.active, null);
+    assert.equal(out.matching.length, 0);
+  });
+
   it('returns matching rules and clears candidates', () => {
     const rules: AlertRule[] = [
       {
@@ -100,6 +133,21 @@ describe('evaluateRestrictionState', () => {
     const out = evaluateRestrictionState(rules, { today: { credits: 100 } }, Date.now());
     assert.equal(out.matching.length, 1);
     assert.equal(out.canClear.length, 1);
+  });
+
+  it('skips restrict rules whose when condition evaluates to false', () => {
+    const rules: AlertRule[] = [
+      {
+        id: 'r',
+        severity: 'warning',
+        message: '',
+        when: { '>': [{ var: 'today.credits' }, 999] }, // false with credits=1
+        restrict: { mode: 'hard', scope: 'copilot' },
+      },
+    ];
+    const out = evaluateRestrictionState(rules, { today: { credits: 1 } }, Date.now());
+    assert.equal(out.active, null);
+    assert.equal(out.matching.length, 0);
   });
 });
 

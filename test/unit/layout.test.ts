@@ -94,4 +94,20 @@ describe('mergeConfigLayout', () => {
     assert.equal(out.find((p) => p.id === 'bogus'), undefined);
     assert.equal(out[0]!.id, 'daily');
   });
+
+  it('deduplicates repeated panel ids in config', () => {
+    const cfg = { panels: [{ id: 'daily', gridColumn: 'span 1' }, { id: 'daily', gridColumn: 'span 2' }] };
+    const out = mergeConfigLayout(cfg, stored);
+    assert.equal(out.filter((p) => p.id === 'daily').length, 1);
+    assert.equal(out.find((p) => p.id === 'daily')!.span, 1); // first occurrence wins
+  });
+
+  it('falls back to defaultById when stored is empty', () => {
+    const cfg = { panels: [{ id: 'daily' }] };
+    const out = mergeConfigLayout(cfg, []); // empty stored
+    const daily = out.find((p) => p.id === 'daily');
+    assert.ok(daily !== undefined);
+    // span falls back to DEFAULT_DASHBOARD_LAYOUT default
+    assert.ok(daily!.span === 1 || daily!.span === 2);
+  });
 });

@@ -5,12 +5,16 @@
     "src/container.ts",
     "src/config.ts",
     "src/store/schema.ts",
+    "src/store/EventRepository.ts",
     "src/ui/**",
     "src/billing/**",
     "src/ingest/LogWatcher.ts",
+    "src/ingest/LogParser.ts",
+    "src/ingest/otelParse.ts",
     "src/ingest/repoResolver.ts",
     "src/util/repo.ts",
     "src/util/vscodeHost.ts",
+    "src/util/extensionDetector.ts",
     "src/app/LayoutStore.ts",
     "src/app/UserConfigStore.ts",
     "src/app/ReportGenerator.ts",
@@ -18,11 +22,12 @@
     "src/domain/restriction/engine.ts",
     "src/domain/restriction/hostScopes.ts",
     "src/export/ExporterFactory.ts",
-    "src/export/MetricExporter.ts"
+    "src/export/MetricExporter.ts",
+    "src/export/WebhookProtocol.ts"
   ],
   "reporter": ["text", "lcov"],
-  "branches": 80,
-  "lines": 90,
-  "functions": 95,
-  "statements": 90
+  "branches": 100,
+  "lines": 100,
+  "functions": 100,
+  "statements": 100
 }

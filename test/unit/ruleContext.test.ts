@@ -161,6 +161,20 @@ describe('buildRuleContext — velocity', () => {
   });
 });
 
+describe('buildRuleContext — billing quota edge cases', () => {
+  it('quotaPercentRemaining is 1 when entitlement is 0', () => {
+    const snap = minimalSnapshot({} as Partial<UsageSnapshot>);
+    (snap as unknown as Record<string, unknown>)['githubBilling'] = {
+      totalNetAmount: 0,
+      items: [],
+      quota: { used: 50, entitlement: 0, unlimited: false },
+    };
+    const ctx = buildRuleContext({ snapshot: snap });
+    const billing = ctx['billing'] as Record<string, unknown>;
+    assert.equal(billing['quotaPercentRemaining'], 1);
+  });
+});
+
 describe('buildRuleContext — billing', () => {
   it('billing is populated when githubBilling is present', () => {
     const snap = minimalSnapshot({} as Partial<UsageSnapshot>);
@@ -175,5 +189,44 @@ describe('buildRuleContext — billing', () => {
     assert.equal(billing['netAmount'], 5);
     assert.ok(Math.abs((billing['quotaPercentRemaining'] as number) - 0.8) < 0.001);
     assert.equal(billing['unlimited'], false);
+  });
+
+  it('quotaPercentRemaining is 1 when quota is null', () => {
+    const snap = minimalSnapshot({} as Partial<UsageSnapshot>);
+    (snap as unknown as Record<string, unknown>)['githubBilling'] = {
+      totalNetAmount: 0,
+      items: [],
+      quota: null,
+    };
+    const ctx = buildRuleContext({ snapshot: snap });
+    const billing = ctx['billing'] as Record<string, unknown>;
+    assert.equal(billing['quotaPercentRemaining'], 1);
+  });
+});
+
+describe('buildRuleContext — surface, model fallback, repo fallback branches', () => {
+  it('covers topSurface TRUE branch, model fallback, surface map, and repo fallback', () => {
+    const snap = minimalSnapshot({
+      allSurfaces: ['chat', 'inline'] as unknown as UsageSnapshot['allSurfaces'],
+      topModels: [{ key: 'gpt-4o', credits: 30, cost: 1.2, tokens: 0 }] as unknown as UsageSnapshot['topModels'],
+      allModels: ['gpt-4o', 'claude-sonnet-4'] as unknown as UsageSnapshot['allModels'],
+      byRepo: [{ key: 'org/a', credits: 10, cost: 0.4, tokens: 0 }] as unknown as UsageSnapshot['byRepo'],
+      allRepos: ['org/a', 'org/b'] as unknown as UsageSnapshot['allRepos'],
+    });
+    const ctx = buildRuleContext({ snapshot: snap });
+    // topSurface TRUE branch (allSurfaces[0] exists)
+    assert.ok(ctx['topSurface'] !== null);
+    // model fallback branch (claude-sonnet-4 not in topModels → gets credits: 0)
+    const model = ctx['model'] as Record<string, Record<string, number>>;
+    assert.ok('claude-sonnet-4' in model);
+    assert.equal(model['claude-sonnet-4']!['credits'], 0);
+    // surface map (allSurfaces is non-empty)
+    const surface = ctx['surface'] as Record<string, unknown>;
+    assert.ok('chat' in surface);
+    assert.ok('inline' in surface);
+    // repo fallback branch (org/b not in byRepo → gets credits: 0)
+    const repo = ctx['repo'] as Record<string, Record<string, number>>;
+    assert.ok('org/b' in repo);
+    assert.equal(repo['org/b']!['credits'], 0);
   });
 });

@@ -14,6 +14,12 @@ describe('mergeConfig', () => {
     assert.equal(out.includedCredits, 300);
   });
 
+  it('accepts a boolean velocityEnabled', () => {
+    const out = mergeConfig({ alerts: { velocityEnabled: true, velocityCreditsPerHour: 50 } });
+    assert.equal(out.alerts.velocityEnabled, true);
+    assert.equal(out.alerts.velocityCreditsPerHour, 50);
+  });
+
   it('preserves v2 fields when present', () => {
     const out = mergeConfig({
       version: 2,

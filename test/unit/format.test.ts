@@ -28,6 +28,12 @@ describe('formatMoney', () => {
   it('returns a string for a negative amount', () => {
     assert.equal(typeof formatMoney(-5), 'string');
   });
+
+  it('falls back gracefully for an invalid currency code', () => {
+    const r = formatMoney(10, 'THISISNOTACURRENCY');
+    assert.equal(typeof r, 'string');
+    assert.ok(r.length > 0);
+  });
 });
 
 describe('formatNumber', () => {

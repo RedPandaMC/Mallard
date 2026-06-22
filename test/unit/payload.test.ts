@@ -1,6 +1,7 @@
 import { strict as assert } from 'assert';
 import { buildMetricPayload } from '../../src/export/payload';
 import { buildSnapshot, SnapshotOptions } from '../../src/domain/snapshot';
+import { UsageSnapshot } from '../../src/domain/types';
 import { makeEvent } from './helpers';
 
 function opts(over: Partial<SnapshotOptions> = {}): SnapshotOptions {
@@ -58,6 +59,80 @@ describe('buildMetricPayload', () => {
     assert.equal(p.input_cost_ratio, 0);
   });
 
+  it('budget_trend is 1 when projected daily pace exceeds recent average', () => {
+    const now = Date.now();
+    const zeroPoints = new Array(23).fill(null).map((_, i) => ({ date: `01-0${(i % 9) + 1}`, credits: 2, cost: 0.08, colorIndex: 0 as const }));
+    const recentPoints = new Array(7).fill(null).map((_, i) => ({ date: `06-${String(i + 1).padStart(2, '0')}`, credits: 2, cost: 0.08, colorIndex: 0 as const }));
+    const snap = {
+      generatedAt: now,
+      source: 'local' as const,
+      topModels: [],
+      sankeyLinks: [],
+      chartData: {
+        categoryBreakdown: { available: false as const, categories: [], costs: [], tokens: [] },
+        hourlyTimeline: { hours: new Array(24).fill(0) as number[], peakHour: 0 },
+        dailyBars: { points: [...zeroPoints, ...recentPoints], budgetLine: 3, projectedLine: 20 },
+        modelBreakdown: { labels: [], credits: [], costs: [], tokens: [], cheapestEquivalentCosts: [] },
+        heatmap: { cells: [], max: 0 },
+      },
+      allModels: [],
+      allSurfaces: [],
+      allSources: [],
+      allRepos: [],
+      byRepo: [],
+      budget: { monthly: null, includedCredits: 90, usedCredits: 0, usedCost: 0, percentOfBudget: 0, percentOfIncluded: 0, projectedOverage: null, pace: 'no-budget' as const },
+      forecast: { basis: 'linear' as const, projectedCredits: 600, projectedCost: 24, low: 500, high: 700, granularity: 'month' as const, asOf: now },
+      today: { credits: 0, cost: 0, tokens: 0 },
+      filter: {},
+      currency: 'USD',
+      pricePerCredit: 0.04,
+      status: { kind: 'ok' as const },
+      authStatus: 'signed-out' as const,
+      isIncremental: false,
+      currentBranchCredits: 0,
+      range: { start: now - 30 * 86400000, end: now },
+    } as unknown as UsageSnapshot;
+    const p = buildMetricPayload(snap);
+    assert.equal(p.budget_trend, 1);
+  });
+
+  it('budget_trend is -1 when projected daily pace is below recent average', () => {
+    const now = Date.now();
+    const zeroPoints = new Array(23).fill(null).map((_, i) => ({ date: `01-0${(i % 9) + 1}`, credits: 2, cost: 0.08, colorIndex: 0 as const }));
+    const recentPoints = new Array(7).fill(null).map((_, i) => ({ date: `06-${String(i + 1).padStart(2, '0')}`, credits: 20, cost: 0.8, colorIndex: 2 as const }));
+    const snap = {
+      generatedAt: now,
+      source: 'local' as const,
+      topModels: [],
+      sankeyLinks: [],
+      chartData: {
+        categoryBreakdown: { available: false as const, categories: [], costs: [], tokens: [] },
+        hourlyTimeline: { hours: new Array(24).fill(0) as number[], peakHour: 0 },
+        dailyBars: { points: [...zeroPoints, ...recentPoints], budgetLine: 15, projectedLine: 5 },
+        modelBreakdown: { labels: [], credits: [], costs: [], tokens: [], cheapestEquivalentCosts: [] },
+        heatmap: { cells: [], max: 0 },
+      },
+      allModels: [],
+      allSurfaces: [],
+      allSources: [],
+      allRepos: [],
+      byRepo: [],
+      budget: { monthly: null, includedCredits: 450, usedCredits: 0, usedCost: 0, percentOfBudget: 0, percentOfIncluded: 0, projectedOverage: null, pace: 'no-budget' as const },
+      forecast: { basis: 'linear' as const, projectedCredits: 150, projectedCost: 6, low: 100, high: 200, granularity: 'month' as const, asOf: now },
+      today: { credits: 0, cost: 0, tokens: 0 },
+      filter: {},
+      currency: 'USD',
+      pricePerCredit: 0.04,
+      status: { kind: 'ok' as const },
+      authStatus: 'signed-out' as const,
+      isIncremental: false,
+      currentBranchCredits: 0,
+      range: { start: now - 30 * 86400000, end: now },
+    } as unknown as UsageSnapshot;
+    const p = buildMetricPayload(snap);
+    assert.equal(p.budget_trend, -1);
+  });
+
   it('repo_count matches allRepos length', () => {
     const now = Date.now();
     const events = [
@@ -67,5 +142,95 @@ describe('buildMetricPayload', () => {
     const s = buildSnapshot(events, opts({ now }));
     const p = buildMetricPayload(s);
     assert.equal(p.repo_count, 2);
+  });
+
+  it('credits_velocity_per_hour is 0 when generatedAt is at midnight (hoursElapsed <= 0.1)', () => {
+    // 30 seconds past midnight → hoursElapsed ≈ 0.0083, below 0.1 threshold
+    const midnight = new Date(2026, 0, 1, 0, 0, 30).getTime();
+    const s = buildSnapshot([makeEvent({ ts: midnight - 60000, credits: 5 })], opts({ now: midnight }));
+    const p = buildMetricPayload(s);
+    assert.equal(p.credits_velocity_per_hour, 0);
+  });
+
+  it('daily_credit_variance is 0 with 1 or fewer daily data points', () => {
+    const now = Date.now();
+    const snap = {
+      generatedAt: now,
+      source: 'local' as const,
+      topModels: [],
+      sankeyLinks: [],
+      chartData: {
+        categoryBreakdown: { available: false as const, categories: [], costs: [], tokens: [] },
+        hourlyTimeline: { hours: new Array(24).fill(0) as number[], peakHour: 0 },
+        dailyBars: { points: [{ date: '06-01', credits: 5, cost: 0.2, colorIndex: 0 as const }], budgetLine: null, projectedLine: null },
+        modelBreakdown: { labels: [], credits: [], costs: [], tokens: [], cheapestEquivalentCosts: [] },
+        heatmap: { cells: [], max: 0 },
+      },
+      allModels: [],
+      allSurfaces: [],
+      allSources: [],
+      allRepos: [],
+      byRepo: [],
+      budget: { monthly: null, includedCredits: 300, usedCredits: 0, usedCost: 0, percentOfBudget: 0, percentOfIncluded: 0, projectedOverage: null, pace: 'no-budget' as const },
+      forecast: { basis: 'insufficient-data' as const, projectedCredits: 0, projectedCost: 0, low: 0, high: 0, granularity: 'month' as const, asOf: now },
+      today: { credits: 0, cost: 0, tokens: 0 },
+      filter: {},
+      currency: 'USD',
+      pricePerCredit: 0.04,
+      status: { kind: 'ok' as const },
+      authStatus: 'signed-out' as const,
+      isIncremental: false,
+      currentBranchCredits: 0,
+      range: { start: now - 86400000, end: now },
+    } as unknown as UsageSnapshot;
+    const p = buildMetricPayload(snap);
+    assert.equal(p.daily_credit_variance, 0);
+  });
+
+  it('estimated_event_ratio is 0 when source is github', () => {
+    const now = Date.now();
+    const s = buildSnapshot([makeEvent({ ts: now - 1000 })], opts({ now, source: 'github' }));
+    const p = buildMetricPayload(s);
+    assert.equal(p.estimated_event_ratio, 0);
+  });
+
+  it('surface_concentration is 0 when there are no sankey links (empty surface_dist)', () => {
+    const s = buildSnapshot([], opts());
+    const p = buildMetricPayload(s);
+    assert.equal(p.surface_concentration, 0);
+  });
+
+  it('surface_concentration is 0 for a single surface (gini of one value = 0)', () => {
+    const now = Date.now();
+    const events = [makeEvent({ ts: now - 1000, credits: 5, surface: 'chat' })];
+    const s = buildSnapshot(events, opts({ now }));
+    const p = buildMetricPayload(s);
+    assert.equal(p.surface_concentration, 0);
+  });
+
+  it('token_per_credit is 0 when totalCredits is 0 (no events)', () => {
+    const s = buildSnapshot([], opts());
+    const p = buildMetricPayload(s);
+    assert.equal(p.token_per_credit, 0);
+  });
+
+  it('daily_credit_variance is 0 when all last-7-day values are identical', () => {
+    const now = new Date(2026, 5, 10, 12).getTime();
+    const events = Array.from({ length: 7 }, (_, i) =>
+      makeEvent({ ts: new Date(2026, 5, 4 + i, 12).getTime(), credits: 5 }),
+    );
+    const s = buildSnapshot(events, opts({ now }));
+    const p = buildMetricPayload(s);
+    assert.equal(p.daily_credit_variance, 0);
+  });
+
+  it('input_cost_ratio reflects actual input/output category breakdown', () => {
+    const now = Date.now();
+    const events = [
+      makeEvent({ ts: now - 1000, credits: 1, cost: 0.1, costByCategory: { input: 0.06, output: 0.04 } }),
+    ];
+    const s = buildSnapshot(events, opts({ now }));
+    const p = buildMetricPayload(s);
+    assert.ok(Math.abs(p.input_cost_ratio - 0.6) < 0.001);
   });
 });

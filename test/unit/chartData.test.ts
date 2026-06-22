@@ -4,8 +4,10 @@ import {
   buildCategoryBreakdownData,
   buildDailyBarsData,
   buildHeatmapData,
+  buildHourlyTimelineData,
   buildModelBreakdownData,
 } from '../../src/domain/chartData';
+import { PricingManifest } from '../../src/domain/pricing';
 import { BudgetState, Forecast, TopEntry } from '../../src/domain/types';
 import { DAY_MS, startOf } from '../../src/util/time';
 import { makeEvent } from './helpers';
@@ -65,6 +67,19 @@ describe('buildDailyBarsData', () => {
     assert.strictEqual(highDay!.colorIndex, 2);
   });
 
+  it('assigns colorIndex 1 when credits are between 70% and 100% of daily budget', () => {
+    const now = startOf(Date.now(), 'day');
+    const evts = [makeEvent({ ts: now - 1 * DAY_MS, credits: 2.5, cost: 0.1 })];
+    const dayAggs = aggregateBy(evts, 'day');
+    // dailyBudget = 30/30 = 1.0, ratio = 2.5/1.0 = 2.5 → well above 1.0 → colorIndex=2
+    // Let's use includedCredits=90 → dailyBudget=3, credits=2.5 → ratio=0.833 → colorIndex=1
+    const budget: BudgetState = { ...EMPTY_BUDGET, includedCredits: 90 };
+    const data = buildDailyBarsData(dayAggs, budget, INSUF_FORECAST, now);
+    const day = data.points.find((p) => p.credits === 2.5);
+    assert.ok(day, 'expected a day with 2.5 credits');
+    assert.strictEqual(day!.colorIndex, 1);
+  });
+
   it('sets projectedLine when forecast is available', () => {
     const forecast: Forecast = { ...INSUF_FORECAST, basis: 'linear', projectedCredits: 300 };
     const data = buildDailyBarsData([], EMPTY_BUDGET, forecast, Date.now());
@@ -92,6 +107,30 @@ describe('buildModelBreakdownData', () => {
     assert.deepStrictEqual(data.costs, [0.4, 0.2, 0.08]);
   });
 
+  it('uses minMultiplier from manifest when models have non-zero multipliers', () => {
+    const tops: TopEntry[] = [
+      { key: 'gpt-4o', credits: 10, cost: 0.4, tokens: 1000 },
+    ];
+    const manifest: PricingManifest = {
+      version: 1,
+      pricePerCredit: 0.04,
+      updatedAt: '2025-01-01',
+      models: { 'gpt-4o': 0.5, 'claude-opus-4': 10 },
+    };
+    const data = buildModelBreakdownData(tops, 0.04, manifest);
+    // minMultiplier = min(0.5, 10) = 0.5; cheapest = 1000 * 0.5 * 0.04 = 20
+    assert.ok(data.cheapestEquivalentCosts.length > 0);
+    assert.ok(Math.abs(data.cheapestEquivalentCosts[0]! - 20) < 0.001);
+  });
+
+  it('strips google/ prefix via shortModelName', () => {
+    const tops: TopEntry[] = [
+      { key: 'google/gemini-pro', credits: 5, cost: 0.2, tokens: 500 },
+    ];
+    const data = buildModelBreakdownData(tops, 0.04);
+    assert.strictEqual(data.labels[0], 'gemini-pro');
+  });
+
   it('caps at 8 models', () => {
     const tops: TopEntry[] = Array.from({ length: 12 }, (_, i) => ({
       key: `model-${i}`,
@@ -101,6 +140,29 @@ describe('buildModelBreakdownData', () => {
     }));
     const data = buildModelBreakdownData(tops, 0.04);
     assert.strictEqual(data.labels.length, 8);
+  });
+});
+
+describe('buildHourlyTimelineData', () => {
+  it('accumulates credits per hour', () => {
+    const now = startOf(Date.now(), 'day') + 10 * 3600_000; // 10am today
+    const events = [
+      makeEvent({ ts: now, credits: 3, modelId: 'gpt-4o' }),
+      makeEvent({ ts: now, credits: 5, modelId: 'claude-sonnet-4' }),
+    ];
+    const data = buildHourlyTimelineData(events);
+    assert.equal(data.hours[10], 8);
+    assert.equal(data.peakHour, 10);
+  });
+
+  it('skips events that do not match the filter', () => {
+    const now = startOf(Date.now(), 'day') + 10 * 3600_000;
+    const events = [
+      makeEvent({ ts: now, credits: 5, modelId: 'gpt-4o' }),
+      makeEvent({ ts: now, credits: 3, modelId: 'claude-sonnet-4' }),
+    ];
+    const data = buildHourlyTimelineData(events, { models: ['gpt-4o'] });
+    assert.equal(data.hours[10], 5);
   });
 });
 
@@ -144,5 +206,23 @@ describe('buildHeatmapData', () => {
     assert.ok(cell, 'expected cell for target day');
     assert.strictEqual(cell!.value, 7);
     assert.strictEqual(data.max, 7);
+  });
+});
+
+describe('buildCategoryBreakdownData — filter', () => {
+  it('excludes events not matching the filter', () => {
+    const events = [
+      makeEvent({ ts: 1_000_000, modelId: 'gpt-4o', costByCategory: { input: 0.05 } }),
+      makeEvent({ ts: 2_000_000, modelId: 'claude-sonnet-4', costByCategory: { input: 0.03 } }),
+    ];
+    const result = buildCategoryBreakdownData(events, { models: ['gpt-4o'] });
+    assert.equal(result.available, true);
+    assert.ok(result.categories.length > 0);
+  });
+
+  it('returns unavailable when all events are filtered out', () => {
+    const events = [makeEvent({ ts: 1_000_000, modelId: 'gpt-4o', costByCategory: { input: 0.05 } })];
+    const result = buildCategoryBreakdownData(events, { models: ['claude-sonnet-4'] });
+    assert.equal(result.available, false);
   });
 });
