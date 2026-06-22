@@ -1,6 +1,10 @@
 <div align="center">
 
-<img src="media/brand/readme-banner.svg" alt="Mallard" width="480" style="max-width:100%" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="media/brand/readme-banner-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="media/brand/readme-banner-light.svg">
+  <img src="media/brand/readme-banner-light.svg" alt="Mallard" width="480" style="max-width:100%" />
+</picture>
 
 **Know exactly what GitHub Copilot is costing you.**
 
