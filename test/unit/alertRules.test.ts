@@ -44,11 +44,122 @@ describe('parseAlertRules', () => {
     assert.equal(result.doc.groups[0]?.id, 'g1');
   });
 
+  it('parses restrict.graceMinutes when present', () => {
+    const result = parseAlertRules({
+      version: 1,
+      rules: [{
+        id: 'r1',
+        severity: 'warning',
+        message: '',
+        when: true,
+        restrict: { mode: 'hard', scope: 'copilot', graceMinutes: 30 },
+      }],
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.doc.rules[0]?.restrict?.graceMinutes, 30);
+  });
+
   it('does not throw on deeply malformed input', () => {
     const inputs = [null, undefined, 123, [], { rules: [{ id: null }] }];
     for (const input of inputs) {
       assert.doesNotThrow(() => parseAlertRules(input));
     }
+  });
+
+  it('accepts a conditions-only rule (no when field)', () => {
+    const result = parseAlertRules({
+      version: 1,
+      rules: [{
+        id: 'r1', severity: 'warning', message: 'hi',
+        conditions: [{ field: 'today.credits', op: '>', value: 50 }],
+      }],
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.doc.rules[0]?.conditions?.[0]?.field, 'today.credits');
+  });
+
+  it('parses restrict without graceMinutes (covers FALSE branch)', () => {
+    const result = parseAlertRules({
+      version: 1,
+      rules: [{
+        id: 'r1', severity: 'warning', message: '',
+        when: true,
+        restrict: { mode: 'soft', scope: 'copilot' },
+      }],
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.doc.rules[0]?.restrict?.graceMinutes, undefined);
+  });
+
+  it('parses restrict with reEnableWhen', () => {
+    const result = parseAlertRules({
+      version: 1,
+      rules: [{
+        id: 'r1', severity: 'warning', message: '',
+        when: true,
+        restrict: { mode: 'hard', scope: 'copilot', reEnableWhen: { '<': [{ var: 'today.credits' }, 10] } },
+      }],
+    });
+    assert.equal(result.ok, true);
+    assert.ok(result.doc.rules[0]?.restrict?.reEnableWhen !== undefined);
+  });
+
+  it('parses threshold with cooldown', () => {
+    const result = parseAlertRules({
+      version: 1,
+      rules: [{
+        id: 'r1', severity: 'info', message: '',
+        thresholds: [{ field: 'today.credits', op: '>', value: 50, severity: 'warning', cooldown: '60m' }],
+      }],
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.doc.rules[0]?.thresholds?.[0]?.cooldown, '60m');
+  });
+
+  it('covers all optional rule fields and group label', () => {
+    const result = parseAlertRules({
+      rules: [{
+        id: 'r1',
+        severity: 'warning',
+        message: 'test',
+        cooldown: '60m',
+        conditions: [{ field: 'today.credits', op: '>', value: 50 }],
+        match: 'any',
+        active: true,
+        requiresAuth: false,
+        notify: true,
+        thresholds: [{ field: 'today.credits', op: '>', value: 80, severity: 'critical', cooldown: '30m' }],
+        snoozeUntil: '2099-01-01T00:00:00Z',
+      }],
+      groups: [{ id: 'g1', active: true, label: 'My Group' }],
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.doc.rules[0]?.cooldown, '60m');
+    assert.equal(result.doc.rules[0]?.match, 'any');
+    assert.equal(result.doc.rules[0]?.active, true);
+    assert.equal(result.doc.rules[0]?.requiresAuth, false);
+    assert.equal(result.doc.rules[0]?.notify, true);
+    assert.equal(result.doc.rules[0]?.thresholds?.[0]?.cooldown, '30m');
+    assert.equal(result.doc.rules[0]?.snoozeUntil, '2099-01-01T00:00:00Z');
+    assert.equal(result.doc.groups[0]?.label, 'My Group');
+    assert.equal(result.doc.version, 1);
+  });
+
+  it('uses default version 1 and empty rules when not specified', () => {
+    const result = parseAlertRules({ vars: { x: 1 } });
+    assert.equal(result.ok, true);
+    assert.equal(result.doc.version, 1);
+    assert.equal(result.doc.rules.length, 0);
+  });
+
+  it('parses threshold without cooldown and group without label', () => {
+    const result = parseAlertRules({
+      rules: [{ id: 'r1', severity: 'warning', message: '', thresholds: [{ field: 'today.credits', op: '>', value: 50, severity: 'info' }] }],
+      groups: [{ id: 'g1', active: true }],
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.doc.rules[0]?.thresholds?.[0]?.cooldown, undefined);
+    assert.equal(result.doc.groups[0]?.label, undefined);
   });
 });
 
@@ -189,5 +300,75 @@ describe('alertRules — threshold escalation', () => {
     }];
     const out = evaluateAlertRules({ snapshot: snap(60), rules, fired: new Map(), now });
     assert.equal(out.length, 0);
+  });
+
+  it('suppresses threshold rule within cooldown period', () => {
+    const rules: AlertRule[] = [{
+      id: 'r', severity: 'info', message: '',
+      thresholds: [{ field: 'today.credits', op: '>', value: 50, severity: 'warning', cooldown: '1h' }],
+    }];
+    const fired = new Map<string, number>();
+    fired.set('r#warning', now - 100); // fired 100ms ago, within 1h cooldown
+    const out = evaluateAlertRules({ snapshot: snap(60), rules, fired, now });
+    assert.equal(out.length, 0);
+  });
+});
+
+describe('alertRules — durationToMs edge cases', () => {
+  const now = Date.now();
+
+  it('handles invalid cooldown format (falls back to default)', () => {
+    const rules: AlertRule[] = [{
+      id: 'r', severity: 'warning', message: 'hi',
+      when: true,
+      cooldown: 'NOT_VALID',
+    }];
+    const out = evaluateAlertRules({ snapshot: snap(0), rules, fired: new Map(), now });
+    assert.equal(out.length, 1);
+  });
+
+  it('handles m, d and w cooldown units', () => {
+    const rulesMin: AlertRule[] = [{ id: 'r-m', severity: 'warning', message: '', when: true, cooldown: '30m' }];
+    const outMin = evaluateAlertRules({ snapshot: snap(0), rules: rulesMin, fired: new Map(), now });
+    assert.equal(outMin.length, 1);
+
+    const rulesDay: AlertRule[] = [{ id: 'r-d', severity: 'warning', message: '', when: true, cooldown: '1d' }];
+    const outDay = evaluateAlertRules({ snapshot: snap(0), rules: rulesDay, fired: new Map(), now });
+    assert.equal(outDay.length, 1);
+
+    const rulesWeek: AlertRule[] = [{ id: 'r-w', severity: 'warning', message: '', when: true, cooldown: '1w' }];
+    const outWeek = evaluateAlertRules({ snapshot: snap(0), rules: rulesWeek, fired: new Map(), now });
+    assert.equal(outWeek.length, 1);
+  });
+});
+
+describe('alertRules — renderTemplate edge cases', () => {
+  const now = Date.now();
+
+  it('returns empty string for undefined template variable', () => {
+    const rules: AlertRule[] = [{ id: 'r', severity: 'warning', message: '{{nonexistent.field}}', when: true }];
+    const out = evaluateAlertRules({ snapshot: snap(0), rules, fired: new Map(), now });
+    assert.equal(out[0]?.message, '');
+  });
+
+  it('formats non-integer float with toFixed(2)', () => {
+    const snapshot = { ...snap(0), today: { credits: 0, cost: 1.5, tokens: 0 } } as unknown as UsageSnapshot;
+    const rules: AlertRule[] = [{ id: 'r', severity: 'warning', message: 'Cost: {{today.cost}}', when: true }];
+    const out = evaluateAlertRules({ snapshot, rules, fired: new Map(), now });
+    assert.equal(out[0]?.message, 'Cost: 1.50');
+  });
+
+  it('converts string values via String()', () => {
+    const rules: AlertRule[] = [{ id: 'r', severity: 'warning', message: 'Basis: {{forecast.basis}}', when: true }];
+    const out = evaluateAlertRules({ snapshot: snap(0), rules, fired: new Map(), now });
+    assert.equal(out[0]?.message, 'Basis: insufficient-data');
+  });
+});
+
+describe('alertRules — evaluateAlertRules without now', () => {
+  it('uses Date.now() when now is not provided', () => {
+    const rules: AlertRule[] = [{ id: 'r', severity: 'warning', message: '', when: true }];
+    const out = evaluateAlertRules({ snapshot: snap(0), rules, fired: new Map() });
+    assert.equal(out.length, 1);
   });
 });

@@ -159,6 +159,252 @@ describe('EventStore', () => {
   });
 });
 
+describe('EventStore — extended methods', () => {
+  it('load() is a no-op', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.load(); // must not throw
+    store.dispose();
+  });
+
+  it('find() with limit truncates results', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000 }),
+      makeEvent({ id: 'b', ts: 2000 }),
+      makeEvent({ id: 'c', ts: 3000 }),
+      makeEvent({ id: 'd', ts: 4000 }),
+      makeEvent({ id: 'e', ts: 5000 }),
+    ]);
+    const result = await store.find({ limit: 2 });
+    assert.strictEqual(result.length, 2);
+    assert.strictEqual(result[0]!.id, 'a');
+    assert.strictEqual(result[1]!.id, 'b');
+    store.dispose();
+  });
+
+  it('find() with offset skips rows', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000 }),
+      makeEvent({ id: 'b', ts: 2000 }),
+      makeEvent({ id: 'c', ts: 3000 }),
+      makeEvent({ id: 'd', ts: 4000 }),
+      makeEvent({ id: 'e', ts: 5000 }),
+    ]);
+    const result = await store.find({ offset: 3 });
+    assert.strictEqual(result.length, 2);
+    assert.strictEqual(result[0]!.id, 'd');
+    store.dispose();
+  });
+
+  it('count() with a filter returns filtered count', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, modelId: 'gpt-4o' }),
+      makeEvent({ id: 'b', ts: 2000, modelId: 'gpt-4o' }),
+      makeEvent({ id: 'c', ts: 3000, modelId: 'claude-sonnet-4' }),
+    ]);
+    const n = await store.count({ models: ['gpt-4o'] });
+    assert.strictEqual(n, 2);
+    store.dispose();
+  });
+
+  it('findById() returns null for unknown id', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const result = await store.findById('does-not-exist');
+    assert.strictEqual(result, null);
+    store.dispose();
+  });
+
+  it('exists() returns true for a known id', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([makeEvent({ id: 'known', ts: 1000 })]);
+    assert.strictEqual(await store.exists('known'), true);
+    store.dispose();
+  });
+
+  it('exists() returns false for an unknown id', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    assert.strictEqual(await store.exists('ghost'), false);
+    store.dispose();
+  });
+
+  it('aggregate() returns statistics for valid fields', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, credits: 4, cost: 0.16 }),
+      makeEvent({ id: 'b', ts: 2000, credits: 6, cost: 0.24 }),
+    ]);
+    const result = await store.aggregate({}, ['credits', 'cost']);
+    assert.strictEqual(result.count, 2);
+    assert.ok(Math.abs(result.sum['credits']! - 10) < 1e-9);
+    assert.ok(Math.abs(result.mean['credits']! - 5) < 1e-9);
+    store.dispose();
+  });
+
+  it('aggregate() returns emptyAggregate for unsafe field names', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const result = await store.aggregate({}, ['credits; DROP TABLE events--']);
+    assert.strictEqual(result.count, 0);
+    assert.deepStrictEqual(result.sum, {});
+    store.dispose();
+  });
+
+  it('bucket() by hour groups events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([makeEvent({ id: 'a', ts: new Date('2026-06-01T10:00:00Z').getTime() })]);
+    const buckets = await store.bucket({}, 'hour');
+    assert.ok(buckets.length > 0);
+    assert.ok(typeof buckets[0]!.key === 'string');
+    assert.ok(typeof buckets[0]!.values['credits'] === 'number');
+    store.dispose();
+  });
+
+  it('bucket() by weekday groups events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([makeEvent({ id: 'a', ts: new Date('2026-06-01T10:00:00Z').getTime() })]);
+    const buckets = await store.bucket({}, 'weekday');
+    assert.ok(buckets.length > 0);
+    store.dispose();
+  });
+
+  it('bucket() by week groups events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([makeEvent({ id: 'a', ts: new Date('2026-06-01T10:00:00Z').getTime() })]);
+    const buckets = await store.bucket({}, 'week');
+    assert.ok(buckets.length > 0);
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(String(buckets[0]!.key)));
+    store.dispose();
+  });
+
+  it('bucket() by month groups events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([makeEvent({ id: 'a', ts: new Date('2026-06-01T10:00:00Z').getTime() })]);
+    const buckets = await store.bucket({}, 'month');
+    assert.ok(buckets.length > 0);
+    assert.ok(/^\d{4}-\d{2}$/.test(String(buckets[0]!.key)));
+    store.dispose();
+  });
+
+  it('bucket() by day groups events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([makeEvent({ id: 'a', ts: new Date('2026-06-01T10:00:00Z').getTime() })]);
+    const buckets = await store.bucket({}, 'day');
+    assert.ok(buckets.length > 0);
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(String(buckets[0]!.key)));
+    store.dispose();
+  });
+
+  it('pivot() returns cross-tab by surface', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, surface: 'chat', credits: 3 }),
+      makeEvent({ id: 'b', ts: 2000, surface: 'inline', credits: 2 }),
+    ]);
+    const result = await store.pivot({}, 'surface', 'credits');
+    assert.ok(result.columnKeys.length > 0);
+    assert.ok(result.rows.length > 0);
+    store.dispose();
+  });
+
+  it('pivot() returns empty CrossTab when no data', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const result = await store.pivot({}, 'surface', 'credits');
+    assert.deepStrictEqual(result, { rows: [], columnKeys: [] });
+    store.dispose();
+  });
+
+  it('rank() returns top models by credits', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, modelId: 'gpt-4o', credits: 10 }),
+      makeEvent({ id: 'b', ts: 2000, modelId: 'claude-sonnet-4', credits: 5 }),
+    ]);
+    const result = await store.rank({}, 'credits', 5);
+    assert.strictEqual(result[0]!.key, 'gpt-4o');
+    assert.ok(result[0]!.values['credits']! > result[1]!.values['credits']!);
+    store.dispose();
+  });
+
+  it('remove() with a filter deletes matching rows and returns count', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, modelId: 'gpt-4o' }),
+      makeEvent({ id: 'b', ts: 2000, modelId: 'claude-sonnet-4' }),
+    ]);
+    const removed = await store.remove({ models: ['gpt-4o'] });
+    assert.strictEqual(removed, 1);
+    assert.strictEqual(await store.count(), 1);
+    store.dispose();
+  });
+
+  it('remove() with empty filter returns 0 without deleting', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([makeEvent({ id: 'a', ts: 1000 })]);
+    const removed = await store.remove({});
+    assert.strictEqual(removed, 0);
+    assert.strictEqual(await store.count(), 1);
+    store.dispose();
+  });
+
+  it('compact() is a no-op when all events are recent', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: Date.now() - DAY_MS }),
+      makeEvent({ id: 'b', ts: Date.now() }),
+    ]);
+    await store.compact(Date.now());
+    assert.strictEqual(await store.count(), 2);
+    store.dispose();
+  });
+
+  it('find() with branches filter returns only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, branch: 'main' }),
+      makeEvent({ id: 'b', ts: 2000, branch: 'feature' }),
+    ]);
+    const result = await store.find({ branches: ['main'] });
+    assert.strictEqual(result.length, 1);
+    assert.strictEqual(result[0]!.id, 'a');
+    store.dispose();
+  });
+
+  it('find() with sources filter returns only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, source: 'local' }),
+      makeEvent({ id: 'b', ts: 2000, source: 'claude-code' }),
+    ]);
+    const result = await store.find({ sources: ['claude-code'] });
+    assert.strictEqual(result.length, 1);
+    assert.strictEqual(result[0]!.id, 'b');
+    store.dispose();
+  });
+});
+
 describe('rollupEvents', () => {
   it('groups by day/model/repo/surface and sums metrics', () => {
     const day = startOf(1_700_000_000_000, 'day');
@@ -178,5 +424,57 @@ describe('rollupEvents', () => {
 
   it('returns nothing for empty input', () => {
     assert.deepStrictEqual(rollupEvents([]), []);
+  });
+
+  it('merges costByCategory across events with different category keys', () => {
+    const day = startOf(1_700_000_000_000, 'day');
+    const rolled = rollupEvents([
+      makeEvent({ id: 'a', ts: day + 1000, modelId: 'gpt-4o', repo: 'r', surface: 'chat', credits: 1, cost: 0.1, costByCategory: { input: 0.06 } }),
+      makeEvent({ id: 'b', ts: day + 2000, modelId: 'gpt-4o', repo: 'r', surface: 'chat', credits: 1, cost: 0.1, costByCategory: { output: 0.04 } }),
+    ]);
+    assert.strictEqual(rolled.length, 1);
+    const merged = rolled[0]!.costByCategory!;
+    assert.ok(Math.abs((merged['input'] ?? 0) - 0.06) < 1e-9);
+    assert.ok(Math.abs((merged['output'] ?? 0) - 0.04) < 1e-9);
+  });
+});
+
+describe('EventStore — filter edge cases', () => {
+  it('query with range filter returns only events in range', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000 }),
+      makeEvent({ id: 'b', ts: 5000 }),
+      makeEvent({ id: 'c', ts: 9000 }),
+    ]);
+    const result = await store.query({ range: { start: 2000, end: 8000 } });
+    assert.deepStrictEqual(result.map((e) => e.id), ['b']);
+    store.dispose();
+  });
+
+  it('query with surfaces filter returns only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000, surface: 'chat' }),
+      makeEvent({ id: 'b', ts: 2000, surface: 'inline' }),
+    ]);
+    const result = await store.query({ surfaces: ['chat'] });
+    assert.deepStrictEqual(result.map((e) => e.id), ['a']);
+    store.dispose();
+  });
+
+  it('remove() with unattributed repo sentinel uses parameterless SQL', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.append([
+      makeEvent({ id: 'a', ts: 1000 }), // no repo → NULL
+      makeEvent({ id: 'b', ts: 2000, repo: 'org/x' }),
+    ]);
+    const removed = await store.remove({ repos: ['unattributed'] });
+    assert.strictEqual(removed, 1);
+    assert.strictEqual(await store.count(), 1);
+    store.dispose();
   });
 });

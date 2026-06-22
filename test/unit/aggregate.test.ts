@@ -2,8 +2,10 @@ import { strict as assert } from 'assert';
 import {
   aggregateAll,
   aggregateBy,
+  distinctModels,
   distinctRepos,
   distinctSources,
+  distinctSurfaces,
   sankeyLinksFor,
   sumEvents,
   topBy,
@@ -78,6 +80,16 @@ describe('aggregate', () => {
     assert.equal(top[0]!.credits, 5);
   });
 
+  it('ranks top surfaces by credits', () => {
+    const top = topBy(events, 'surface');
+    assert.ok(top.length > 0);
+    const keys = top.map((t) => t.key);
+    assert.ok(keys.includes('chat') || keys.includes('inline') || keys.includes('agent'));
+    // agent has 3 credits, chat has 2, inline has 1
+    assert.equal(top[0]!.key, 'agent');
+    assert.equal(top[0]!.credits, 3);
+  });
+
   it('builds sankey links', () => {
     const links = sankeyLinksFor(events);
     const chat = links.find((l) => l.source === 'gpt-4o' && l.target === 'chat');
@@ -118,5 +130,55 @@ describe('aggregate', () => {
     ];
     const sources = distinctSources(mixed);
     assert.deepEqual(sources, ['lm', 'local', 'claude-code']);
+  });
+
+  it('topBy rejects events that do not match the filter', () => {
+    const top = topBy(events, 'model', { models: ['gpt-4o'] });
+    assert.equal(top.length, 1);
+    assert.equal(top[0]!.key, 'gpt-4o');
+    assert.ok(!top.some((t) => t.key === 'claude-sonnet-4'));
+  });
+
+  it('sankeyLinksFor filters out events that do not match', () => {
+    const links = sankeyLinksFor(events, { models: ['gpt-4o'] });
+    assert.ok(links.every((l) => l.source === 'gpt-4o'));
+  });
+
+  it('sankeyLinksFor skips zero-credit events', () => {
+    const withZero = [
+      makeEvent({ ts: d1, credits: 0, modelId: 'gpt-4o', surface: 'chat' }),
+      makeEvent({ ts: d1b, credits: 2, modelId: 'gpt-4o', surface: 'chat' }),
+    ];
+    const links = sankeyLinksFor(withZero);
+    assert.equal(links.length, 1);
+    assert.equal(links[0]!.value, 2);
+  });
+
+  it('distinctModels rejects events not matching filter', () => {
+    const models = distinctModels(events, { models: ['gpt-4o'] });
+    assert.deepEqual(models, ['gpt-4o']);
+  });
+
+  it('distinctRepos rejects events not matching filter', () => {
+    const repoEvents = [
+      makeEvent({ ts: d1, repo: 'octo/a' }),
+      makeEvent({ ts: d2, repo: 'octo/b' }),
+    ];
+    const repos = distinctRepos(repoEvents, { repos: ['octo/a'] });
+    assert.deepEqual(repos, ['octo/a']);
+  });
+
+  it('distinctSurfaces rejects events not matching filter', () => {
+    const surfaces = distinctSurfaces(events, { surfaces: ['chat'] });
+    assert.deepEqual(surfaces, ['chat']);
+  });
+
+  it('distinctSources rejects events not matching filter', () => {
+    const mixed = [
+      makeEvent({ ts: d1, source: 'local' }),
+      makeEvent({ ts: d2, source: 'claude-code' }),
+    ];
+    const sources = distinctSources(mixed, { sources: ['local'] });
+    assert.deepEqual(sources, ['local']);
   });
 });

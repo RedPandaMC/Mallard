@@ -205,9 +205,19 @@ describe('evalSimpleCondition', () => {
     assert.equal(evalSimpleCondition({ field: 'topModel.id', op: 'in', value: ['gpt-4o'] }, ctx), false);
   });
 
+  it('evaluates in operator with scalar value (non-array)', () => {
+    assert.equal(evalSimpleCondition({ field: 'topModel.id', op: 'in', value: 'claude-sonnet-4' as unknown as string[] }, ctx), true);
+    assert.equal(evalSimpleCondition({ field: 'topModel.id', op: 'in', value: 'gpt-4o' as unknown as string[] }, ctx), false);
+  });
+
   it('evaluates matches operator with regex', () => {
     assert.equal(evalSimpleCondition({ field: 'topModel.id', op: 'matches', value: '^claude-' }, ctx), true);
     assert.equal(evalSimpleCondition({ field: 'topModel.id', op: 'matches', value: '^gpt-' }, ctx), false);
+  });
+
+  it('matches operator coerces undefined fieldValue to empty string', () => {
+    assert.equal(evalSimpleCondition({ field: 'nonexistent', op: 'matches', value: '^$' }, ctx), true);
+    assert.equal(evalSimpleCondition({ field: 'nonexistent', op: 'matches', value: '^claude' }, ctx), false);
   });
 
   it('returns false for matches with invalid regex', () => {
@@ -244,6 +254,37 @@ describe('compileConditions', () => {
     ], 'none');
     assert.equal(evalCondition(cond, ctx), true);
   });
+
+  it('in condition with ctx pre-evaluates via evalSimpleCondition', () => {
+    const evalCtx = { topModel: { id: 'claude-sonnet-4' } };
+    const cond = compileConditions(
+      [{ field: 'topModel.id', op: 'in', value: ['claude-sonnet-4', 'gpt-4o'] }],
+      'all',
+      evalCtx,
+    );
+    // Pre-evaluated to a boolean literal
+    assert.equal(cond, true);
+  });
+
+  it('in condition without ctx returns true literal', () => {
+    const cond = compileConditions(
+      [{ field: 'topModel.id', op: 'in', value: ['claude-sonnet-4'] }],
+      'all',
+    );
+    assert.equal(cond, true);
+  });
+
+  it('none match with multiple conditions returns { not: { or: [...] } }', () => {
+    const evalCtx = { today: { credits: 75 } };
+    const cond = compileConditions(
+      [
+        { field: 'today.credits', op: '>' as const, value: 100 },
+        { field: 'today.credits', op: '>' as const, value: 200 },
+      ],
+      'none',
+    );
+    assert.equal(evalCondition(cond, evalCtx), true); // none match (both false)
+  });
 });
 
 describe('evalRule', () => {
@@ -261,5 +302,21 @@ describe('evalRule', () => {
 
   it('returns false when neither when nor conditions', () => {
     assert.equal(evalRule({}, ctx), false);
+  });
+
+  it('evaluates conditions with match=none via evalRuleConditions', () => {
+    const rule = {
+      conditions: [
+        { field: 'today.credits', op: '>' as const, value: 100 },
+        { field: 'today.credits', op: '>' as const, value: 200 },
+      ],
+      match: 'none' as const,
+    };
+    assert.equal(evalRule(rule, ctx), true); // credits=75, none match (both fail)
+    const rule2 = {
+      conditions: [{ field: 'today.credits', op: '>' as const, value: 50 }],
+      match: 'none' as const,
+    };
+    assert.equal(evalRule(rule2, ctx), false); // credits=75 > 50, so "some" match → none=false
   });
 });

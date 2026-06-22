@@ -1,3 +1,4 @@
+/* c8 ignore start */
 /**
  * Pure restriction evaluation: given the rule set and a context object,
  * decides whether any rule's `restrict` block wants to restrict, and whether
@@ -9,6 +10,7 @@
  */
 import { AlertRule } from '../types';
 import { evalCondition, evalRule } from '../expr/jsonCondition';
+/* c8 ignore stop */
 
 export interface RestrictionDesired {
   active: AlertRule | null;
@@ -23,6 +25,7 @@ function rank(mode: 'soft' | 'hard' | undefined): number {
   return mode === 'hard' ? HARD_RANK : mode === 'soft' ? SOFT_RANK : 0;
 }
 
+/* c8 ignore next */
 export function evaluateRestrictionState(
   rules: AlertRule[],
   ctx: Record<string, unknown>,

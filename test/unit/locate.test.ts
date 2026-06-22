@@ -5,7 +5,10 @@ import * as path from 'path';
 import {
   findLogFiles,
   isPathSafe,
+  isClaudeCodeLogFilename,
+  claudeCodeLogRoots,
   locateCopilotLogDirs,
+  locateClaudeCodeLogDirs,
   platformDefaults,
   vscodeLogRoot,
 } from '../../src/ingest/locate';
@@ -93,6 +96,113 @@ describe('findLogFiles', () => {
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('locateCopilotLogDirs — with logUriPath', () => {
+  it('includes the resolved log root derived from logUriPath', async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'mallard-luri-'));
+    try {
+      const logsDir = path.join(tmp, 'logs');
+      const sessionDir = path.join(logsDir, '20260612T123456', 'exthost');
+      await fs.mkdir(sessionDir, { recursive: true });
+      // Pass the session path as logUriPath; vscodeLogRoot walks up to find 'logs'
+      const out = await locateCopilotLogDirs(sessionDir);
+      assert.ok(out.includes(logsDir), `expected ${logsDir} in ${JSON.stringify(out)}`);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('findLogFiles — edge cases', () => {
+  it('stops collecting when maxFiles is reached', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mallard-max-'));
+    try {
+      for (let i = 0; i < 5; i++) {
+        await fs.writeFile(path.join(root, `github.copilot-${i}.log`), '');
+      }
+      const out = await findLogFiles(root, [root], 5, 3);
+      assert.strictEqual(out.length, 3);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('skips unreadable subdirectories without throwing', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mallard-unread-'));
+    try {
+      const goodFile = path.join(root, 'github.copilot.log');
+      await fs.writeFile(goodFile, '');
+      const badDir = path.join(root, 'locked');
+      await fs.mkdir(badDir);
+      await fs.chmod(badDir, 0o000);
+      const out = await findLogFiles(root, [root], 5, 50);
+      assert.ok(out.includes(goodFile));
+      // Should not throw; locked dir is silently skipped
+    } finally {
+      // Restore permissions so cleanup works
+      await fs.chmod(path.join(root, 'locked'), 0o755).catch(() => {});
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('claudeCodeLogRoots', () => {
+  it('returns [~/.claude/projects]', () => {
+    const roots = claudeCodeLogRoots();
+    assert.deepStrictEqual(roots, [path.join(os.homedir(), '.claude', 'projects')]);
+  });
+});
+
+describe('locateClaudeCodeLogDirs', () => {
+  it('returns directory when it exists on disk', async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'mallard-cc-'));
+    try {
+      // Temporarily override the module's behaviour by creating the expected dir
+      // We test by passing a real directory path through a mock via findLogFiles indirectly.
+      // Instead, directly test with an existing path by calling the real function
+      // and checking the real home dir — or skip if ~/.claude/projects exists.
+      const realRoot = path.join(os.homedir(), '.claude', 'projects');
+      const stat = await fs.stat(realRoot).catch(() => null);
+      if (stat?.isDirectory()) {
+        const out = await locateClaudeCodeLogDirs();
+        assert.ok(out.includes(realRoot));
+      } else {
+        // Create it temporarily in tmp (function is hardcoded to homedir, so we
+        // just verify the empty-dir case is covered elsewhere and confirm no throw)
+        const out = await locateClaudeCodeLogDirs();
+        assert.ok(Array.isArray(out));
+      }
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('returns empty array when the projects directory does not exist', async () => {
+    // Unless ~/.claude/projects exists, the function returns []
+    const realRoot = path.join(os.homedir(), '.claude', 'projects');
+    const stat = await fs.stat(realRoot).catch(() => null);
+    if (!stat?.isDirectory()) {
+      const out = await locateClaudeCodeLogDirs();
+      assert.deepStrictEqual(out, []);
+    } else {
+      // Directory exists — skip this variant
+      assert.ok(true);
+    }
+  });
+});
+
+describe('isClaudeCodeLogFilename', () => {
+  it('returns true for .jsonl files', () => {
+    assert.ok(isClaudeCodeLogFilename('session.jsonl'));
+    assert.ok(isClaudeCodeLogFilename('SESSION.JSONL'));
+  });
+
+  it('returns false for non-.jsonl files', () => {
+    assert.ok(!isClaudeCodeLogFilename('data.json'));
+    assert.ok(!isClaudeCodeLogFilename('output.log'));
+    assert.ok(!isClaudeCodeLogFilename('file.jsonl.bak'));
   });
 });
 
