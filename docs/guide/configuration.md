@@ -299,52 +299,11 @@ first, then uninstall.
 
 ## VS Code settings
 
-There are a few settings for cases where auto-detection does not fit.
+Three settings cover cases where auto-detection does not fit. See the
+[Settings reference](/reference/settings) for full descriptions.
 
-### `mallard.copilotLogPath`
-
-Type `string`, default `""` (auto-detect).
-
-Override the directory Mallard scans for Copilot log files. Leave it blank to use
-the path VS Code reports through `vscode.env.logUri`, which is correct in almost
-every case. Set it only if your logs live in a non-standard location, such as a
-portable VS Code install.
-
-```json
-"mallard.copilotLogPath": "/custom/path/to/vscode/logs"
-```
-
-### `mallard.pricingManifestUrl`
-
-Type `string`, default `""` (built-in URL).
-
-Override the URL for the pricing manifest JSON. Leave it blank to use the
-default. The manifest is fetched once per day, validated, and cached locally;
-the copy bundled with the extension is the fallback when the network is
-unavailable. Set this only if you host a custom manifest for a non-standard
-plan.
-
-```json
-"mallard.pricingManifestUrl": "https://example.com/my-pricing.json"
-```
-
-### `mallard.palette`
-
-Type `string`, one of `"swiss"` (default) or `"theme"`.
-
-Controls the dashboard chart palette. `swiss` uses the fixed Swiss duotone —
-one red accent plus a grayscale ramp. `theme` instead derives the accent from
-your active VS Code theme (its button / link colour). Both modes keep the same
-duotone structure and are validated for contrast and colour-blindness, so the
-charts stay legible whichever you pick.
-
-```json
-"mallard.palette": "theme"
-```
-
-## Notes
-
-- The price per credit comes from the pricing manifest (0.04 USD by default) and
-  updates automatically when GitHub changes pricing. It is not a setting.
-- The only data source is local OTel logs. There is no sample or synthetic mode;
-  when there is nothing to show, the dashboard says so.
+| Setting | Default | Description |
+| --- | --- | --- |
+| `mallard.copilotLogPath` | `""` | Override the log directory (blank = auto-detect). |
+| `mallard.pricingManifestUrl` | `""` | Override the pricing manifest URL (blank = built-in). |
+| `mallard.palette` | `"swiss"` | Chart palette: `swiss` = fixed duotone; `theme` = VS Code theme colour. |
