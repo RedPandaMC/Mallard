@@ -175,6 +175,22 @@ describe('ClaudeCodeParser', () => {
       assert.equal(events[0]!.costByCategory, undefined);
     });
 
+    it('omits costByCategory when model has zero cost (free-tier multiplier)', () => {
+      const manifest = {
+        version: 1 as const,
+        pricePerCredit: 0.04,
+        updatedAt: '2026-01-01',
+        models: { 'claude-sonnet-4': 0 },
+      };
+      const line = JSON.stringify({
+        type: 'assistant',
+        message: { model: 'claude-sonnet-4', usage: { input_tokens: 100, output_tokens: 50 } },
+        timestamp: '2026-01-15T10:00:00.000Z',
+      });
+      const events = parser.parse(line, { pricePerCredit: 0.04, now, manifest });
+      assert.equal(events[0]!.costByCategory, undefined);
+    });
+
     it('converts string input_tokens via num()', () => {
       const line = JSON.stringify({
         type: 'assistant',

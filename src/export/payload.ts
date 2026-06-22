@@ -114,16 +114,16 @@ export function buildMetricPayload(s: UsageSnapshot): MetricPayload {
   const cost_dist: Record<string, number> = {};
   if (totalCatCostAll > 0) {
     for (let i = 0; i < catData.categories.length; i++) {
-      const cat = catData.categories[i];
-      const c = catData.costs[i] ?? 0;
-      if (cat && c > 0) cost_dist[cat] = c / totalCatCostAll;
+      const c = catData.costs[i]!;
+      if (c > 0) cost_dist[catData.categories[i]!] = c / totalCatCostAll;
     }
   }
   // Legacy field: input/(input+output) only — does not include cache/thinking.
-  const inputCost  = cost_dist['input']  !== undefined ? (catData.costs[catData.categories.indexOf('input')]  ?? 0) : 0;
-  const outputCost = cost_dist['output'] !== undefined ? (catData.costs[catData.categories.indexOf('output')] ?? 0) : 0;
-  const totalInOut = inputCost + outputCost;
-  const input_cost_ratio = totalInOut > 0 ? inputCost / totalInOut : 0;
+  // Derived from already-normalised cost_dist to avoid re-indexing the arrays.
+  const inputFrac  = cost_dist['input']  ?? 0;
+  const outputFrac = cost_dist['output'] ?? 0;
+  const totalInOut = inputFrac + outputFrac;
+  const input_cost_ratio = totalInOut > 0 ? inputFrac / totalInOut : 0;
 
   // ── credits_velocity_per_hour ───────────────────────────────────────────────
   const midnight = new Date(s.generatedAt);

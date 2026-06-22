@@ -285,4 +285,18 @@ describe('buildMetricPayload', () => {
     const p = buildMetricPayload(s);
     assert.ok(Math.abs(p.input_cost_ratio - 0.6) < 0.001);
   });
+
+  it('cost_dist includes cache_creation and cache_read when present', () => {
+    const now = Date.now();
+    const events = [
+      makeEvent({ ts: now - 1000, credits: 1, cost: 0.1,
+        costByCategory: { input: 0.03, output: 0.02, cache_creation: 0.04, cache_read: 0.01 } }),
+    ];
+    const s = buildSnapshot(events, opts({ now }));
+    const p = buildMetricPayload(s);
+    assert.ok('cache_creation' in p.cost_dist, 'cache_creation missing from cost_dist');
+    assert.ok('cache_read' in p.cost_dist, 'cache_read missing from cost_dist');
+    const total = Object.values(p.cost_dist).reduce((a, x) => a + x, 0);
+    assert.ok(total <= 1.0001, `cost_dist total ${total} exceeds 1`);
+  });
 });
