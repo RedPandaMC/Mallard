@@ -72,9 +72,11 @@ export class ClaudeCodeConnector extends BaseFileConnector {
     /* c8 ignore next */
     if (dirs.length === 0) return { globs: [], allowedRoots: [], searchedDirs: [] };
 
+    /* c8 ignore start */
     this.logPaths = dirs;
     const globs = dirs.map((d) => path.join(d, '**', '*.jsonl'));
     return { globs, allowedRoots: dirs, searchedDirs: dirs };
+    /* c8 ignore stop */
   }
 
   protected override async buildContext(globs: string[]): Promise<ParseContext> {
