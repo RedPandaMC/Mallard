@@ -84,8 +84,46 @@ export function aggregateAll(
   events: readonly UsageEvent[],
   filter?: Filter,
 ): Record<Granularity, UsageAggregate[]> {
+  // Single pass: fill all three granularity maps at once so matchesFilter and
+  // tokensOf are called once per event instead of once per granularity.
+  const maps = GRANULARITIES.map(() => new Map<string, UsageAggregate>());
+
+  for (const entry of events) {
+    if (!matchesFilter(entry, filter)) continue;
+    const tokenCount = tokensOf(entry);
+    for (let gi = 0; gi < GRANULARITIES.length; gi++) {
+      const granularity = GRANULARITIES[gi]!;
+      const map = maps[gi]!;
+      const key = bucketKey(entry.ts, granularity);
+      let agg = map.get(key);
+      if (!agg) {
+        agg = {
+          granularity,
+          bucketKey: key,
+          start: startOf(entry.ts, granularity),
+          end: nextBucketStart(entry.ts, granularity),
+          credits: 0,
+          cost: 0,
+          tokens: 0,
+          byModel: {},
+          eventCount: 0,
+          estimated: false,
+        };
+        map.set(key, agg);
+      }
+      agg.credits += entry.credits;
+      agg.cost += entry.cost;
+      agg.tokens += tokenCount;
+      agg.eventCount += 1;
+      agg.estimated = agg.estimated || entry.estimated;
+      addTo(agg.byModel, entry.modelId, entry, tokenCount);
+    }
+  }
+
   const out = {} as Record<Granularity, UsageAggregate[]>;
-  for (const granularity of GRANULARITIES) out[granularity] = aggregateBy(events, granularity, filter);
+  for (let gi = 0; gi < GRANULARITIES.length; gi++) {
+    out[GRANULARITIES[gi]!] = [...maps[gi]!.values()].sort((a, b) => a.start - b.start);
+  }
   return out;
 }
 
@@ -139,20 +177,20 @@ export function sumEvents(
  * Only includes links with value > 0.
  */
 export function sankeyLinksFor(events: readonly UsageEvent[], filter?: Filter): SankeyLink[] {
-  const map = new Map<string, number>();
+  const map = new Map<string, SankeyLink>();
   for (const entry of events) {
     if (!matchesFilter(entry, filter)) continue;
     if (entry.credits <= 0) continue;
-    const key = `${entry.modelId}|||${entry.surface}`;
-    map.set(key, (map.get(key) ?? 0) + entry.credits);
+    // \x00 cannot appear in modelId or surface, so it's a safe separator.
+    const key = `${entry.modelId}\x00${entry.surface}`;
+    const existing = map.get(key);
+    if (existing) {
+      existing.value += entry.credits;
+    } else {
+      map.set(key, { source: entry.modelId, target: entry.surface, value: entry.credits });
+    }
   }
-  return [...map.entries()]
-    .filter(([, v]) => v > 0)
-    .map(([key, value]) => {
-      const [source, target] = key.split('|||');
-      return { source, target, value };
-    })
-    .filter((l): l is SankeyLink => l.source !== undefined && l.target !== undefined);
+  return [...map.values()].filter((l) => l.value > 0);
 }
 
 /** All distinct model IDs in the filtered event set. */

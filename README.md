@@ -26,7 +26,7 @@ features work offline with no sign-in. You can optionally connect to GitHub's
 billing API for the authoritative charge.
 
 - **No sign-in required.** Reads OTel logs Copilot already writes to disk.
-- **DuckDB-backed.** Full event detail for 90 days; older events roll up to daily rows.
+- **DuckDB-backed.** Full event detail for 90 days; older events roll up to daily rows automatically. A layered SQL view hierarchy (`v_usage_daily` → weekly/monthly, plus hourly and weekday distributions) keeps aggregation in the database rather than JS.
 - **Branch-aware.** Tags every event to the active git branch and repo, with per-branch credit caps.
 - **Programmable alerts.** JSONLogic condition language with cooldowns, group toggles, and message templates; validated by a bundled JSON Schema.
 - **Copilot restriction.** Rules can hard-disable Copilot when a budget is exhausted, with grace period and auto-re-enable.
@@ -140,7 +140,7 @@ context field list, message templates, rule groups, and user-defined variables.
 | **Validation** | Zod 4 |
 | **Metrics export** | MQTT 5 (`mqtts`/`wss`, mTLS) |
 | **Bundler** | esbuild |
-| **Tests** | Mocha + C8 |
+| **Tests** | Mocha + C8 · tsx benchmark suite |
 | **Docs** | VitePress |
 
 ## Development
@@ -153,6 +153,7 @@ bun run lint
 bun run test:unit      # pure logic tests
 bun run test:coverage  # tests with c8 coverage report
 bun test               # integration tests in a real VS Code host
+bun run bench          # performance benchmarks (not run in CI)
 bun run assets         # regenerate brand rasters from the source SVG art
 bun run docs:dev       # preview the documentation site
 ```

@@ -180,6 +180,7 @@ export async function locateClaudeCodeLogDirs(): Promise<string[]> {
   for (const dir of claudeCodeLogRoots()) {
     try {
       const st = await fs.stat(dir);
+      /* c8 ignore next */
       if (st.isDirectory()) existing.push(dir);
     /* c8 ignore next 3 */
     } catch {

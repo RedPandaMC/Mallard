@@ -70,8 +70,15 @@ export function bucketKey(ts: number, g: Granularity): string {
     case 'day':
       return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
     case 'week': {
-      const { year, week } = isoWeek(ts);
-      return `${year}-W${pad2(week)}`;
+      // `date` is already the Monday midnight (from startOf). Derive the ISO year
+      // by finding this week's Thursday (the day that always falls in the correct
+      // ISO year). Then compute week 1's Monday as Jan 4 snapped back to Monday.
+      const thursday = new Date(date.getTime() + 3 * DAY_MS);
+      const isoYear = thursday.getFullYear();
+      const jan4 = new Date(isoYear, 0, 4);
+      const week1Monday = jan4.getTime() - ((jan4.getDay() + 6) % 7) * DAY_MS;
+      const weekNum = 1 + Math.round((date.getTime() - week1Monday) / (7 * DAY_MS));
+      return `${isoYear}-W${pad2(weekNum)}`;
     }
     case 'month':
       return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;

@@ -203,4 +203,21 @@ describe('aggregate', () => {
     const sources = distinctSources(mixed, { sources: ['local'] });
     assert.deepEqual(sources, ['local']);
   });
+
+  it('aggregateAll with a filter excludes non-matching events', () => {
+    const all = aggregateAll(events, { models: ['gpt-4o'] });
+    // claude-sonnet-4 event should be filtered out — only gpt-4o's credits remain
+    const totalCredits = Object.values(all)
+      .flat()
+      .reduce((sum, a) => sum + a.credits, 0);
+    // gpt-4o has 2 + 3 = 5 credits across 3 granularities → 5 * 3 = 15
+    assert.equal(totalCredits, 5 * 3);
+  });
+
+  it('aggregateAll returns empty buckets when all events are filtered out', () => {
+    const all = aggregateAll(events, { models: ['o3-does-not-exist'] });
+    assert.deepEqual(all.day, []);
+    assert.deepEqual(all.week, []);
+    assert.deepEqual(all.month, []);
+  });
 });
