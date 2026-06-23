@@ -18,7 +18,7 @@ function gen(n: number, window = 90, prefix = 'e') {
     const credits = 1 + (i % 10);
     return { id: `${prefix}${i}`, ts: now - Math.floor(Math.random()*window)*DAY_MS,
       modelId: MODELS[i%5]!, surface: SURFACES[i%5]!, source: SOURCES[i%5]!,
-      credits, cost: credits*0.04, estimated: false, repo: REPOS[i%5],
+      credits, cost: credits*0.04, estimated: false, ...(REPOS[i%5] !== undefined ? { repo: REPOS[i%5]! } : {}),
       costByCategory: { input: credits*0.028, output: credits*0.012 } };
   });
 }

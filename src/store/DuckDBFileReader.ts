@@ -46,11 +46,10 @@ export class DuckDBFileReader {
 
     let rows: Record<string, unknown>[];
     try {
-      rows = (
-        await this.conn.runAndReadAll(
-          `SELECT *, filename FROM read_ndjson([${globList}], ignore_errors := true, auto_detect := true, filename := true) ${tsFilter}`,
-        )
-      ).getRowObjects();
+      const result = await this.conn.runAndReadAll(
+        `SELECT *, filename FROM read_ndjson([${globList}], ignore_errors := true, auto_detect := true, filename := true) ${tsFilter}`,
+      );
+      rows = result.getRowObjects() as Record<string, unknown>[];
     } catch {
       return 0;
     }
@@ -71,14 +70,13 @@ export class DuckDBFileReader {
     const globList = globArray.map((g) => `'${g.replace(/'/g, "''")}'`).join(', ');
 
     try {
-      const rows = (
-        await this.conn.runAndReadAll(
-          `SELECT COUNT(*) AS cnt
-           FROM read_ndjson([${globList}], ignore_errors := true, auto_detect := true, filename := true)
-           WHERE ${safeField} = '${safeValue}'`,
-        )
-      ).getRowObjects();
-      return Number(rows[0]?.cnt ?? 0) > 0;
+      const result = await this.conn.runAndReadAll(
+        `SELECT COUNT(*) AS cnt
+         FROM read_ndjson([${globList}], ignore_errors := true, auto_detect := true, filename := true)
+         WHERE ${safeField} = '${safeValue}'`,
+      );
+      const rows = result.getRowObjects() as Record<string, unknown>[];
+      return Number(rows[0]?.['cnt'] ?? 0) > 0;
     } catch {
       return false;
     }

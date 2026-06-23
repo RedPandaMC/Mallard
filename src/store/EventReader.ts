@@ -1,5 +1,5 @@
 /* c8 ignore start */
-import { Kysely, RawBuilder, sql } from 'kysely';
+import { DuckDBConnection } from '@duckdb/node-api';
 import { z } from 'zod';
 import { CostCategory, Filter, SourceKind, Surface, UsageEvent } from '../domain/types';
 import { UNATTRIBUTED_REPO } from '../domain/aggregate';
@@ -11,12 +11,48 @@ import {
   RecordFilter,
   TimeBucket,
 } from './EventRepository';
-import type { Database } from './db-types';
+import { readRows, readPrepared } from './dbUtils';
+import {
+  COUNT_ALL_SQL,
+  CREDITS_BY_BRANCH_SQL,
+  FIND_ALL_SQL,
+  FIND_BY_ID_SQL,
+  QUERY_FACTS_BASE_SQL,
+  READ_SNAP_CATEGORIES,
+  READ_SNAP_DAILY,
+  READ_SNAP_DIM_MODELS,
+  READ_SNAP_DIM_REPOS,
+  READ_SNAP_DIM_SOURCES,
+  READ_SNAP_DIM_SURFACES,
+  READ_SNAP_HOURLY,
+  READ_SNAP_MODELS,
+  READ_SNAP_REPOS,
+  READ_SNAP_SANKEY,
+  READ_SNAP_TOTALS,
+} from './schema';
 /* c8 ignore stop */
+
+// ── SnapshotCache ─────────────────────────────────────────────────────────────
+
+export interface SnapshotCache {
+  totals: {
+    all:   { credits: number; cost: number; tokens: number; eventCount: number };
+    mtd:   { credits: number; cost: number; tokens: number; eventCount: number };
+    today: { credits: number; cost: number; tokens: number; eventCount: number };
+  };
+  /** day_start = epoch ms of local midnight, DST-correct. */
+  daily:      Array<{ dayStart: number; credits: number; cost: number; tokens: number; eventCount: number }>;
+  models:     Array<{ modelId: string; credits: number; cost: number; tokens: number }>;
+  repos:      Array<{ repo: string; credits: number; cost: number; tokens: number }>;
+  /** hour_local = 0-23 in session timezone (DST-correct). */
+  hourly:     Array<{ hourLocal: number; credits: number }>;
+  categories: Array<{ category: string; cost: number }>;
+  sankey:     Array<{ model: string; surface: string; count: number; credits: number }>;
+  dims:       { models: string[]; surfaces: string[]; sources: string[]; repos: string[] };
+}
 
 // ── FactRow ────────────────────────────────────────────────────────────────────
 
-/** One aggregated row returned by {@link EventReader.queryFacts}. */
 export interface FactRow {
   day: string;
   credits: number;
@@ -44,6 +80,8 @@ export interface IEventReader {
   pivot(filter: RecordFilter, on: string, value: string): Promise<CrossTab>;
   rank(filter: RecordFilter, by: string, limit?: number): Promise<TimeBucket[]>;
   queryFacts(filter?: RecordFilter): Promise<FactRow[]>;
+  readSnapshotCache(): Promise<SnapshotCache>;
+  creditsByBranch(branch: string): Promise<number>;
   /** @deprecated Use find(). */
   query(filter?: Filter): Promise<UsageEvent[]>;
 }
@@ -104,116 +142,130 @@ function rowToEvent(row: Record<string, unknown>): UsageEvent | null {
 
 // ── Filter helpers ─────────────────────────────────────────────────────────────
 
-/** Convert epoch-ms to YYYYMMDD integer (UTC) for dim_date.id lookups. */
 function dateToId(ms: number): number {
   const d = new Date(ms);
   return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
 }
 
-function buildWhereParts(filter: RecordFilter): RawBuilder<unknown>[] {
-  const parts: RawBuilder<unknown>[] = [];
+function buildFilterSQL(filter?: RecordFilter): { clause: string; params: unknown[] } {
+  if (!filter) return { clause: '', params: [] };
+  const conditions: string[] = [];
+  const params: unknown[] = [];
 
   if (filter.range) {
-    parts.push(
-      sql`ts >= ${BigInt(filter.range.start)} AND ts < ${BigInt(filter.range.end)}`,
-    );
+    conditions.push('ts >= ? AND ts < ?');
+    params.push(filter.range.start, filter.range.end);
   }
   if (filter.models?.length) {
-    parts.push(sql`modelId IN (${sql.join(filter.models)})`);
+    conditions.push(`modelId IN (${filter.models.map(() => '?').join(',')})`);
+    params.push(...filter.models);
   }
   if (filter.surfaces?.length) {
-    parts.push(sql`surface IN (${sql.join(filter.surfaces)})`);
-  }
-  if (filter.repos?.length) {
-    const named = filter.repos.filter((r) => r !== UNATTRIBUTED_REPO);
-    const hasUnattr = filter.repos.includes(UNATTRIBUTED_REPO);
-    const subParts: RawBuilder<unknown>[] = [];
-    if (named.length) subParts.push(sql`repo IN (${sql.join(named)})`);
-    if (hasUnattr) subParts.push(sql`repo IS NULL`);
-    if (subParts.length) parts.push(sql`(${sql.join(subParts, sql` OR `)})`);
-  }
-  if (filter.branches?.length) {
-    parts.push(sql`branch IN (${sql.join(filter.branches)})`);
+    conditions.push(`surface IN (${filter.surfaces.map(() => '?').join(',')})`);
+    params.push(...filter.surfaces);
   }
   if (filter.sources?.length) {
-    parts.push(sql`source IN (${sql.join(filter.sources)})`);
+    conditions.push(`source IN (${filter.sources.map(() => '?').join(',')})`);
+    params.push(...filter.sources);
   }
-
-  return parts;
-}
-
-function whereClause(filter: RecordFilter): RawBuilder<unknown> {
-  const parts = buildWhereParts(filter);
-  return parts.length > 0 ? sql`WHERE ${sql.join(parts, sql` AND `)}` : sql``;
-}
-
-/** WHERE parts for fact/dim JOIN queries (uses dim table aliases, not raw events columns). */
-function buildFactsWhereParts(filter?: RecordFilter): RawBuilder<unknown>[] {
-  const parts: RawBuilder<unknown>[] = [];
-  if (filter?.range) {
-    parts.push(sql`f.date_id >= ${dateToId(filter.range.start)} AND f.date_id < ${dateToId(filter.range.end)}`);
+  if (filter.branches?.length) {
+    conditions.push(`branch IN (${filter.branches.map(() => '?').join(',')})`);
+    params.push(...filter.branches);
   }
-  if (filter?.models?.length)   parts.push(sql`m.name IN (${sql.join(filter.models)})`);
-  if (filter?.surfaces?.length) parts.push(sql`sf.name IN (${sql.join(filter.surfaces)})`);
-  if (filter?.sources?.length)  parts.push(sql`sc.name IN (${sql.join(filter.sources)})`);
-  if (filter?.repos?.length) {
-    const named = filter.repos.filter((r) => r !== UNATTRIBUTED_REPO);
+  if (filter.repos?.length) {
+    const named    = filter.repos.filter((r) => r !== UNATTRIBUTED_REPO);
     const hasUnattr = filter.repos.includes(UNATTRIBUTED_REPO);
-    const sub: RawBuilder<unknown>[] = [];
-    if (named.length) sub.push(sql`r.name IN (${sql.join(named)})`);
-    if (hasUnattr)    sub.push(sql`r.name = ${'unattributed'}`);
-    if (sub.length)   parts.push(sql`(${sql.join(sub, sql` OR `)})`);
+    const repoParts: string[] = [];
+    if (named.length) {
+      repoParts.push(`repo IN (${named.map(() => '?').join(',')})`);
+      params.push(...named);
+    }
+    if (hasUnattr) repoParts.push('repo IS NULL');
+    if (repoParts.length) conditions.push(`(${repoParts.join(' OR ')})`);
   }
-  return parts;
+
+  return {
+    clause: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '',
+    params,
+  };
+}
+
+function buildFactsFilterSQL(filter?: RecordFilter): { clause: string; params: unknown[] } {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (filter?.range) {
+    conditions.push('f.date_id >= ? AND f.date_id < ?');
+    params.push(dateToId(filter.range.start), dateToId(filter.range.end));
+  }
+  if (filter?.models?.length) {
+    conditions.push(`m.name IN (${filter.models.map(() => '?').join(',')})`);
+    params.push(...filter.models);
+  }
+  if (filter?.surfaces?.length) {
+    conditions.push(`sf.name IN (${filter.surfaces.map(() => '?').join(',')})`);
+    params.push(...filter.surfaces);
+  }
+  if (filter?.sources?.length) {
+    conditions.push(`sc.name IN (${filter.sources.map(() => '?').join(',')})`);
+    params.push(...filter.sources);
+  }
+  if (filter?.repos?.length) {
+    const named    = filter.repos.filter((r) => r !== UNATTRIBUTED_REPO);
+    const hasUnattr = filter.repos.includes(UNATTRIBUTED_REPO);
+    const sub: string[] = [];
+    if (named.length) {
+      sub.push(`r.name IN (${named.map(() => '?').join(',')})`);
+      params.push(...named);
+    }
+    if (hasUnattr) sub.push(`r.name = 'unattributed'`);
+    if (sub.length) conditions.push(`(${sub.join(' OR ')})`);
+  }
+
+  return {
+    clause: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '',
+    params,
+  };
 }
 
 // ── Implementation ─────────────────────────────────────────────────────────────
 
 export class EventReader implements IEventReader {
-  constructor(private readonly db: Kysely<Database>) {}
+  constructor(private readonly conn: DuckDBConnection) {}
 
   async find(filter?: RecordFilter): Promise<UsageEvent[]> {
-    if (!filter) {
-      const rows = await this.db.selectFrom('events').selectAll().orderBy('ts').execute();
-      return rows.map(rowToEvent).filter((e): e is UsageEvent => e !== null);
+    if (!filter || Object.keys(filter).length === 0) {
+      const rows = await readRows(this.conn, FIND_ALL_SQL, rowToEvent);
+      return rows.filter((e): e is UsageEvent => e !== null);
     }
 
-    const where = whereClause(filter);
-    const limitSql = filter.limit ? sql.raw(` LIMIT ${filter.limit}`) : sql``;
-    const offsetSql = filter.offset ? sql.raw(` OFFSET ${filter.offset}`) : sql``;
+    const { clause, params } = buildFilterSQL(filter);
+    const limitPart  = filter.limit  ? ` LIMIT ${filter.limit}`   : '';
+    const offsetPart = filter.offset ? ` OFFSET ${filter.offset}` : '';
+    const sql = `SELECT * FROM events ${clause} ORDER BY ts${limitPart}${offsetPart}`;
 
-    const result = await sql<Record<string, unknown>>`
-      SELECT * FROM events ${where} ORDER BY ts${limitSql}${offsetSql}
-    `.execute(this.db);
-
-    return result.rows.map(rowToEvent).filter((e): e is UsageEvent => e !== null);
+    const rows = await readPrepared(this.conn, sql, params, rowToEvent);
+    return rows.filter((e): e is UsageEvent => e !== null);
   }
 
   async findById(id: string): Promise<UsageEvent | null> {
-    const row = await this.db
-      .selectFrom('events')
-      .selectAll()
-      .where('id', '=', id)
-      .executeTakeFirst();
-    return row ? rowToEvent(row as Record<string, unknown>) : null;
+    const rows = await readPrepared(this.conn, FIND_BY_ID_SQL, [id], rowToEvent);
+    return rows[0] ?? null;
   }
 
   async count(filter?: RecordFilter): Promise<number> {
-    if (!filter) {
-      const row = await this.db
-        .selectFrom('events')
-        .select((eb) => eb.fn.countAll().as('c'))
-        .executeTakeFirst();
-      /* c8 ignore next */
-      return Number(row?.c ?? 0);
+    if (!filter || Object.keys(filter).length === 0) {
+      const rows = await readRows(this.conn, COUNT_ALL_SQL, (r) => Number(r['c']));
+      return rows[0] ?? 0;
     }
-
-    const where = whereClause(filter);
-    const result = await sql<{ c: number | bigint }>`
-      SELECT count(*) AS c FROM events ${where}
-    `.execute(this.db);
-    /* c8 ignore next */
-    return Number(result.rows[0]?.c ?? 0);
+    const { clause, params } = buildFilterSQL(filter);
+    const rows = await readPrepared(
+      this.conn,
+      `SELECT COUNT(*) AS c FROM events ${clause}`,
+      params,
+      (r) => Number(r['c']),
+    );
+    return rows[0] ?? 0;
   }
 
   async exists(id: string): Promise<boolean> {
@@ -243,14 +295,12 @@ export class EventReader implements IEventReader {
       `COALESCE(MAX(${f}), 0) AS max_${f}`,
     ]);
 
-    const where = whereClause(filter);
-    const selectRaw = sql.raw(selects.join(', '));
-    const result = await sql<Record<string, unknown>>`
-      SELECT COUNT(*) AS total, ${selectRaw} FROM events ${where}
-    `.execute(this.db);
+    const { clause, params } = buildFilterSQL(filter);
+    const sql = `SELECT COUNT(*) AS total, ${selects.join(', ')} FROM events ${clause}`;
 
+    const rows = await readPrepared(this.conn, sql, params, (r) => r);
     /* c8 ignore next */
-    const row = result.rows[0] ?? {};
+    const row = rows[0] ?? {};
     const out: AggregateResult = {
       /* c8 ignore next */
       count: Number(row['total'] ?? 0),
@@ -271,30 +321,30 @@ export class EventReader implements IEventReader {
   }
 
   async bucket(filter: RecordFilter, by: BucketBy): Promise<TimeBucket[]> {
-    const where = whereClause(filter);
+    const { clause, params } = buildFilterSQL(filter);
     let keyExpr: string;
     switch (by) {
-      case 'hour':    keyExpr = "strftime(to_timestamp(ts / 1000), '%H')"; break;
-      case 'weekday': keyExpr = 'CAST(dayofweek(to_timestamp(ts / 1000)) AS VARCHAR)'; break;
-      case 'week':    keyExpr = "strftime(date_trunc('week', to_timestamp(ts / 1000)), '%Y-%m-%d')"; break;
-      case 'month':   keyExpr = "strftime(date_trunc('month', to_timestamp(ts / 1000)), '%Y-%m')"; break;
-      default:        keyExpr = "strftime(to_timestamp(ts / 1000), '%Y-%m-%d')";
+      case 'hour':    keyExpr = "strftime(to_timestamp(ts / 1000.0)::TIMESTAMPTZ, '%H')"; break;
+      case 'weekday': keyExpr = 'CAST(dayofweek(to_timestamp(ts / 1000.0)::TIMESTAMPTZ) AS VARCHAR)'; break;
+      case 'week':    keyExpr = "strftime(date_trunc('week', to_timestamp(ts / 1000.0)::TIMESTAMPTZ), '%Y-%m-%d')"; break;
+      case 'month':   keyExpr = "strftime(date_trunc('month', to_timestamp(ts / 1000.0)::TIMESTAMPTZ), '%Y-%m')"; break;
+      default:        keyExpr = "strftime(to_timestamp(ts / 1000.0)::TIMESTAMPTZ, '%Y-%m-%d')";
     }
 
-    const result = await sql<Record<string, unknown>>`
+    const sql = `
       SELECT
-        ${sql.raw(keyExpr)} AS bucket_key,
-        COALESCE(SUM(credits), 0)                                                           AS credits,
-        COALESCE(SUM(cost), 0)                                                              AS cost,
-        COALESCE(SUM(COALESCE(promptTokens, 0) + COALESCE(completionTokens, 0)), 0)        AS tokens,
-        COUNT(*)                                                                             AS event_count
-      FROM events ${where}
+        ${keyExpr} AS bucket_key,
+        COALESCE(SUM(credits), 0) AS credits,
+        COALESCE(SUM(cost), 0) AS cost,
+        COALESCE(SUM(COALESCE(promptTokens, 0) + COALESCE(completionTokens, 0)), 0) AS tokens,
+        COUNT(*) AS event_count
+      FROM events ${clause}
       GROUP BY bucket_key
-      ORDER BY bucket_key
-    `.execute(this.db);
+      ORDER BY bucket_key`;
 
+    const rows = await readPrepared(this.conn, sql, params, (r) => r);
     /* c8 ignore start */
-    return result.rows.map((r) => ({
+    return rows.map((r) => ({
       key: String(r['bucket_key'] ?? ''),
       values: {
         credits:     Number(r['credits']     ?? 0),
@@ -310,14 +360,17 @@ export class EventReader implements IEventReader {
     /* c8 ignore next 2 */
     const safeOn    = /^[a-zA-Z_]+$/.test(on)    ? on    : 'surface';
     const safeValue = /^[a-zA-Z_]+$/.test(value) ? value : 'credits';
-    const where = whereClause(filter);
+    const { clause, params } = buildFilterSQL(filter);
 
-    const colResult = await sql<Record<string, unknown>>`
-      SELECT DISTINCT ${sql.raw(safeOn)} AS col FROM events ${where} ORDER BY col
-    `.execute(this.db);
+    const colRows = await readPrepared(
+      this.conn,
+      `SELECT DISTINCT ${safeOn} AS col FROM events ${clause} ORDER BY col`,
+      params,
+      (r) => String(r['col'] ?? ''),
+    );
 
     /* c8 ignore next */
-    const columnKeys = colResult.rows.map((r) => String(r['col'] ?? '')).filter(Boolean);
+    const columnKeys = colRows.filter(Boolean);
     if (columnKeys.length === 0) return { rows: [], columnKeys: [] };
 
     const pivotCols = columnKeys.map(
@@ -325,16 +378,16 @@ export class EventReader implements IEventReader {
         `COALESCE(SUM(CASE WHEN ${safeOn} = '${k.replace(/'/g, "''")}' THEN ${safeValue} ELSE 0 END), 0) AS "${k}"`,
     );
 
-    const dataResult = await sql<Record<string, unknown>>`
-      SELECT modelId, ${sql.raw(pivotCols.join(', '))}
-      FROM events ${where}
-      GROUP BY modelId
-      ORDER BY SUM(${sql.raw(safeValue)}) DESC
-    `.execute(this.db);
+    const dataRows = await readPrepared(
+      this.conn,
+      `SELECT modelId, ${pivotCols.join(', ')} FROM events ${clause} GROUP BY modelId ORDER BY SUM(${safeValue}) DESC`,
+      params,
+      (r) => r,
+    );
 
     return {
       /* c8 ignore start */
-      rows: dataResult.rows.map((r) => {
+      rows: dataRows.map((r) => {
         const row: Record<string, string | number> = { modelId: String(r['modelId'] ?? '') };
         for (const k of columnKeys) row[k] = Number(r[k] ?? 0);
         return row;
@@ -347,22 +400,22 @@ export class EventReader implements IEventReader {
   async rank(filter: RecordFilter, by: string, limit = 10): Promise<TimeBucket[]> {
     /* c8 ignore next */
     const safeBy = /^[a-zA-Z_]+$/.test(by) ? by : 'credits';
-    const where = whereClause(filter);
+    const { clause, params } = buildFilterSQL(filter);
 
-    const result = await sql<Record<string, unknown>>`
+    const sql = `
       SELECT
         modelId AS rank_key,
         COALESCE(SUM(credits), 0) AS credits,
         COALESCE(SUM(cost), 0)    AS cost,
         COALESCE(SUM(COALESCE(promptTokens, 0) + COALESCE(completionTokens, 0)), 0) AS tokens
-      FROM events ${where}
+      FROM events ${clause}
       GROUP BY modelId
-      ORDER BY SUM(${sql.raw(safeBy)}) DESC
-      LIMIT ${sql.raw(String(limit))}
-    `.execute(this.db);
+      ORDER BY SUM(${safeBy}) DESC
+      LIMIT ${limit}`;
 
+    const rows = await readPrepared(this.conn, sql, params, (r) => r);
     /* c8 ignore start */
-    return result.rows.map((r) => ({
+    return rows.map((r) => ({
       key: String(r['rank_key'] ?? ''),
       values: {
         credits: Number(r['credits'] ?? 0),
@@ -374,47 +427,108 @@ export class EventReader implements IEventReader {
   }
 
   async queryFacts(filter?: RecordFilter): Promise<FactRow[]> {
-    const wParts = buildFactsWhereParts(filter);
-    const whereSql = wParts.length > 0 ? sql`WHERE ${sql.join(wParts, sql` AND `)}` : sql``;
+    const { clause, params } = buildFactsFilterSQL(filter);
+    const sql = `${QUERY_FACTS_BASE_SQL} ${clause} GROUP BY d.date ORDER BY d.date`;
 
-    const result = await sql<Record<string, unknown>>`
-      SELECT
-        d.date,
-        SUM(f.credits)       AS credits,
-        SUM(f.cost)          AS cost,
-        SUM(f.tokens)        AS tokens,
-        SUM(f.event_count)   AS event_count,
-        SUM(f.cost_input)    AS cost_input,
-        SUM(f.cost_output)   AS cost_output,
-        SUM(f.cost_cache_read)  AS cost_cache_read,
-        SUM(f.cost_cache_write) AS cost_cache_write,
-        SUM(f.cost_thinking) AS cost_thinking,
-        SUM(f.cost_tool)     AS cost_tool
-      FROM fact_daily_usage f
-      JOIN dim_date    d  ON d.id  = f.date_id
-      JOIN dim_model   m  ON m.id  = f.model_id
-      JOIN dim_surface sf ON sf.id = f.surface_id
-      JOIN dim_source  sc ON sc.id = f.source_id
-      JOIN dim_repo    r  ON r.id  = f.repo_id
-      ${whereSql}
-      GROUP BY d.date
-      ORDER BY d.date
-    `.execute(this.db);
-
+    const rows = await readPrepared(this.conn, sql, params, (r) => r);
     /* c8 ignore next 14 */
-    return result.rows.map((row) => ({
-      day:           String(row['date']           ?? ''),
-      credits:       Number(row['credits']        ?? 0),
-      cost:          Number(row['cost']           ?? 0),
-      tokens:        Number(row['tokens']         ?? 0),
-      eventCount:    Number(row['event_count']    ?? 0),
-      costInput:     Number(row['cost_input']     ?? 0),
-      costOutput:    Number(row['cost_output']    ?? 0),
-      costCacheRead: Number(row['cost_cache_read'] ?? 0),
-      costCacheWrite:Number(row['cost_cache_write'] ?? 0),
-      costThinking:  Number(row['cost_thinking']  ?? 0),
-      costTool:      Number(row['cost_tool']      ?? 0),
+    return rows.map((row) => ({
+      day:            String(row['date']            ?? ''),
+      credits:        Number(row['credits']         ?? 0),
+      cost:           Number(row['cost']            ?? 0),
+      tokens:         Number(row['tokens']          ?? 0),
+      eventCount:     Number(row['event_count']     ?? 0),
+      costInput:      Number(row['cost_input']      ?? 0),
+      costOutput:     Number(row['cost_output']     ?? 0),
+      costCacheRead:  Number(row['cost_cache_read'] ?? 0),
+      costCacheWrite: Number(row['cost_cache_write']?? 0),
+      costThinking:   Number(row['cost_thinking']   ?? 0),
+      costTool:       Number(row['cost_tool']       ?? 0),
     }));
+  }
+
+  async readSnapshotCache(): Promise<SnapshotCache> {
+    const [totalsRaw, daily, models, repos, hourly, categories, sankey,
+           dimModels, dimSurfaces, dimSources, dimRepos] = await Promise.all([
+      readRows(this.conn, READ_SNAP_TOTALS, (r) => r),
+      readRows(this.conn, READ_SNAP_DAILY,  (r) => ({
+        dayStart:   Number(r['day_start']   ?? 0),
+        credits:    Number(r['credits']     ?? 0),
+        cost:       Number(r['cost']        ?? 0),
+        tokens:     Number(r['tokens']      ?? 0),
+        eventCount: Number(r['event_count'] ?? 0),
+      })),
+      readRows(this.conn, READ_SNAP_MODELS, (r) => ({
+        modelId: String(r['modelId'] ?? ''),
+        credits: Number(r['credits'] ?? 0),
+        cost:    Number(r['cost']    ?? 0),
+        tokens:  Number(r['tokens']  ?? 0),
+      })),
+      readRows(this.conn, READ_SNAP_REPOS, (r) => ({
+        repo:    String(r['repo']    ?? ''),
+        credits: Number(r['credits'] ?? 0),
+        cost:    Number(r['cost']    ?? 0),
+        tokens:  Number(r['tokens']  ?? 0),
+      })),
+      readRows(this.conn, READ_SNAP_HOURLY, (r) => ({
+        hourLocal: Number(r['hour_local'] ?? 0),
+        credits:   Number(r['credits']   ?? 0),
+      })),
+      readRows(this.conn, READ_SNAP_CATEGORIES, (r) => ({
+        category: String(r['category'] ?? ''),
+        cost:     Number(r['cost']     ?? 0),
+      })),
+      readRows(this.conn, READ_SNAP_SANKEY, (r) => ({
+        model:   String(r['model']   ?? ''),
+        surface: String(r['surface'] ?? ''),
+        count:   Number(r['count']   ?? 0),
+        credits: Number(r['credits'] ?? 0),
+      })),
+      readRows(this.conn, READ_SNAP_DIM_MODELS,   (r) => String(r['name'] ?? '')),
+      readRows(this.conn, READ_SNAP_DIM_SURFACES, (r) => String(r['name'] ?? '')),
+      readRows(this.conn, READ_SNAP_DIM_SOURCES,  (r) => String(r['name'] ?? '')),
+      readRows(this.conn, READ_SNAP_DIM_REPOS,    (r) => String(r['name'] ?? '')),
+    ]);
+
+    const zero = { credits: 0, cost: 0, tokens: 0, eventCount: 0 };
+    const totals = { all: { ...zero }, mtd: { ...zero }, today: { ...zero } };
+    for (const row of totalsRaw) {
+      const period = String(row['period'] ?? '');
+      if (period === 'all' || period === 'mtd' || period === 'today') {
+        totals[period] = {
+          credits:    Number(row['credits']     ?? 0),
+          cost:       Number(row['cost']        ?? 0),
+          tokens:     Number(row['tokens']      ?? 0),
+          eventCount: Number(row['event_count'] ?? 0),
+        };
+      }
+    }
+
+    return {
+      totals,
+      daily,
+      models,
+      repos,
+      hourly,
+      categories,
+      sankey,
+      dims: {
+        models:   dimModels,
+        surfaces: dimSurfaces,
+        sources:  dimSources,
+        repos:    dimRepos,
+      },
+    };
+  }
+
+  async creditsByBranch(branch: string): Promise<number> {
+    const rows = await readPrepared(
+      this.conn,
+      CREDITS_BY_BRANCH_SQL,
+      [branch],
+      (r) => Number(r['c'] ?? 0),
+    );
+    return rows[0] ?? 0;
   }
 }
 
@@ -423,6 +537,5 @@ function emptyAggregate(): AggregateResult {
   return { count: 0, sum: {}, mean: {}, stddev: {}, p50: {}, p95: {}, min: {}, max: {} };
 }
 
-// re-export so callers don't need a separate import
 export type { RecordFilter, AggregateResult, BucketBy, CrossTab, TimeBucket };
 export { DAY_MS };

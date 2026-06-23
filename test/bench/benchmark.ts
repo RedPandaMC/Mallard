@@ -36,6 +36,7 @@ function makeEvent(ts: number, prefix: string): UsageEvent {
   const i = eventUid++;
   const credits = 1 + (i % 10);
   const cost    = credits * 0.04;
+  const repo    = REPOS[i % REPOS.length];
   return {
     id:               `${prefix}-${i}`,
     ts,
@@ -47,7 +48,7 @@ function makeEvent(ts: number, prefix: string): UsageEvent {
     promptTokens:     100 + (i % 2000),
     completionTokens: 20  + (i % 500),
     estimated:        false,
-    repo:             REPOS[i % REPOS.length],
+    ...(repo !== undefined ? { repo } : {}),
     costByCategory:   { input: cost * 0.7, output: cost * 0.3 },
   };
 }
@@ -201,6 +202,10 @@ async function benchmarkSnapshot(store: EventStore, count: number): Promise<void
   await bench(`find + buildSnapshot       (${count})`, async () => {
     const events = await store.reader.find({});
     buildSnapshot(events, opts);
+  }, { warmup: 1, iters: 10 });
+
+  await bench(`readSnapshotCache          (${count})`, async () => {
+    await store.reader.readSnapshotCache();
   }, { warmup: 1, iters: 10 });
 }
 

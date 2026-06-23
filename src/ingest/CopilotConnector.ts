@@ -6,7 +6,7 @@ import { priceRequest } from '../domain/pricing';
 import { CostCategory, UsageEvent } from '../domain/types';
 import { PricingService } from '../pricing/PricingService';
 import { DuckDBFileReader } from '../store/DuckDBFileReader';
-import type { MetaStore } from '../store/MetaStore';
+import type { IMetaStore as MetaStore } from '../store/MetaStore';
 import { BaseFileConnector } from './BaseFileConnector';
 import { num, pick, toSurface, fileKeyOf } from './connectorUtils';
 /* c8 ignore stop */
