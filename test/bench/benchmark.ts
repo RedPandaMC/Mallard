@@ -155,8 +155,8 @@ async function benchmarkReads(store: EventStore, count: number): Promise<void> {
   const narrow: RecordFilter   = { range: { start: now - 30 * DAY_MS, end: now }, models: ['gpt-4o'] };
 
   // find() caps at 5k rows for large stores to bound per-iteration JS allocation.
-  const findFilter = count > 5_000 ? { ...noFilter, limit: 5_000 } : noFilter;
-  const findLabel  = count > 5_000 ? 'find (limit 5k)          ' : 'find (no filter)         ';
+  const findFilter = count > 2_000 ? { ...noFilter, limit: 2_000 } : noFilter;
+  const findLabel  = count > 2_000 ? 'find (limit 2k)          ' : 'find (no filter)         ';
   await bench(`${findLabel} (${count})`, async () => { await store.reader.find(findFilter); });
   await bench(`find (model + 30d filter)  (${count})`, async () => { await store.reader.find(narrow); });
   await bench(`count                      (${count})`, async () => { await store.reader.count(noFilter); });
@@ -248,12 +248,14 @@ async function main(): Promise<void> {
   // multiple instances are opened sequentially, exhausting available memory.
   const tmp   = mkdtempSync(join(tmpdir(), 'mallard-bench-'));
   const store = await EventStore.open(tmp);
-  // Use a modest memory cap and single thread to keep the benchmark self-contained.
-  await (store as any).conn.run("SET memory_limit='8GB'; SET threads=1");
+  // Don't cap memory: DuckDB's refreshFacts 5-way JOIN needs its full buffer pool.
+  // A single shared instance avoids the multi-instance accumulation problem, so
+  // DuckDB's native LRU (default 80% of RAM) manages eviction correctly.
+  await (store as any).conn.run("SET threads=2");
 
   await benchmarkWrites(store);
 
-  for (const count of [1_000, 10_000, 25_000]) {
+  for (const count of [1_000, 5_000, 10_000]) {
     console.log(`\n── Read Queries (${count} events) ${'─'.repeat(35)}`);
     await seed(store, count, 90, `r${count}`);
     await benchmarkReads(store, count);
