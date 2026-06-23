@@ -105,65 +105,114 @@ const CREATE_SQL = `
   CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR);
   ALTER TABLE events ADD COLUMN IF NOT EXISTS branch VARCHAR;
 
-  -- Shift-left views: computation defined once in schema, queried by application code.
-  -- Using CREATE OR REPLACE VIEW so definitions stay current across upgrades.
+  -- Shift-left view hierarchy: computation defined once in schema, queried with GROUP BY/WHERE.
+  -- CREATE OR REPLACE VIEW keeps definitions current across upgrades without version bumps.
 
-  -- Daily rollup: one row per (UTC day, model, surface, source, repo) for all raw events.
-  -- compact() inserts from this view filtered to ts < cutoff, then deletes the originals.
-  -- Table alias e.ts in GROUP BY avoids DuckDB's GROUP BY / SELECT alias collision.
+  -- Base normalization layer: one row per event, NULLs resolved, is_rolled flag added.
+  -- repo stays nullable (compact preserves NULL for unattributed rows in events.repo);
+  -- repo_label is the non-null label used in aggregation GROUP BYs.
+  CREATE OR REPLACE VIEW v_events AS
+    SELECT
+      id, ts, modelId, surface, source,
+      repo,
+      COALESCE(repo, 'unattributed')   AS repo_label,
+      credits, cost, estimated,
+      COALESCE(promptTokens, 0)        AS prompt_tokens,
+      COALESCE(completionTokens, 0)    AS completion_tokens,
+      id LIKE 'roll:%'                 AS is_rolled
+    FROM events;
+
+  -- UTC day × 5 dims over ALL events (raw + rolled). Foundation for week/month views.
+  -- Every chart aggregation is a GROUP BY rollup on this view — no chart-specific views needed.
+  CREATE OR REPLACE VIEW v_usage_daily AS
+    SELECT
+      strftime(to_timestamp(e.ts / 1000), '%Y-%m-%d') AS day,
+      e.modelId, e.surface, e.source,
+      e.repo_label                                     AS repo,
+      SUM(e.credits)                                   AS credits,
+      SUM(e.cost)                                      AS cost,
+      SUM(e.prompt_tokens)                             AS prompt_tokens,
+      SUM(e.completion_tokens)                         AS completion_tokens,
+      COUNT(*)                                         AS event_count
+    FROM v_events e
+    GROUP BY strftime(to_timestamp(e.ts / 1000), '%Y-%m-%d'),
+             e.modelId, e.surface, e.source, e.repo_label;
+
+  -- ISO week × 5 dims, folded from v_usage_daily.
+  CREATE OR REPLACE VIEW v_usage_weekly AS
+    SELECT
+      strftime(date_trunc('week', day::DATE), '%Y-%m-%d') AS week_start,
+      modelId, surface, source, repo,
+      SUM(credits)           AS credits,
+      SUM(cost)              AS cost,
+      SUM(prompt_tokens)     AS prompt_tokens,
+      SUM(completion_tokens) AS completion_tokens,
+      SUM(event_count)       AS event_count
+    FROM v_usage_daily
+    GROUP BY date_trunc('week', day::DATE), modelId, surface, source, repo;
+
+  -- YYYY-MM × 5 dims, folded from v_usage_daily.
+  CREATE OR REPLACE VIEW v_usage_monthly AS
+    SELECT
+      LEFT(day, 7)           AS month,
+      modelId, surface, source, repo,
+      SUM(credits)           AS credits,
+      SUM(cost)              AS cost,
+      SUM(prompt_tokens)     AS prompt_tokens,
+      SUM(completion_tokens) AS completion_tokens,
+      SUM(event_count)       AS event_count
+    FROM v_usage_daily
+    GROUP BY LEFT(day, 7), modelId, surface, source, repo;
+
+  -- Hour-of-day UTC × 5 dims. Reads v_events directly: daily grain loses sub-day ts.
+  CREATE OR REPLACE VIEW v_usage_hourly AS
+    SELECT
+      CAST(strftime(to_timestamp(e.ts / 1000), '%H') AS INTEGER) AS hour_utc,
+      e.modelId, e.surface, e.source, e.repo_label               AS repo,
+      SUM(e.credits)   AS credits,
+      SUM(e.cost)      AS cost,
+      COUNT(*)         AS event_count
+    FROM v_events e
+    GROUP BY CAST(strftime(to_timestamp(e.ts / 1000), '%H') AS INTEGER),
+             e.modelId, e.surface, e.source, e.repo_label;
+
+  -- Weekday (0=Sun…6=Sat) × 5 dims. Reads v_events directly.
+  CREATE OR REPLACE VIEW v_usage_by_weekday AS
+    SELECT
+      CAST(dayofweek(to_timestamp(e.ts / 1000)) AS INTEGER) AS weekday,
+      e.modelId, e.surface, e.source, e.repo_label          AS repo,
+      SUM(e.credits)   AS credits,
+      SUM(e.cost)      AS cost,
+      COUNT(*)         AS event_count
+    FROM v_events e
+    GROUP BY CAST(dayofweek(to_timestamp(e.ts / 1000)) AS INTEGER),
+             e.modelId, e.surface, e.source, e.repo_label;
+
+  -- Raw-only daily rollup for compact(). Composed from v_events WHERE NOT is_rolled.
+  -- repo preserved nullable so unattributed rolled rows keep NULL in events.repo,
+  -- which matches the 'repo IS NULL' predicate in buildWhere() for UNATTRIBUTED_REPO.
+  -- Table-alias e.ts in GROUP BY avoids DuckDB GROUP BY / SELECT alias collision.
   CREATE OR REPLACE VIEW v_daily_rollup AS
     SELECT
       'roll:' || strftime(to_timestamp(MIN(e.ts) / 1000), '%Y-%m-%d')
         || ':' || e.modelId
         || ':' || COALESCE(e.repo, 'unattributed')
         || ':' || e.surface
-        || ':' || e.source                                         AS id,
-      MIN(e.ts) / 86400000 * 86400000                             AS ts,
+        || ':' || e.source                             AS id,
+      MIN(e.ts) / 86400000 * 86400000                  AS ts,
       e.modelId, e.surface, e.source,
-      SUM(e.credits)                                              AS credits,
-      SUM(e.cost)                                                 AS cost,
-      CAST(SUM(COALESCE(e.promptTokens, 0)) AS INTEGER)          AS promptTokens,
-      CAST(SUM(COALESCE(e.completionTokens, 0)) AS INTEGER)      AS completionTokens,
-      true                                                        AS estimated,
       e.repo,
-      NULL::VARCHAR                                               AS costByCategory,
-      NULL::VARCHAR                                               AS branch
-    FROM events e
-    WHERE e.id NOT LIKE 'roll:%'
+      SUM(e.credits)                                   AS credits,
+      SUM(e.cost)                                      AS cost,
+      CAST(SUM(e.prompt_tokens) AS INTEGER)            AS promptTokens,
+      CAST(SUM(e.completion_tokens) AS INTEGER)        AS completionTokens,
+      true                                             AS estimated,
+      NULL::VARCHAR                                    AS costByCategory,
+      NULL::VARCHAR                                    AS branch
+    FROM v_events e
+    WHERE NOT e.is_rolled
     GROUP BY strftime(to_timestamp(e.ts / 1000), '%Y-%m-%d'),
              e.modelId, e.surface, e.source, e.repo;
-
-  -- Top models by credits: pre-aggregated ranking, queryable with optional WHERE.
-  CREATE OR REPLACE VIEW v_top_models AS
-    SELECT
-      modelId                                                     AS key,
-      SUM(credits)                                                AS credits,
-      SUM(cost)                                                   AS cost,
-      SUM(COALESCE(promptTokens, 0) + COALESCE(completionTokens, 0)) AS tokens
-    FROM events
-    GROUP BY modelId
-    ORDER BY credits DESC;
-
-  -- Top surfaces by credits.
-  CREATE OR REPLACE VIEW v_top_by_surface AS
-    SELECT
-      surface                                                     AS key,
-      SUM(credits)                                                AS credits,
-      SUM(cost)                                                   AS cost,
-      SUM(COALESCE(promptTokens, 0) + COALESCE(completionTokens, 0)) AS tokens
-    FROM events
-    GROUP BY surface
-    ORDER BY credits DESC;
-
-  -- Sankey model→surface flow: source/target/value pre-aggregated.
-  CREATE OR REPLACE VIEW v_sankey_links AS
-    SELECT
-      modelId                                                     AS source,
-      surface                                                     AS target,
-      SUM(credits)                                               AS value
-    FROM events
-    WHERE credits > 0
-    GROUP BY modelId, surface;
 `;
 
 const INSERT_SQL = `INSERT OR IGNORE INTO events
