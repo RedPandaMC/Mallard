@@ -31,18 +31,17 @@ import {
   buildChartData,
   buildModelBreakdownData,
 } from '../../src/domain/chartData';
-import { forecastMonth, fitHoltWinters, selectForecaster } from '../../src/domain/forecast';
+import { forecastMonth, fitHoltWinters } from '../../src/domain/forecast';
 import { linearForecaster } from '../../src/domain/forecasters/linear';
 import { seasonalForecaster } from '../../src/domain/forecasters/seasonal';
 import { buildSnapshot } from '../../src/domain/snapshot';
 import {
   BudgetState,
-  CostCategory,
   Filter,
   UsageAggregate,
   UsageEvent,
 } from '../../src/domain/types';
-import { DAY_MS, startOf, nextBucketStart } from '../../src/util/time';
+import { DAY_MS, startOf } from '../../src/util/time';
 
 // ─── Data generators ────────────────────────────────────────────────────────
 
@@ -55,7 +54,6 @@ const MODELS = [
 ];
 const SURFACES: UsageEvent['surface'][] = ['chat', 'inline', 'agent', 'edit', 'unknown'];
 const REPOS = ['acme/frontend', 'acme/backend', 'acme/infra', 'acme/shared', 'unattributed'];
-const COST_CATS: CostCategory[] = ['input', 'output'];
 
 let uid = 0;
 
@@ -76,7 +74,7 @@ function makeEvent(ts: number): UsageEvent {
     promptTokens,
     completionTokens,
     estimated: false,
-    repo: REPOS[uid % REPOS.length],
+    repo: REPOS[uid % REPOS.length]!,
     costByCategory: {
       input: cost * 0.7,
       output: cost * 0.3,
