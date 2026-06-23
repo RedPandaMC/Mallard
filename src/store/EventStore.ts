@@ -213,6 +213,55 @@ const CREATE_SQL = `
     WHERE NOT e.is_rolled
     GROUP BY strftime(to_timestamp(e.ts / 1000), '%Y-%m-%d'),
              e.modelId, e.surface, e.source, e.repo;
+
+  -- ── Star-schema: dimensions + materialized fact ────────────────────────────
+  -- Dimensions that never grow: pre-seeded with all known values.
+  CREATE TABLE IF NOT EXISTS dim_surface (id TINYINT PRIMARY KEY, name VARCHAR UNIQUE NOT NULL);
+  INSERT OR IGNORE INTO dim_surface VALUES (0,'chat'),(1,'inline'),(2,'agent'),(3,'edit'),(4,'unknown');
+
+  CREATE TABLE IF NOT EXISTS dim_source (id TINYINT PRIMARY KEY, name VARCHAR UNIQUE NOT NULL);
+  INSERT OR IGNORE INTO dim_source VALUES (0,'lm'),(1,'local'),(2,'github'),(3,'claude-code');
+
+  -- Slowly-growing dimensions: populated lazily by refreshFacts() on first ingest.
+  CREATE SEQUENCE IF NOT EXISTS seq_model_id INCREMENT 1;
+  CREATE TABLE IF NOT EXISTS dim_model (id SMALLINT PRIMARY KEY, name VARCHAR UNIQUE NOT NULL);
+
+  CREATE SEQUENCE IF NOT EXISTS seq_repo_id INCREMENT 1;
+  CREATE TABLE IF NOT EXISTS dim_repo (id SMALLINT PRIMARY KEY, name VARCHAR UNIQUE NOT NULL);
+
+  -- Date spine: 4-year window (2 back, 2 forward). INSERT OR IGNORE is idempotent on re-open.
+  CREATE TABLE IF NOT EXISTS dim_date (
+    id          INTEGER  PRIMARY KEY,
+    date        VARCHAR  UNIQUE NOT NULL,
+    year        SMALLINT NOT NULL,
+    month       TINYINT  NOT NULL,
+    week        TINYINT  NOT NULL,
+    day_of_week TINYINT  NOT NULL
+  );
+  INSERT OR IGNORE INTO dim_date (id, date, year, month, week, day_of_week)
+    SELECT
+      CAST(strftime((CURRENT_DATE - INTERVAL '730 days' + n * INTERVAL '1 day')::DATE, '%Y%m%d') AS INTEGER),
+      strftime((CURRENT_DATE - INTERVAL '730 days' + n * INTERVAL '1 day')::DATE, '%Y-%m-%d'),
+      CAST(year((CURRENT_DATE - INTERVAL '730 days' + n * INTERVAL '1 day')::DATE) AS SMALLINT),
+      CAST(month((CURRENT_DATE - INTERVAL '730 days' + n * INTERVAL '1 day')::DATE) AS TINYINT),
+      CAST(weekofyear((CURRENT_DATE - INTERVAL '730 days' + n * INTERVAL '1 day')::DATE) AS TINYINT),
+      CAST(dayofweek((CURRENT_DATE - INTERVAL '730 days' + n * INTERVAL '1 day')::DATE) AS TINYINT)
+    FROM generate_series(0, 1460) AS t(n);
+
+  -- Materialized fact: one row per (UTC day × model × surface × source × repo).
+  -- Queried by queryFacts(); refreshed by refreshFacts() after each ingest + compact.
+  CREATE TABLE IF NOT EXISTS fact_daily_usage (
+    date_id     INTEGER  NOT NULL,
+    model_id    SMALLINT NOT NULL,
+    surface_id  TINYINT  NOT NULL,
+    source_id   TINYINT  NOT NULL,
+    repo_id     SMALLINT NOT NULL,
+    credits     DOUBLE   NOT NULL DEFAULT 0,
+    cost        DOUBLE   NOT NULL DEFAULT 0,
+    tokens      BIGINT   NOT NULL DEFAULT 0,
+    event_count INTEGER  NOT NULL DEFAULT 0,
+    PRIMARY KEY (date_id, model_id, surface_id, source_id, repo_id)
+  );
 `;
 
 const INSERT_SQL = `INSERT OR IGNORE INTO events
@@ -220,6 +269,21 @@ const INSERT_SQL = `INSERT OR IGNORE INTO events
   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`;
 
 type Row = Record<string, unknown>;
+
+/** One aggregated row returned by {@link EventStore.queryFacts}. */
+export interface FactRow {
+  day: string;
+  credits: number;
+  cost: number;
+  tokens: number;
+  eventCount: number;
+}
+
+/** Convert epoch-ms to YYYYMMDD integer (UTC), matching the dim_date.id key. */
+function dateToId(ms: number): number {
+  const d = new Date(ms);
+  return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+}
 
 function rowToEvent(row: Row): UsageEvent | null {
   const result = EventRow.safeParse(row);
@@ -325,6 +389,9 @@ export class EventStore implements EventRepository {
     const total = await this.count();
     /* c8 ignore next */
     if (total > MAX_RAW_EVENTS) await this.compact();
+    // Refresh only today's fact rows; historical data is unchanged by a normal insert.
+    const todayStart = startOf(Date.now(), 'day');
+    await this.refreshFacts(todayStart, todayStart + DAY_MS);
     return inserted;
   }
 
@@ -595,11 +662,78 @@ export class EventStore implements EventRepository {
     );
     delPrep.bindBigInt(1, cutoffBig);
     await delPrep.run();
+
+    // Compact restructures historical events; refresh the full fact window.
+    await this.refreshFacts();
   }
 
   /** @deprecated Use `compact()`. */
   async rollup(now = Date.now()): Promise<void> {
     return this.compact(now);
+  }
+
+  /**
+   * Query the materialized {@link fact_daily_usage} table: one aggregated row per
+   * UTC calendar day, with optional filter on date range / models / surfaces /
+   * repos / sources. Runs an integer-join over ~365 rows rather than scanning raw
+   * events — the fast path for dashboard daily-bar and summary queries.
+   *
+   * Returns an empty array until the first {@link insert} (which calls
+   * {@link refreshFacts}) has run.
+   */
+  async queryFacts(filter?: RecordFilter): Promise<FactRow[]> {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+
+    if (filter?.range) {
+      clauses.push('f.date_id >= ? AND f.date_id < ?');
+      params.push(dateToId(filter.range.start), dateToId(filter.range.end));
+    }
+    if (filter?.models?.length) {
+      clauses.push(`m.name IN (${filter.models.map(() => '?').join(',')})`);
+      params.push(...filter.models);
+    }
+    if (filter?.surfaces?.length) {
+      clauses.push(`sf.name IN (${filter.surfaces.map(() => '?').join(',')})`);
+      params.push(...filter.surfaces);
+    }
+    if (filter?.sources?.length) {
+      clauses.push(`sc.name IN (${filter.sources.map(() => '?').join(',')})`);
+      params.push(...filter.sources);
+    }
+    if (filter?.repos?.length) {
+      const names = filter.repos.map((r) => (r === UNATTRIBUTED_REPO ? 'unattributed' : r));
+      clauses.push(`r.name IN (${names.map(() => '?').join(',')})`);
+      params.push(...names);
+    }
+
+    const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    const sql = `
+      SELECT
+        d.date,
+        SUM(f.credits)     AS credits,
+        SUM(f.cost)        AS cost,
+        SUM(f.tokens)      AS tokens,
+        SUM(f.event_count) AS event_count
+      FROM fact_daily_usage f
+      JOIN dim_date    d  ON d.id  = f.date_id
+      JOIN dim_model   m  ON m.id  = f.model_id
+      JOIN dim_surface sf ON sf.id = f.surface_id
+      JOIN dim_source  sc ON sc.id = f.source_id
+      JOIN dim_repo    r  ON r.id  = f.repo_id
+      ${where}
+      GROUP BY d.date
+      ORDER BY d.date
+    `;
+    const rows = (await this.runSql(sql, params)).getRowObjects();
+    /* c8 ignore next 8 */
+    return rows.map((row) => ({
+      day:        String(row['date']        ?? ''),
+      credits:    Number(row['credits']     ?? 0),
+      cost:       Number(row['cost']        ?? 0),
+      tokens:     Number(row['tokens']      ?? 0),
+      eventCount: Number(row['event_count'] ?? 0),
+    }));
   }
 
   async dump(): Promise<UsageEvent[]> {
@@ -622,6 +756,67 @@ export class EventStore implements EventRepository {
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────
+
+  /**
+   * Seed dim_model / dim_repo for any new values present in `events`, then
+   * upsert `fact_daily_usage` rows for the given time window (epoch-ms).
+   *
+   * Defaults to the full stored range (0 … now+1 day) when called with no
+   * arguments (e.g. after compact). After a normal insert, callers pass just
+   * today's window so only a single date_id row is updated.
+   */
+  private async refreshFacts(
+    windowStart = 0,
+    windowEnd = Date.now() + DAY_MS,
+  ): Promise<void> {
+    // 1. Seed dim_model for any new model names not yet in the dimension table.
+    await this.conn.run(`
+      INSERT INTO dim_model (id, name)
+        SELECT CAST(nextval('seq_model_id') AS SMALLINT), modelId
+        FROM (
+          SELECT DISTINCT modelId FROM events
+          WHERE modelId NOT IN (SELECT name FROM dim_model)
+        ) sub
+    `);
+
+    // 2. Seed dim_repo (NULL repo maps to 'unattributed').
+    await this.conn.run(`
+      INSERT INTO dim_repo (id, name)
+        SELECT CAST(nextval('seq_repo_id') AS SMALLINT), repo_label
+        FROM (
+          SELECT DISTINCT COALESCE(repo, 'unattributed') AS repo_label FROM events
+          WHERE COALESCE(repo, 'unattributed') NOT IN (SELECT name FROM dim_repo)
+        ) sub
+    `);
+
+    // 3. Upsert fact rows for the window.  Uses v_events so NULL tokens are
+    //    already resolved to 0 and repo_label is non-null.
+    const prep = await this.conn.prepare(`
+      INSERT OR REPLACE INTO fact_daily_usage
+        (date_id, model_id, surface_id, source_id, repo_id,
+         credits, cost, tokens, event_count)
+      SELECT
+        CAST(strftime(to_timestamp(e.ts / 1000), '%Y%m%d') AS INTEGER) AS date_id,
+        m.id   AS model_id,
+        sf.id  AS surface_id,
+        sc.id  AS source_id,
+        r.id   AS repo_id,
+        SUM(e.credits)                                              AS credits,
+        SUM(e.cost)                                                 AS cost,
+        CAST(SUM(e.prompt_tokens + e.completion_tokens) AS BIGINT) AS tokens,
+        COUNT(*)                                                    AS event_count
+      FROM v_events e
+      JOIN dim_model   m  ON m.name  = e.modelId
+      JOIN dim_surface sf ON sf.name = e.surface
+      JOIN dim_source  sc ON sc.name = e.source
+      JOIN dim_repo    r  ON r.name  = e.repo_label
+      WHERE e.ts >= ? AND e.ts < ?
+      GROUP BY 1, 2, 3, 4, 5
+    `);
+    prep.bindBigInt(1, BigInt(windowStart));
+    prep.bindBigInt(2, BigInt(windowEnd));
+    await prep.run();
+  }
 
   /** Bulk insert with dedup (INSERT OR IGNORE). Returns count of rows actually written. */
   private async insertAll(events: UsageEvent[]): Promise<number> {
