@@ -20,6 +20,16 @@ import type { UsageEvent } from '../../src/domain/types';
 import type { RecordFilter } from '../../src/store/EventRepository';
 import { DAY_MS } from '../../src/util/time';
 
+// Cap DuckDB memory and threads so repeated store opens within one process
+// don't exhaust the buffer pool (DuckDB defaults to 80% of available RAM).
+async function openStore(dir: string): Promise<EventStore> {
+  const store = await EventStore.open(dir);
+  await (store as any).conn.run(
+    "SET memory_limit='4GB'; SET threads=2; SET preserve_insertion_order=false",
+  );
+  return store;
+}
+
 // ─── Data generators ────────────────────────────────────────────────────────
 
 const MODELS:   string[]                = ['gpt-4o', 'claude-sonnet-4-6', 'claude-haiku-4-5', 'o3', 'gemini-2-flash'];
@@ -110,16 +120,20 @@ async function benchAsync(
 async function benchmarkWrites(): Promise<void> {
   console.log('\n── Write Pipeline ──────────────────────────────────────────');
 
-  // insert() benchmark: each iteration inserts a fresh batch of unique events.
-  // Measures: batch INSERT + count check + refreshFacts(today window).
-  for (const [batchSize, warmup, iters] of [[100, 2, 10], [1_000, 1, 5], [10_000, 0, 3]] as const) {
+  // insert() benchmark: pre-seed each store with existing events, then measure
+  // adding a new batch. This reflects the real hot path: a plugin with an
+  // existing store ingesting a fresh sync of N events.
+  // Each store is pre-seeded with ~2k events so refreshFacts has realistic work.
+  for (const [batchSize, iters] of [[100, 8], [1_000, 5], [10_000, 3]] as const) {
     const tmp = mkdtempSync(join(tmpdir(), 'mallard-write-'));
-    const store = await EventStore.open(tmp);
+    const store = await openStore(tmp);
+    // Pre-seed with 2k background events (not timed).
+    await store.writer.insert(generateEvents(2_000, 90, `seed${batchSize}`));
 
     await benchAsync(`insert ${batchSize} events (+ refreshFacts today)`, async () => {
       const events = generateEvents(batchSize, 30, `ins${batchSize}`);
       await store.writer.insert(events);
-    }, { warmup, iters });
+    }, { warmup: 0, iters });
 
     store.dispose();
     rmSync(tmp, { recursive: true, force: true });
@@ -129,7 +143,7 @@ async function benchmarkWrites(): Promise<void> {
   // This is called once per insert() and once during compact().
   {
     const tmp = mkdtempSync(join(tmpdir(), 'mallard-facts-'));
-    const store = await EventStore.open(tmp);
+    const store = await openStore(tmp);
     await store.writer.insert(generateEvents(10_000, 90, 'rf'));
 
     await benchAsync('refreshFacts full-window (10k events)', async () => {
@@ -144,7 +158,7 @@ async function benchmarkWrites(): Promise<void> {
   // Re-seeds between iterations so each compact() has real work to do.
   {
     const tmp = mkdtempSync(join(tmpdir(), 'mallard-compact-'));
-    const store = await EventStore.open(tmp);
+    const store = await openStore(tmp);
     let compactIter = 0;
 
     await benchAsync('compact() — 10k old events → daily rollup + DELETE', async () => {
@@ -168,8 +182,11 @@ async function benchmarkReads(store: EventStore, count: number): Promise<void> {
     models: ['gpt-4o'],
   };
 
-  await benchAsync(`find — no filter          (${count})`, async () => {
-    await store.reader.find(noFilter);
+  // At large scales, cap find() to avoid materialising tens of thousands
+  // of Zod-parsed rows in a single benchmark iteration.
+  const findFilter: RecordFilter = count > 5_000 ? { ...noFilter, limit: 5_000 } : noFilter;
+  await benchAsync(`find — no filter${count > 5_000 ? ' limit 5k' : '       '}  (${count})`, async () => {
+    await store.reader.find(findFilter);
   });
 
   await benchAsync(`find — model+30d filter   (${count})`, async () => {
@@ -270,10 +287,10 @@ async function main(): Promise<void> {
 
   await benchmarkWrites();
 
-  for (const count of [1_000, 10_000, 50_000]) {
+  for (const count of [1_000, 10_000, 25_000]) {
     console.log(`\n── Read Queries (${count} events) ${'─'.repeat(35)}`);
     const tmp   = mkdtempSync(join(tmpdir(), `mallard-read${count}-`));
-    const store = await EventStore.open(tmp);
+    const store = await openStore(tmp);
     await store.writer.insert(generateEvents(count, 90, `r${count}`));
 
     await benchmarkReads(store, count);
@@ -285,7 +302,7 @@ async function main(): Promise<void> {
   console.log('\n── Full Snapshot Pipeline ──────────────────────────────────');
   for (const count of [1_000, 10_000]) {
     const tmp   = mkdtempSync(join(tmpdir(), `mallard-snap${count}-`));
-    const store = await EventStore.open(tmp);
+    const store = await openStore(tmp);
     await store.writer.insert(generateEvents(count, 90, `s${count}`));
 
     await benchmarkSnapshot(store, count);
