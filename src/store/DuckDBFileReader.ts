@@ -48,7 +48,7 @@ export class DuckDBFileReader {
     try {
       rows = (
         await this.conn.runAndReadAll(
-          `SELECT * FROM read_ndjson([${globList}], ignore_errors := true, auto_detect := true) ${tsFilter}`,
+          `SELECT *, filename FROM read_ndjson([${globList}], ignore_errors := true, auto_detect := true, filename := true) ${tsFilter}`,
         )
       ).getRowObjects();
     } catch {
@@ -74,7 +74,7 @@ export class DuckDBFileReader {
       const rows = (
         await this.conn.runAndReadAll(
           `SELECT COUNT(*) AS cnt
-           FROM read_ndjson([${globList}], ignore_errors := true, auto_detect := true)
+           FROM read_ndjson([${globList}], ignore_errors := true, auto_detect := true, filename := true)
            WHERE ${safeField} = '${safeValue}'`,
         )
       ).getRowObjects();

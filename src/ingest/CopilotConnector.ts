@@ -3,26 +3,15 @@ import * as path from 'path';
 import { ParseContext } from './otelParse';
 import { locateCopilotLogDirs } from './locate';
 import { priceRequest } from '../domain/pricing';
-import { CostCategory, Surface, UsageEvent } from '../domain/types';
+import { CostCategory, UsageEvent } from '../domain/types';
 import { PricingService } from '../pricing/PricingService';
 import { DuckDBFileReader } from '../store/DuckDBFileReader';
 import type { MetaStore } from '../store/MetaStore';
 import { BaseFileConnector } from './BaseFileConnector';
+import { num, pick, toSurface, fileKeyOf } from './connectorUtils';
 /* c8 ignore stop */
 
 type AnyRecord = Record<string, unknown>;
-
-function num(v: unknown): number | undefined {
-  const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : undefined;
-  return n != null && !Number.isNaN(n) && n >= 0 ? n : undefined;
-}
-
-function pick(attrs: AnyRecord, keys: string[]): unknown {
-  for (const k of keys) {
-    if (attrs[k] != null) return attrs[k];
-  }
-  return undefined;
-}
 
 function splitCost(cost: number, prompt: number, total: number): Partial<Record<CostCategory, number>> {
   const inputCost = (cost * prompt) / total;
@@ -31,22 +20,6 @@ function splitCost(cost: number, prompt: number, total: number): Partial<Record<
   const outputCost = cost - inputCost;
   if (outputCost > 0) out.output = outputCost;
   return out;
-}
-
-function toSurface(v: unknown): Surface {
-  const s = String(v ?? '').toLowerCase();
-  if (s.includes('inline') || s.includes('completion')) return 'inline';
-  if (s.includes('agent')) return 'agent';
-  if (s.includes('edit')) return 'edit';
-  if (s.includes('chat')) return 'chat';
-  return 'unknown';
-}
-
-/** djb2 hash — stable short key for a file path, used to namespace event ids. */
-function fileKeyOf(filePath: string): string {
-  let hash = 5381;
-  for (let i = 0; i < filePath.length; i++) hash = ((hash << 5) + hash + filePath.charCodeAt(i)) | 0;
-  return (hash >>> 0).toString(36);
 }
 
 export class CopilotConnector extends BaseFileConnector {
@@ -72,13 +45,11 @@ export class CopilotConnector extends BaseFileConnector {
     if (dirs.length === 0) return { globs: [], allowedRoots: [], searchedDirs: [] };
 
     this.logPaths = dirs;
-    // Copilot logs are NDJSON files under the VS Code log dirs.
-    // Use broad glob; mapRow filters for Copilot-specific fields.
     const globs = dirs.map((d) => path.join(d, '**'));
     return { globs, allowedRoots: dirs, searchedDirs: dirs };
   }
 
-  protected mapRow(row: AnyRecord, ctx: ParseContext): UsageEvent | null {
+  mapRow(row: AnyRecord, ctx: ParseContext): UsageEvent | null {
     const attrs = (row['attributes'] as AnyRecord | undefined) ?? row;
     const model = pick(attrs, ['gen_ai.request.model', 'gen_ai.response.model', 'model']);
     if (!model) return null;
@@ -112,9 +83,8 @@ export class CopilotConnector extends BaseFileConnector {
     const surfaceHint =
       pick(attrs, ['gen_ai.operation.surface', 'surface', 'gen_ai.operation.name']) ?? row['name'];
 
-    // Stable id: hash of the file path is unavailable in DuckDB row mode,
-    // so we use a hash of the model+timestamp combination as a discriminator.
-    const fileKey = typeof row['__filename'] === 'string' ? fileKeyOf(row['__filename']) : 'cp';
+    // DuckDB adds filename column via `filename := true` in read_ndjson.
+    const fileKey = typeof row['filename'] === 'string' ? fileKeyOf(row['filename']) : 'cp';
     const rowKey = `${fileKey}:${ts}:${String(model)}`;
 
     return {

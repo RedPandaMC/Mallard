@@ -9,21 +9,10 @@ import { PricingService } from '../pricing/PricingService';
 import { DuckDBFileReader } from '../store/DuckDBFileReader';
 import type { MetaStore } from '../store/MetaStore';
 import { BaseFileConnector } from './BaseFileConnector';
+import { num, pick } from './connectorUtils';
 /* c8 ignore stop */
 
 type AnyRecord = Record<string, unknown>;
-
-function num(v: unknown): number | undefined {
-  const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : undefined;
-  return n != null && !Number.isNaN(n) && n >= 0 ? n : undefined;
-}
-
-function pick(attrs: AnyRecord, keys: string[]): unknown {
-  for (const k of keys) {
-    if (attrs[k] != null) return attrs[k];
-  }
-  return undefined;
-}
 
 function splitCost(
   cost: number,
@@ -83,19 +72,17 @@ export class ClaudeCodeConnector extends BaseFileConnector {
     if (dirs.length === 0) return { globs: [], allowedRoots: [], searchedDirs: [] };
 
     this.logPaths = dirs;
-    // Claude Code writes one .jsonl file per session under ~/.claude/projects/<hash>/
     const globs = dirs.map((d) => path.join(d, '**', '*.jsonl'));
     return { globs, allowedRoots: dirs, searchedDirs: dirs };
   }
 
   protected override async buildContext(globs: string[]): Promise<ParseContext> {
     const base = await super.buildContext(globs);
-    // Pre-scan to detect agent surface (any session with tool calls => agent for this batch).
     const isAgent = await this.fileReader.hasField(globs, 'type', 'tool');
     return { ...base, surface: isAgent ? 'agent' : 'chat' };
   }
 
-  protected mapRow(row: AnyRecord, ctx: ParseContext): UsageEvent | null {
+  mapRow(row: AnyRecord, ctx: ParseContext): UsageEvent | null {
     if (row['type'] !== 'assistant') return null;
 
     const msg   = (row['message']  as AnyRecord | undefined) ?? row;
@@ -141,7 +128,10 @@ export class ClaudeCodeConnector extends BaseFileConnector {
 
     const surface: Surface = ctx.surface ?? 'agent';
 
-    // Resolve workspace folder for per-folder repo attribution
+    // sessionId is the last 8 chars of the session UUID — enough to discriminate
+    // concurrent turns without exposing the full id in event keys.
+    const sessionKey = typeof row['sessionId'] === 'string' ? row['sessionId'].slice(-8) : 'cc';
+
     let repo = ctx.repo;
     const folders = this.getFolders();
     if (folders) {
@@ -153,7 +143,7 @@ export class ClaudeCodeConnector extends BaseFileConnector {
     }
 
     return {
-      id: `claude-code:${ts}:${String(model)}`,
+      id: `claude-code:${sessionKey}:${ts}:${String(model)}`,
       ts,
       modelId: String(model),
       surface,

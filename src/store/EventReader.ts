@@ -147,6 +147,26 @@ function whereClause(filter: RecordFilter): RawBuilder<unknown> {
   return parts.length > 0 ? sql`WHERE ${sql.join(parts, sql` AND `)}` : sql``;
 }
 
+/** WHERE parts for fact/dim JOIN queries (uses dim table aliases, not raw events columns). */
+function buildFactsWhereParts(filter?: RecordFilter): RawBuilder<unknown>[] {
+  const parts: RawBuilder<unknown>[] = [];
+  if (filter?.range) {
+    parts.push(sql`f.date_id >= ${dateToId(filter.range.start)} AND f.date_id < ${dateToId(filter.range.end)}`);
+  }
+  if (filter?.models?.length)   parts.push(sql`m.name IN (${sql.join(filter.models)})`);
+  if (filter?.surfaces?.length) parts.push(sql`sf.name IN (${sql.join(filter.surfaces)})`);
+  if (filter?.sources?.length)  parts.push(sql`sc.name IN (${sql.join(filter.sources)})`);
+  if (filter?.repos?.length) {
+    const named = filter.repos.filter((r) => r !== UNATTRIBUTED_REPO);
+    const hasUnattr = filter.repos.includes(UNATTRIBUTED_REPO);
+    const sub: RawBuilder<unknown>[] = [];
+    if (named.length) sub.push(sql`r.name IN (${sql.join(named)})`);
+    if (hasUnattr)    sub.push(sql`r.name = ${'unattributed'}`);
+    if (sub.length)   parts.push(sql`(${sql.join(sub, sql` OR `)})`);
+  }
+  return parts;
+}
+
 // ── Implementation ─────────────────────────────────────────────────────────────
 
 export class EventReader implements IEventReader {
@@ -350,54 +370,8 @@ export class EventReader implements IEventReader {
   }
 
   async queryFacts(filter?: RecordFilter): Promise<FactRow[]> {
-    const clauses: string[] = [];
-    const params: unknown[] = [];
-
-    if (filter?.range) {
-      clauses.push('f.date_id >= ? AND f.date_id < ?');
-      params.push(dateToId(filter.range.start), dateToId(filter.range.end));
-    }
-    if (filter?.models?.length) {
-      clauses.push(`m.name IN (${filter.models.map(() => '?').join(',')})`);
-      params.push(...filter.models);
-    }
-    if (filter?.surfaces?.length) {
-      clauses.push(`sf.name IN (${filter.surfaces.map(() => '?').join(',')})`);
-      params.push(...filter.surfaces);
-    }
-    if (filter?.sources?.length) {
-      clauses.push(`sc.name IN (${filter.sources.map(() => '?').join(',')})`);
-      params.push(...filter.sources);
-    }
-    if (filter?.repos?.length) {
-      const names = filter.repos.map((r) => (r === UNATTRIBUTED_REPO ? 'unattributed' : r));
-      clauses.push(`r.name IN (${names.map(() => '?').join(',')})`);
-      params.push(...names);
-    }
-
-    // Bind params as raw sql fragments (safe: numeric ids and pre-validated model/surface names)
-    const paramFragments = params.map((p) =>
-      typeof p === 'number' ? sql.raw(String(p)) : sql`${String(p)}`,
-    );
-
-    // Build WHERE with correct parameterization
-    let whereSql: RawBuilder<unknown>;
-    if (clauses.length > 0) {
-      // Replace ? placeholders with actual params
-      let idx = 0;
-      const parts = clauses.join(' AND ').split('?');
-      const fragments: (RawBuilder<unknown> | string)[] = [];
-      for (let i = 0; i < parts.length; i++) {
-        fragments.push(parts[i]!);
-        if (i < paramFragments.length) fragments.push(paramFragments[idx++]!);
-      }
-      whereSql = sql`WHERE ${sql.join(
-        fragments.map((f) => (typeof f === 'string' ? sql.raw(f) : f)),
-        sql``,
-      )}`;
-    } else {
-      whereSql = sql``;
-    }
+    const wParts = buildFactsWhereParts(filter);
+    const whereSql = wParts.length > 0 ? sql`WHERE ${sql.join(wParts, sql` AND `)}` : sql``;
 
     const result = await sql<Record<string, unknown>>`
       SELECT

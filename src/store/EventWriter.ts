@@ -266,6 +266,18 @@ export class EventWriter implements IEventWriter {
       clauses.push(`modelId IN (${filter.models.map(() => '?').join(',')})`);
       params.push(...filter.models);
     }
+    if (filter.surfaces?.length) {
+      clauses.push(`surface IN (${filter.surfaces.map(() => '?').join(',')})`);
+      params.push(...filter.surfaces);
+    }
+    if (filter.sources?.length) {
+      clauses.push(`source IN (${filter.sources.map(() => '?').join(',')})`);
+      params.push(...filter.sources);
+    }
+    if (filter.branches?.length) {
+      clauses.push(`branch IN (${filter.branches.map(() => '?').join(',')})`);
+      params.push(...filter.branches);
+    }
     if (filter.repos?.length) {
       const named = filter.repos.filter((r) => r !== UNATTRIBUTED_REPO);
       const hasUnattr = filter.repos.includes(UNATTRIBUTED_REPO);
