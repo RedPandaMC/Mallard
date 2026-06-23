@@ -6,6 +6,9 @@
  *   2. Read queries: find, count, bucket, queryFacts, rank, pivot, aggregate
  *   3. End-to-end: find → buildSnapshot (JS aggregation layer on top of DuckDB results)
  *
+ * Uses a SINGLE DuckDB instance throughout (store.writer.clear() between suites) to
+ * avoid the process-level buffer-pool leak that occurs when opening many instances.
+ *
  * Run with:  npx tsx test/bench/benchmark.ts
  */
 
@@ -20,16 +23,6 @@ import type { UsageEvent } from '../../src/domain/types';
 import type { RecordFilter } from '../../src/store/EventRepository';
 import { DAY_MS } from '../../src/util/time';
 
-// Cap DuckDB memory and threads so repeated store opens within one process
-// don't exhaust the buffer pool (DuckDB defaults to 80% of available RAM).
-async function openStore(dir: string): Promise<EventStore> {
-  const store = await EventStore.open(dir);
-  await (store as any).conn.run(
-    "SET memory_limit='4GB'; SET threads=2; SET preserve_insertion_order=false",
-  );
-  return store;
-}
-
 // ─── Data generators ────────────────────────────────────────────────────────
 
 const MODELS:   string[]                = ['gpt-4o', 'claude-sonnet-4-6', 'claude-haiku-4-5', 'o3', 'gemini-2-flash'];
@@ -39,12 +32,12 @@ const SOURCES:  UsageEvent['source'][]  = ['local', 'local', 'local', 'github', 
 
 let eventUid = 0;
 
-function makeEvent(ts: number, idPrefix = 'e'): UsageEvent {
+function makeEvent(ts: number, prefix: string): UsageEvent {
   const i = eventUid++;
   const credits = 1 + (i % 10);
-  const cost = credits * 0.04;
+  const cost    = credits * 0.04;
   return {
-    id: `${idPrefix}-${i}`,
+    id:               `${prefix}-${i}`,
     ts,
     modelId:          MODELS[i % MODELS.length]!,
     surface:          SURFACES[i % SURFACES.length]!,
@@ -59,18 +52,17 @@ function makeEvent(ts: number, idPrefix = 'e'): UsageEvent {
   };
 }
 
-function generateEvents(count: number, windowDays = 90, idPrefix = 'e'): UsageEvent[] {
+function generateEvents(count: number, windowDays = 90, prefix = 'e'): UsageEvent[] {
   const now = Date.now();
   return Array.from({ length: count }, () =>
-    makeEvent(now - Math.floor(Math.random() * windowDays) * DAY_MS, idPrefix),
+    makeEvent(now - Math.floor(Math.random() * windowDays) * DAY_MS, prefix),
   );
 }
 
-/** Events dated 100–180 days ago so compact() picks them up immediately. */
-function generateOldEvents(count: number, idPrefix = 'old'): UsageEvent[] {
+function generateOldEvents(count: number, prefix = 'old'): UsageEvent[] {
   const now = Date.now();
   return Array.from({ length: count }, () =>
-    makeEvent(now - (100 + Math.floor(Math.random() * 80)) * DAY_MS, idPrefix),
+    makeEvent(now - (100 + Math.floor(Math.random() * 80)) * DAY_MS, prefix),
   );
 }
 
@@ -87,12 +79,12 @@ interface Result {
 
 const results: Result[] = [];
 
-async function benchAsync(
+async function bench(
   name: string,
   fn: () => Promise<void>,
   opts: { warmup?: number; iters?: number } = {},
 ): Promise<void> {
-  const warmup = opts.warmup ?? 3;
+  const warmup = opts.warmup ?? 2;
   const iters  = opts.iters  ?? 20;
 
   for (let i = 0; i < warmup; i++) await fn();
@@ -108,118 +100,82 @@ async function benchAsync(
   results.push({
     name,
     iterations: iters,
-    meanMs:   mean,
-    minMs:    Math.min(...times),
-    maxMs:    Math.max(...times),
+    meanMs:    mean,
+    minMs:     Math.min(...times),
+    maxMs:     Math.max(...times),
     opsPerSec: 1000 / mean,
   });
 }
 
+// ─── Suite helpers ───────────────────────────────────────────────────────────
+
+/** Reset the store to an empty state and seed it with fresh events (not timed). */
+async function seed(store: EventStore, count: number, windowDays = 90, prefix = 'e'): Promise<void> {
+  await store.writer.clear();
+  if (count > 0) await store.writer.insert(generateEvents(count, windowDays, prefix));
+}
+
 // ─── Suite 1: Write Pipeline ─────────────────────────────────────────────────
 
-async function benchmarkWrites(): Promise<void> {
+async function benchmarkWrites(store: EventStore): Promise<void> {
   console.log('\n── Write Pipeline ──────────────────────────────────────────');
 
-  // insert() benchmark: pre-seed each store with existing events, then measure
-  // adding a new batch. This reflects the real hot path: a plugin with an
-  // existing store ingesting a fresh sync of N events.
-  // Each store is pre-seeded with ~2k events so refreshFacts has realistic work.
+  // insert(): pre-seed with 2k background events so refreshFacts has realistic
+  // existing data to merge with.  Each iteration appends a fresh batch of unique events.
   for (const [batchSize, iters] of [[100, 8], [1_000, 5], [10_000, 3]] as const) {
-    const tmp = mkdtempSync(join(tmpdir(), 'mallard-write-'));
-    const store = await openStore(tmp);
-    // Pre-seed with 2k background events (not timed).
-    await store.writer.insert(generateEvents(2_000, 90, `seed${batchSize}`));
-
-    await benchAsync(`insert ${batchSize} events (+ refreshFacts today)`, async () => {
-      const events = generateEvents(batchSize, 30, `ins${batchSize}`);
-      await store.writer.insert(events);
+    await seed(store, 2_000, 90, `bg${batchSize}`);
+    await bench(`insert ${batchSize.toString().padStart(6)} events  (+ refreshFacts today)`, async () => {
+      await store.writer.insert(generateEvents(batchSize, 30, `w${batchSize}`));
     }, { warmup: 0, iters });
-
-    store.dispose();
-    rmSync(tmp, { recursive: true, force: true });
   }
 
-  // refreshFacts standalone: measures the full fact-table rebuild for a given window.
-  // This is called once per insert() and once during compact().
-  {
-    const tmp = mkdtempSync(join(tmpdir(), 'mallard-facts-'));
-    const store = await openStore(tmp);
-    await store.writer.insert(generateEvents(10_000, 90, 'rf'));
+  // refreshFacts standalone: the full star-schema rebuild over the entire window.
+  await seed(store, 10_000, 90, 'rfbg');
+  await bench('refreshFacts — full window rebuild  (10k events)', async () => {
+    await (store.writer as any).refreshFacts(0, Date.now() + DAY_MS);
+  }, { warmup: 1, iters: 8 });
 
-    await benchAsync('refreshFacts full-window (10k events)', async () => {
-      await (store.writer as any).refreshFacts(0, Date.now() + DAY_MS);
-    }, { warmup: 2, iters: 10 });
-
-    store.dispose();
-    rmSync(tmp, { recursive: true, force: true });
-  }
-
-  // compact(): rolls up events older than RAW_WINDOW_DAYS (90 d) into daily summaries.
-  // Re-seeds between iterations so each compact() has real work to do.
-  {
-    const tmp = mkdtempSync(join(tmpdir(), 'mallard-compact-'));
-    const store = await openStore(tmp);
-    let compactIter = 0;
-
-    await benchAsync('compact() — 10k old events → daily rollup + DELETE', async () => {
-      // Re-seed before each compact so there is always raw material.
-      await store.writer.insert(generateOldEvents(10_000, `cp${compactIter++}`));
-      await store.writer.compact();
-    }, { warmup: 0, iters: 3 });
-
-    store.dispose();
-    rmSync(tmp, { recursive: true, force: true });
-  }
+  // compact(): rolls up events older than 90 d into daily summaries + deletes raw.
+  // Re-inserts old events before each iteration so compact() always has work.
+  let compactPass = 0;
+  await seed(store, 0);
+  await bench('compact()  — 10k old events  (rollup + DELETE)', async () => {
+    await store.writer.insert(generateOldEvents(10_000, `cp${compactPass++}`));
+    await store.writer.compact();
+  }, { warmup: 0, iters: 3 });
 }
 
 // ─── Suite 2: Read Queries ───────────────────────────────────────────────────
 
 async function benchmarkReads(store: EventStore, count: number): Promise<void> {
-  const now      = Date.now();
+  const now   = Date.now();
   const noFilter: RecordFilter = {};
-  const modelRangeFilter: RecordFilter = {
-    range:  { start: now - 30 * DAY_MS, end: now },
-    models: ['gpt-4o'],
-  };
+  const narrow: RecordFilter   = { range: { start: now - 30 * DAY_MS, end: now }, models: ['gpt-4o'] };
 
-  // At large scales, cap find() to avoid materialising tens of thousands
-  // of Zod-parsed rows in a single benchmark iteration.
-  const findFilter: RecordFilter = count > 5_000 ? { ...noFilter, limit: 5_000 } : noFilter;
-  await benchAsync(`find — no filter${count > 5_000 ? ' limit 5k' : '       '}  (${count})`, async () => {
-    await store.reader.find(findFilter);
-  });
-
-  await benchAsync(`find — model+30d filter   (${count})`, async () => {
-    await store.reader.find(modelRangeFilter);
-  });
-
-  await benchAsync(`count                     (${count})`, async () => {
-    await store.reader.count(noFilter);
-  });
+  // find() caps at 5k rows for large stores to bound per-iteration JS allocation.
+  const findFilter = count > 5_000 ? { ...noFilter, limit: 5_000 } : noFilter;
+  const findLabel  = count > 5_000 ? 'find (limit 5k)          ' : 'find (no filter)         ';
+  await bench(`${findLabel} (${count})`, async () => { await store.reader.find(findFilter); });
+  await bench(`find (model + 30d filter)  (${count})`, async () => { await store.reader.find(narrow); });
+  await bench(`count                      (${count})`, async () => { await store.reader.count(noFilter); });
 
   for (const by of ['day', 'week', 'month', 'hour', 'weekday'] as const) {
-    await benchAsync(`bucket(${by.padEnd(7)})             (${count})`, async () => {
+    await bench(`bucket(${by.padEnd(7)})            (${count})`, async () => {
       await store.reader.bucket(noFilter, by);
     });
   }
 
-  await benchAsync(`queryFacts — no filter    (${count})`, async () => {
-    await store.reader.queryFacts();
-  });
-
-  await benchAsync(`queryFacts — model filter (${count})`, async () => {
+  await bench(`queryFacts (no filter)     (${count})`, async () => { await store.reader.queryFacts(); });
+  await bench(`queryFacts (model filter)  (${count})`, async () => {
     await store.reader.queryFacts({ models: ['gpt-4o'] });
   });
-
-  await benchAsync(`rank credits top-10       (${count})`, async () => {
+  await bench(`rank credits top-10        (${count})`, async () => {
     await store.reader.rank(noFilter, 'credits', 10);
   });
-
-  await benchAsync(`pivot surface × credits   (${count})`, async () => {
+  await bench(`pivot surface × credits    (${count})`, async () => {
     await store.reader.pivot(noFilter, 'surface', 'credits');
   });
-
-  await benchAsync(`aggregate credits+cost    (${count})`, async () => {
+  await bench(`aggregate credits+cost     (${count})`, async () => {
     await store.reader.aggregate(noFilter, ['credits', 'cost']);
   });
 }
@@ -227,7 +183,7 @@ async function benchmarkReads(store: EventStore, count: number): Promise<void> {
 // ─── Suite 3: Full Snapshot Pipeline ─────────────────────────────────────────
 
 async function benchmarkSnapshot(store: EventStore, count: number): Promise<void> {
-  const now = Date.now();
+  const now  = Date.now();
   const opts = {
     now,
     currency:        'USD',
@@ -235,21 +191,21 @@ async function benchmarkSnapshot(store: EventStore, count: number): Promise<void
     monthlyBudget:   50,
     includedCredits: 300,
     filter:          {},
-    source:          'local' as const,
+    source:          'local'       as const,
     status:          { kind: 'ok' as const },
-    authStatus:      'signed-out' as const,
+    authStatus:      'signed-out'  as const,
   };
 
-  await benchAsync(`find + buildSnapshot      (${count})`, async () => {
+  await bench(`find + buildSnapshot       (${count})`, async () => {
     const events = await store.reader.find({});
     buildSnapshot(events, opts);
-  }, { warmup: 2, iters: 10 });
+  }, { warmup: 1, iters: 10 });
 }
 
 // ─── Runner ─────────────────────────────────────────────────────────────────
 
 function printTable(): void {
-  const W = { name: 52, iters: 7, ms: 10, ops: 12 };
+  const W = { name: 54, iters: 7, ms: 10, ops: 12 };
   const pad  = (s: string, n: number) => s.padEnd(n);
   const rpad = (s: string, n: number) => s.padStart(n);
 
@@ -267,14 +223,15 @@ function printTable(): void {
   console.log(sep);
 
   for (const r of results) {
-    const row =
+    const ops = r.opsPerSec < 10 ? r.opsPerSec.toFixed(2) : Math.round(r.opsPerSec).toString();
+    console.log(
       pad(r.name, W.name) +
       rpad(String(r.iterations), W.iters) +
       rpad(r.meanMs.toFixed(3), W.ms) +
       rpad(r.minMs.toFixed(3), W.ms) +
       rpad(r.maxMs.toFixed(3), W.ms) +
-      rpad(r.opsPerSec < 10 ? r.opsPerSec.toFixed(2) : Math.round(r.opsPerSec).toString(), W.ops);
-    console.log(row);
+      rpad(ops, W.ops),
+    );
   }
 
   console.log(sep);
@@ -285,31 +242,29 @@ async function main(): Promise<void> {
   console.log('Mallard DuckDB Benchmarks');
   console.log(`Node.js ${process.version}  |  ${new Date().toISOString()}`);
 
-  await benchmarkWrites();
+  // Single shared instance — DuckDB leaks process-level buffer pool pages when
+  // multiple instances are opened sequentially, exhausting available memory.
+  const tmp   = mkdtempSync(join(tmpdir(), 'mallard-bench-'));
+  const store = await EventStore.open(tmp);
+  // Use a modest memory cap and single thread to keep the benchmark self-contained.
+  await (store as any).conn.run("SET memory_limit='4GB'; SET threads=1");
+
+  await benchmarkWrites(store);
 
   for (const count of [1_000, 10_000, 25_000]) {
     console.log(`\n── Read Queries (${count} events) ${'─'.repeat(35)}`);
-    const tmp   = mkdtempSync(join(tmpdir(), `mallard-read${count}-`));
-    const store = await openStore(tmp);
-    await store.writer.insert(generateEvents(count, 90, `r${count}`));
-
+    await seed(store, count, 90, `r${count}`);
     await benchmarkReads(store, count);
-
-    store.dispose();
-    rmSync(tmp, { recursive: true, force: true });
   }
 
   console.log('\n── Full Snapshot Pipeline ──────────────────────────────────');
   for (const count of [1_000, 10_000]) {
-    const tmp   = mkdtempSync(join(tmpdir(), `mallard-snap${count}-`));
-    const store = await openStore(tmp);
-    await store.writer.insert(generateEvents(count, 90, `s${count}`));
-
+    await seed(store, count, 90, `s${count}`);
     await benchmarkSnapshot(store, count);
-
-    store.dispose();
-    rmSync(tmp, { recursive: true, force: true });
   }
+
+  store.dispose();
+  rmSync(tmp, { recursive: true, force: true });
 
   printTable();
 }
