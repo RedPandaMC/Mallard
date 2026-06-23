@@ -109,10 +109,12 @@ async function bench(
 
 // ─── Suite helpers ───────────────────────────────────────────────────────────
 
-/** Reset the store to an empty state and seed it with fresh events (not timed). */
+/** Reset the store and seed it with fresh events (not timed). */
 async function seed(store: EventStore, count: number, windowDays = 90, prefix = 'e'): Promise<void> {
   await store.writer.clear();
   if (count > 0) await store.writer.insert(generateEvents(count, windowDays, prefix));
+  // Flush WAL + encourage buffer pool eviction between suites.
+  await (store as any).conn.run('CHECKPOINT');
 }
 
 // ─── Suite 1: Write Pipeline ─────────────────────────────────────────────────
@@ -247,7 +249,7 @@ async function main(): Promise<void> {
   const tmp   = mkdtempSync(join(tmpdir(), 'mallard-bench-'));
   const store = await EventStore.open(tmp);
   // Use a modest memory cap and single thread to keep the benchmark self-contained.
-  await (store as any).conn.run("SET memory_limit='4GB'; SET threads=1");
+  await (store as any).conn.run("SET memory_limit='8GB'; SET threads=1");
 
   await benchmarkWrites(store);
 
