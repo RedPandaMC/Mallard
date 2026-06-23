@@ -227,6 +227,7 @@
     "lint": "eslint src webview test",
     "test:unit": "mocha",
     "test:coverage": "c8 mocha",
+    "bench": "tsx test/bench/benchmark.ts",
     "compile-tests": "tsc -p tsconfig.host.json --outDir out",
     "pretest": "bun run compile-tests && bun run compile && bun run check-types && bun run lint",
     "test": "vscode-test",
