@@ -43,6 +43,13 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   pricing.startDailyRefresh();
 
   const store = await EventStore.open(storageDir);
+
+  // Proactive compact: run hourly so compaction is never on the hot insert path.
+  // The reactive guard (MAX_RAW_EVENTS) remains as a safety net.
+  const COMPACT_INTERVAL_MS = 60 * 60 * 1000;
+  const compactHandle = setInterval(() => { void store.compact(); }, COMPACT_INTERVAL_MS);
+  context.subscriptions.push({ dispose: () => clearInterval(compactHandle) });
+
   const watcher = new LogWatcher(
     store,
     pricing,

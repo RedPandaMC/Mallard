@@ -100,6 +100,8 @@ const CREATE_SQL = `
   );
   CREATE INDEX IF NOT EXISTS idx_ts ON events(ts);
   CREATE INDEX IF NOT EXISTS idx_model ON events(modelId);
+  CREATE INDEX IF NOT EXISTS idx_ts_model_surface_source
+    ON events(ts, modelId, surface, source);
   CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR);
   ALTER TABLE events ADD COLUMN IF NOT EXISTS branch VARCHAR;
 `;
@@ -210,15 +212,14 @@ export class EventStore implements EventRepository {
   async insert(records: UsageEvent[]): Promise<number> {
     /* c8 ignore next */
     if (records.length === 0) return 0;
-    const dupes = await this.countExistingIds(records.map((e) => e.id));
-    await this.insertAll(records);
+    const inserted = await this.insertAll(records);
     const total = await this.count();
     /* c8 ignore next */
     if (total > MAX_RAW_EVENTS) await this.compact();
-    return records.length - dupes;
+    return inserted;
   }
 
-  /** @deprecated Use `insert()`. */
+  /** @deprecated Use `insert()`. Kept for API compatibility. */
   async append(incoming: UsageEvent[]): Promise<number> {
     return this.insert(incoming);
   }
@@ -457,13 +458,57 @@ export class EventStore implements EventRepository {
 
   async compact(now = Date.now()): Promise<void> {
     const cutoff = startOf(now - RAW_WINDOW_DAYS * DAY_MS, 'day');
-    const old = await this.select('SELECT * FROM events WHERE ts < ? ORDER BY ts', [cutoff]);
-    if (old.length === 0) return;
-    const rolled = rollupEvents(old);
-    const del = await this.conn.prepare('DELETE FROM events WHERE ts < ?');
-    del.bindBigInt(1, BigInt(cutoff));
-    await del.run();
-    await this.insertAll(rolled);
+    const cutoffBig = BigInt(cutoff);
+
+    const checkPrep = await this.conn.prepare(
+      "SELECT COUNT(*) AS c FROM events WHERE ts < ? AND id NOT LIKE 'roll:%'",
+    );
+    checkPrep.bindBigInt(1, cutoffBig);
+    const checkRows = (await checkPrep.runAndReadAll()).getRowObjects();
+    if (Number(checkRows[0]?.c ?? 0) === 0) return;
+
+    // Roll up in DuckDB: one row per (UTC day, modelId, repo, surface, source).
+    // Uses UTC midnight for ts; ±1 hour error possible at DST boundary, acceptable
+    // for a billing heatmap. CTE avoids GROUP BY / SELECT alias name collision.
+    const rollupPrep = await this.conn.prepare(`
+      INSERT OR IGNORE INTO events
+        (id, ts, modelId, surface, source, credits, cost,
+         promptTokens, completionTokens, estimated, repo, costByCategory, branch)
+      WITH src AS (
+        SELECT
+          strftime(to_timestamp(MIN(raw_ts) / 1000), '%Y-%m-%d') AS day_str,
+          MIN(raw_ts) / 86400000 * 86400000                      AS day_ms,
+          modelId, surface, source, repo,
+          SUM(credits)                                            AS credits,
+          SUM(cost)                                               AS cost,
+          CAST(SUM(COALESCE(promptTokens, 0)) AS INTEGER)        AS promptTokens,
+          CAST(SUM(COALESCE(completionTokens, 0)) AS INTEGER)    AS completionTokens
+        FROM (SELECT ts AS raw_ts, modelId, surface, source, repo, credits, cost,
+                     promptTokens, completionTokens
+              FROM events
+              WHERE ts < ? AND id NOT LIKE 'roll:%') sub
+        GROUP BY strftime(to_timestamp(raw_ts / 1000), '%Y-%m-%d'),
+                 modelId, surface, source, repo
+      )
+      SELECT
+        'roll:' || day_str
+          || ':' || modelId
+          || ':' || COALESCE(repo, 'unattributed')
+          || ':' || surface
+          || ':' || source,
+        day_ms, modelId, surface, source,
+        credits, cost, promptTokens, completionTokens,
+        true, repo, NULL, NULL
+      FROM src
+    `);
+    rollupPrep.bindBigInt(1, cutoffBig);
+    await rollupPrep.run();
+
+    const delPrep = await this.conn.prepare(
+      "DELETE FROM events WHERE ts < ? AND id NOT LIKE 'roll:%'",
+    );
+    delPrep.bindBigInt(1, cutoffBig);
+    await delPrep.run();
   }
 
   /** @deprecated Use `compact()`. */
@@ -492,28 +537,17 @@ export class EventStore implements EventRepository {
 
   // ── Private helpers ──────────────────────────────────────────────────────────
 
-  /** Count how many of the given ids already exist (scoped query, not full scan). */
-  private async countExistingIds(ids: string[]): Promise<number> {
+  /** Bulk insert with dedup (INSERT OR IGNORE). Returns count of rows actually written. */
+  private async insertAll(events: UsageEvent[]): Promise<number> {
     /* c8 ignore next */
-    if (ids.length === 0) return 0;
-    const placeholders = ids.map(() => '?').join(',');
-    const prep = await this.conn.prepare(`SELECT count(*) AS c FROM events WHERE id IN (${placeholders})`);
-    ids.forEach((id, i) => prep.bindVarchar(i + 1, id));
-    const rows = (await prep.runAndReadAll()).getRowObjects();
-    /* c8 ignore next */
-    return Number(rows[0]?.c ?? 0);
-  }
-
-  /** Bulk insert with dedup (INSERT OR IGNORE) inside a single transaction. */
-  private async insertAll(events: UsageEvent[]): Promise<void> {
-    /* c8 ignore next */
-    if (events.length === 0) return;
+    if (events.length === 0) return 0;
     await this.conn.run('BEGIN');
+    let inserted = 0;
     try {
       const stmt = await this.conn.prepare(INSERT_SQL);
       for (const e of events) {
         bindEvent(stmt, e);
-        await stmt.run();
+        inserted += (await stmt.run()).rowsChanged;
       }
       await this.conn.run('COMMIT');
     /* c8 ignore next 4 */
@@ -521,6 +555,7 @@ export class EventStore implements EventRepository {
       await this.conn.run('ROLLBACK');
       throw err;
     }
+    return inserted;
   }
 
   private async select(sql: string, params: unknown[] = []): Promise<UsageEvent[]> {

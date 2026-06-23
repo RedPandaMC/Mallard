@@ -177,20 +177,20 @@ export function sumEvents(
  * Only includes links with value > 0.
  */
 export function sankeyLinksFor(events: readonly UsageEvent[], filter?: Filter): SankeyLink[] {
-  const map = new Map<string, number>();
+  const map = new Map<string, SankeyLink>();
   for (const entry of events) {
     if (!matchesFilter(entry, filter)) continue;
     if (entry.credits <= 0) continue;
-    const key = `${entry.modelId}|||${entry.surface}`;
-    map.set(key, (map.get(key) ?? 0) + entry.credits);
+    // \x00 cannot appear in modelId or surface, so it's a safe separator.
+    const key = `${entry.modelId}\x00${entry.surface}`;
+    const existing = map.get(key);
+    if (existing) {
+      existing.value += entry.credits;
+    } else {
+      map.set(key, { source: entry.modelId, target: entry.surface, value: entry.credits });
+    }
   }
-  return [...map.entries()]
-    .filter(([, v]) => v > 0)
-    .map(([key, value]) => {
-      const [source, target] = key.split('|||');
-      return { source, target, value };
-    })
-    .filter((l): l is SankeyLink => l.source !== undefined && l.target !== undefined);
+  return [...map.values()].filter((l) => l.value > 0);
 }
 
 /** All distinct model IDs in the filtered event set. */

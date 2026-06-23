@@ -89,9 +89,12 @@ export function buildModelBreakdownData(
 
 export function buildHourlyTimelineData(events: readonly UsageEvent[], filter?: Filter): HourlyTimelineData {
   const hours = new Array(24).fill(0) as number[];
+  // Compute local-timezone offset once; ±1 hour error possible at DST boundary,
+  // acceptable for a usage heatmap.
+  const tzOffsetMs = -new Date().getTimezoneOffset() * 60_000;
   for (const e of events) {
     if (!matchesFilter(e, filter)) continue;
-    hours[new Date(e.ts).getHours()]! += e.credits;
+    hours[Math.floor(((e.ts + tzOffsetMs) % DAY_MS) / 3_600_000) % 24]! += e.credits;
   }
   const peakHour = hours.indexOf(Math.max(...hours));
   return { hours, peakHour };
@@ -131,10 +134,11 @@ export function buildCategoryBreakdownData(
   for (const e of events) {
     if (!matchesFilter(e, f)) continue;
     if (!e.costByCategory) continue;
-    for (const [cat, val] of Object.entries(e.costByCategory)) {
+    for (const cat of COST_CATEGORIES) {
+      const val = e.costByCategory[cat];
       if (val == null || val <= 0) continue;
       any = true;
-      totals.set(cat as CostCategory, (totals.get(cat as CostCategory) ?? 0) + val);
+      totals.set(cat, (totals.get(cat) ?? 0) + val);
     }
   }
   if (!any) return { categories: [], costs: [], available: false };

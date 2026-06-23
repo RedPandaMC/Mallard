@@ -133,9 +133,8 @@ export class UsageService implements vscode.Disposable {
     // memory. `universe` (range-only) drives the filter dropdowns so selecting a
     // value never collapses the list of choices; `filteredEvents` drives totals.
     const rangeStart = startOf(now - 365 * DAY_MS, 'day');
-    const rangeFilter: Filter = this.filter.range ? { range: this.filter.range } : {};
-    let universe = await this.store.query(rangeFilter);
-    if (!this.filter.range) universe = universe.filter((e) => e.ts >= rangeStart);
+    const effectiveRange = this.filter.range ?? { start: rangeStart, end: now + DAY_MS };
+    const universe = await this.store.query({ range: effectiveRange });
     const filteredEvents = universe.filter((e) => matchesFilter(e, this.filter));
 
     const source =
