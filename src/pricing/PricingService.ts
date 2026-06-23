@@ -74,6 +74,13 @@ export class PricingService {
     return this.manifest;
   }
 
+  allPrices(): ReadonlyArray<{ modelId: string; multiplier: number }> {
+    return Object.entries(this.manifest.models ?? {}).map(([modelId, multiplier]) => ({
+      modelId,
+      multiplier: typeof multiplier === 'number' ? multiplier : 1,
+    }));
+  }
+
   async load(): Promise<void> {
     const cached = await this.loadCached();
     if (cached) {

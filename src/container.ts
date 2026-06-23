@@ -13,9 +13,9 @@ import { GitHubUsageService } from './billing/GitHubUsageService';
 import { RestrictionEngine } from './domain/restriction/engine';
 import { PricingManifest } from './domain/pricing';
 import { initRepoAttribution } from './ingest/repoResolver';
-import { LogWatcher } from './ingest/LogWatcher';
-import { OtelParser } from './ingest/parsers/OtelParser';
-import { ClaudeCodeParser } from './ingest/parsers/ClaudeCodeParser';
+import { CopilotConnector } from './ingest/CopilotConnector';
+import { ClaudeCodeConnector } from './ingest/ClaudeCodeConnector';
+import { IngestService } from './ingest/IngestService';
 import { PricingService } from './pricing/PricingService';
 import { EventStore } from './store/EventStore';
 import { createMetricExporter } from './export/ExporterFactory';
@@ -30,8 +30,6 @@ export interface Container {
 }
 
 export async function buildContainer(context: vscode.ExtensionContext): Promise<Container> {
-  // Best-effort and non-essential to first paint; don't block activation on the
-  // Git extension. Until it resolves, attribution falls back to folder names.
   void initRepoAttribution();
   const bundledManifest = await loadBundledManifest(context);
 
@@ -43,20 +41,26 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   pricing.startDailyRefresh();
 
   const store = await EventStore.open(storageDir);
+  await store.writer.setPrices(pricing.allPrices());
 
-  // Proactive compact: run hourly so compaction is never on the hot insert path.
-  // The reactive guard (MAX_RAW_EVENTS) remains as a safety net.
   const COMPACT_INTERVAL_MS = 60 * 60 * 1000;
   const compactHandle = setInterval(() => { void store.compact(); }, COMPACT_INTERVAL_MS);
   context.subscriptions.push({ dispose: () => clearInterval(compactHandle) });
 
-  const watcher = new LogWatcher(
-    store,
+  const copilot = new CopilotConnector(
     pricing,
-    [new OtelParser(), new ClaudeCodeParser(() => vscode.workspace.workspaceFolders)],
+    store.meta,
+    store.fileReader,
     context.logUri?.fsPath,
     cfg.copilotLogPath || undefined,
   );
+  const claudeCode = new ClaudeCodeConnector(
+    pricing,
+    store.meta,
+    store.fileReader,
+    () => vscode.workspace.workspaceFolders,
+  );
+  const ingest = new IngestService([copilot, claudeCode]);
 
   const githubSession = new GitHubSession();
   const github = new GitHubUsageService(githubSession);
@@ -74,19 +78,17 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     ...(ve.caPath ? { caPath: ve.caPath } : {}),
     ...(workspaceFolders?.length ? { workspaceFolders } : {}),
   }) ?? undefined;
-  const usage = new UsageService(store, pricing, watcher, userConfig, github, exporter);
+
+  const usage = new UsageService(store.reader, pricing, ingest, userConfig, github, exporter);
   const restriction = new RestrictionEngine(storageDir);
 
-  // Re-evaluate the restriction on every snapshot fire.
   context.subscriptions.push(
     usage.onDidChangeSnapshot(async (snapshot) => {
       const cfg = userConfig.get();
       await restriction.reconcile({
         snapshot,
         rules: cfg.rules ?? [],
-        ...(cfg.vars !== undefined
-          ? { vars: cfg.vars }
-          : {}),
+        ...(cfg.vars !== undefined ? { vars: cfg.vars } : {}),
         ...(cfg.groups !== undefined ? { groups: cfg.groups } : {}),
         signedIn: snapshot.authStatus === 'signed-in',
         ...(cfg.branchBudgets !== undefined ? { branchBudgets: cfg.branchBudgets } : {}),

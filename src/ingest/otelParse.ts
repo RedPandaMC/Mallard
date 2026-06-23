@@ -1,4 +1,5 @@
 import { PricingManifest } from '../domain/pricing';
+import type { Surface } from '../domain/types';
 
 export interface ParseContext {
   pricePerCredit: number;
@@ -16,4 +17,6 @@ export interface ParseContext {
    * in full or incrementally, so re-parsing never duplicates or drops events.
    */
   baseOffset?: number;
+  /** Pre-detected surface hint (e.g. from a glob-level agent-mode pre-scan). */
+  surface?: Surface;
 }

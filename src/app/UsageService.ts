@@ -1,5 +1,5 @@
 /**
- * Orchestrates LogWatcher → EventStore → UsageSnapshot and emits one
+ * Orchestrates IngestService → EventReader → UsageSnapshot and emits one
  * `onDidChangeSnapshot` stream that the status bar, dashboard, and sidebar
  * all subscribe to.
  */
@@ -10,9 +10,9 @@ import { buildSnapshot, SnapshotOptions } from '../domain/snapshot';
 import { AuthStatus, Filter, GitHubBillingData, UsageSnapshot } from '../domain/types';
 import { DAY_MS, startOf } from '../util/time';
 import type { IBillingProvider } from '../billing/IBillingProvider';
-import { LogWatcher } from '../ingest/LogWatcher';
+import { IngestService } from '../ingest/IngestService';
 import { PricingService } from '../pricing/PricingService';
-import { EventStore } from '../store/EventStore';
+import type { IEventReader } from '../store/EventReader';
 import { UserConfigStore } from './UserConfigStore';
 import { MetricExporter } from '../export/MetricExporter';
 import { activeBranch } from '../util/repo';
@@ -36,9 +36,9 @@ export class UsageService implements vscode.Disposable {
   private readonly exporter: MetricExporter | undefined;
 
   constructor(
-    private readonly store: EventStore,
+    private readonly reader: IEventReader,
     private readonly pricing: PricingService,
-    private readonly watcher: LogWatcher,
+    private readonly ingest: IngestService,
     private readonly userConfig: UserConfigStore,
     private readonly github?: IBillingProvider,
     exporter?: MetricExporter,
@@ -46,10 +46,8 @@ export class UsageService implements vscode.Disposable {
   ) {
     this.exporter = exporter;
     if (github) {
-      // Re-fetch billing whenever the underlying auth state changes.
       this.subs.push(github.onDidChange(() => void this.refreshGitHub()));
     }
-    // Budget/included credits feed the snapshot, so recompute on config change.
     this.subs.push(userConfig.onDidChange(() => this.compute()));
   }
 
@@ -62,19 +60,19 @@ export class UsageService implements vscode.Disposable {
   }
 
   getLogPaths(): string[] {
-    return this.watcher.getLogPaths();
+    return this.ingest.getLogPaths();
   }
 
   getSearchedDirs(): string[] {
-    return this.watcher.getSearchedDirs();
+    return this.ingest.getSearchedDirs();
   }
 
   getKnownDirs(): string[] {
-    return this.watcher.getKnownDirs();
+    return this.ingest.getKnownDirs();
   }
 
   getStatus() {
-    return this.watcher.getStatus();
+    return this.ingest.getStatus();
   }
 
   async setFilter(filter: Filter): Promise<void> {
@@ -83,11 +81,9 @@ export class UsageService implements vscode.Disposable {
   }
 
   async start(): Promise<void> {
-    await this.store.load();
-    await this.watcher.start();
+    await this.ingest.start();
     await this.compute();
     this.scheduleTimer();
-    // Silent background fetch — does not block startup.
     void this.refreshGitHub();
   }
 
@@ -97,12 +93,11 @@ export class UsageService implements vscode.Disposable {
   }
 
   async refresh(): Promise<void> {
-    await this.watcher.start();
+    await this.ingest.start();
     await this.compute();
     void this.refreshGitHub();
   }
 
-  /** Trigger explicit GitHub sign-in (shows a prompt). */
   async signInGitHub(): Promise<void> {
     if (!this.github) return;
     await this.github.signIn?.();
@@ -129,12 +124,9 @@ export class UsageService implements vscode.Disposable {
     for (const [key, ts] of this.alertFired)
       if (now - ts > 86_400_000) this.alertFired.delete(key);
 
-    // Query by date range only, then apply the model/surface/repo selection in
-    // memory. `universe` (range-only) drives the filter dropdowns so selecting a
-    // value never collapses the list of choices; `filteredEvents` drives totals.
     const rangeStart = startOf(now - 365 * DAY_MS, 'day');
     const effectiveRange = this.filter.range ?? { start: rangeStart, end: now + DAY_MS };
-    const universe = await this.store.query({ range: effectiveRange });
+    const universe = await this.reader.find({ range: effectiveRange });
     const filteredEvents = universe.filter((e) => matchesFilter(e, this.filter));
 
     const source =
@@ -153,7 +145,7 @@ export class UsageService implements vscode.Disposable {
       includedCredits: userConfig.includedCredits,
       filter: this.filter,
       source,
-      status: filteredEvents.length === 0 ? this.watcher.getStatus() : { kind: 'ok' },
+      status: filteredEvents.length === 0 ? this.ingest.getStatus() : { kind: 'ok' },
       authStatus: this.authStatus,
       ...(this.githubBilling !== undefined ? { githubBilling: this.githubBilling } : {}),
       dimensionEvents: universe,
@@ -185,13 +177,12 @@ export class UsageService implements vscode.Disposable {
 
   private scheduleTimer(): void {
     if (this.timer) clearInterval(this.timer);
-    // Re-parse logs every 10 minutes as a fallback for environments where fs.watch is unavailable.
     this.timer = setInterval(() => void this.refresh(), 10 * 60_000);
   }
 
   dispose(): void {
     if (this.timer) clearInterval(this.timer);
-    this.watcher.dispose();
+    this.ingest.dispose();
     this._onDidChange.dispose();
     this.subs.forEach((d) => d.dispose());
     this.github?.dispose();

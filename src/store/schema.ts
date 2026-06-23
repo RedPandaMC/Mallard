@@ -1,5 +1,5 @@
 // stub — wire up a migration runner before 1.0
-export const STORE_SCHEMA_VERSION = 4;
+export const STORE_SCHEMA_VERSION = 5;
 
 /** Keep this many days of raw, per-request events before rolling up. */
 export const RAW_WINDOW_DAYS = 90;
