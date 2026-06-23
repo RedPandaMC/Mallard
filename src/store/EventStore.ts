@@ -104,6 +104,66 @@ const CREATE_SQL = `
     ON events(ts, modelId, surface, source);
   CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR);
   ALTER TABLE events ADD COLUMN IF NOT EXISTS branch VARCHAR;
+
+  -- Shift-left views: computation defined once in schema, queried by application code.
+  -- Using CREATE OR REPLACE VIEW so definitions stay current across upgrades.
+
+  -- Daily rollup: one row per (UTC day, model, surface, source, repo) for all raw events.
+  -- compact() inserts from this view filtered to ts < cutoff, then deletes the originals.
+  -- Table alias e.ts in GROUP BY avoids DuckDB's GROUP BY / SELECT alias collision.
+  CREATE OR REPLACE VIEW v_daily_rollup AS
+    SELECT
+      'roll:' || strftime(to_timestamp(MIN(e.ts) / 1000), '%Y-%m-%d')
+        || ':' || e.modelId
+        || ':' || COALESCE(e.repo, 'unattributed')
+        || ':' || e.surface
+        || ':' || e.source                                         AS id,
+      MIN(e.ts) / 86400000 * 86400000                             AS ts,
+      e.modelId, e.surface, e.source,
+      SUM(e.credits)                                              AS credits,
+      SUM(e.cost)                                                 AS cost,
+      CAST(SUM(COALESCE(e.promptTokens, 0)) AS INTEGER)          AS promptTokens,
+      CAST(SUM(COALESCE(e.completionTokens, 0)) AS INTEGER)      AS completionTokens,
+      true                                                        AS estimated,
+      e.repo,
+      NULL::VARCHAR                                               AS costByCategory,
+      NULL::VARCHAR                                               AS branch
+    FROM events e
+    WHERE e.id NOT LIKE 'roll:%'
+    GROUP BY strftime(to_timestamp(e.ts / 1000), '%Y-%m-%d'),
+             e.modelId, e.surface, e.source, e.repo;
+
+  -- Top models by credits: pre-aggregated ranking, queryable with optional WHERE.
+  CREATE OR REPLACE VIEW v_top_models AS
+    SELECT
+      modelId                                                     AS key,
+      SUM(credits)                                                AS credits,
+      SUM(cost)                                                   AS cost,
+      SUM(COALESCE(promptTokens, 0) + COALESCE(completionTokens, 0)) AS tokens
+    FROM events
+    GROUP BY modelId
+    ORDER BY credits DESC;
+
+  -- Top surfaces by credits.
+  CREATE OR REPLACE VIEW v_top_by_surface AS
+    SELECT
+      surface                                                     AS key,
+      SUM(credits)                                                AS credits,
+      SUM(cost)                                                   AS cost,
+      SUM(COALESCE(promptTokens, 0) + COALESCE(completionTokens, 0)) AS tokens
+    FROM events
+    GROUP BY surface
+    ORDER BY credits DESC;
+
+  -- Sankey model→surface flow: source/target/value pre-aggregated.
+  CREATE OR REPLACE VIEW v_sankey_links AS
+    SELECT
+      modelId                                                     AS source,
+      surface                                                     AS target,
+      SUM(credits)                                               AS value
+    FROM events
+    WHERE credits > 0
+    GROUP BY modelId, surface;
 `;
 
 const INSERT_SQL = `INSERT OR IGNORE INTO events
@@ -467,40 +527,17 @@ export class EventStore implements EventRepository {
     const checkRows = (await checkPrep.runAndReadAll()).getRowObjects();
     if (Number(checkRows[0]?.c ?? 0) === 0) return;
 
-    // Roll up in DuckDB: one row per (UTC day, modelId, repo, surface, source).
-    // Uses UTC midnight for ts; ±1 hour error possible at DST boundary, acceptable
-    // for a billing heatmap. CTE avoids GROUP BY / SELECT alias name collision.
-    const rollupPrep = await this.conn.prepare(`
-      INSERT OR IGNORE INTO events
-        (id, ts, modelId, surface, source, credits, cost,
-         promptTokens, completionTokens, estimated, repo, costByCategory, branch)
-      WITH src AS (
-        SELECT
-          strftime(to_timestamp(MIN(raw_ts) / 1000), '%Y-%m-%d') AS day_str,
-          MIN(raw_ts) / 86400000 * 86400000                      AS day_ms,
-          modelId, surface, source, repo,
-          SUM(credits)                                            AS credits,
-          SUM(cost)                                               AS cost,
-          CAST(SUM(COALESCE(promptTokens, 0)) AS INTEGER)        AS promptTokens,
-          CAST(SUM(COALESCE(completionTokens, 0)) AS INTEGER)    AS completionTokens
-        FROM (SELECT ts AS raw_ts, modelId, surface, source, repo, credits, cost,
-                     promptTokens, completionTokens
-              FROM events
-              WHERE ts < ? AND id NOT LIKE 'roll:%') sub
-        GROUP BY strftime(to_timestamp(raw_ts / 1000), '%Y-%m-%d'),
-                 modelId, surface, source, repo
-      )
-      SELECT
-        'roll:' || day_str
-          || ':' || modelId
-          || ':' || COALESCE(repo, 'unattributed')
-          || ':' || surface
-          || ':' || source,
-        day_ms, modelId, surface, source,
-        credits, cost, promptTokens, completionTokens,
-        true, repo, NULL, NULL
-      FROM src
-    `);
+    // v_daily_rollup (defined in CREATE_SQL) holds the GROUP BY logic.
+    // DuckDB pushes the ts < ? predicate through the view into the table scan.
+    const rollupPrep = await this.conn.prepare(
+      `INSERT OR IGNORE INTO events
+         (id, ts, modelId, surface, source, credits, cost,
+          promptTokens, completionTokens, estimated, repo, costByCategory, branch)
+       SELECT id, ts, modelId, surface, source, credits, cost,
+              promptTokens, completionTokens, estimated, repo, costByCategory, branch
+       FROM v_daily_rollup
+       WHERE ts < ?`,
+    );
     rollupPrep.bindBigInt(1, cutoffBig);
     await rollupPrep.run();
 
