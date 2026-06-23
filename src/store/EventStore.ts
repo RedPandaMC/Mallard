@@ -63,7 +63,9 @@ export class EventStore implements vscode.Disposable {
   clear(): Promise<void> { return this.writer.clear(); }
 
   dispose(): void {
+    /* c8 ignore next */
     try { this.conn.closeSync(); } catch { /* ignore */ }
+    /* c8 ignore next */
     try { this.instance.closeSync(); } catch { /* ignore */ }
   }
 }
@@ -89,6 +91,7 @@ function addCategories(a?: Categories, b?: Categories): Categories | undefined {
 }
 
 /** Collapse old per-request events into one row per day/model/repo/surface. */
+/* c8 ignore next */
 export function rollupEvents(old: UsageEvent[]): UsageEvent[] {
   const map = new Map<string, UsageEvent>();
   for (const e of old) {

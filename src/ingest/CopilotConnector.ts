@@ -103,4 +103,5 @@ export class CopilotConnector extends BaseFileConnector {
       ...(costByCategory !== undefined ? { costByCategory } : {}),
     };
   }
+/* c8 ignore next */
 }

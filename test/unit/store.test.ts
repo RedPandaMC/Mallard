@@ -439,6 +439,246 @@ describe('rollupEvents', () => {
   });
 });
 
+describe('EventStore — remove() filter dimensions', () => {
+  it('remove() with surfaces filter deletes only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: 1000, surface: 'chat' }),
+      makeEvent({ id: 'b', ts: 2000, surface: 'inline' }),
+    ]);
+    const removed = await store.writer.remove({ surfaces: ['chat'] });
+    assert.strictEqual(removed, 1);
+    assert.strictEqual(await store.count(), 1);
+    assert.strictEqual((await store.reader.find())[0]!.id, 'b');
+    store.dispose();
+  });
+
+  it('remove() with sources filter deletes only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: 1000, source: 'local' }),
+      makeEvent({ id: 'b', ts: 2000, source: 'claude-code' }),
+    ]);
+    const removed = await store.writer.remove({ sources: ['claude-code'] });
+    assert.strictEqual(removed, 1);
+    assert.strictEqual(await store.count(), 1);
+    assert.strictEqual((await store.reader.find())[0]!.id, 'a');
+    store.dispose();
+  });
+
+  it('remove() with branches filter deletes only matching events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: 1000, branch: 'main' }),
+      makeEvent({ id: 'b', ts: 2000, branch: 'feature' }),
+    ]);
+    const removed = await store.writer.remove({ branches: ['main'] });
+    assert.strictEqual(removed, 1);
+    assert.strictEqual(await store.count(), 1);
+    assert.strictEqual((await store.reader.find())[0]!.id, 'b');
+    store.dispose();
+  });
+
+  it('remove() with named repos filter deletes only the named repo', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: 1000, repo: 'org/alpha' }),
+      makeEvent({ id: 'b', ts: 2000, repo: 'org/beta' }),
+      makeEvent({ id: 'c', ts: 3000 }), // NULL repo
+    ]);
+    const removed = await store.writer.remove({ repos: ['org/alpha'] });
+    assert.strictEqual(removed, 1);
+    assert.strictEqual(await store.count(), 2);
+    store.dispose();
+  });
+
+  it('remove() with combined named + unattributed repos deletes both', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: 1000, repo: 'org/alpha' }),
+      makeEvent({ id: 'b', ts: 2000, repo: 'org/beta' }),
+      makeEvent({ id: 'c', ts: 3000 }), // NULL repo
+    ]);
+    const removed = await store.writer.remove({ repos: ['org/alpha', 'unattributed'] });
+    assert.strictEqual(removed, 2);
+    assert.strictEqual(await store.count(), 1);
+    assert.strictEqual((await store.reader.find())[0]!.id, 'b');
+    store.dispose();
+  });
+
+  it('remove() with range filter deletes only events in the range', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: 1000 }),
+      makeEvent({ id: 'b', ts: 5000 }),
+      makeEvent({ id: 'c', ts: 9000 }),
+    ]);
+    const removed = await store.writer.remove({ range: { start: 2000, end: 8000 } });
+    assert.strictEqual(removed, 1);
+    assert.strictEqual(await store.count(), 2);
+    const remaining = (await store.reader.find()).map((e) => e.id);
+    assert.ok(remaining.includes('a'));
+    assert.ok(remaining.includes('c'));
+    store.dispose();
+  });
+});
+
+describe('EventStore — setPrices', () => {
+  it('setPrices() stores multipliers without throwing', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.writer.setPrices([
+      { modelId: 'gpt-4o', multiplier: 2 },
+      { modelId: 'claude-sonnet-4', multiplier: 3 },
+    ]);
+    store.dispose();
+  });
+
+  it('setPrices() with empty array clears all prices', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.writer.setPrices([{ modelId: 'gpt-4o', multiplier: 2 }]);
+    await store.writer.setPrices([]);
+    store.dispose();
+  });
+});
+
+describe('EventStore — insert edge cases', () => {
+  it('insert() with empty array returns 0 without writing to db', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const inserted = await store.writer.insert([]);
+    assert.strictEqual(inserted, 0);
+    assert.strictEqual(await store.count(), 0);
+    store.dispose();
+  });
+
+  it('insert() with promptTokens and completionTokens stores token counts', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: 1000, promptTokens: 100, completionTokens: 50 }),
+    ]);
+    const events = await store.reader.find();
+    assert.strictEqual(events[0]!.promptTokens, 100);
+    assert.strictEqual(events[0]!.completionTokens, 50);
+    store.dispose();
+  });
+});
+
+describe('EventStore — queryFacts', () => {
+  it('queryFacts() returns empty array when no facts exist', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const rows = await store.reader.queryFacts();
+    assert.deepStrictEqual(rows, []);
+    store.dispose();
+  });
+
+  it('queryFacts() with range filter returns facts in range', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    // Use today's timestamp so insert() refreshes facts for today
+    const ts = startOf(Date.now(), 'day') + 3600000;
+    await store.writer.insert([makeEvent({ id: 'a', ts, credits: 5 })]);
+    const rows = await store.reader.queryFacts({
+      range: { start: ts - DAY_MS, end: ts + DAY_MS },
+    });
+    assert.strictEqual(rows.length, 1);
+    assert.ok(rows[0]!.credits > 0);
+    store.dispose();
+  });
+
+  it('queryFacts() with models filter counts only matching model', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const base = startOf(Date.now(), 'day') + 3600000;
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: base, modelId: 'gpt-4o', credits: 3 }),
+      makeEvent({ id: 'b', ts: base + 60000, modelId: 'claude-sonnet-4', credits: 7 }),
+    ]);
+    const rows = await store.reader.queryFacts({ models: ['gpt-4o'] });
+    const total = rows.reduce((s, r) => s + r.credits, 0);
+    assert.ok(total > 0 && total < 10);
+    store.dispose();
+  });
+
+  it('queryFacts() with surfaces filter narrows results', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const base = startOf(Date.now(), 'day') + 7200000;
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: base, surface: 'chat', credits: 2 }),
+      makeEvent({ id: 'b', ts: base + 60000, surface: 'inline', credits: 8 }),
+    ]);
+    const rows = await store.reader.queryFacts({ surfaces: ['chat'] });
+    const total = rows.reduce((s, r) => s + r.credits, 0);
+    assert.ok(total > 0 && total < 10);
+    store.dispose();
+  });
+
+  it('queryFacts() with sources filter narrows results', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const base = startOf(Date.now(), 'day') + 10800000;
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: base, source: 'local', credits: 4 }),
+      makeEvent({ id: 'b', ts: base + 60000, source: 'claude-code', credits: 6 }),
+    ]);
+    const rows = await store.reader.queryFacts({ sources: ['local'] });
+    const total = rows.reduce((s, r) => s + r.credits, 0);
+    assert.ok(total > 0 && total < 10);
+    store.dispose();
+  });
+
+  it('queryFacts() with named repos filter', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const base = startOf(Date.now(), 'day') + 14400000;
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: base, repo: 'org/x', credits: 3 }),
+      makeEvent({ id: 'b', ts: base + 60000, credits: 7 }),
+    ]);
+    const withRepo = await store.reader.queryFacts({ repos: ['org/x'] });
+    assert.ok(withRepo.reduce((s, r) => s + r.credits, 0) > 0);
+    store.dispose();
+  });
+
+  it('queryFacts() with repos: unattributed filter', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const base = startOf(Date.now(), 'day') + 18000000;
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: base, repo: 'org/x', credits: 3 }),
+      makeEvent({ id: 'b', ts: base + 60000, credits: 7 }),
+    ]);
+    const unattr = await store.reader.queryFacts({ repos: ['unattributed'] });
+    assert.ok(unattr.reduce((s, r) => s + r.credits, 0) > 0);
+    store.dispose();
+  });
+});
+
+describe('EventStore — deprecated query()', () => {
+  it('query() delegates to find() and returns the same results', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.writer.insert([makeEvent({ id: 'a', ts: 1000, modelId: 'gpt-4o' })]);
+    const fromQuery = await store.reader.query({ models: ['gpt-4o'] });
+    const fromFind = await store.reader.find({ models: ['gpt-4o'] });
+    assert.deepStrictEqual(
+      fromQuery.map((e) => e.id),
+      fromFind.map((e) => e.id),
+    );
+    store.dispose();
+  });
+});
+
 describe('EventStore — filter edge cases', () => {
   it('query with range filter returns only events in range', async () => {
     const dir = await tmpDir();

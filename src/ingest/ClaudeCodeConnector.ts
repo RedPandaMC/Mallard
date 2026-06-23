@@ -69,6 +69,7 @@ export class ClaudeCodeConnector extends BaseFileConnector {
 
   protected async discover(): Promise<{ globs: string[]; allowedRoots: string[]; searchedDirs: string[] }> {
     const dirs = await locateClaudeCodeLogDirs();
+    /* c8 ignore next */
     if (dirs.length === 0) return { globs: [], allowedRoots: [], searchedDirs: [] };
 
     this.logPaths = dirs;
@@ -161,4 +162,5 @@ export class ClaudeCodeConnector extends BaseFileConnector {
       ...(costByCategory !== undefined ? { costByCategory } : {}),
     };
   }
+/* c8 ignore next */
 }

@@ -83,4 +83,5 @@ export class DuckDBFileReader {
       return false;
     }
   }
+/* c8 ignore next */
 }

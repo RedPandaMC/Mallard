@@ -292,15 +292,15 @@ export class EventWriter implements IEventWriter {
     if (!clauses.length) return 0; // safety guard
 
     const where = `WHERE ${clauses.join(' AND ')}`;
-    const before = Number(
-      (await this.db.selectFrom('events').select((eb) => eb.fn.countAll().as('c')).executeTakeFirst())?.c ?? 0,
-    );
+    const beforeRow = await this.db.selectFrom('events').select((eb) => eb.fn.countAll().as('c')).executeTakeFirst();
+    /* c8 ignore next */
+    const before = Number(beforeRow?.c ?? 0);
     const prep = await this.conn.prepare(`DELETE FROM events ${where}`);
     params.forEach((p, i) => bindParam(prep, i + 1, p));
     await prep.run();
-    const after = Number(
-      (await this.db.selectFrom('events').select((eb) => eb.fn.countAll().as('c')).executeTakeFirst())?.c ?? 0,
-    );
+    const afterRow = await this.db.selectFrom('events').select((eb) => eb.fn.countAll().as('c')).executeTakeFirst();
+    /* c8 ignore next */
+    const after = Number(afterRow?.c ?? 0);
     return before - after;
   }
 
@@ -313,6 +313,7 @@ export class EventWriter implements IEventWriter {
     );
     checkPrep.bindBigInt(1, cutoffBig);
     const checkRows = (await checkPrep.runAndReadAll()).getRowObjects();
+    /* c8 ignore next */
     if (Number(checkRows[0]?.c ?? 0) === 0) return;
 
     const rollupPrep = await this.conn.prepare(

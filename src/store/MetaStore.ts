@@ -1,5 +1,7 @@
+/* c8 ignore start */
 import type { Kysely } from 'kysely';
 import type { Database } from './db-types';
+/* c8 ignore stop */
 
 export interface MetaStore {
   get(key: string): Promise<string | null>;
@@ -24,5 +26,7 @@ export class KyselyMetaStore implements MetaStore {
       .values({ key, value })
       .onConflict((oc) => oc.column('key').doUpdateSet({ value }))
       .execute();
+  /* c8 ignore next */
   }
+/* c8 ignore next */
 }

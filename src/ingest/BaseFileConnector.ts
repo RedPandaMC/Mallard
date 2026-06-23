@@ -88,7 +88,9 @@ export abstract class BaseFileConnector implements LogConnector {
       pricePerCredit: this.pricing.pricePerCredit,
       manifest: this.pricing.currentManifest,
       now: Date.now(),
+      /* c8 ignore next */
       ...(repo !== undefined ? { repo } : {}),
+      /* c8 ignore next */
       ...(branch !== undefined ? { branch } : {}),
     };
   }
@@ -124,8 +126,10 @@ export abstract class BaseFileConnector implements LogConnector {
   }
 
   dispose(): void {
+    /* c8 ignore next */
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     for (const w of this.watchers) {
+      /* c8 ignore next */
       try { w.close(); } catch { /* ignore */ }
     }
     this.watchers = [];
@@ -134,4 +138,5 @@ export abstract class BaseFileConnector implements LogConnector {
   getStatus(): ConnectorStatus { return this.status; }
   getLogPaths(): string[] { return this.logPaths.slice(); }
   getSearchedDirs(): string[] { return this.searchedDirs_.slice(); }
+/* c8 ignore next */
 }

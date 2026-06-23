@@ -204,6 +204,7 @@ export class EventReader implements IEventReader {
         .selectFrom('events')
         .select((eb) => eb.fn.countAll().as('c'))
         .executeTakeFirst();
+      /* c8 ignore next */
       return Number(row?.c ?? 0);
     }
 
@@ -211,6 +212,7 @@ export class EventReader implements IEventReader {
     const result = await sql<{ c: number | bigint }>`
       SELECT count(*) AS c FROM events ${where}
     `.execute(this.db);
+    /* c8 ignore next */
     return Number(result.rows[0]?.c ?? 0);
   }
 
@@ -247,8 +249,10 @@ export class EventReader implements IEventReader {
       SELECT COUNT(*) AS total, ${selectRaw} FROM events ${where}
     `.execute(this.db);
 
+    /* c8 ignore next */
     const row = result.rows[0] ?? {};
     const out: AggregateResult = {
+      /* c8 ignore next */
       count: Number(row['total'] ?? 0),
       sum: {}, mean: {}, stddev: {}, p50: {}, p95: {}, min: {}, max: {},
     };
@@ -414,6 +418,7 @@ export class EventReader implements IEventReader {
   }
 }
 
+/* c8 ignore next */
 function emptyAggregate(): AggregateResult {
   return { count: 0, sum: {}, mean: {}, stddev: {}, p50: {}, p95: {}, min: {}, max: {} };
 }

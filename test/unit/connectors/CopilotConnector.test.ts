@@ -24,6 +24,43 @@ const baseAttrs = {
   'gen_ai.usage.output_tokens': 50,
 };
 
+function makeConnectorWithLogPath(logPath: string): CopilotConnector {
+  const pricing = { pricePerCredit: 0.04, currentManifest: undefined } as unknown as PricingService;
+  const meta = { get: async () => null, set: async () => {} } as MetaStore;
+  const fileReader = {} as DuckDBFileReader;
+  return new CopilotConnector(pricing, meta, fileReader, undefined, logPath);
+}
+
+describe('CopilotConnector — lifecycle', () => {
+  it('watermarkKey returns "copilot:watermark"', () => {
+    const connector = makeConnector();
+    assert.equal(
+      (connector as unknown as { watermarkKey: string }).watermarkKey,
+      'copilot:watermark',
+    );
+  });
+
+  it('discover() returns an object with globs/allowedRoots/searchedDirs arrays', async () => {
+    const connector = makeConnector();
+    const result = await (connector as unknown as {
+      discover(): Promise<{ globs: string[]; allowedRoots: string[]; searchedDirs: string[] }>;
+    }).discover();
+    assert.ok(Array.isArray(result.globs));
+    assert.ok(Array.isArray(result.allowedRoots));
+    assert.ok(Array.isArray(result.searchedDirs));
+  });
+
+  it('discover() returns globs when a log dir path override points to an existing dir', async () => {
+    const connector = makeConnectorWithLogPath('/tmp');
+    const result = await (connector as unknown as {
+      discover(): Promise<{ globs: string[]; allowedRoots: string[]; searchedDirs: string[] }>;
+    }).discover();
+    assert.ok(result.globs.length > 0, 'globs should be non-empty when /tmp exists');
+    assert.ok(result.allowedRoots.includes('/tmp'));
+    assert.ok(result.searchedDirs.includes('/tmp'));
+  });
+});
+
 describe('CopilotConnector.mapRow()', () => {
   it('returns null when no model field is present', () => {
     const connector = makeConnector();
@@ -42,6 +79,28 @@ describe('CopilotConnector.mapRow()', () => {
     assert.equal(result.source, 'local');
     assert.equal(result.promptTokens, 100);
     assert.equal(result.completionTokens, 50);
+  });
+
+  it('uses row.time as fallback when timestamp is absent', () => {
+    const connector = makeConnector();
+    const time = '2026-01-15T10:00:00.000Z';
+    const result = connector.mapRow(
+      { time, attributes: baseAttrs },
+      makeCtx(),
+    );
+    assert.ok(result);
+    assert.equal(result.ts, new Date(time).getTime());
+  });
+
+  it('falls through to attrs.timestamp when both row.timestamp and row.time are absent', () => {
+    const connector = makeConnector();
+    const ts = '2026-01-15T10:00:00.000Z';
+    const result = connector.mapRow(
+      { attributes: { ...baseAttrs, timestamp: ts } },
+      makeCtx(),
+    );
+    assert.ok(result);
+    assert.equal(result.ts, new Date(ts).getTime());
   });
 
   it('falls back to ctx.now for NaN timestamp', () => {

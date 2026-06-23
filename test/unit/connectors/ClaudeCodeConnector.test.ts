@@ -7,10 +7,17 @@ import type { DuckDBFileReader } from '../../../src/store/DuckDBFileReader';
 
 const now = new Date('2026-01-15T10:00:00.000Z').getTime();
 
-function makeConnector(): ClaudeCodeConnector {
+function makeConnector(getFolders?: () => undefined): ClaudeCodeConnector {
   const pricing = { pricePerCredit: 0.04, currentManifest: undefined } as unknown as PricingService;
   const meta = { get: async () => null, set: async () => {} } as MetaStore;
   const fileReader = {} as DuckDBFileReader;
+  return new ClaudeCodeConnector(pricing, meta, fileReader, getFolders ?? (() => undefined));
+}
+
+function makeConnectorWithHasField(hasFieldResult: boolean): ClaudeCodeConnector {
+  const pricing = { pricePerCredit: 0.04, currentManifest: undefined } as unknown as PricingService;
+  const meta = { get: async () => null, set: async () => {} } as MetaStore;
+  const fileReader = { hasField: async () => hasFieldResult } as unknown as DuckDBFileReader;
   return new ClaudeCodeConnector(pricing, meta, fileReader, () => undefined);
 }
 
@@ -26,6 +33,121 @@ function makeLine(overrides: Record<string, unknown>) {
     ...overrides,
   };
 }
+
+describe('ClaudeCodeConnector — lifecycle', () => {
+  it('watermarkKey returns "claude-code:watermark"', () => {
+    const connector = makeConnector();
+    assert.equal(
+      (connector as unknown as { watermarkKey: string }).watermarkKey,
+      'claude-code:watermark',
+    );
+  });
+
+  it('discover() returns an object with globs/allowedRoots/searchedDirs arrays', async () => {
+    const connector = makeConnector();
+    const result = await (connector as unknown as {
+      discover(): Promise<{ globs: string[]; allowedRoots: string[]; searchedDirs: string[] }>;
+    }).discover();
+    assert.ok(Array.isArray(result.globs));
+    assert.ok(Array.isArray(result.allowedRoots));
+    assert.ok(Array.isArray(result.searchedDirs));
+  });
+
+  it('buildContext() with hasField=true sets surface to "agent"', async () => {
+    const connector = makeConnectorWithHasField(true);
+    const ctx = await (connector as unknown as {
+      buildContext(g: string[]): Promise<import('../../../src/ingest/otelParse').ParseContext>;
+    }).buildContext([]);
+    assert.equal(ctx.surface, 'agent');
+  });
+
+  it('buildContext() with hasField=false sets surface to "chat"', async () => {
+    const connector = makeConnectorWithHasField(false);
+    const ctx = await (connector as unknown as {
+      buildContext(g: string[]): Promise<import('../../../src/ingest/otelParse').ParseContext>;
+    }).buildContext([]);
+    assert.equal(ctx.surface, 'chat');
+  });
+});
+
+describe('ClaudeCodeConnector — folder attribution', () => {
+  function makeFolderConnector(folders: Array<{ name: string; fsPath: string }>) {
+    const pricing = { pricePerCredit: 0.04, currentManifest: undefined } as unknown as PricingService;
+    const meta = { get: async () => null, set: async () => {} } as MetaStore;
+    const fileReader = {} as DuckDBFileReader;
+    const vscodeFolders = folders.map((f) => ({
+      name: f.name,
+      uri: { fsPath: f.fsPath },
+    })) as unknown as ReadonlyArray<import('vscode').WorkspaceFolder>;
+    return new ClaudeCodeConnector(pricing, meta, fileReader, () => vscodeFolders);
+  }
+
+  it('mapRow() uses folder name as repo when sessionId hash matches a folder', () => {
+    const fsPath = '/home/user/myproject';
+    // compute hash the same way as matchFolderHash:
+    // encodeURIComponent(fsPath).replace(/%/g, '').toLowerCase()
+    const hash = encodeURIComponent(fsPath).replace(/%/g, '').toLowerCase();
+    const connector = makeFolderConnector([{ name: 'myproject', fsPath }]);
+    const result = connector.mapRow(
+      {
+        type: 'assistant',
+        message: { model: 'claude-sonnet-4', usage: { input_tokens: 10, output_tokens: 5 } },
+        timestamp: '2026-01-15T10:00:00.000Z',
+        sessionId: hash,
+      },
+      makeCtx(),
+    );
+    assert.ok(result);
+    assert.equal(result.repo, 'myproject');
+  });
+
+  it('mapRow() falls back to ctx.repo when sessionId does not match any folder', () => {
+    const connector = makeFolderConnector([{ name: 'myproject', fsPath: '/home/user/myproject' }]);
+    const result = connector.mapRow(
+      {
+        type: 'assistant',
+        message: { model: 'claude-sonnet-4', usage: { input_tokens: 10, output_tokens: 5 } },
+        timestamp: '2026-01-15T10:00:00.000Z',
+        sessionId: 'no-match-at-all',
+      },
+      makeCtx({ repo: 'ctx-repo' }),
+    );
+    assert.ok(result);
+    assert.equal(result.repo, 'ctx-repo');
+  });
+
+  it('mapRow() skips folder matching when sessionId is absent', () => {
+    const connector = makeFolderConnector([{ name: 'myproject', fsPath: '/tmp/x' }]);
+    const result = connector.mapRow(
+      {
+        type: 'assistant',
+        message: { model: 'claude-sonnet-4', usage: { input_tokens: 10, output_tokens: 5 } },
+        timestamp: '2026-01-15T10:00:00.000Z',
+      },
+      makeCtx({ repo: 'fallback' }),
+    );
+    assert.ok(result);
+    assert.equal(result.repo, 'fallback');
+  });
+
+  it('mapRow() returns empty folders list (getFolders returns [])', () => {
+    const pricing = { pricePerCredit: 0.04, currentManifest: undefined } as unknown as PricingService;
+    const meta = { get: async () => null, set: async () => {} } as MetaStore;
+    const fileReader = {} as DuckDBFileReader;
+    const connector = new ClaudeCodeConnector(pricing, meta, fileReader, () => []);
+    const result = connector.mapRow(
+      {
+        type: 'assistant',
+        message: { model: 'claude-sonnet-4', usage: { input_tokens: 10, output_tokens: 5 } },
+        timestamp: '2026-01-15T10:00:00.000Z',
+        sessionId: 'abc123',
+      },
+      makeCtx({ repo: 'fallback' }),
+    );
+    assert.ok(result);
+    assert.equal(result.repo, 'fallback');
+  });
+});
 
 describe('ClaudeCodeConnector.mapRow()', () => {
   it('returns null for non-assistant rows', () => {
