@@ -202,8 +202,11 @@ async function benchmarkSnapshot(store: EventStore, count: number): Promise<void
     authStatus:      'signed-out'  as const,
   };
 
-  await bench(`find + buildSnapshot       (${count})`, async () => {
-    const events = await store.reader.find({});
+  // Cap find() at 10k rows for the JS snapshot path so memory doesn't blow up at 100k.
+  const snapFilter = count > 10_000 ? { limit: 10_000 } : {};
+  const snapLabel  = count > 10_000 ? `find (limit 10k) + buildSnapshot` : `find + buildSnapshot      `;
+  await bench(`${snapLabel} (${count})`, async () => {
+    const events = await store.reader.find(snapFilter);
     buildSnapshot(events, opts);
   }, { warmup: 1, iters: 10 });
 
@@ -263,14 +266,14 @@ async function main(): Promise<void> {
 
   await benchmarkWrites(store);
 
-  for (const count of [1_000, 5_000, 10_000]) {
+  for (const count of [1_000, 5_000, 10_000, 100_000]) {
     console.log(`\n── Read Queries (${count} events) ${'─'.repeat(35)}`);
     await seed(store, count, 90, `r${count}`);
     await benchmarkReads(store, count);
   }
 
   console.log('\n── Full Snapshot Pipeline ──────────────────────────────────');
-  for (const count of [1_000, 10_000]) {
+  for (const count of [1_000, 10_000, 100_000]) {
     await seed(store, count, 90, `s${count}`);
     await benchmarkSnapshot(store, count);
   }
