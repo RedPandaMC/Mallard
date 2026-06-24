@@ -4,12 +4,11 @@
  * all subscribe to.
  */
 import * as vscode from 'vscode';
-import { matchesFilter } from '../domain/aggregate';
 import { evaluateAlerts, SnapshotSample } from '../domain/alerts';
 import { computeBudget } from '../domain/budget';
 import { buildDailyBarsData, buildHeatmapData, buildModelBreakdownData } from '../domain/chartData';
 import { forecastMonth } from '../domain/forecast';
-import { buildSnapshot, SnapshotOptions } from '../domain/snapshot';
+import { isIncrementalUpdate } from '../domain/snapshot';
 import {
   AuthStatus,
   COST_CATEGORIES,
@@ -28,6 +27,7 @@ import type { IBillingProvider } from '../billing/IBillingProvider';
 import { IngestService } from '../ingest/IngestService';
 import { PricingService } from '../pricing/PricingService';
 import type { IEventReader } from '../store/EventReader';
+import type { RecordFilter } from '../store/EventRepository';
 import { UserConfigStore } from './UserConfigStore';
 import { MetricExporter, NullMetricExporter } from '../export/MetricExporter';
 import { activeBranch } from '../util/repo';
@@ -274,7 +274,7 @@ export class UsageService implements vscode.Disposable {
     this.exporter.export(next);
   }
 
-  /** Filtered path: load raw events and build snapshot via domain functions. */
+  /** Filtered path: all aggregations pushed to DuckDB; no raw event transfer. */
   private async computeFromEvents(
     now: number,
     userConfig: ReturnType<UserConfigStore['get']>,
@@ -282,36 +282,104 @@ export class UsageService implements vscode.Disposable {
   ): Promise<void> {
     const rangeStart = startOf(now - 365 * DAY_MS, 'day');
     const effectiveRange = this.filter.range ?? { start: rangeStart, end: now + DAY_MS };
-    const universe = await this.reader.find({ range: effectiveRange });
-    const filteredEvents = universe.filter((e) => matchesFilter(e, this.filter));
+    const filter: RecordFilter = { ...this.filter, range: effectiveRange };
 
-    const source: SourceKind =
-      filteredEvents.length > 0
-        ? filteredEvents.some((e) => e.source === 'local') ? 'local' : 'lm'
-        : 'local';
+    const [data, currentBranchCredits] = await Promise.all([
+      this.reader.readFilteredSnapshot(filter),
+      branch ? this.reader.creditsByBranch(branch) : Promise.resolve(0),
+    ]);
 
-    const options: SnapshotOptions = {
-      now,
-      currency:        'USD',
-      pricePerCredit:  this.pricing.pricePerCredit,
+    // ── Day aggregates (for forecast + chart) ──────────────────────────────
+    const dayAggregates: UsageAggregate[] = data.daily.map((row) => ({
+      granularity: 'day',
+      bucketKey:   bucketKey(row.dayStart, 'day'),
+      start:       row.dayStart,
+      end:         nextBucketStart(row.dayStart, 'day'),
+      credits:     row.credits,
+      cost:        row.cost,
+      tokens:      Number(row.tokens),
+      byModel:     {},
+      eventCount:  row.eventCount,
+      estimated:   false,
+    }));
+
+    const forecast = forecastMonth(dayAggregates, now, this.pricing.pricePerCredit);
+    const budget   = computeBudget({
       monthlyBudget:   userConfig.monthlyBudget > 0 ? userConfig.monthlyBudget : null,
       includedCredits: userConfig.includedCredits,
-      filter:          this.filter,
-      source,
-      status:          filteredEvents.length === 0 ? this.ingest.getStatus() : { kind: 'ok' },
-      authStatus:      this.authStatus,
-      ...opt('githubBilling', this.githubBilling),
-      dimensionEvents: universe,
-      ...opt('prevSnapshot', this.snapshot),
-      manifest:        this.pricing.currentManifest,
-      ...opt('currentBranch', branch),
+      mtdCredits:      data.totals.mtd.credits,
+      mtdCost:         data.totals.mtd.cost,
+      forecast,
+    });
+
+    // ── Dimensions ──────────────────────────────────────────────────────────
+    const allModels   = data.dims.models;
+    const allSurfaces = data.dims.surfaces.filter((s): s is Surface    => SURFACES.has(s as Surface));
+    const allSources  = data.dims.sources.filter( (s): s is SourceKind => SOURCE_KINDS.has(s as SourceKind));
+    const allRepos    = data.dims.repos;
+
+    const topModels = data.topModels.map((m) => ({ key: m.modelId, credits: m.credits, cost: m.cost, tokens: Number(m.tokens) }));
+    const byRepo    = data.topRepos.map( (r) => ({ key: r.repo,    credits: r.credits, cost: r.cost, tokens: Number(r.tokens) }));
+    const sankeyLinks = data.sankey.map((s) => ({ source: s.model, target: s.surface, value: s.credits }));
+
+    // ── Chart data ──────────────────────────────────────────────────────────
+    const catMap  = new Map(data.categories.map((c) => [c.category, c.cost]));
+    const catKeys = COST_CATEGORIES.filter((c) => (catMap.get(c) ?? 0) > 0);
+    const categoryBreakdown = catKeys.length > 0
+      ? { categories: catKeys, costs: catKeys.map((c) => catMap.get(c) ?? 0), available: true }
+      : { categories: [] as typeof catKeys, costs: [] as number[], available: false };
+
+    const hourArr = new Array<number>(24).fill(0);
+    for (const h of data.hourly) hourArr[h.hourLocal] = h.credits;
+    const peakHour = hourArr.indexOf(Math.max(...hourArr));
+    const hourlyTimeline = { hours: hourArr, peakHour };
+
+    const chartData = {
+      dailyBars:      buildDailyBarsData(dayAggregates, budget, forecast, now),
+      modelBreakdown: buildModelBreakdownData(topModels, this.pricing.pricePerCredit, this.pricing.currentManifest),
+      heatmap:        buildHeatmapData(dayAggregates, now),
+      categoryBreakdown,
+      hourlyTimeline,
     };
 
-    this.snapshot = buildSnapshot(filteredEvents, options);
-    this.recordSample(now, this.snapshot);
-    this.fireAlerts(this.snapshot, userConfig, now);
-    this._onDidChange.fire(this.snapshot);
-    this.exporter.export(this.snapshot);
+    // ── Assemble snapshot ───────────────────────────────────────────────────
+    const hasData    = data.totals.all.eventCount > 0;
+    const source: SourceKind = allSources.includes('local') ? 'local' : (hasData ? 'lm' : 'local');
+    const rangeStart2 = data.daily[0]?.dayStart ?? startOf(now - 29 * DAY_MS, 'day');
+    const rangeEnd   = (data.daily[data.daily.length - 1]?.dayStart ?? now) + DAY_MS;
+
+    const next: UsageSnapshot = {
+      generatedAt:   now,
+      source,
+      status:        hasData ? { kind: 'ok' } : this.ingest.getStatus(),
+      currency:      'USD',
+      pricePerCredit: this.pricing.pricePerCredit,
+      filter:        this.filter,
+      range:         { start: rangeStart2, end: rangeEnd },
+      forecast,
+      budget,
+      topModels,
+      today:         { credits: data.totals.today.credits, cost: data.totals.today.cost, tokens: Number(data.totals.today.tokens) },
+      allModels,
+      allSurfaces,
+      allSources,
+      sankeyLinks,
+      allRepos,
+      byRepo,
+      chartData,
+      authStatus:    this.authStatus,
+      isIncremental: false,
+      currentBranchCredits,
+      ...opt('currentBranch', branch),
+      ...opt('githubBilling', this.githubBilling),
+    };
+    next.isIncremental = isIncrementalUpdate(this.snapshot, next);
+
+    this.snapshot = next;
+    this.recordSample(now, next);
+    this.fireAlerts(next, userConfig, now);
+    this._onDidChange.fire(next);
+    this.exporter.export(next);
   }
 
   private recordSample(now: number, s: UsageSnapshot): void {
