@@ -52,7 +52,7 @@ export interface SnapshotOptions {
   currentBranch?: string;
 }
 
-function isIncrementalUpdate(prev: UsageSnapshot | undefined, next: UsageSnapshot): boolean {
+export function isIncrementalUpdate(prev: UsageSnapshot | undefined, next: UsageSnapshot): boolean {
   if (!prev) return false;
   if (JSON.stringify(prev.filter) !== JSON.stringify(next.filter)) return false;
   const prevPts = prev.chartData.dailyBars.points;
