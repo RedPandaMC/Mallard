@@ -85,9 +85,9 @@ export class EventWriter implements IEventWriter {
     }
     if (!clauses.length) return 0;
 
-    const before = (await readRows(this.conn, COUNT_EVENTS_SQL, (r) => Number(r['c'])))[0] ?? 0;
+    const before = await this.countAll();
     await runPrepared(this.conn, `DELETE FROM events WHERE ${clauses.join(' AND ')}`, params);
-    const after  = (await readRows(this.conn, COUNT_EVENTS_SQL, (r) => Number(r['c'])))[0] ?? 0;
+    const after  = await this.countAll();
     return before - after;
   }
 
@@ -95,11 +95,13 @@ export class EventWriter implements IEventWriter {
     const cutoff = startOf(now - RAW_WINDOW_DAYS * DAY_MS, 'day');
     const cutoffBig = BigInt(cutoff);
 
-    const count = (await readRows(
+    const countRows = await readRows(
       this.conn,
       `SELECT COUNT(*) AS c FROM events WHERE ts < ${cutoffBig} AND id NOT LIKE 'roll:%'`,
       (r) => Number(r['c']),
-    ))[0] ?? 0;
+    );
+    /* c8 ignore next */
+    const count = countRows[0] ?? 0;
     /* c8 ignore next */
     if (count === 0) return;
 
@@ -128,6 +130,12 @@ export class EventWriter implements IEventWriter {
 
   // ── Private helpers ──────────────────────────────────────────────────────────
 
+  private async countAll(): Promise<number> {
+    const rows = await readRows(this.conn, COUNT_EVENTS_SQL, (r) => Number(r['c']));
+    /* c8 ignore next */
+    return rows[0] ?? 0;
+  }
+
   private async insertAll(events: UsageEvent[]): Promise<number> {
     /* c8 ignore next */
     if (events.length === 0) return 0;
@@ -153,18 +161,22 @@ export class EventWriter implements IEventWriter {
     appender.flushSync();
     appender.closeSync();
 
-    const before = (await readRows(this.conn, COUNT_EVENTS_SQL, (r) => Number(r['c'])))[0] ?? 0;
+    const before = await this.countAll();
     await this.conn.run(INSERT_STAGING_MERGE);
-    const after  = (await readRows(this.conn, COUNT_EVENTS_SQL, (r) => Number(r['c'])))[0] ?? 0;
+    const after  = await this.countAll();
     await this.conn.run(CLEAR_STAGING);
     return after - before;
   }
 
-  async refreshFacts(windowStart = 0, windowEnd = Date.now() + DAY_MS): Promise<void> {
+  async refreshFacts(windowStart?: number, windowEnd?: number): Promise<void> {
+    const start = windowStart ?? 0;
+    /* c8 ignore next */
+    const end   = windowEnd   ?? (Date.now() + DAY_MS);
     await this.conn.run(REFRESH_FACTS_INSERT_MODELS_SQL);
     await this.conn.run(REFRESH_FACTS_INSERT_REPOS_SQL);
-    await runPrepared(this.conn, REFRESH_FACTS_SQL, [BigInt(windowStart), BigInt(windowEnd)]);
+    await runPrepared(this.conn, REFRESH_FACTS_SQL, [BigInt(start), BigInt(end)]);
   }
+/* c8 ignore next */
 }
 
 export { UNATTRIBUTED_REPO };

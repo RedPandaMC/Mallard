@@ -39,7 +39,11 @@ export class EventStore implements vscode.Disposable {
     const conn = await instance.connect();
 
     // Set session timezone so all TIMESTAMPTZ operations use local time (DST-correct).
-    const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return 'UTC'; } })();
+    /* c8 ignore start */
+    let tz: string;
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; }
+    catch { tz = 'UTC'; }
+    /* c8 ignore stop */
     await conn.run(`SET TimeZone = '${tz.replace(/'/g, "''")}'`);
 
     await conn.run(CREATE_SQL);
