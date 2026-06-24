@@ -13,11 +13,14 @@ type DiscoverResult = { globs: string[]; allowedRoots: string[]; searchedDirs: s
 class TestConnector extends BaseFileConnector {
   readonly id = 'test';
   readonly displayName = 'Test Connector';
+  readonly capabilities = {
+    tokenFields: [] as const,
+    costCategories: [] as const,
+    supportsRepoAttribution: false,
+  };
   private _discoverResult: DiscoverResult = { globs: [], allowedRoots: [], searchedDirs: [] };
 
   setDiscoverResult(r: DiscoverResult): void { this._discoverResult = r; }
-
-  protected get watermarkKey(): string { return 'test:watermark'; }
 
   protected async discover(): Promise<DiscoverResult> {
     return this._discoverResult;

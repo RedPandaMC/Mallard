@@ -1,4 +1,3 @@
-/* c8 ignore start */
 /**
  * Best-effort discovery of local Copilot log files.
  *
@@ -11,7 +10,6 @@
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-/* c8 ignore stop */
 
 /** Resolve the VS Code log root (the parent of the session-specific folder). */
 export function vscodeLogRoot(logUriPath: string): string {
@@ -102,8 +100,6 @@ export async function locateCopilotLogDirs(
  */
 export function isPathSafe(filePath: string, allowedRoots: string[]): boolean {
   const resolved = path.resolve(filePath);
-  /* c8 ignore next */
-  if (resolved.includes('..')) return false;
   return allowedRoots.some((root) => {
     const resolvedRoot = path.resolve(root);
     return resolved.startsWith(resolvedRoot + path.sep) || resolved === resolvedRoot;

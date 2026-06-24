@@ -1,4 +1,3 @@
-/* c8 ignore start */
 /**
  * Model → credit (premium-request) weight and cost helpers.
  *
@@ -7,7 +6,6 @@
  * pricing manifest and are refreshed daily — settings are only needed
  * for non-standard enterprise plans.
  */
-/* c8 ignore stop */
 
 export interface PricingManifest {
   version: number;

@@ -1,5 +1,3 @@
-/* c8 ignore start */
-import { watch as fsWatch, FSWatcher } from 'fs';
 import { currentRepo } from './repoResolver';
 import { activeBranch } from '../util/repo';
 import { ParseContext } from './otelParse';
@@ -8,16 +6,14 @@ import { DuckDBFileReader, RowMapper } from '../store/DuckDBFileReader';
 import type { IMetaStore as MetaStore } from '../store/MetaStore';
 import type { ConnectorStatus, LogConnector } from './LogConnector';
 import type { UsageEvent } from '../domain/types';
-/* c8 ignore stop */
+import { IFsWatcher, NodeFsWatcher } from './IFsWatcher';
+import { defaultLogger, Logger } from '../util/logger';
 
 const DEBOUNCE_MS = 1_500;
 
 export abstract class BaseFileConnector implements LogConnector {
   abstract readonly id: string;
   abstract readonly displayName: string;
-
-  /** MetaStore key for this connector's timestamp watermark. */
-  protected abstract get watermarkKey(): string;
 
   /** Discover globs and allowed root dirs for this connector. */
   protected abstract discover(): Promise<{
@@ -29,12 +25,17 @@ export abstract class BaseFileConnector implements LogConnector {
   /** Map one raw DuckDB row to a UsageEvent, or null to skip. */
   protected abstract mapRow(row: Record<string, unknown>, ctx: ParseContext): UsageEvent | null;
 
+  /** MetaStore key for this connector's timestamp watermark. Derived from id by default. */
+  protected get watermarkKey(): string {
+    return `${this.id}:watermark`;
+  }
+
   protected logPaths: string[] = [];
   protected searchedDirs_: string[] = [];
 
   private status: ConnectorStatus = 'idle';
   private eventsSeenEver = false;
-  private watchers: FSWatcher[] = [];
+  private watchers: Array<{ close(): void }> = [];
   private debounceTimer?: ReturnType<typeof setTimeout>;
   private currentGlobs: string[] = [];
 
@@ -42,6 +43,8 @@ export abstract class BaseFileConnector implements LogConnector {
     protected readonly pricing: PricingService,
     protected readonly meta: MetaStore,
     protected readonly fileReader: DuckDBFileReader,
+    private readonly fsWatcher: IFsWatcher = new NodeFsWatcher(),
+    protected readonly logger: Logger = defaultLogger,
   ) {}
 
   async start(): Promise<void> {
@@ -72,7 +75,7 @@ export abstract class BaseFileConnector implements LogConnector {
       }
       this.status = this.eventsSeenEver ? 'ok' : 'empty';
     } catch (err) {
-      console.warn(`[mallard] ${this.id}: ingest error`, err);
+      this.logger.warn(this.id, 'ingest error', err);
       this.status = 'error';
     }
   }
@@ -88,9 +91,7 @@ export abstract class BaseFileConnector implements LogConnector {
       pricePerCredit: this.pricing.pricePerCredit,
       manifest: this.pricing.currentManifest,
       now: Date.now(),
-      /* c8 ignore next */
       ...(repo !== undefined ? { repo } : {}),
-      /* c8 ignore next */
       ...(branch !== undefined ? { branch } : {}),
     };
   }
@@ -99,9 +100,7 @@ export abstract class BaseFileConnector implements LogConnector {
     const dirs = new Set(roots);
     for (const dir of dirs) {
       try {
-        this.watchers.push(
-          fsWatch(dir, { recursive: false }, () => this.scheduleReparse()),
-        );
+        this.watchers.push(this.fsWatcher.watch(dir, () => this.scheduleReparse()));
       } catch {
         // fs.watch unavailable — fall back to UsageService interval polling.
       }
@@ -126,17 +125,16 @@ export abstract class BaseFileConnector implements LogConnector {
   }
 
   dispose(): void {
-    /* c8 ignore next */
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     for (const w of this.watchers) {
-      /* c8 ignore next */
       try { w.close(); } catch { /* ignore */ }
     }
     this.watchers = [];
   }
 
+  abstract readonly capabilities: import('./LogConnector').ConnectorCapabilities;
+
   getStatus(): ConnectorStatus { return this.status; }
   getLogPaths(): string[] { return this.logPaths.slice(); }
   getSearchedDirs(): string[] { return this.searchedDirs_.slice(); }
-/* c8 ignore next */
 }

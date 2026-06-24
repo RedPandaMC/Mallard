@@ -1,4 +1,3 @@
-/* c8 ignore start */
 /**
  * Minimal JSONLogic-inspired condition evaluator.
  *
@@ -11,7 +10,6 @@
  */
 import { z } from 'zod';
 import type { JsonCondition, JsonOperand, SimpleCondition } from '../types';
-/* c8 ignore stop */
 
 // ── Zod schemas (used in alertRules.ts and UserConfigStore.ts) ───────────────
 

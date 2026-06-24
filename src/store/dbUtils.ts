@@ -1,6 +1,4 @@
-/* c8 ignore start */
 import { DuckDBConnection, DuckDBMaterializedResult, DuckDBPreparedStatement } from '@duckdb/node-api';
-/* c8 ignore stop */
 
 function readChunks<T>(result: DuckDBMaterializedResult, map: (row: Record<string, unknown>) => T): T[] {
   const names = result.columnNames();

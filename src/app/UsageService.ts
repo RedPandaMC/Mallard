@@ -23,12 +23,13 @@ import {
   UsageSnapshot,
 } from '../domain/types';
 import { DAY_MS, bucketKey, nextBucketStart, startOf } from '../util/time';
+import { opt } from '../util/lang';
 import type { IBillingProvider } from '../billing/IBillingProvider';
 import { IngestService } from '../ingest/IngestService';
 import { PricingService } from '../pricing/PricingService';
 import type { IEventReader } from '../store/EventReader';
 import { UserConfigStore } from './UserConfigStore';
-import { MetricExporter } from '../export/MetricExporter';
+import { MetricExporter, NullMetricExporter } from '../export/MetricExporter';
 import { activeBranch } from '../util/repo';
 import { defaultVscodeHost, VscodeHost } from '../util/vscodeHost';
 
@@ -52,7 +53,7 @@ export class UsageService implements vscode.Disposable {
   private authStatus: AuthStatus = 'signed-out';
   private githubBilling: GitHubBillingData | undefined = undefined;
   private readonly subs: vscode.Disposable[] = [];
-  private readonly exporter: MetricExporter | undefined;
+  private readonly exporter: MetricExporter;
 
   constructor(
     private readonly reader: IEventReader,
@@ -60,7 +61,7 @@ export class UsageService implements vscode.Disposable {
     private readonly ingest: IngestService,
     private readonly userConfig: UserConfigStore,
     private readonly github?: IBillingProvider,
-    exporter?: MetricExporter,
+    exporter: MetricExporter = new NullMetricExporter(),
     private readonly host: VscodeHost = defaultVscodeHost,
   ) {
     this.exporter = exporter;
@@ -262,15 +263,15 @@ export class UsageService implements vscode.Disposable {
       authStatus:    this.authStatus,
       isIncremental: false,
       currentBranchCredits,
-      ...(branch !== undefined ? { currentBranch: branch } : {}),
-      ...(this.githubBilling !== undefined ? { githubBilling: this.githubBilling } : {}),
+      ...opt('currentBranch', branch),
+      ...opt('githubBilling', this.githubBilling),
     };
 
     this.snapshot = next;
     this.recordSample(now, next);
     this.fireAlerts(next, userConfig, now);
     this._onDidChange.fire(next);
-    this.exporter?.export(next);
+    this.exporter.export(next);
   }
 
   /** Filtered path: load raw events and build snapshot via domain functions. */
@@ -299,18 +300,18 @@ export class UsageService implements vscode.Disposable {
       source,
       status:          filteredEvents.length === 0 ? this.ingest.getStatus() : { kind: 'ok' },
       authStatus:      this.authStatus,
-      ...(this.githubBilling !== undefined ? { githubBilling: this.githubBilling } : {}),
+      ...opt('githubBilling', this.githubBilling),
       dimensionEvents: universe,
-      ...(this.snapshot !== undefined ? { prevSnapshot: this.snapshot } : {}),
+      ...opt('prevSnapshot', this.snapshot),
       manifest:        this.pricing.currentManifest,
-      ...(branch !== undefined ? { currentBranch: branch } : {}),
+      ...opt('currentBranch', branch),
     };
 
     this.snapshot = buildSnapshot(filteredEvents, options);
     this.recordSample(now, this.snapshot);
     this.fireAlerts(this.snapshot, userConfig, now);
     this._onDidChange.fire(this.snapshot);
-    this.exporter?.export(this.snapshot);
+    this.exporter.export(this.snapshot);
   }
 
   private recordSample(now: number, s: UsageSnapshot): void {

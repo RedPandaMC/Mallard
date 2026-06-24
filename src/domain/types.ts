@@ -1,9 +1,7 @@
-/* c8 ignore start */
 /**
  * Shared, pure data model for Mallard. Imported by BOTH the extension host and
  * the webview bundle — must never import `vscode` or any Node/DOM API.
  */
-/* c8 ignore stop */
 
 export type Granularity = 'day' | 'week' | 'month';
 

@@ -1,10 +1,8 @@
-/* c8 ignore start */
 /**
  * Pure budget / pace math. Drives KPI cards, the status-bar tint, and
  * notification evaluation. (No pet — the mallard is branding only.)
  */
 import { BudgetState, Forecast, PaceStatus } from './types';
-/* c8 ignore stop */
 
 export interface BudgetInput {
   monthlyBudget: number | null;

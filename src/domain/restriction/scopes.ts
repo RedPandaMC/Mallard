@@ -1,11 +1,9 @@
-/* c8 ignore start */
 /**
  * Pure scope data and custom-extension fallback. The host-side resolver in
  * `engine.ts` handles the `vscode.extensions.all` filter; this module just
  * names the scopes and the fallback for the `custom` value.
  */
 import { RestrictionScope } from '../types';
-/* c8 ignore stop */
 
 const SCOPES: Record<RestrictionScope, string[]> = {
   copilot: ['github.copilot', 'github.copilot-chat'],

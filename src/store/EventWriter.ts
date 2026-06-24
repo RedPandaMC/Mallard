@@ -1,4 +1,3 @@
-/* c8 ignore start */
 import { DuckDBConnection } from '@duckdb/node-api';
 import { UsageEvent } from '../domain/types';
 import { UNATTRIBUTED_REPO } from '../domain/aggregate';
@@ -19,7 +18,6 @@ import {
 } from './schema';
 import type { RecordFilter } from './EventRepository';
 import { readRows, runPrepared } from './dbUtils';
-/* c8 ignore stop */
 
 // ── Interface ─────────────────────────────────────────────────────────────────
 

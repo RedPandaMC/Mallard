@@ -1,10 +1,8 @@
-/* c8 ignore start */
 /**
  * Shared, locale-aware formatters used by both the host and the webview.
  * Pure — no `vscode`, no DOM.
  */
 import { Metric } from './types';
-/* c8 ignore stop */
 
 export function formatMoney(amount: number, currency = 'USD'): string {
   try {

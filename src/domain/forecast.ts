@@ -1,4 +1,3 @@
-/* c8 ignore start */
 /**
  * Month-end forecasting. The default model is a linear run-rate; the
  * {@link Forecaster} seam lets a richer model (seasonal Holt-Winters) drop in
@@ -12,7 +11,6 @@
 import { Forecast, UsageAggregate } from './types';
 import { Forecaster, linearForecaster } from './forecasters/linear';
 import { seasonalForecaster } from './forecasters/seasonal';
-/* c8 ignore stop */
 
 export type { Forecaster, ForecastInput } from './forecasters/linear';
 export type { HoltWintersParams } from './forecasters/seasonal';

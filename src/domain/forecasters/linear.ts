@@ -1,4 +1,3 @@
-/* c8 ignore start */
 /**
  * Linear run-rate forecaster. The confidence band widens with the number of
  * remaining days (uncertainty compounds) and never dips below the
@@ -6,7 +5,6 @@
  */
 import { Forecast, UsageAggregate } from '../types';
 import { DAY_MS, nextBucketStart, startOf } from '../../util/time';
-/* c8 ignore stop */
 
 export interface ForecastInput {
   dayAggregates: UsageAggregate[];

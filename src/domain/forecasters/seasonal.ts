@@ -1,4 +1,3 @@
-/* c8 ignore start */
 /**
  * Holt-Winters triple exponential smoothing with additive weekly seasonality (m=7).
  *
@@ -14,7 +13,6 @@
 import type { Forecast } from '../types';
 import type { Forecaster, ForecastInput } from './linear';
 import { DAY_MS, startOf, nextBucketStart } from '../../util/time';
-/* c8 ignore stop */
 
 export interface HoltWintersParams {
   alpha: number;

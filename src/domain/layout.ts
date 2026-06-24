@@ -1,4 +1,3 @@
-/* c8 ignore start */
 /**
  * Pure helpers for the dashboard layout. Kept free of vscode/DOM so they can be
  * shared and unit-tested.
@@ -11,7 +10,6 @@ import {
   DashboardPanelLayout,
   DEFAULT_DASHBOARD_LAYOUT,
 } from './types';
-/* c8 ignore stop */
 
 /**
  * Keep stored entries (preserving their order/span/hidden), drop unknown panel

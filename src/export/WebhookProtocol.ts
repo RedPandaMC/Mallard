@@ -16,6 +16,7 @@ import * as vscode from 'vscode';
 import pRetry, { AbortError } from 'p-retry';
 import type { RetryContext } from 'p-retry';
 import type { MetricProtocol } from './MetricExporter';
+import { defaultLogger, Logger } from '../util/logger';
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -30,7 +31,7 @@ export class WebhookProtocol implements MetricProtocol {
   private readonly opts: WebhookProtocolOptions;
   private active = true;
 
-  constructor(opts: WebhookProtocolOptions) {
+  constructor(opts: WebhookProtocolOptions, private readonly logger: Logger = defaultLogger) {
     if (!opts.url.startsWith('https://')) {
       void vscode.window.showWarningMessage(
         'Mallard: metricExport.webhook.url must use https:// (TLS required). ' +
@@ -46,7 +47,7 @@ export class WebhookProtocol implements MetricProtocol {
     if (!this.active || !this.opts.url) return;
     const body = JSON.stringify(payload);
     void this.post(body).catch((err: unknown) => {
-      console.error('[mallard] webhook export failed:', (err as Error).message);
+      this.logger.error('webhook', 'export failed:', (err as Error).message);
     });
   }
 
@@ -82,7 +83,7 @@ export class WebhookProtocol implements MetricProtocol {
         minTimeout: 1_000,
         factor: 2,
         onFailedAttempt: (ctx: RetryContext) => {
-          console.warn(`[mallard] webhook attempt ${ctx.attemptNumber} failed:`, ctx.error.message);
+          this.logger.warn('webhook', `attempt ${ctx.attemptNumber} failed:`, ctx.error.message);
         },
       },
     );

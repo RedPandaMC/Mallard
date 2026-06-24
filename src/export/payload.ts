@@ -1,4 +1,3 @@
-/* c8 ignore start */
 /**
  * Derives an expanded metric payload from a UsageSnapshot.
  *
@@ -17,7 +16,6 @@
  */
 import type { SourceKind, UsageSnapshot } from '../domain/types';
 import type { MetricSerializer } from './MetricExporter';
-/* c8 ignore stop */
 
 export interface MetricPayload {
   /**
