@@ -250,11 +250,6 @@ function buildFactsFilterSQL(filter?: RecordFilter): { clause: string; params: u
   };
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function appendCondition(clause: string, extra: string): string {
-  return clause === '' ? `WHERE ${extra}` : `${clause} AND ${extra}`;
-}
 
 // ── Implementation ─────────────────────────────────────────────────────────────
 
@@ -557,90 +552,104 @@ export class EventReader implements IEventReader {
   }
 
   async readFilteredSnapshot(filter: RecordFilter): Promise<FilteredSnapshotData> {
-    const { clause, params } = buildFilterSQL(filter);
-    const rangeOnly: RecordFilter = filter.range ? { range: filter.range } : {};
+    const { clause, params }                           = buildFilterSQL(filter);
+    const rangeOnly: RecordFilter                      = filter.range ? { range: filter.range } : {};
     const { clause: rangeClause, params: rangeParams } = buildFilterSQL(rangeOnly);
 
-    const mtdClause   = appendCondition(clause,
-      `date_trunc('month', to_timestamp(ts/1000.0)::TIMESTAMPTZ) = date_trunc('month', now()::TIMESTAMPTZ)`);
-    const todayClause = appendCondition(clause,
-      `date_trunc('day', to_timestamp(ts/1000.0)::TIMESTAMPTZ) = date_trunc('day', now()::TIMESTAMPTZ)`);
-    const sankeyClause = appendCondition(clause, 'credits > 0');
+    // Single query: MATERIALIZED CTEs scan `events` exactly twice (full filter +
+    // range-only), then all aggregations run over the in-memory CTE buffers.
+    // Arrays are serialised to JSON inside DuckDB so JS receives plain strings —
+    // avoiding @duckdb/node-api's LIST<STRUCT> → JS conversion quirks.
+    const tok      = `COALESCE(CAST(SUM(COALESCE(promptTokens,0)+COALESCE(completionTokens,0)) AS BIGINT),0)`;
+    const mtdCond  = `date_trunc('month', to_timestamp(ts/1000.0)::TIMESTAMPTZ) = date_trunc('month', now()::TIMESTAMPTZ)`;
+    const todaCond = `date_trunc('day',   to_timestamp(ts/1000.0)::TIMESTAMPTZ) = date_trunc('day',   now()::TIMESTAMPTZ)`;
 
-    const totSql = (w: string) =>
-      `SELECT COALESCE(SUM(credits),0) AS credits, COALESCE(SUM(cost),0) AS cost,
-              COALESCE(CAST(SUM(COALESCE(promptTokens,0)+COALESCE(completionTokens,0)) AS BIGINT),0) AS tokens,
-              COUNT(*) AS event_count
-       FROM events ${w}`;
+    // Scalar subquery over f (optional extra WHERE condition)
+    const agg = (col: string, cond = '') =>
+      `(SELECT ${col} FROM f${cond ? ` WHERE ${cond}` : ''})`;
+
+    // Aggregate inner subquery rows into a JSON array string via list() + to_json()
+    const listJson = (fields: string, from: string, orderBy = '') =>
+      `(SELECT COALESCE(to_json(list({${fields}}${orderBy ? ` ORDER BY ${orderBy}` : ''}))::VARCHAR, '[]') FROM (${from}))`;
+
+    const sql = `
+WITH
+  f  AS MATERIALIZED (SELECT * FROM events ${clause}),
+  ro AS MATERIALIZED (SELECT * FROM events ${rangeClause})
+SELECT
+  ${agg(`COALESCE(SUM(credits),0)`)}                     AS all_credits,
+  ${agg(`COALESCE(SUM(cost),0)`)}                        AS all_cost,
+  ${agg(tok)}                                            AS all_tokens,
+  ${agg(`COUNT(*)`)}                                     AS all_ec,
+  ${agg(`COALESCE(SUM(credits),0)`, mtdCond)}            AS mtd_credits,
+  ${agg(`COALESCE(SUM(cost),0)`,    mtdCond)}            AS mtd_cost,
+  ${agg(tok,                        mtdCond)}            AS mtd_tokens,
+  ${agg(`COUNT(*)`,                 mtdCond)}            AS mtd_ec,
+  ${agg(`COALESCE(SUM(credits),0)`, todaCond)}           AS today_credits,
+  ${agg(`COALESCE(SUM(cost),0)`,    todaCond)}           AS today_cost,
+  ${agg(tok,                        todaCond)}           AS today_tokens,
+  ${agg(`COUNT(*)`,                 todaCond)}           AS today_ec,
+  ${listJson(
+    `'day_start': day_start, 'credits': credits, 'cost': cost, 'tokens': tokens, 'event_count': event_count`,
+    `SELECT CAST(extract(epoch from date_trunc('day', to_timestamp(ts/1000.0)::TIMESTAMPTZ))*1000 AS BIGINT) AS day_start,
+            COALESCE(SUM(credits),0) AS credits, COALESCE(SUM(cost),0) AS cost,
+            ${tok} AS tokens, COUNT(*) AS event_count FROM f GROUP BY 1`,
+    'day_start',
+  )} AS daily,
+  ${listJson(
+    `'modelId': modelId, 'credits': credits, 'cost': cost, 'tokens': tokens`,
+    `SELECT modelId, COALESCE(SUM(credits),0) AS credits, COALESCE(SUM(cost),0) AS cost,
+            ${tok} AS tokens FROM f GROUP BY modelId`,
+    'credits DESC',
+  )} AS top_models,
+  ${listJson(
+    `'repo': repo, 'credits': credits, 'cost': cost, 'tokens': tokens`,
+    `SELECT COALESCE(repo,'unattributed') AS repo, COALESCE(SUM(credits),0) AS credits,
+            COALESCE(SUM(cost),0) AS cost, ${tok} AS tokens
+     FROM f GROUP BY COALESCE(repo,'unattributed')`,
+    'credits DESC',
+  )} AS top_repos,
+  ${listJson(
+    `'model': model, 'surface': surface, 'count': cnt, 'credits': credits`,
+    `SELECT modelId AS model, surface, COUNT(*) AS cnt, COALESCE(SUM(credits),0) AS credits
+     FROM f WHERE credits > 0 GROUP BY modelId, surface`,
+  )} AS sankey,
+  ${agg(`COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.input')          AS DOUBLE),0)),0)`)} AS cat_input,
+  ${agg(`COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.output')         AS DOUBLE),0)),0)`)} AS cat_output,
+  ${agg(`COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.tool')           AS DOUBLE),0)),0)`)} AS cat_tool,
+  ${agg(`COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.thinking')       AS DOUBLE),0)),0)`)} AS cat_thinking,
+  ${agg(`COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.cache_creation') AS DOUBLE),0)),0)`)} AS cat_cache_creation,
+  ${agg(`COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.cache_read')     AS DOUBLE),0)),0)`)} AS cat_cache_read,
+  ${agg(`COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.unknown')        AS DOUBLE),0)),0)`)} AS cat_unknown,
+  ${listJson(
+    `'hour_local': hour_local, 'credits': credits`,
+    `SELECT CAST(strftime(to_timestamp(ts/1000.0)::TIMESTAMPTZ,'%H') AS INTEGER) AS hour_local,
+            COALESCE(SUM(credits),0) AS credits FROM f GROUP BY 1`,
+    'hour_local',
+  )} AS hourly,
+  (SELECT COALESCE(to_json(list(name ORDER BY name))::VARCHAR,'[]') FROM (SELECT DISTINCT modelId AS name FROM ro WHERE modelId IS NOT NULL)) AS dim_models,
+  (SELECT COALESCE(to_json(list(name ORDER BY name))::VARCHAR,'[]') FROM (SELECT DISTINCT surface  AS name FROM ro WHERE surface  IS NOT NULL)) AS dim_surfaces,
+  (SELECT COALESCE(to_json(list(name ORDER BY name))::VARCHAR,'[]') FROM (SELECT DISTINCT source   AS name FROM ro WHERE source   IS NOT NULL)) AS dim_sources,
+  (SELECT COALESCE(to_json(list(name ORDER BY name))::VARCHAR,'[]') FROM (SELECT DISTINCT COALESCE(repo,'unattributed') AS name FROM ro))       AS dim_repos
+`;
 
     /* c8 ignore start */
-    const [allRows, mtdRows, todayRows, dailyRows, modelRows, repoRows, sankeyRows,
-           catRows, hourlyRows, dimModelRows, dimSurfaceRows, dimSourceRows, dimRepoRows] =
-      await Promise.all([
-        readPrepared(this.conn, totSql(clause),     params, (r) => r),
-        readPrepared(this.conn, totSql(mtdClause),  params, (r) => r),
-        readPrepared(this.conn, totSql(todayClause), params, (r) => r),
-        readPrepared(this.conn,
-          `SELECT CAST(extract(epoch from date_trunc('day', to_timestamp(ts/1000.0)::TIMESTAMPTZ)) * 1000 AS BIGINT) AS day_start,
-                  COALESCE(SUM(credits),0) AS credits, COALESCE(SUM(cost),0) AS cost,
-                  COALESCE(CAST(SUM(COALESCE(promptTokens,0)+COALESCE(completionTokens,0)) AS BIGINT),0) AS tokens,
-                  COUNT(*) AS event_count
-           FROM events ${clause}
-           GROUP BY day_start ORDER BY day_start`,
-          params, (r) => r),
-        readPrepared(this.conn,
-          `SELECT modelId,
-                  COALESCE(SUM(credits),0) AS credits, COALESCE(SUM(cost),0) AS cost,
-                  COALESCE(CAST(SUM(COALESCE(promptTokens,0)+COALESCE(completionTokens,0)) AS BIGINT),0) AS tokens
-           FROM events ${clause}
-           GROUP BY modelId ORDER BY credits DESC`,
-          params, (r) => r),
-        readPrepared(this.conn,
-          `SELECT COALESCE(repo, 'unattributed') AS repo,
-                  COALESCE(SUM(credits),0) AS credits, COALESCE(SUM(cost),0) AS cost,
-                  COALESCE(CAST(SUM(COALESCE(promptTokens,0)+COALESCE(completionTokens,0)) AS BIGINT),0) AS tokens
-           FROM events ${clause}
-           GROUP BY COALESCE(repo, 'unattributed') ORDER BY credits DESC`,
-          params, (r) => r),
-        readPrepared(this.conn,
-          `SELECT modelId AS model, surface, COUNT(*) AS count, COALESCE(SUM(credits),0) AS credits
-           FROM events ${sankeyClause}
-           GROUP BY modelId, surface`,
-          params, (r) => r),
-        readPrepared(this.conn,
-          `SELECT
-             COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.input')          AS DOUBLE),0)),0) AS cat_input,
-             COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.output')         AS DOUBLE),0)),0) AS cat_output,
-             COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.tool')           AS DOUBLE),0)),0) AS cat_tool,
-             COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.thinking')       AS DOUBLE),0)),0) AS cat_thinking,
-             COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.cache_creation') AS DOUBLE),0)),0) AS cat_cache_creation,
-             COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.cache_read')     AS DOUBLE),0)),0) AS cat_cache_read,
-             COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.unknown')        AS DOUBLE),0)),0) AS cat_unknown
-           FROM events ${clause}`,
-          params, (r) => r),
-        readPrepared(this.conn,
-          `SELECT CAST(strftime(to_timestamp(ts/1000.0)::TIMESTAMPTZ, '%H') AS INTEGER) AS hour_local,
-                  COALESCE(SUM(credits),0) AS credits
-           FROM events ${clause}
-           GROUP BY hour_local ORDER BY hour_local`,
-          params, (r) => r),
-        readPrepared(this.conn, `SELECT DISTINCT modelId AS name FROM events ${rangeClause}`, rangeParams, (r) => String(r['name'] ?? '')),
-        readPrepared(this.conn, `SELECT DISTINCT surface  AS name FROM events ${rangeClause}`, rangeParams, (r) => String(r['name'] ?? '')),
-        readPrepared(this.conn, `SELECT DISTINCT source   AS name FROM events ${rangeClause}`, rangeParams, (r) => String(r['name'] ?? '')),
-        readPrepared(this.conn, `SELECT DISTINCT COALESCE(repo, 'unattributed') AS name FROM events ${rangeClause}`, rangeParams, (r) => String(r['name'] ?? '')),
-      ]);
+    const rows = await readPrepared(this.conn, sql, [...params, ...rangeParams], (r) => r);
+    const row  = rows[0] ?? {};
 
-    const toTotals = (rows: Record<string, unknown>[]): FilteredSnapshotData['totals']['all'] => {
-      const r = rows[0] ?? {};
-      return {
-        credits:    Number(r['credits']     ?? 0),
-        cost:       Number(r['cost']        ?? 0),
-        tokens:     Number(r['tokens']      ?? 0),
-        eventCount: Number(r['event_count'] ?? 0),
-      };
+    const parseArr = <T>(key: string): T[] => {
+      const v = row[key];
+      if (v == null) return [];
+      return JSON.parse(String(v)) as T[];
     };
 
-    const catRow = catRows[0] ?? {};
+    const mkTotals = (pfx: string): FilteredSnapshotData['totals']['all'] => ({
+      credits:    Number(row[`${pfx}_credits`] ?? 0),
+      cost:       Number(row[`${pfx}_cost`]    ?? 0),
+      tokens:     Number(row[`${pfx}_tokens`]  ?? 0),
+      eventCount: Number(row[`${pfx}_ec`]      ?? 0),
+    });
+
     const catPairs: [string, string][] = [
       ['cat_input', 'input'], ['cat_output', 'output'], ['cat_tool', 'tool'],
       ['cat_thinking', 'thinking'], ['cat_cache_creation', 'cache_creation'],
@@ -648,47 +657,53 @@ export class EventReader implements IEventReader {
     ];
     const categories: FilteredSnapshotData['categories'] = [];
     for (const [col, cat] of catPairs) {
-      const cost = Number(catRow[col] ?? 0);
+      const cost = Number(row[col] ?? 0);
       if (cost > 0) categories.push({ category: cat, cost });
     }
 
+    const dailyArr  = parseArr<Record<string, unknown>>('daily');
+    const modelArr  = parseArr<Record<string, unknown>>('top_models');
+    const repoArr   = parseArr<Record<string, unknown>>('top_repos');
+    const sankeyArr = parseArr<Record<string, unknown>>('sankey');
+    const hourArr   = parseArr<Record<string, unknown>>('hourly');
+
     return {
-      totals: { all: toTotals(allRows), mtd: toTotals(mtdRows), today: toTotals(todayRows) },
-      daily: dailyRows.map((r) => ({
+      totals: { all: mkTotals('all'), mtd: mkTotals('mtd'), today: mkTotals('today') },
+      daily: dailyArr.map((r) => ({
         dayStart:   Number(r['day_start']   ?? 0),
         credits:    Number(r['credits']     ?? 0),
         cost:       Number(r['cost']        ?? 0),
         tokens:     Number(r['tokens']      ?? 0),
         eventCount: Number(r['event_count'] ?? 0),
       })),
-      topModels: modelRows.map((r) => ({
+      topModels: modelArr.map((r) => ({
         modelId: String(r['modelId'] ?? ''),
         credits: Number(r['credits'] ?? 0),
         cost:    Number(r['cost']    ?? 0),
         tokens:  Number(r['tokens']  ?? 0),
       })),
-      topRepos: repoRows.map((r) => ({
+      topRepos: repoArr.map((r) => ({
         repo:    String(r['repo']    ?? ''),
         credits: Number(r['credits'] ?? 0),
         cost:    Number(r['cost']    ?? 0),
         tokens:  Number(r['tokens']  ?? 0),
       })),
-      sankey: sankeyRows.map((r) => ({
+      sankey: sankeyArr.map((r) => ({
         model:   String(r['model']   ?? ''),
         surface: String(r['surface'] ?? ''),
         count:   Number(r['count']   ?? 0),
         credits: Number(r['credits'] ?? 0),
       })),
       categories,
-      hourly: hourlyRows.map((r) => ({
+      hourly: hourArr.map((r) => ({
         hourLocal: Number(r['hour_local'] ?? 0),
         credits:   Number(r['credits']   ?? 0),
       })),
       dims: {
-        models:   dimModelRows,
-        surfaces: dimSurfaceRows,
-        sources:  dimSourceRows,
-        repos:    dimRepoRows,
+        models:   parseArr<string>('dim_models'),
+        surfaces: parseArr<string>('dim_surfaces'),
+        sources:  parseArr<string>('dim_sources'),
+        repos:    parseArr<string>('dim_repos'),
       },
     };
     /* c8 ignore stop */
