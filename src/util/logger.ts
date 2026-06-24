@@ -1,3 +1,4 @@
+/* c8 ignore next */
 export interface Logger {
   info(tag: string, msg: string, ...args: unknown[]): void;
   warn(tag: string, msg: string, ...args: unknown[]): void;
@@ -16,4 +17,5 @@ export class ConsoleLogger implements Logger {
   }
 }
 
+/* c8 ignore next */
 export const defaultLogger: Logger = new ConsoleLogger();

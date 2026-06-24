@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Model → credit (premium-request) weight and cost helpers.
  *

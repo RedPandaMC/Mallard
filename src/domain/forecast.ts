@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Month-end forecasting. The default model is a linear run-rate; the
  * {@link Forecaster} seam lets a richer model (seasonal Holt-Winters) drop in

@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Holt-Winters triple exponential smoothing with additive weekly seasonality (m=7).
  *

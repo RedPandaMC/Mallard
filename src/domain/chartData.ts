@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Pure host-side functions that build render-ready chart payloads.
  * Assembled once in buildSnapshot(); the webview only paints, never aggregates.

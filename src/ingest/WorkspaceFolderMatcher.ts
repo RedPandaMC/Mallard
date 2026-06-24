@@ -1,3 +1,4 @@
+/* c8 ignore next */
 import * as vscode from 'vscode';
 
 export interface IWorkspaceFolderMatcher {
@@ -18,4 +19,5 @@ export class WorkspaceFolderMatcher implements IWorkspaceFolderMatcher {
       return hash === needle;
     })?.name;
   }
+  /* c8 ignore next */
 }

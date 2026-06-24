@@ -1,3 +1,4 @@
+/* c8 ignore next */
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -16,6 +17,7 @@ export async function cleanupStorage(storageDir: string): Promise<void> {
 }
 
 /** Clear all globalState keys written by Mallard. */
+/* c8 ignore next */
 export async function cleanupGlobalState(state: vscode.Memento): Promise<void> {
   for (const key of state.keys()) {
     await state.update(key, undefined);

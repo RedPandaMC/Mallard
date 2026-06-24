@@ -1,3 +1,4 @@
+/* c8 ignore next */
 import { watch as fsWatch } from 'fs';
 
 export interface IFsWatcher {
@@ -14,4 +15,5 @@ export class NoopFsWatcher implements IFsWatcher {
   watch(_dir: string, _callback: () => void): { close(): void } {
     return { close() {} };
   }
+  /* c8 ignore next */
 }

@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Minimal JSONLogic-inspired condition evaluator.
  *

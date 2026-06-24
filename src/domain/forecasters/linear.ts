@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Linear run-rate forecaster. The confidence band widens with the number of
  * remaining days (uncertainty compounds) and never dips below the

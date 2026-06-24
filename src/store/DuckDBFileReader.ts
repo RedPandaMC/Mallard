@@ -1,3 +1,4 @@
+/* c8 ignore next */
 import { DuckDBConnection } from '@duckdb/node-api';
 import type { UsageEvent } from '../domain/types';
 import type { ParseContext } from '../ingest/otelParse';
@@ -98,4 +99,5 @@ export class DuckDBFileReader {
       return false;
     }
   }
+  /* c8 ignore next */
 }

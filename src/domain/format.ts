@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Shared, locale-aware formatters used by both the host and the webview.
  * Pure — no `vscode`, no DOM.

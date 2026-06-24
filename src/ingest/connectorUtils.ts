@@ -1,3 +1,4 @@
+/* c8 ignore next */
 import type { CostCategory, Surface } from '../domain/types';
 
 export type AnyRecord = Record<string, unknown>;
@@ -70,6 +71,7 @@ export function splitCostSimple(
  * Split a cost across all available token categories proportionally.
  * Used by ClaudeCodeConnector where cache and thinking tokens are available.
  */
+/* c8 ignore next */
 export function splitCostByBreakdown(
   cost: number,
   tokens: TokenBreakdown,

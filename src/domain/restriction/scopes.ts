@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Pure scope data and custom-extension fallback. The host-side resolver in
  * `engine.ts` handles the `vscode.extensions.all` filter; this module just

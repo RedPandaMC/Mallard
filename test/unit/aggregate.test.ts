@@ -124,6 +124,13 @@ describe('aggregate', () => {
     assert.equal(mainOnly.credits, 4);
   });
 
+  it('branches filter treats events without a branch field as empty string', () => {
+    const noBranch = makeEvent({ ts: d1, credits: 3 });
+    const withBranch = makeEvent({ ts: d2, credits: 5, branch: 'main' });
+    const result = sumEvents([noBranch, withBranch], { branches: ['main'] });
+    assert.equal(result.credits, 5); // noBranch excluded: '' !== 'main'
+  });
+
   it('distinctSources returns source kinds in canonical order', () => {
     const mixed = [
       makeEvent({ ts: d1, source: 'claude-code' }),

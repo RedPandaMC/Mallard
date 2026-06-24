@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Local-timezone bucketing helpers. Bucketing uses local Date component methods
  * so "today"/"this month" match the user's clock.

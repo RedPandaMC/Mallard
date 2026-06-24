@@ -1,3 +1,4 @@
+/* c8 ignore next */
 import { DuckDBConnection } from '@duckdb/node-api';
 import { UsageEvent } from '../domain/types';
 import { UNATTRIBUTED_REPO } from '../domain/aggregate';

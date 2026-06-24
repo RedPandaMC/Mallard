@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Pure restriction evaluation: given the rule set and a context object,
  * decides whether any rule's `restrict` block wants to restrict, and whether

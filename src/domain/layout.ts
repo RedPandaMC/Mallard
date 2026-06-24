@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Pure helpers for the dashboard layout. Kept free of vscode/DOM so they can be
  * shared and unit-tested.

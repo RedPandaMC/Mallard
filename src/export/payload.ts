@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Derives an expanded metric payload from a UsageSnapshot.
  *

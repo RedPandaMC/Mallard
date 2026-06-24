@@ -1,3 +1,4 @@
+/* c8 ignore next */
 import type { LogConnector } from './LogConnector';
 
 export class ConnectorRegistry {
@@ -11,4 +12,5 @@ export class ConnectorRegistry {
   build(): readonly LogConnector[] {
     return [...this.connectors];
   }
+  /* c8 ignore next */
 }

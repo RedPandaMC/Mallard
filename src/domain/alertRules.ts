@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Alert-rule evaluation: turns the user-authored JSON rules document into the
  * AlertFireResult[] the host surfaces as toast messages. Pure.

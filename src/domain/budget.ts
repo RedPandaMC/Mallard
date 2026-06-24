@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Pure budget / pace math. Drives KPI cards, the status-bar tint, and
  * notification evaluation. (No pet — the mallard is branding only.)

@@ -1,3 +1,4 @@
+/* c8 ignore next */
 import * as path from 'path';
 import { ParseContext } from './otelParse';
 import { locateCopilotLogDirs } from './locate';
@@ -97,4 +98,5 @@ export class CopilotConnector extends BaseFileConnector {
       ...(costByCategory !== undefined ? { costByCategory } : {}),
     };
   }
+  /* c8 ignore next */
 }

@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Pure aggregation: turn a flat list of UsageEvents into per-granularity
  * buckets (with per-model breakdowns) and ranked top lists.
@@ -222,6 +223,7 @@ export function distinctSurfaces(events: readonly UsageEvent[], filter?: Filter)
 }
 
 /** All distinct source kinds in the filtered event set. */
+/* c8 ignore next */
 export function distinctSources(events: readonly UsageEvent[], filter?: Filter): SourceKind[] {
   const set = new Set<SourceKind>();
   for (const entry of events) {

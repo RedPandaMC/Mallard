@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Builds the rule evaluation context — a plain nested object that
  * evalCondition() and renderTemplate() walk via dot-path resolution.

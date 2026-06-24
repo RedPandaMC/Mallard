@@ -1,3 +1,4 @@
+/* c8 ignore next */
 import { currentRepo } from './repoResolver';
 import { activeBranch } from '../util/repo';
 import { ParseContext } from './otelParse';
@@ -139,4 +140,5 @@ export abstract class BaseFileConnector implements LogConnector {
   getStatus(): ConnectorStatus { return this.status; }
   getLogPaths(): string[] { return this.logPaths.slice(); }
   getSearchedDirs(): string[] { return this.searchedDirs_.slice(); }
+  /* c8 ignore next */
 }

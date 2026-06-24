@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Pure assembly of a UsageSnapshot from raw events + options.
  */

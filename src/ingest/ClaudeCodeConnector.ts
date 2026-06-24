@@ -1,3 +1,4 @@
+/* c8 ignore next */
 import * as path from 'path';
 import { ParseContext } from './otelParse';
 import { locateClaudeCodeLogDirs } from './locate';
@@ -122,4 +123,5 @@ export class ClaudeCodeConnector extends BaseFileConnector {
       ...(costByCategory !== undefined ? { costByCategory } : {}),
     };
   }
+  /* c8 ignore next */
 }

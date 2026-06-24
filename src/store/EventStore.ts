@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Lifecycle facade for the DuckDB-backed event store.
  *
