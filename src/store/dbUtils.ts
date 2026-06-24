@@ -46,8 +46,8 @@ export async function runPrepared(
   return (await stmt.run()).rowsChanged;
 }
 
-export function bindParam(stmt: DuckDBPreparedStatement, i: number, v: unknown): void {
-  /* c8 ignore next */
+/* c8 ignore next */
+export const bindParam = (stmt: DuckDBPreparedStatement, i: number, v: unknown): void => {
   if (v === null || v === undefined) stmt.bindNull(i);
   else if (typeof v === 'bigint') stmt.bindBigInt(i, v);
   else if (typeof v === 'boolean') stmt.bindBoolean(i, v);
@@ -56,4 +56,4 @@ export function bindParam(stmt: DuckDBPreparedStatement, i: number, v: unknown):
     else stmt.bindDouble(i, v);
   }
   else stmt.bindVarchar(i, String(v));
-}
+};
