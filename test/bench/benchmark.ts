@@ -114,6 +114,9 @@ async function bench(
 async function seed(store: EventStore, count: number, windowDays = 90, prefix = 'e'): Promise<void> {
   await store.writer.clear();
   if (count > 0) await store.writer.insert(generateEvents(count, windowDays, prefix));
+  // insert() only refreshes today's fact window; rebuild the full window so
+  // queryFacts benchmarks reflect the actual seeded event count, not just today's slice.
+  if (count > 0) await (store.writer as any).refreshFacts(0, Date.now() + DAY_MS);
   // Flush WAL + encourage buffer pool eviction between suites.
   await (store as any).conn.run('CHECKPOINT');
 }
