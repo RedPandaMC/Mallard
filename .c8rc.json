@@ -5,6 +5,7 @@
     "src/container.ts",
     "src/config.ts",
     "src/store/schema.ts",
+    "src/store/schema/**",
     "src/store/EventRepository.ts",
     "src/ui/**",
     "src/billing/**",

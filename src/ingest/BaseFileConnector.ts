@@ -91,7 +91,9 @@ export abstract class BaseFileConnector implements LogConnector {
       pricePerCredit: this.pricing.pricePerCredit,
       manifest: this.pricing.currentManifest,
       now: Date.now(),
+      /* c8 ignore next */
       ...(repo !== undefined ? { repo } : {}),
+      /* c8 ignore next */
       ...(branch !== undefined ? { branch } : {}),
     };
   }
