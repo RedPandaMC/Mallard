@@ -1,9 +1,7 @@
-/* c8 ignore start */
 import * as vscode from 'vscode';
 import { ProviderStatus } from '../domain/types';
 import { platformDefaults } from './locate';
 import type { LogConnector } from './LogConnector';
-/* c8 ignore stop */
 
 export class IngestService implements vscode.Disposable {
   constructor(private readonly connectors: readonly LogConnector[]) {}

@@ -1,10 +1,9 @@
-/* c8 ignore start */
+/* c8 ignore next */
 /**
  * Builds the rule evaluation context — a plain nested object that
  * evalCondition() and renderTemplate() walk via dot-path resolution.
  */
 import { UsageSnapshot } from '../types';
-/* c8 ignore stop */
 
 export interface HistorySample {
   ts: number;

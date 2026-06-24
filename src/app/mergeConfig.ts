@@ -1,4 +1,4 @@
-/* c8 ignore start */
+/* c8 ignore next */
 /**
  * Pure default-merge for UserConfig. Lives in its own file so it can be
  * unit-tested without pulling in the `vscode` module.
@@ -6,8 +6,8 @@
 import { DEFAULT_USER_CONFIG, UserConfig } from '../domain/types';
 
 /** Merge a partial over defaults, clamping numbers to be non-negative. */
+/* c8 ignore next */
 export function mergeConfig(stored?: Partial<UserConfig>): UserConfig {
-/* c8 ignore stop */
   const d = DEFAULT_USER_CONFIG;
   const nonNeg = (v: unknown, fallback: number) =>
     typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fallback;

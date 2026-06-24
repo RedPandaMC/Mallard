@@ -4,8 +4,12 @@ import { buildContainer, Container } from './container';
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
 import { registerTriggerView } from './ui/TriggerView';
+import { cleanupGlobalState, cleanupStorage } from './app/Lifecycle';
+
+let _context: vscode.ExtensionContext | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  _context = context;
   const container = await buildContainer(context);
   const { usage, restriction } = container;
 
@@ -59,8 +63,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   await usage.start();
 }
 
-export function deactivate(): void {
-  // disposables cleaned up via context.subscriptions
+export async function deactivate(): Promise<void> {
+  if (!_context) return;
+  // context.subscriptions are disposed by VS Code before deactivate() is called,
+  // so EventStore.dispose() (which closes the DuckDB connection) runs first.
+  // It is then safe to delete the database files.
+  await cleanupStorage(_context.globalStorageUri.fsPath);
+  await cleanupGlobalState(_context.globalState);
 }
 
 function registerCommands(context: vscode.ExtensionContext, c: Container): void {

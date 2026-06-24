@@ -1,4 +1,4 @@
-/* c8 ignore start */
+/* c8 ignore next */
 import { DuckDBConnection } from '@duckdb/node-api';
 import { z } from 'zod';
 import { CostCategory, Filter, SourceKind, Surface, UsageEvent } from '../domain/types';
@@ -30,7 +30,6 @@ import {
   READ_SNAP_SANKEY,
   READ_SNAP_TOTALS,
 } from './schema';
-/* c8 ignore stop */
 
 // ── SnapshotCache ─────────────────────────────────────────────────────────────
 

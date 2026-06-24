@@ -15,10 +15,14 @@ import { PricingManifest } from './domain/pricing';
 import { initRepoAttribution } from './ingest/repoResolver';
 import { CopilotConnector } from './ingest/CopilotConnector';
 import { ClaudeCodeConnector } from './ingest/ClaudeCodeConnector';
+import { ConnectorRegistry } from './ingest/ConnectorRegistry';
+import { WorkspaceFolderMatcher } from './ingest/WorkspaceFolderMatcher';
 import { IngestService } from './ingest/IngestService';
 import { PricingService } from './pricing/PricingService';
 import { EventStore } from './store/EventStore';
 import { createMetricExporter } from './export/ExporterFactory';
+import { NullMetricExporter } from './export/MetricExporter';
+import { opt } from './util/lang';
 
 export interface Container {
   usage: UsageService;
@@ -58,26 +62,33 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     pricing,
     store.meta,
     store.fileReader,
-    () => vscode.workspace.workspaceFolders,
+    new WorkspaceFolderMatcher(() => vscode.workspace.workspaceFolders),
   );
-  const ingest = new IngestService([copilot, claudeCode]);
+
+  const ingest = new IngestService(
+    new ConnectorRegistry()
+      .register(copilot)
+      .register(claudeCode)
+      .build(),
+  );
 
   const githubSession = new GitHubSession();
   const github = new GitHubUsageService(githubSession);
   const userConfig = new UserConfigStore(storageDir);
   const layout = new LayoutStore(context.globalState);
+
   const ve = cfg.metricExport;
   const workspaceFolders = vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath);
   const exporter = createMetricExporter({
-    ...(ve.brokerUrl ? { brokerUrl: ve.brokerUrl } : {}),
-    ...(ve.topic ? { topic: ve.topic } : {}),
-    ...(ve.username ? { username: ve.username } : {}),
-    ...(ve.password ? { password: ve.password } : {}),
-    ...(ve.certPath ? { certPath: ve.certPath } : {}),
-    ...(ve.keyPath ? { keyPath: ve.keyPath } : {}),
-    ...(ve.caPath ? { caPath: ve.caPath } : {}),
+    ...opt('brokerUrl',       ve.brokerUrl   || undefined),
+    ...opt('topic',           ve.topic       || undefined),
+    ...opt('username',        ve.username    || undefined),
+    ...opt('password',        ve.password    || undefined),
+    ...opt('certPath',        ve.certPath    || undefined),
+    ...opt('keyPath',         ve.keyPath     || undefined),
+    ...opt('caPath',          ve.caPath      || undefined),
     ...(workspaceFolders?.length ? { workspaceFolders } : {}),
-  }) ?? undefined;
+  }) ?? new NullMetricExporter();
 
   const usage = new UsageService(store.reader, pricing, ingest, userConfig, github, exporter);
   const restriction = new RestrictionEngine(storageDir);
@@ -88,10 +99,10 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
       await restriction.reconcile({
         snapshot,
         rules: cfg.rules ?? [],
-        ...(cfg.vars !== undefined ? { vars: cfg.vars } : {}),
-        ...(cfg.groups !== undefined ? { groups: cfg.groups } : {}),
+        ...opt('vars',           cfg.vars),
+        ...opt('groups',         cfg.groups),
         signedIn: snapshot.authStatus === 'signed-in',
-        ...(cfg.branchBudgets !== undefined ? { branchBudgets: cfg.branchBudgets } : {}),
+        ...opt('branchBudgets', cfg.branchBudgets),
       });
     }),
   );
@@ -104,7 +115,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     layout,
     usage,
     restriction,
-    ...(exporter ? [{ dispose: () => exporter.dispose() }] : []),
+    { dispose: () => exporter.dispose() },
   );
 
   return { usage, store, userConfig, layout, pricing, restriction };
@@ -112,9 +123,9 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
 
 async function loadBundledManifest(context: vscode.ExtensionContext): Promise<PricingManifest> {
   const fallback: PricingManifest = { version: 1, pricePerCredit: 0.04, updatedAt: '', models: {} };
-  const path = vscode.Uri.joinPath(context.extensionUri, 'media', 'pricing-manifest.json');
+  const manifestPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'pricing-manifest.json');
   try {
-    const raw = await vscode.workspace.fs.readFile(path);
+    const raw = await vscode.workspace.fs.readFile(manifestPath);
     return JSON.parse(Buffer.from(raw).toString('utf8')) as PricingManifest;
   } catch {
     return fallback;

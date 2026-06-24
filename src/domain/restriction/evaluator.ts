@@ -1,4 +1,4 @@
-/* c8 ignore start */
+/* c8 ignore next */
 /**
  * Pure restriction evaluation: given the rule set and a context object,
  * decides whether any rule's `restrict` block wants to restrict, and whether
@@ -10,7 +10,6 @@
  */
 import { AlertRule } from '../types';
 import { evalCondition, evalRule } from '../expr/jsonCondition';
-/* c8 ignore stop */
 
 export interface RestrictionDesired {
   active: AlertRule | null;

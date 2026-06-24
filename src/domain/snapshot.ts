@@ -1,4 +1,4 @@
-/* c8 ignore start */
+/* c8 ignore next */
 /**
  * Pure assembly of a UsageSnapshot from raw events + options.
  */
@@ -26,7 +26,6 @@ import {
   UsageSnapshot,
 } from './types';
 import { DAY_MS, nextBucketStart, startOf } from '../util/time';
-/* c8 ignore stop */
 
 export interface SnapshotOptions {
   now: number;

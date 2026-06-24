@@ -1,10 +1,9 @@
-/* c8 ignore start */
+/* c8 ignore next */
 /**
  * Local-timezone bucketing helpers. Bucketing uses local Date component methods
  * so "today"/"this month" match the user's clock.
  */
 import { Granularity } from '../domain/types';
-/* c8 ignore stop */
 
 export const DAY_MS = 86_400_000;
 

@@ -1,5 +1,6 @@
 import { strict as assert } from 'assert';
 import { BaseFileConnector } from '../../../src/ingest/BaseFileConnector';
+import type { IFsWatcher } from '../../../src/ingest/IFsWatcher';
 import type { ParseContext } from '../../../src/ingest/otelParse';
 import type { PricingService } from '../../../src/pricing/PricingService';
 import type { IMetaStore as MetaStore } from '../../../src/store/MetaStore';
@@ -13,11 +14,14 @@ type DiscoverResult = { globs: string[]; allowedRoots: string[]; searchedDirs: s
 class TestConnector extends BaseFileConnector {
   readonly id = 'test';
   readonly displayName = 'Test Connector';
+  readonly capabilities = {
+    tokenFields: [] as const,
+    costCategories: [] as const,
+    supportsRepoAttribution: false,
+  };
   private _discoverResult: DiscoverResult = { globs: [], allowedRoots: [], searchedDirs: [] };
 
   setDiscoverResult(r: DiscoverResult): void { this._discoverResult = r; }
-
-  protected get watermarkKey(): string { return 'test:watermark'; }
 
   protected async discover(): Promise<DiscoverResult> {
     return this._discoverResult;
@@ -102,6 +106,31 @@ describe('BaseFileConnector — lifecycle', () => {
     const { pricing, meta, fileReader } = makeStubs();
     const c = new TestConnector(pricing, meta, fileReader);
     // /tmp exists so fsWatch won't throw and a real watcher is pushed to this.watchers
+    c.setDiscoverResult({ globs: ['/tmp/*.jsonl'], allowedRoots: ['/tmp'], searchedDirs: ['/tmp'] });
+    await c.start();
+    assert.doesNotThrow(() => c.dispose());
+  });
+
+  it('dispose() clears an active debounce timer set by a watcher callback', async () => {
+    let capturedCb: (() => void) | undefined;
+    const capturingWatcher: IFsWatcher = {
+      watch: (_dir, cb) => { capturedCb = cb; return { close() {} }; },
+    };
+    const { pricing, meta, fileReader, ingestResults } = makeStubs();
+    ingestResults.push(1);
+    const c = new TestConnector(pricing, meta, fileReader, capturingWatcher);
+    c.setDiscoverResult({ globs: ['/tmp/*.jsonl'], allowedRoots: ['/tmp'], searchedDirs: ['/tmp'] });
+    await c.start();
+    capturedCb!(); // scheduleReparse — sets debounceTimer
+    assert.doesNotThrow(() => c.dispose()); // dispose must clearTimeout the pending timer
+  });
+
+  it('dispose() silently swallows errors thrown by watcher.close()', async () => {
+    const throwingWatcher: IFsWatcher = {
+      watch: () => ({ close() { throw new Error('fs error'); } }),
+    };
+    const { pricing, meta, fileReader } = makeStubs();
+    const c = new TestConnector(pricing, meta, fileReader, throwingWatcher);
     c.setDiscoverResult({ globs: ['/tmp/*.jsonl'], allowedRoots: ['/tmp'], searchedDirs: ['/tmp'] });
     await c.start();
     assert.doesNotThrow(() => c.dispose());

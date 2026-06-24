@@ -17,6 +17,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import type { UsageSnapshot } from '../domain/types';
+import { defaultLogger, Logger } from '../util/logger';
 
 // ── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -49,6 +50,25 @@ export class MetricExporter {
   }
 }
 
+/** No-op exporter used when metric export is not configured. Eliminates optional chaining. */
+export class NullMetricExporter extends MetricExporter {
+  private static readonly nullProtocol: MetricProtocol = {
+    send() {},
+    dispose() {},
+  };
+  private static readonly nullSerializer: MetricSerializer = {
+    topic: '',
+    serialize: () => ({}),
+  };
+
+  constructor() {
+    super(NullMetricExporter.nullProtocol, NullMetricExporter.nullSerializer);
+  }
+
+  override export(_snapshot: UsageSnapshot): void {}
+  override dispose(): void {}
+}
+
 // ── MQTT protocol ─────────────────────────────────────────────────────────────
 
 export interface MqttProtocolOptions {
@@ -73,7 +93,7 @@ export class MqttProtocol implements MetricProtocol {
   private client: mqtt.MqttClient | null = null;
   private readonly resolvedTopic: string;
 
-  constructor(opts: MqttProtocolOptions) {
+  constructor(opts: MqttProtocolOptions, private readonly logger: Logger = defaultLogger) {
     if (!opts.brokerUrl.startsWith('mqtts://') && !opts.brokerUrl.startsWith('wss://')) {
       void vscode.window.showWarningMessage(
         'Mallard: mallard.metricExport.brokerUrl must use mqtts:// or wss:// (TLS required). ' +
@@ -102,7 +122,7 @@ export class MqttProtocol implements MetricProtocol {
 
     const useMtls = opts.certPath && opts.keyPath;
     if ((opts.certPath && !opts.keyPath) || (!opts.certPath && opts.keyPath)) {
-      console.warn('[mallard] metric export: certPath and keyPath must both be set for mTLS');
+      this.logger.warn('mqtt', 'certPath and keyPath must both be set for mTLS');
     }
 
     if (useMtls) {
@@ -114,7 +134,7 @@ export class MqttProtocol implements MetricProtocol {
         key = fs.readFileSync(opts.keyPath!);
         if (opts.caPath) ca = fs.readFileSync(opts.caPath);
       } catch (err) {
-        console.error('[mallard] metric export: failed to read mTLS cert files:', (err as Error).message);
+        this.logger.error('mqtt', 'failed to read mTLS cert files:', (err as Error).message);
         return;
       }
       this.client = mqtt.connect(opts.brokerUrl, {
@@ -134,7 +154,7 @@ export class MqttProtocol implements MetricProtocol {
     }
 
     this.client.on('error', (err: Error) => {
-      console.error('[mallard] metric export connection error:', err.message);
+      this.logger.error('mqtt', 'connection error:', err.message);
     });
   }
 
@@ -144,7 +164,7 @@ export class MqttProtocol implements MetricProtocol {
     // we publish to the instance-scoped resolved topic instead.
     void topic;
     this.client.publish(this.resolvedTopic, JSON.stringify(payload), { qos: 1, retain: true }, (err?: Error) => {
-      if (err) console.error('[mallard] metric publish error:', err.message);
+      if (err) this.logger.error('mqtt', 'publish error:', err.message);
     });
   }
 

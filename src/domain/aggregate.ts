@@ -1,4 +1,4 @@
-/* c8 ignore start */
+/* c8 ignore next */
 /**
  * Pure aggregation: turn a flat list of UsageEvents into per-granularity
  * buckets (with per-model breakdowns) and ranked top lists.
@@ -16,7 +16,6 @@ import {
   UsageEvent,
 } from './types';
 import { bucketKey, nextBucketStart, startOf } from '../util/time';
-/* c8 ignore stop */
 
 export function tokensOf(e: UsageEvent): number {
   return (e.promptTokens ?? 0) + (e.completionTokens ?? 0);
@@ -28,7 +27,6 @@ export function matchesFilter(event: UsageEvent, filter?: Filter): boolean {
   if (filter.models?.length && !filter.models.includes(event.modelId)) return false;
   if (filter.surfaces?.length && !filter.surfaces.includes(event.surface)) return false;
   if (filter.repos?.length && !filter.repos.includes(event.repo ?? UNATTRIBUTED_REPO)) return false;
-  /* c8 ignore next */
   if (filter.branches?.length && !filter.branches.includes(event.branch ?? '')) return false;
   if (filter.sources?.length && !filter.sources.includes(event.source)) return false;
   return true;

@@ -1,9 +1,8 @@
-/* c8 ignore start */
+/* c8 ignore next */
 import { DuckDBConnection } from '@duckdb/node-api';
 import type { UsageEvent } from '../domain/types';
 import type { ParseContext } from '../ingest/otelParse';
 import type { IEventWriter } from './EventWriter';
-/* c8 ignore stop */
 
 export type RowMapper = (row: Record<string, unknown>, ctx: ParseContext) => UsageEvent | null;
 
@@ -14,8 +13,13 @@ export type RowMapper = (row: Record<string, unknown>, ctx: ParseContext) => Usa
  * offsets. DuckDB reads and parses the files in C++, filters rows newer than
  * the watermark timestamp, and hands back structured objects. `mapRow` is the
  * thin TS mapping layer that converts raw DuckDB rows into typed UsageEvents.
+ *
+ * All calls are serialized through an async queue so concurrent connectors
+ * sharing the same DuckDB connection never race on writes.
  */
 export class DuckDBFileReader {
+  private queue: Promise<unknown> = Promise.resolve();
+
   constructor(
     private readonly conn: DuckDBConnection,
     private readonly writer: IEventWriter,
@@ -28,8 +32,22 @@ export class DuckDBFileReader {
    * `ignore_errors := true` silently drops malformed records (e.g. partial
    * lines written mid-flush). `auto_detect := true` lets DuckDB infer column
    * types from the JSON content.
+   *
+   * Calls are serialized through an internal queue — safe to call from
+   * multiple connectors concurrently.
    */
-  async ingestGlob(
+  ingestGlob(
+    globs: string | string[],
+    mapRow: RowMapper,
+    ctx: ParseContext,
+    sinceMs?: number,
+  ): Promise<number> {
+    const task = () => this._ingestGlob(globs, mapRow, ctx, sinceMs);
+    this.queue = this.queue.then(task, task);
+    return this.queue as Promise<number>;
+  }
+
+  private async _ingestGlob(
     globs: string | string[],
     mapRow: RowMapper,
     ctx: ParseContext,
@@ -81,5 +99,5 @@ export class DuckDBFileReader {
       return false;
     }
   }
-/* c8 ignore next */
+  /* c8 ignore next */
 }

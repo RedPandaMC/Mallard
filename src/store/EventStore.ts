@@ -1,4 +1,4 @@
-/* c8 ignore start */
+/* c8 ignore next */
 /**
  * Lifecycle facade for the DuckDB-backed event store.
  *
@@ -15,7 +15,6 @@ import { EventWriter } from './EventWriter';
 import { EventReader } from './EventReader';
 import { MetaStore } from './MetaStore';
 import { DuckDBFileReader } from './DuckDBFileReader';
-/* c8 ignore stop */
 
 export class EventStore implements vscode.Disposable {
   readonly reader: EventReader;

@@ -1,4 +1,4 @@
-/* c8 ignore start */
+/* c8 ignore next */
 /**
  * Alert-rule evaluation: turns the user-authored JSON rules document into the
  * AlertFireResult[] the host surfaces as toast messages. Pure.
@@ -7,7 +7,6 @@ import { z } from 'zod';
 import { AlertRule, AlertGroup, JsonCondition } from './types';
 import { evalCondition, evalRule, evalSimpleCondition, JsonConditionSchema, resolveVar } from './expr/jsonCondition';
 import { buildRuleContext, EvalBuildInput } from './expr/context';
-/* c8 ignore stop */
 
 const RestrictSchema = z.object({
   mode: z.enum(['soft', 'hard']),

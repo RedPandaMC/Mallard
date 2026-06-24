@@ -1,24 +1,28 @@
 import { strict as assert } from 'assert';
 import { ClaudeCodeConnector } from '../../../src/ingest/ClaudeCodeConnector';
+import { WorkspaceFolderMatcher } from '../../../src/ingest/WorkspaceFolderMatcher';
+import type { IWorkspaceFolderMatcher } from '../../../src/ingest/WorkspaceFolderMatcher';
 import type { ParseContext } from '../../../src/ingest/otelParse';
 import type { PricingService } from '../../../src/pricing/PricingService';
 import type { IMetaStore as MetaStore } from '../../../src/store/MetaStore';
 import type { DuckDBFileReader } from '../../../src/store/DuckDBFileReader';
 
+const noopMatcher: IWorkspaceFolderMatcher = { resolve: () => undefined };
+
 const now = new Date('2026-01-15T10:00:00.000Z').getTime();
 
-function makeConnector(getFolders?: () => undefined): ClaudeCodeConnector {
+function makeConnector(matcher?: IWorkspaceFolderMatcher): ClaudeCodeConnector {
   const pricing = { pricePerCredit: 0.04, currentManifest: undefined } as unknown as PricingService;
   const meta = { get: async () => null, set: async () => {} } as MetaStore;
   const fileReader = {} as DuckDBFileReader;
-  return new ClaudeCodeConnector(pricing, meta, fileReader, getFolders ?? (() => undefined));
+  return new ClaudeCodeConnector(pricing, meta, fileReader, matcher ?? noopMatcher);
 }
 
 function makeConnectorWithHasField(hasFieldResult: boolean): ClaudeCodeConnector {
   const pricing = { pricePerCredit: 0.04, currentManifest: undefined } as unknown as PricingService;
   const meta = { get: async () => null, set: async () => {} } as MetaStore;
   const fileReader = { hasField: async () => hasFieldResult } as unknown as DuckDBFileReader;
-  return new ClaudeCodeConnector(pricing, meta, fileReader, () => undefined);
+  return new ClaudeCodeConnector(pricing, meta, fileReader, noopMatcher);
 }
 
 function makeCtx(overrides?: Partial<ParseContext>): ParseContext {
@@ -79,7 +83,8 @@ describe('ClaudeCodeConnector — folder attribution', () => {
       name: f.name,
       uri: { fsPath: f.fsPath },
     })) as unknown as ReadonlyArray<import('vscode').WorkspaceFolder>;
-    return new ClaudeCodeConnector(pricing, meta, fileReader, () => vscodeFolders);
+    const matcher = new WorkspaceFolderMatcher(() => vscodeFolders);
+    return new ClaudeCodeConnector(pricing, meta, fileReader, matcher);
   }
 
   it('mapRow() uses folder name as repo when sessionId hash matches a folder', () => {
@@ -134,7 +139,8 @@ describe('ClaudeCodeConnector — folder attribution', () => {
     const pricing = { pricePerCredit: 0.04, currentManifest: undefined } as unknown as PricingService;
     const meta = { get: async () => null, set: async () => {} } as MetaStore;
     const fileReader = {} as DuckDBFileReader;
-    const connector = new ClaudeCodeConnector(pricing, meta, fileReader, () => []);
+    const matcher = new WorkspaceFolderMatcher(() => []);
+    const connector = new ClaudeCodeConnector(pricing, meta, fileReader, matcher);
     const result = connector.mapRow(
       {
         type: 'assistant',

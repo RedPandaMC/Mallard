@@ -1,8 +1,7 @@
-/* c8 ignore start */
+/* c8 ignore next */
 import type { DuckDBConnection } from '@duckdb/node-api';
 import { readPrepared, runPrepared } from './dbUtils';
 import { META_GET_SQL, META_SET_SQL } from './schema';
-/* c8 ignore stop */
 
 export interface IMetaStore {
   get(key: string): Promise<string | null>;

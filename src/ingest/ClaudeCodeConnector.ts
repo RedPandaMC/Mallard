@@ -1,70 +1,44 @@
-/* c8 ignore start */
+/* c8 ignore next */
 import * as path from 'path';
-import * as vscode from 'vscode';
 import { ParseContext } from './otelParse';
 import { locateClaudeCodeLogDirs } from './locate';
 import { priceRequest } from '../domain/pricing';
-import { CostCategory, Surface, UsageEvent } from '../domain/types';
+import { Surface, UsageEvent } from '../domain/types';
 import { PricingService } from '../pricing/PricingService';
 import { DuckDBFileReader } from '../store/DuckDBFileReader';
 import type { IMetaStore as MetaStore } from '../store/MetaStore';
 import { BaseFileConnector } from './BaseFileConnector';
-import { num, pick } from './connectorUtils';
-/* c8 ignore stop */
-
-type AnyRecord = Record<string, unknown>;
-
-function splitCost(
-  cost: number,
-  tokens: {
-    prompt?: number;
-    completion?: number;
-    cacheCreation?: number;
-    cacheRead?: number;
-    thinking?: number;
-  },
-): Partial<Record<CostCategory, number>> {
-  const total =
-    (tokens.prompt ?? 0) +
-    (tokens.completion ?? 0) +
-    (tokens.cacheCreation ?? 0) +
-    (tokens.cacheRead ?? 0) +
-    (tokens.thinking ?? 0);
-  if (total === 0) return {};
-  const out: Partial<Record<CostCategory, number>> = {};
-  if (tokens.prompt)        out.input          = (cost * tokens.prompt)        / total;
-  if (tokens.completion)    out.output         = (cost * tokens.completion)    / total;
-  if (tokens.cacheCreation) out.cache_creation = (cost * tokens.cacheCreation) / total;
-  if (tokens.cacheRead)     out.cache_read     = (cost * tokens.cacheRead)     / total;
-  if (tokens.thinking)      out.thinking       = (cost * tokens.thinking)      / total;
-  return out;
-}
-
-function matchFolderHash(
-  projectHash: string,
-  folders: ReadonlyArray<vscode.WorkspaceFolder>,
-): vscode.WorkspaceFolder | undefined {
-  return folders.find((wf) => {
-    const hash = encodeURIComponent(wf.uri.fsPath).replace(/%/g, '').toLowerCase();
-    return hash === projectHash;
-  });
-}
+import {
+  AnyRecord,
+  num,
+  parseTimestamp,
+  splitCostByBreakdown,
+  TokenBreakdown,
+} from './connectorUtils';
+import type { ConnectorCapabilities } from './LogConnector';
+import type { IWorkspaceFolderMatcher } from './WorkspaceFolderMatcher';
+import type { IFsWatcher } from './IFsWatcher';
+import type { Logger } from '../util/logger';
 
 export class ClaudeCodeConnector extends BaseFileConnector {
   readonly id = 'claude-code';
   readonly displayName = 'Claude Code';
 
+  readonly capabilities: ConnectorCapabilities = {
+    tokenFields: ['promptTokens', 'completionTokens', 'cacheCreationTokens', 'cacheReadTokens', 'thinkingTokens'],
+    costCategories: ['input', 'output', 'cache_creation', 'cache_read', 'thinking'],
+    supportsRepoAttribution: true,
+  };
+
   constructor(
     pricing: PricingService,
     meta: MetaStore,
     fileReader: DuckDBFileReader,
-    private readonly getFolders: () => ReadonlyArray<vscode.WorkspaceFolder> | undefined,
+    private readonly folderMatcher: IWorkspaceFolderMatcher,
+    fsWatcher?: IFsWatcher,
+    logger?: Logger,
   ) {
-    super(pricing, meta, fileReader);
-  }
-
-  protected get watermarkKey(): string {
-    return 'claude-code:watermark';
+    super(pricing, meta, fileReader, fsWatcher, logger);
   }
 
   protected async discover(): Promise<{ globs: string[]; allowedRoots: string[]; searchedDirs: string[] }> {
@@ -92,9 +66,11 @@ export class ClaudeCodeConnector extends BaseFileConnector {
     const usage = (msg['usage']    as AnyRecord | undefined) ?? (row['usage'] as AnyRecord | undefined);
     if (!usage) return null;
 
-    const model = pick(
-      { ...msg, ...row },
-      ['model', 'gen_ai.request.model', 'gen_ai.response.model'],
+    const model = String(
+      (msg as AnyRecord)['model'] ??
+      row['model'] ??
+      (msg as AnyRecord)['gen_ai.request.model'] ??
+      row['gen_ai.request.model'] ?? '',
     );
     if (!model) return null;
 
@@ -103,66 +79,49 @@ export class ClaudeCodeConnector extends BaseFileConnector {
     const cacheCreation = num(usage['cache_creation_input_tokens']);
     const cacheRead     = num(usage['cache_read_input_tokens']);
     const thinking      = num(usage['thinking_tokens'] ?? usage['output_thinking_tokens']);
+    const ts            = parseTimestamp({ ...row, ...msg }, ctx.now);
 
-    const tsRaw = row['timestamp'] ?? row['time'] ?? (msg as AnyRecord)['timestamp'];
-    let ts =
-      typeof tsRaw === 'string'
-        ? Date.parse(tsRaw)
-        : typeof tsRaw === 'number'
-          ? tsRaw
-          : ctx.now;
-    if (Number.isNaN(ts)) ts = ctx.now;
-
-    const { credits, cost } = priceRequest(String(model), {
+    const { credits, cost } = priceRequest(model, {
       pricePerCredit: ctx.pricePerCredit,
       currency: 'USD',
       ...(ctx.manifest !== undefined ? { manifest: ctx.manifest } : {}),
     });
 
-    const tokens = {
+    const tokens: TokenBreakdown = {
       ...(prompt        !== undefined ? { prompt }        : {}),
       ...(completion    !== undefined ? { completion }    : {}),
       ...(cacheCreation !== undefined ? { cacheCreation } : {}),
       ...(cacheRead     !== undefined ? { cacheRead }     : {}),
       ...(thinking      !== undefined ? { thinking }      : {}),
     };
-    const rawCbc = cost > 0 ? splitCost(cost, tokens) : undefined;
+    const rawCbc       = cost > 0 ? splitCostByBreakdown(cost, tokens) : undefined;
     const costByCategory = rawCbc && Object.keys(rawCbc).length > 0 ? rawCbc : undefined;
 
     const surface: Surface = ctx.surface ?? 'agent';
 
-    // sessionId is the last 8 chars of the session UUID — enough to discriminate
-    // concurrent turns without exposing the full id in event keys.
-    const sessionKey = typeof row['sessionId'] === 'string' ? row['sessionId'].slice(-8) : 'cc';
-
-    let repo = ctx.repo;
-    const folders = this.getFolders();
-    if (folders) {
-      const sessionId = typeof row['sessionId'] === 'string' ? row['sessionId'] : undefined;
-      if (sessionId) {
-        const matched = matchFolderHash(sessionId.toLowerCase(), folders);
-        if (matched) repo = matched.name;
-      }
-    }
+    const sessionId  = typeof row['sessionId'] === 'string' ? row['sessionId'] : undefined;
+    const sessionKey = sessionId ? sessionId.slice(-8) : 'cc';
+    const resolvedRepo = sessionId ? this.folderMatcher.resolve(sessionId) : undefined;
+    const repo = resolvedRepo ?? ctx.repo;
 
     return {
-      id: `claude-code:${sessionKey}:${ts}:${String(model)}`,
+      id:      `claude-code:${sessionKey}:${ts}:${model}`,
       ts,
-      modelId: String(model),
+      modelId: model,
       surface,
-      source: 'claude-code',
-      ...(prompt        !== undefined ? { promptTokens:        prompt        } : {}),
-      ...(completion    !== undefined ? { completionTokens:    completion    } : {}),
+      source:  'claude-code',
+      ...(prompt        !== undefined ? { promptTokens:        prompt }        : {}),
+      ...(completion    !== undefined ? { completionTokens:    completion }    : {}),
       ...(cacheCreation !== undefined ? { cacheCreationTokens: cacheCreation } : {}),
-      ...(cacheRead     !== undefined ? { cacheReadTokens:     cacheRead     } : {}),
-      ...(thinking      !== undefined ? { thinkingTokens:      thinking      } : {}),
+      ...(cacheRead     !== undefined ? { cacheReadTokens:     cacheRead }     : {}),
+      ...(thinking      !== undefined ? { thinkingTokens:      thinking }      : {}),
       credits,
       cost,
       estimated: true,
-      ...(repo !== undefined ? { repo } : {}),
+      ...(repo       !== undefined ? { repo }          : {}),
       ...(ctx.branch !== undefined ? { branch: ctx.branch } : {}),
       ...(costByCategory !== undefined ? { costByCategory } : {}),
     };
   }
-/* c8 ignore next */
+  /* c8 ignore next */
 }
