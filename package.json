@@ -239,10 +239,8 @@
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.3-r.3",
-    "@oorabona/kysely-duckdb": "^0.5.1",
     "chalk": "2.4.2",
     "echarts": "^5.5.1",
-    "kysely": "^0.29.2",
     "mqtt": "^5.15.1",
     "neverthrow": "^8.2.0",
     "p-retry": "^8.0.0",

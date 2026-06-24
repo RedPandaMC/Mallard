@@ -10,34 +10,26 @@ import { mkdirSync } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { DuckDBInstance, DuckDBConnection } from '@duckdb/node-api';
-import { Kysely } from 'kysely';
-import { DuckDbDialect } from '@oorabona/kysely-duckdb';
-import { CREATE_SQL, EventWriter } from './EventWriter';
+import { CREATE_SQL } from './schema';
+import { EventWriter } from './EventWriter';
 import { EventReader } from './EventReader';
-import { KyselyMetaStore } from './MetaStore';
+import { MetaStore } from './MetaStore';
 import { DuckDBFileReader } from './DuckDBFileReader';
-import type { Database } from './db-types';
 /* c8 ignore stop */
 
 export class EventStore implements vscode.Disposable {
   readonly reader: EventReader;
   readonly writer: EventWriter;
-  readonly meta: KyselyMetaStore;
+  readonly meta: MetaStore;
   readonly fileReader: DuckDBFileReader;
 
   private constructor(
     private readonly instance: DuckDBInstance,
-    private readonly conn: DuckDBConnection,
+    readonly conn: DuckDBConnection,
   ) {
-    // The dialect package bundles its own version of kysely and @duckdb/node-api.
-    // TypeScript sees them as structurally distinct from our installed versions,
-    // so we cast through unknown to satisfy the type checker. At runtime they are
-    // compatible — same API surface, just different private class member tokens.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const db = new Kysely<Database>({ dialect: new DuckDbDialect({ database: instance as any }) as any });
-    this.meta       = new KyselyMetaStore(db);
-    this.reader     = new EventReader(db);
-    this.writer     = new EventWriter(conn, db);
+    this.meta       = new MetaStore(conn);
+    this.reader     = new EventReader(conn);
+    this.writer     = new EventWriter(conn);
     this.fileReader = new DuckDBFileReader(conn, this.writer);
   }
 
@@ -45,6 +37,15 @@ export class EventStore implements vscode.Disposable {
     mkdirSync(dir, { recursive: true });
     const instance = await DuckDBInstance.create(path.join(dir, 'events.duckdb'));
     const conn = await instance.connect();
+
+    // Set session timezone so all TIMESTAMPTZ operations use local time (DST-correct).
+    /* c8 ignore start */
+    let tz: string;
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; }
+    catch { tz = 'UTC'; }
+    /* c8 ignore stop */
+    await conn.run(`SET TimeZone = '${tz.replace(/'/g, "''")}'`);
+
     await conn.run(CREATE_SQL);
     return new EventStore(instance, conn);
   }
@@ -59,7 +60,7 @@ export class EventStore implements vscode.Disposable {
   setMeta(key: string, value: string): Promise<void> { return this.meta.set(key, value); }
   compact(now?: number): Promise<void> { return this.writer.compact(now); }
 
-  /** Full wipe — events, meta, facts, dimension tables. */
+  /** Full wipe — events, meta, facts, dimension tables, snap cache. */
   clear(): Promise<void> { return this.writer.clear(); }
 
   dispose(): void {

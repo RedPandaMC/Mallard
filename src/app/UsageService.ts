@@ -6,9 +6,23 @@
 import * as vscode from 'vscode';
 import { matchesFilter } from '../domain/aggregate';
 import { evaluateAlerts, SnapshotSample } from '../domain/alerts';
+import { computeBudget } from '../domain/budget';
+import { buildDailyBarsData, buildHeatmapData, buildModelBreakdownData } from '../domain/chartData';
+import { forecastMonth } from '../domain/forecast';
 import { buildSnapshot, SnapshotOptions } from '../domain/snapshot';
-import { AuthStatus, Filter, GitHubBillingData, UsageSnapshot } from '../domain/types';
-import { DAY_MS, startOf } from '../util/time';
+import {
+  AuthStatus,
+  COST_CATEGORIES,
+  Filter,
+  GitHubBillingData,
+  SourceKind,
+  Surface,
+  SURFACES,
+  SOURCE_KINDS,
+  UsageAggregate,
+  UsageSnapshot,
+} from '../domain/types';
+import { DAY_MS, bucketKey, nextBucketStart, startOf } from '../util/time';
 import type { IBillingProvider } from '../billing/IBillingProvider';
 import { IngestService } from '../ingest/IngestService';
 import { PricingService } from '../pricing/PricingService';
@@ -20,6 +34,11 @@ import { defaultVscodeHost, VscodeHost } from '../util/vscodeHost';
 
 /** Keep ~1h of recent samples for velocity alerting. */
 const HISTORY_WINDOW_MS = 60 * 60 * 1000;
+
+function isEmptyFilter(f: Filter): boolean {
+  return !f.range && !f.models?.length && !f.surfaces?.length &&
+         !f.repos?.length && !f.branches?.length && !f.sources?.length;
+}
 
 export class UsageService implements vscode.Disposable {
   private readonly _onDidChange = new vscode.EventEmitter<UsageSnapshot>();
@@ -124,33 +143,166 @@ export class UsageService implements vscode.Disposable {
     for (const [key, ts] of this.alertFired)
       if (now - ts > 86_400_000) this.alertFired.delete(key);
 
+    const branch = activeBranch();
+
+    if (isEmptyFilter(this.filter)) {
+      await this.computeFromCache(now, userConfig, branch);
+    } else {
+      await this.computeFromEvents(now, userConfig, branch);
+    }
+  }
+
+  /** Fast path: read pre-materialized snap_* tables — no raw event scan. */
+  private async computeFromCache(
+    now: number,
+    userConfig: ReturnType<UserConfigStore['get']>,
+    branch: string | undefined,
+  ): Promise<void> {
+    const [cache, currentBranchCredits] = await Promise.all([
+      this.reader.readSnapshotCache(),
+      branch ? this.reader.creditsByBranch(branch) : Promise.resolve(0),
+    ]);
+
+    // ── Day aggregates (for forecast + chart) ──────────────────────────────
+    const dayAggregates: UsageAggregate[] = cache.daily.map((row) => ({
+      granularity: 'day',
+      bucketKey:   bucketKey(row.dayStart, 'day'),
+      start:       row.dayStart,
+      end:         nextBucketStart(row.dayStart, 'day'),
+      credits:     row.credits,
+      cost:        row.cost,
+      tokens:      Number(row.tokens),
+      byModel:     {},
+      eventCount:  row.eventCount,
+      estimated:   false,
+    }));
+
+    const forecast = forecastMonth(dayAggregates, now, this.pricing.pricePerCredit);
+
+    const budget = computeBudget({
+      monthlyBudget:   userConfig.monthlyBudget > 0 ? userConfig.monthlyBudget : null,
+      includedCredits: userConfig.includedCredits,
+      mtdCredits:      cache.totals.mtd.credits,
+      mtdCost:         cache.totals.mtd.cost,
+      forecast,
+    });
+
+    // ── Dimensions ──────────────────────────────────────────────────────────
+    const allModels   = cache.dims.models;
+    const allSurfaces = cache.dims.surfaces.filter((s): s is Surface    => SURFACES.has(s as Surface));
+    const allSources  = cache.dims.sources.filter( (s): s is SourceKind => SOURCE_KINDS.has(s as SourceKind));
+    const allRepos    = cache.dims.repos;
+
+    const topModels = cache.models.map((m) => ({
+      key:     m.modelId,
+      credits: m.credits,
+      cost:    m.cost,
+      tokens:  Number(m.tokens),
+    }));
+
+    const byRepo = cache.repos.map((r) => ({
+      key:     r.repo,
+      credits: r.credits,
+      cost:    r.cost,
+      tokens:  Number(r.tokens),
+    }));
+
+    const sankeyLinks = cache.sankey.map((s) => ({
+      source: s.model,
+      target: s.surface,
+      value:  s.credits,
+    }));
+
+    // ── Chart data ──────────────────────────────────────────────────────────
+    const catMap = new Map(cache.categories.map((c) => [c.category, c.cost]));
+    const catKeys = COST_CATEGORIES.filter((c) => (catMap.get(c) ?? 0) > 0);
+    const categoryBreakdown = catKeys.length > 0
+      ? { categories: catKeys, costs: catKeys.map((c) => catMap.get(c) ?? 0), available: true }
+      : { categories: [] as typeof catKeys, costs: [] as number[], available: false };
+
+    const hourArr = new Array<number>(24).fill(0);
+    for (const h of cache.hourly) hourArr[h.hourLocal] = h.credits;
+    const peakHour = hourArr.indexOf(Math.max(...hourArr));
+    const hourlyTimeline = { hours: hourArr, peakHour };
+
+    const chartData = {
+      dailyBars:      buildDailyBarsData(dayAggregates, budget, forecast, now),
+      modelBreakdown: buildModelBreakdownData(topModels, this.pricing.pricePerCredit, this.pricing.currentManifest),
+      heatmap:        buildHeatmapData(dayAggregates, now),
+      categoryBreakdown,
+      hourlyTimeline,
+    };
+
+    // ── Range from snap_daily extent ───────────────────────────────────────
+    const rangeStart = cache.daily[0]?.dayStart ?? startOf(now - 29 * DAY_MS, 'day');
+    const rangeEnd   = (cache.daily[cache.daily.length - 1]?.dayStart ?? now) + DAY_MS;
+
+    const hasData = cache.totals.all.eventCount > 0;
+    const source: SourceKind = allSources.includes('local') ? 'local' : (hasData ? 'lm' : 'local');
+
+    const next: UsageSnapshot = {
+      generatedAt:   now,
+      source,
+      status:        hasData ? { kind: 'ok' } : this.ingest.getStatus(),
+      currency:      'USD',
+      pricePerCredit: this.pricing.pricePerCredit,
+      filter:        this.filter,
+      range:         { start: rangeStart, end: rangeEnd },
+      forecast,
+      budget,
+      topModels,
+      today:         { credits: cache.totals.today.credits, cost: cache.totals.today.cost, tokens: Number(cache.totals.today.tokens) },
+      allModels,
+      allSurfaces,
+      allSources,
+      sankeyLinks,
+      allRepos,
+      byRepo,
+      chartData,
+      authStatus:    this.authStatus,
+      isIncremental: false,
+      currentBranchCredits,
+      ...(branch !== undefined ? { currentBranch: branch } : {}),
+      ...(this.githubBilling !== undefined ? { githubBilling: this.githubBilling } : {}),
+    };
+
+    this.snapshot = next;
+    this.recordSample(now, next);
+    this.fireAlerts(next, userConfig, now);
+    this._onDidChange.fire(next);
+    this.exporter?.export(next);
+  }
+
+  /** Filtered path: load raw events and build snapshot via domain functions. */
+  private async computeFromEvents(
+    now: number,
+    userConfig: ReturnType<UserConfigStore['get']>,
+    branch: string | undefined,
+  ): Promise<void> {
     const rangeStart = startOf(now - 365 * DAY_MS, 'day');
     const effectiveRange = this.filter.range ?? { start: rangeStart, end: now + DAY_MS };
     const universe = await this.reader.find({ range: effectiveRange });
     const filteredEvents = universe.filter((e) => matchesFilter(e, this.filter));
 
-    const source =
+    const source: SourceKind =
       filteredEvents.length > 0
-        ? filteredEvents.some((e) => e.source === 'local')
-          ? 'local'
-          : 'lm'
+        ? filteredEvents.some((e) => e.source === 'local') ? 'local' : 'lm'
         : 'local';
 
-    const branch = activeBranch();
     const options: SnapshotOptions = {
       now,
-      currency: 'USD',
-      pricePerCredit: this.pricing.pricePerCredit,
-      monthlyBudget: userConfig.monthlyBudget > 0 ? userConfig.monthlyBudget : null,
+      currency:        'USD',
+      pricePerCredit:  this.pricing.pricePerCredit,
+      monthlyBudget:   userConfig.monthlyBudget > 0 ? userConfig.monthlyBudget : null,
       includedCredits: userConfig.includedCredits,
-      filter: this.filter,
+      filter:          this.filter,
       source,
-      status: filteredEvents.length === 0 ? this.ingest.getStatus() : { kind: 'ok' },
-      authStatus: this.authStatus,
+      status:          filteredEvents.length === 0 ? this.ingest.getStatus() : { kind: 'ok' },
+      authStatus:      this.authStatus,
       ...(this.githubBilling !== undefined ? { githubBilling: this.githubBilling } : {}),
       dimensionEvents: universe,
       ...(this.snapshot !== undefined ? { prevSnapshot: this.snapshot } : {}),
-      manifest: this.pricing.currentManifest,
+      manifest:        this.pricing.currentManifest,
       ...(branch !== undefined ? { currentBranch: branch } : {}),
     };
 

@@ -2,7 +2,7 @@ import { strict as assert } from 'assert';
 import { ClaudeCodeConnector } from '../../../src/ingest/ClaudeCodeConnector';
 import type { ParseContext } from '../../../src/ingest/otelParse';
 import type { PricingService } from '../../../src/pricing/PricingService';
-import type { MetaStore } from '../../../src/store/MetaStore';
+import type { IMetaStore as MetaStore } from '../../../src/store/MetaStore';
 import type { DuckDBFileReader } from '../../../src/store/DuckDBFileReader';
 
 const now = new Date('2026-01-15T10:00:00.000Z').getTime();

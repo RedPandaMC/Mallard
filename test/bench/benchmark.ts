@@ -1,133 +1,70 @@
 /**
- * Mallard Plugin Optimization Benchmarks
+ * Mallard Plugin Optimization Benchmarks — DuckDB Edition
+ *
+ * Covers the actual hot paths after the star-schema rework:
+ *   1. Write pipeline: batch insert (includes refreshFacts), standalone refreshFacts, compact
+ *   2. Read queries: find, count, bucket, queryFacts, rank, pivot, aggregate
+ *   3. End-to-end: find → buildSnapshot (JS aggregation layer on top of DuckDB results)
+ *
+ * Uses a SINGLE DuckDB instance throughout (store.writer.clear() between suites) to
+ * avoid the process-level buffer-pool leak that occurs when opening many instances.
  *
  * Run with:  npx tsx test/bench/benchmark.ts
- *            bun test/bench/benchmark.ts
- *
- * Benchmarks cover the four performance-critical paths:
- *   1. Event aggregation (aggregateBy / aggregateAll / topBy / sumEvents / sankey)
- *   2. Forecasting (linear and Holt-Winters seasonal)
- *   3. Chart-data assembly (dailyBars, heatmap, hourly, category, full buildChartData)
- *   4. Full snapshot pipeline (buildSnapshot)
  */
 
+import { mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { performance } from 'perf_hooks';
 
-import {
-  aggregateAll,
-  aggregateBy,
-  distinctModels,
-  distinctRepos,
-  distinctSurfaces,
-  sankeyLinksFor,
-  sumEvents,
-  topBy,
-} from '../../src/domain/aggregate';
-import {
-  buildCategoryBreakdownData,
-  buildDailyBarsData,
-  buildHeatmapData,
-  buildHourlyTimelineData,
-  buildChartData,
-  buildModelBreakdownData,
-} from '../../src/domain/chartData';
-import { forecastMonth, fitHoltWinters } from '../../src/domain/forecast';
-import { linearForecaster } from '../../src/domain/forecasters/linear';
-import { seasonalForecaster } from '../../src/domain/forecasters/seasonal';
+import { EventStore } from '../../src/store/EventStore';
 import { buildSnapshot } from '../../src/domain/snapshot';
-import {
-  BudgetState,
-  Filter,
-  UsageAggregate,
-  UsageEvent,
-} from '../../src/domain/types';
-import { DAY_MS, startOf } from '../../src/util/time';
+import type { UsageEvent } from '../../src/domain/types';
+import type { RecordFilter } from '../../src/store/EventRepository';
+import { DAY_MS } from '../../src/util/time';
 
 // ─── Data generators ────────────────────────────────────────────────────────
 
-const MODELS = [
-  'gpt-4o',
-  'claude-sonnet-4-6',
-  'claude-haiku-4-5',
-  'o3',
-  'gemini-2-flash',
-];
+const MODELS:   string[]                = ['gpt-4o', 'claude-sonnet-4-6', 'claude-haiku-4-5', 'o3', 'gemini-2-flash'];
 const SURFACES: UsageEvent['surface'][] = ['chat', 'inline', 'agent', 'edit', 'unknown'];
-const REPOS = ['acme/frontend', 'acme/backend', 'acme/infra', 'acme/shared', 'unattributed'];
+const REPOS:    (string | undefined)[]  = ['acme/frontend', 'acme/backend', 'acme/infra', 'acme/shared', undefined];
+const SOURCES:  UsageEvent['source'][]  = ['local', 'local', 'local', 'github', 'claude-code'];
 
-let uid = 0;
+let eventUid = 0;
 
-function makeEvent(ts: number): UsageEvent {
-  uid++;
-  const credits = Math.random() * 10;
-  const cost = credits * 0.04;
-  const promptTokens = Math.floor(Math.random() * 2000);
-  const completionTokens = Math.floor(Math.random() * 500);
+function makeEvent(ts: number, prefix: string): UsageEvent {
+  const i = eventUid++;
+  const credits = 1 + (i % 10);
+  const cost    = credits * 0.04;
+  const repo    = REPOS[i % REPOS.length];
   return {
-    id: `e${uid}`,
+    id:               `${prefix}-${i}`,
     ts,
-    modelId: MODELS[uid % MODELS.length]!,
-    surface: SURFACES[uid % SURFACES.length]!,
-    source: 'local',
+    modelId:          MODELS[i % MODELS.length]!,
+    surface:          SURFACES[i % SURFACES.length]!,
+    source:           SOURCES[i % SOURCES.length]!,
     credits,
     cost,
-    promptTokens,
-    completionTokens,
-    estimated: false,
-    repo: REPOS[uid % REPOS.length]!,
-    costByCategory: {
-      input: cost * 0.7,
-      output: cost * 0.3,
-    },
+    promptTokens:     100 + (i % 2000),
+    completionTokens: 20  + (i % 500),
+    estimated:        false,
+    ...(repo !== undefined ? { repo } : {}),
+    costByCategory:   { input: cost * 0.7, output: cost * 0.3 },
   };
 }
 
-/**
- * Generate `count` synthetic events spread over the past `windowDays` days,
- * a few events per day, with some days having more activity.
- */
-function generateEvents(count: number, windowDays = 90): UsageEvent[] {
+function generateEvents(count: number, windowDays = 90, prefix = 'e'): UsageEvent[] {
   const now = Date.now();
-  const events: UsageEvent[] = [];
-  for (let i = 0; i < count; i++) {
-    const daysBack = Math.floor(Math.random() * windowDays);
-    const hoursOffset = Math.floor(Math.random() * 24) * 3_600_000;
-    const ts = now - daysBack * DAY_MS - hoursOffset;
-    events.push(makeEvent(ts));
-  }
-  return events;
+  return Array.from({ length: count }, () =>
+    makeEvent(now - Math.floor(Math.random() * windowDays) * DAY_MS, prefix),
+  );
 }
 
-/** Build a daily credit series for forecasting (one value per day). */
-function dailySeries(days: number): number[] {
-  const series: number[] = [];
-  for (let i = 0; i < days; i++) {
-    // Simulate weekday/weekend pattern + noise
-    const weekday = i % 7;
-    const base = weekday < 5 ? 15 : 5;
-    series.push(Math.max(0, base + (Math.random() - 0.5) * 8));
-  }
-  return series;
-}
-
-/** Build day-granularity aggregates from a credit series. */
-function makeAggregates(series: number[]): UsageAggregate[] {
-  const now = startOf(Date.now(), 'month');
-  return series.map((credits, i) => {
-    const start = now - (series.length - i) * DAY_MS;
-    return {
-      granularity: 'day',
-      bucketKey: `bucket-${i}`,
-      start,
-      end: start + DAY_MS,
-      credits,
-      cost: credits * 0.04,
-      tokens: credits * 1000,
-      byModel: {},
-      eventCount: Math.ceil(credits),
-      estimated: false,
-    };
-  });
+function generateOldEvents(count: number, prefix = 'old'): UsageEvent[] {
+  const now = Date.now();
+  return Array.from({ length: count }, () =>
+    makeEvent(now - (100 + Math.floor(Math.random() * 80)) * DAY_MS, prefix),
+  );
 }
 
 // ─── Harness ────────────────────────────────────────────────────────────────
@@ -143,186 +80,149 @@ interface Result {
 
 const results: Result[] = [];
 
-function bench(name: string, fn: () => void, opts: { warmup?: number; iters?: number } = {}): void {
-  const warmup = opts.warmup ?? 5;
-  const iters = opts.iters ?? 50;
+async function bench(
+  name: string,
+  fn: () => Promise<void>,
+  opts: { warmup?: number; iters?: number } = {},
+): Promise<void> {
+  const warmup = opts.warmup ?? 2;
+  const iters  = opts.iters  ?? 20;
 
-  for (let i = 0; i < warmup; i++) fn();
+  for (let i = 0; i < warmup; i++) await fn();
 
   const times: number[] = [];
   for (let i = 0; i < iters; i++) {
     const t0 = performance.now();
-    fn();
+    await fn();
     times.push(performance.now() - t0);
   }
 
   const mean = times.reduce((a, b) => a + b, 0) / times.length;
-  const min = Math.min(...times);
-  const max = Math.max(...times);
-
   results.push({
     name,
     iterations: iters,
-    meanMs: mean,
-    minMs: min,
-    maxMs: max,
+    meanMs:    mean,
+    minMs:     Math.min(...times),
+    maxMs:     Math.max(...times),
     opsPerSec: 1000 / mean,
   });
 }
 
-// ─── Benchmark suites ────────────────────────────────────────────────────────
+// ─── Suite helpers ───────────────────────────────────────────────────────────
 
-function benchmarkAggregation(): void {
-  console.log('\n── Aggregation ─────────────────────────────────────────────');
-
-  for (const count of [1_000, 10_000, 50_000]) {
-    const events = generateEvents(count);
-
-    bench(`aggregateBy(${count} events, 'day')`,    () => aggregateBy(events, 'day'));
-    bench(`aggregateBy(${count} events, 'week')`,   () => aggregateBy(events, 'week'));
-    bench(`aggregateBy(${count} events, 'month')`,  () => aggregateBy(events, 'month'));
-    bench(`aggregateAll(${count} events)`,          () => aggregateAll(events));
-    bench(`topBy model   (${count} events)`,        () => topBy(events, 'model'));
-    bench(`topBy repo    (${count} events)`,        () => topBy(events, 'repo'));
-    bench(`sumEvents     (${count} events)`,        () => sumEvents(events));
-    bench(`sankeyLinksFor(${count} events)`,        () => sankeyLinksFor(events));
-    bench(`distinctModels(${count} events)`,        () => distinctModels(events));
-    bench(`distinctRepos (${count} events)`,        () => distinctRepos(events));
-    bench(`distinctSurf  (${count} events)`,        () => distinctSurfaces(events));
-  }
+/** Reset the store and seed it with fresh events (not timed). */
+async function seed(store: EventStore, count: number, windowDays = 90, prefix = 'e'): Promise<void> {
+  await store.writer.clear();
+  if (count > 0) await store.writer.insert(generateEvents(count, windowDays, prefix));
+  // Flush WAL + encourage buffer pool eviction between suites.
+  await (store as any).conn.run('CHECKPOINT');
 }
 
-function benchmarkForecasting(): void {
-  console.log('\n── Forecasting ─────────────────────────────────────────────');
-  const now = Date.now();
+// ─── Suite 1: Write Pipeline ─────────────────────────────────────────────────
 
-  for (const days of [7, 14, 30, 90]) {
-    const series = dailySeries(days);
-    const aggregates = makeAggregates(series);
+async function benchmarkWrites(store: EventStore): Promise<void> {
+  console.log('\n── Write Pipeline ──────────────────────────────────────────');
 
-    bench(`fitHoltWinters(${days} day series)`, () => fitHoltWinters(series), { iters: 20 });
-
-    bench(`linearForecaster   (${days} days)`, () =>
-      linearForecaster.forecast({ dayAggregates: aggregates, now, pricePerCredit: 0.04 }));
-
-    if (days >= 14) {
-      bench(`seasonalForecaster (${days} days, includes fit)`, () =>
-        seasonalForecaster.forecast({ dayAggregates: aggregates, now, pricePerCredit: 0.04 }), {
-          warmup: 2,
-          iters: 10,
-        });
-    }
-
-    bench(`forecastMonth (${days} days, auto-select)`, () =>
-      forecastMonth(aggregates, now, 0.04));
-  }
-}
-
-function benchmarkChartData(): void {
-  console.log('\n── Chart Data Assembly ─────────────────────────────────────');
-  const now = Date.now();
-  const series30 = dailySeries(30);
-  const aggregates30 = makeAggregates(series30);
-  const forecast = forecastMonth(aggregates30, now, 0.04);
-  const budget: BudgetState = {
-    monthly: 50,
-    includedCredits: 300,
-    usedCredits: 100,
-    usedCost: 4,
-    percentOfBudget: 8,
-    percentOfIncluded: 33,
-    projectedOverage: null,
-    pace: 'under',
-  };
-
-  bench('buildDailyBarsData (30 day aggregates)', () =>
-    buildDailyBarsData(aggregates30, budget, forecast, now));
-
-  bench('buildHeatmapData (30 day aggregates)', () =>
-    buildHeatmapData(aggregates30, now));
-
-  for (const count of [1_000, 10_000]) {
-    const events = generateEvents(count);
-    bench(`buildHourlyTimelineData (${count} events)`, () =>
-      buildHourlyTimelineData(events));
-    bench(`buildCategoryBreakdownData (${count} events)`, () =>
-      buildCategoryBreakdownData(events));
+  // insert(): pre-seed with 2k background events so refreshFacts has realistic
+  // existing data to merge with.  Each iteration appends a fresh batch of unique events.
+  for (const [batchSize, iters] of [[100, 8], [1_000, 5], [10_000, 3]] as const) {
+    await seed(store, 2_000, 90, `bg${batchSize}`);
+    await bench(`insert ${batchSize.toString().padStart(6)} events  (+ refreshFacts today)`, async () => {
+      await store.writer.insert(generateEvents(batchSize, 30, `w${batchSize}`));
+    }, { warmup: 0, iters });
   }
 
-  const topModels = topBy(generateEvents(5_000), 'model');
-  bench('buildModelBreakdownData', () =>
-    buildModelBreakdownData(topModels, 0.04));
+  // refreshFacts standalone: the full star-schema rebuild over the entire window.
+  await seed(store, 10_000, 90, 'rfbg');
+  await bench('refreshFacts — full window rebuild  (10k events)', async () => {
+    await (store.writer as any).refreshFacts(0, Date.now() + DAY_MS);
+  }, { warmup: 1, iters: 8 });
 
-  bench('buildChartData — full (30 day aggregates, 5k events)', () => {
-    const events = generateEvents(5_000);
-    buildChartData(
-      aggregates30,
-      topModels,
-      budget,
-      forecast,
-      now,
-      buildCategoryBreakdownData(events),
-      buildHourlyTimelineData(events),
-      0.04,
-    );
-  }, { warmup: 3, iters: 20 });
+  // compact(): rolls up events older than 90 d into daily summaries + deletes raw.
+  // Re-inserts old events before each iteration so compact() always has work.
+  let compactPass = 0;
+  await seed(store, 0);
+  await bench('compact()  — 10k old events  (rollup + DELETE)', async () => {
+    await store.writer.insert(generateOldEvents(10_000, `cp${compactPass++}`));
+    await store.writer.compact();
+  }, { warmup: 0, iters: 3 });
 }
 
-function benchmarkFullSnapshot(): void {
-  console.log('\n── Full Snapshot Pipeline ──────────────────────────────────');
-  const now = Date.now();
-  const filter: Filter = {};
+// ─── Suite 2: Read Queries ───────────────────────────────────────────────────
+
+async function benchmarkReads(store: EventStore, count: number): Promise<void> {
+  const now   = Date.now();
+  const noFilter: RecordFilter = {};
+  const narrow: RecordFilter   = { range: { start: now - 30 * DAY_MS, end: now }, models: ['gpt-4o'] };
+
+  // find() caps at 5k rows for large stores to bound per-iteration JS allocation.
+  const findFilter = count > 2_000 ? { ...noFilter, limit: 2_000 } : noFilter;
+  const findLabel  = count > 2_000 ? 'find (limit 2k)          ' : 'find (no filter)         ';
+  await bench(`${findLabel} (${count})`, async () => { await store.reader.find(findFilter); });
+  await bench(`find (model + 30d filter)  (${count})`, async () => { await store.reader.find(narrow); });
+  await bench(`count                      (${count})`, async () => { await store.reader.count(noFilter); });
+
+  for (const by of ['day', 'week', 'month', 'hour', 'weekday'] as const) {
+    await bench(`bucket(${by.padEnd(7)})            (${count})`, async () => {
+      await store.reader.bucket(noFilter, by);
+    });
+  }
+
+  await bench(`queryFacts (no filter)     (${count})`, async () => { await store.reader.queryFacts(); });
+  await bench(`queryFacts (model filter)  (${count})`, async () => {
+    await store.reader.queryFacts({ models: ['gpt-4o'] });
+  });
+  await bench(`rank credits top-10        (${count})`, async () => {
+    await store.reader.rank(noFilter, 'credits', 10);
+  });
+  await bench(`pivot surface × credits    (${count})`, async () => {
+    await store.reader.pivot(noFilter, 'surface', 'credits');
+  });
+  await bench(`aggregate credits+cost     (${count})`, async () => {
+    await store.reader.aggregate(noFilter, ['credits', 'cost']);
+  });
+}
+
+// ─── Suite 3: Full Snapshot Pipeline ─────────────────────────────────────────
+
+async function benchmarkSnapshot(store: EventStore, count: number): Promise<void> {
+  const now  = Date.now();
   const opts = {
     now,
-    currency: 'USD',
-    pricePerCredit: 0.04,
-    monthlyBudget: 50,
+    currency:        'USD',
+    pricePerCredit:  0.04,
+    monthlyBudget:   50,
     includedCredits: 300,
-    filter,
-    source: 'local' as const,
-    status: { kind: 'ok' as const },
-    authStatus: 'signed-out' as const,
+    filter:          {},
+    source:          'local'       as const,
+    status:          { kind: 'ok' as const },
+    authStatus:      'signed-out'  as const,
   };
 
-  for (const count of [1_000, 5_000, 10_000]) {
-    const events = generateEvents(count);
-    bench(`buildSnapshot (${count} events, no filter)`, () =>
-      buildSnapshot(events, opts), { warmup: 3, iters: 20 });
-  }
+  await bench(`find + buildSnapshot       (${count})`, async () => {
+    const events = await store.reader.find({});
+    buildSnapshot(events, opts);
+  }, { warmup: 1, iters: 10 });
 
-  // With a model + date range filter applied
-  const events10k = generateEvents(10_000);
-  const rangeStart = Date.now() - 7 * DAY_MS;
-  const filteredOpts = {
-    ...opts,
-    filter: { models: ['gpt-4o'], range: { start: rangeStart, end: now } },
-  };
-  bench('buildSnapshot (10k events, model+range filter)', () =>
-    buildSnapshot(events10k, filteredOpts), { warmup: 3, iters: 20 });
+  await bench(`readSnapshotCache          (${count})`, async () => {
+    await store.reader.readSnapshotCache();
+  }, { warmup: 1, iters: 10 });
 }
 
 // ─── Runner ─────────────────────────────────────────────────────────────────
 
 function printTable(): void {
-  const COL = {
-    name:   50,
-    iters:   7,
-    mean:    10,
-    min:     10,
-    max:     10,
-    ops:     12,
-  };
-
-  const pad = (s: string, n: number) => s.padEnd(n);
+  const W = { name: 54, iters: 7, ms: 10, ops: 12 };
+  const pad  = (s: string, n: number) => s.padEnd(n);
   const rpad = (s: string, n: number) => s.padStart(n);
 
   const header =
-    pad('Benchmark', COL.name) +
-    rpad('Iters', COL.iters) +
-    rpad('Mean (ms)', COL.mean) +
-    rpad('Min (ms)', COL.min) +
-    rpad('Max (ms)', COL.max) +
-    rpad('ops/sec', COL.ops);
+    pad('Benchmark', W.name) +
+    rpad('Iters', W.iters) +
+    rpad('Mean (ms)', W.ms) +
+    rpad('Min (ms)', W.ms) +
+    rpad('Max (ms)', W.ms) +
+    rpad('ops/sec', W.ops);
 
   const sep = '─'.repeat(header.length);
   console.log('\n' + sep);
@@ -330,19 +230,15 @@ function printTable(): void {
   console.log(sep);
 
   for (const r of results) {
-    const isSection = r.name.startsWith('─');
-    if (isSection) {
-      console.log('\n' + r.name);
-      continue;
-    }
-    const row =
-      pad(r.name, COL.name) +
-      rpad(String(r.iterations), COL.iters) +
-      rpad(r.meanMs.toFixed(3), COL.mean) +
-      rpad(r.minMs.toFixed(3), COL.min) +
-      rpad(r.maxMs.toFixed(3), COL.max) +
-      rpad(r.opsPerSec < 10 ? r.opsPerSec.toFixed(2) : Math.round(r.opsPerSec).toString(), COL.ops);
-    console.log(row);
+    const ops = r.opsPerSec < 10 ? r.opsPerSec.toFixed(2) : Math.round(r.opsPerSec).toString();
+    console.log(
+      pad(r.name, W.name) +
+      rpad(String(r.iterations), W.iters) +
+      rpad(r.meanMs.toFixed(3), W.ms) +
+      rpad(r.minMs.toFixed(3), W.ms) +
+      rpad(r.maxMs.toFixed(3), W.ms) +
+      rpad(ops, W.ops),
+    );
   }
 
   console.log(sep);
@@ -350,13 +246,34 @@ function printTable(): void {
 }
 
 async function main(): Promise<void> {
-  console.log('Mallard Optimization Benchmarks');
+  console.log('Mallard DuckDB Benchmarks');
   console.log(`Node.js ${process.version}  |  ${new Date().toISOString()}`);
 
-  benchmarkAggregation();
-  benchmarkForecasting();
-  benchmarkChartData();
-  benchmarkFullSnapshot();
+  // Single shared instance — DuckDB leaks process-level buffer pool pages when
+  // multiple instances are opened sequentially, exhausting available memory.
+  const tmp   = mkdtempSync(join(tmpdir(), 'mallard-bench-'));
+  const store = await EventStore.open(tmp);
+  // Don't cap memory: DuckDB's refreshFacts 5-way JOIN needs its full buffer pool.
+  // A single shared instance avoids the multi-instance accumulation problem, so
+  // DuckDB's native LRU (default 80% of RAM) manages eviction correctly.
+  await (store as any).conn.run("SET threads=2");
+
+  await benchmarkWrites(store);
+
+  for (const count of [1_000, 5_000, 10_000]) {
+    console.log(`\n── Read Queries (${count} events) ${'─'.repeat(35)}`);
+    await seed(store, count, 90, `r${count}`);
+    await benchmarkReads(store, count);
+  }
+
+  console.log('\n── Full Snapshot Pipeline ──────────────────────────────────');
+  for (const count of [1_000, 10_000]) {
+    await seed(store, count, 90, `s${count}`);
+    await benchmarkSnapshot(store, count);
+  }
+
+  store.dispose();
+  rmSync(tmp, { recursive: true, force: true });
 
   printTable();
 }

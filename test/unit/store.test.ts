@@ -718,3 +718,75 @@ describe('EventStore — filter edge cases', () => {
     store.dispose();
   });
 });
+
+describe('EventStore — readSnapshotCache', () => {
+  it('returns zero totals when store is empty', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const cache = await store.reader.readSnapshotCache();
+    assert.strictEqual(cache.totals.all.credits, 0);
+    assert.strictEqual(cache.totals.mtd.credits, 0);
+    assert.strictEqual(cache.totals.today.credits, 0);
+    assert.deepStrictEqual(cache.daily, []);
+    assert.deepStrictEqual(cache.models, []);
+    assert.deepStrictEqual(cache.repos, []);
+    assert.deepStrictEqual(cache.dims.models, []);
+    store.dispose();
+  });
+
+  it('returns aggregated totals after inserting events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const now = Date.now();
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: now, credits: 5, cost: 0.20, modelId: 'gpt-4o', repo: 'org/x', branch: 'main' }),
+      makeEvent({ id: 'b', ts: now, credits: 3, cost: 0.12, modelId: 'claude-sonnet-4-6' }),
+    ]);
+    const cache = await store.reader.readSnapshotCache();
+    assert.ok(cache.totals.all.credits >= 8, 'all.credits should be >= 8');
+    assert.ok(cache.totals.today.credits >= 8, 'today.credits should be >= 8');
+    assert.ok(cache.models.length >= 2, 'should have at least 2 models');
+    assert.ok(cache.dims.models.includes('gpt-4o'), 'dim_models should include gpt-4o');
+    assert.ok(cache.dims.models.includes('claude-sonnet-4-6'));
+    assert.ok(cache.dims.sources.includes('local'));
+    assert.ok(cache.sankey.length > 0, 'sankey should be populated');
+    assert.ok(cache.repos.length > 0, 'repos should be populated');
+    store.dispose();
+  });
+
+  it('populates hourly and category breakdowns', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const now = Date.now();
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: now, credits: 2, costByCategory: { input: 0.05, output: 0.03 } }),
+    ]);
+    const cache = await store.reader.readSnapshotCache();
+    assert.ok(cache.categories.length > 0, 'categories should be populated');
+    store.dispose();
+  });
+});
+
+describe('EventStore — creditsByBranch', () => {
+  it('returns summed credits for a matching branch', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const now = Date.now();
+    await store.writer.insert([
+      makeEvent({ id: 'a', ts: now, credits: 4, branch: 'main' }),
+      makeEvent({ id: 'b', ts: now, credits: 2, branch: 'dev' }),
+      makeEvent({ id: 'c', ts: now, credits: 1 }), // no branch
+    ]);
+    const credits = await store.reader.creditsByBranch('main');
+    assert.strictEqual(credits, 4);
+    store.dispose();
+  });
+
+  it('returns 0 for a branch with no events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const credits = await store.reader.creditsByBranch('nonexistent');
+    assert.strictEqual(credits, 0);
+    store.dispose();
+  });
+});

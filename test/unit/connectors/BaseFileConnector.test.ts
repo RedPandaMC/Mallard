@@ -2,7 +2,7 @@ import { strict as assert } from 'assert';
 import { BaseFileConnector } from '../../../src/ingest/BaseFileConnector';
 import type { ParseContext } from '../../../src/ingest/otelParse';
 import type { PricingService } from '../../../src/pricing/PricingService';
-import type { MetaStore } from '../../../src/store/MetaStore';
+import type { IMetaStore as MetaStore } from '../../../src/store/MetaStore';
 import type { DuckDBFileReader } from '../../../src/store/DuckDBFileReader';
 import type { UsageEvent } from '../../../src/domain/types';
 

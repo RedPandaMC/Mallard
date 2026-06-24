@@ -5,7 +5,7 @@ import { activeBranch } from '../util/repo';
 import { ParseContext } from './otelParse';
 import { PricingService } from '../pricing/PricingService';
 import { DuckDBFileReader, RowMapper } from '../store/DuckDBFileReader';
-import type { MetaStore } from '../store/MetaStore';
+import type { IMetaStore as MetaStore } from '../store/MetaStore';
 import type { ConnectorStatus, LogConnector } from './LogConnector';
 import type { UsageEvent } from '../domain/types';
 /* c8 ignore stop */
