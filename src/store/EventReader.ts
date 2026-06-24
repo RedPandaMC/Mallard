@@ -629,7 +629,6 @@ export class EventReader implements IEventReader {
         readPrepared(this.conn, `SELECT DISTINCT source   AS name FROM events ${rangeClause}`, rangeParams, (r) => String(r['name'] ?? '')),
         readPrepared(this.conn, `SELECT DISTINCT COALESCE(repo, 'unattributed') AS name FROM events ${rangeClause}`, rangeParams, (r) => String(r['name'] ?? '')),
       ]);
-    /* c8 ignore stop */
 
     const toTotals = (rows: Record<string, unknown>[]): FilteredSnapshotData['totals']['all'] => {
       const r = rows[0] ?? {};
@@ -692,6 +691,7 @@ export class EventReader implements IEventReader {
         repos:    dimRepoRows,
       },
     };
+    /* c8 ignore stop */
   }
 
   async creditsByBranch(branch: string): Promise<number> {
