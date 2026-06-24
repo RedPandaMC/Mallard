@@ -213,6 +213,20 @@ async function benchmarkSnapshot(store: EventStore, count: number): Promise<void
   await bench(`readSnapshotCache          (${count})`, async () => {
     await store.reader.readSnapshotCache();
   }, { warmup: 1, iters: 10 });
+
+  // readFilteredSnapshot: SQL-side aggregation (CQRS fix) — no raw event transfer.
+  const filteredLabel = `readFilteredSnapshot (no filter)   (${count})`;
+  await bench(filteredLabel, async () => {
+    await store.reader.readFilteredSnapshot({});
+  }, { warmup: 1, iters: 10 });
+
+  const filteredNarrowLabel = `readFilteredSnapshot (model+30d)   (${count})`;
+  await bench(filteredNarrowLabel, async () => {
+    await store.reader.readFilteredSnapshot({
+      range:  { start: now - 30 * DAY_MS, end: now },
+      models: ['gpt-4o'],
+    });
+  }, { warmup: 1, iters: 10 });
 }
 
 // ─── Runner ─────────────────────────────────────────────────────────────────
