@@ -16,7 +16,7 @@ export {
   REFRESH_FACTS_SQL,
   CLEAR_ALL_SQL,
 } from './dml';
-export { REFRESH_SNAP_SQL } from './snapshots';
+export { REFRESH_SNAP_SQL, buildRefreshSnapSQL } from './snapshots';
 export {
   FIND_ALL_SQL,
   FIND_BY_ID_SQL,
@@ -33,5 +33,6 @@ export {
   READ_SNAP_DIM_SURFACES,
   READ_SNAP_DIM_SOURCES,
   READ_SNAP_DIM_REPOS,
+  READ_SNAP_WEEKDAY,
   QUERY_FACTS_BASE_SQL,
 } from './queries';

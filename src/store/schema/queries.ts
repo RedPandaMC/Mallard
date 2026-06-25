@@ -21,6 +21,7 @@ export const READ_SNAP_DIM_MODELS  = `SELECT name FROM snap_dim_models`;
 export const READ_SNAP_DIM_SURFACES= `SELECT name FROM snap_dim_surfaces`;
 export const READ_SNAP_DIM_SOURCES = `SELECT name FROM snap_dim_sources`;
 export const READ_SNAP_DIM_REPOS   = `SELECT name FROM snap_dim_repos`;
+export const READ_SNAP_WEEKDAY     = `SELECT weekday, credits, event_count FROM snap_weekday ORDER BY weekday`;
 
 // ── Queries: queryFacts (parameterized via fact tables) ───────────────────────
 

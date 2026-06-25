@@ -1,6 +1,7 @@
 // ── DML: snapshot cache refresh ───────────────────────────────────────────────
 
-export const REFRESH_SNAP_SQL = `
+export function buildRefreshSnapSQL(retentionDays: number): string {
+  return `
   DELETE FROM snap_totals;
   INSERT INTO snap_totals (period, credits, cost, tokens, event_count)
     SELECT 'all',
@@ -35,7 +36,7 @@ export const REFRESH_SNAP_SQL = `
       COALESCE(CAST(SUM(COALESCE(promptTokens,0) + COALESCE(completionTokens,0)) AS BIGINT), 0),
       COUNT(*)
     FROM events
-    WHERE to_timestamp(ts/1000.0)::TIMESTAMPTZ >= date_trunc('day', now()::TIMESTAMPTZ) - INTERVAL '90 days'
+    WHERE to_timestamp(ts/1000.0)::TIMESTAMPTZ >= date_trunc('day', now()::TIMESTAMPTZ) - INTERVAL '${retentionDays} days'
     GROUP BY day_start
     ORDER BY day_start;
 
@@ -75,15 +76,24 @@ export const REFRESH_SNAP_SQL = `
 
   DELETE FROM snap_categories;
   INSERT INTO snap_categories (category, cost)
-    SELECT cat, total FROM (
-      SELECT 'input' AS cat, COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.input') AS DOUBLE),0)),0) AS total FROM events
-      UNION ALL SELECT 'output',         COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.output') AS DOUBLE),0)),0) FROM events
-      UNION ALL SELECT 'cache_read',     COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.cache_read') AS DOUBLE),0)),0) FROM events
-      UNION ALL SELECT 'cache_creation', COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.cache_creation') AS DOUBLE),0)),0) FROM events
-      UNION ALL SELECT 'thinking',       COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.thinking') AS DOUBLE),0)),0) FROM events
-      UNION ALL SELECT 'tool',           COALESCE(SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.tool') AS DOUBLE),0)),0) FROM events
+    WITH sums AS (
+      SELECT
+        SUM(cost_input)       AS c_input,
+        SUM(cost_output)      AS c_output,
+        SUM(cost_cache_read)  AS c_cache_read,
+        SUM(cost_cache_write) AS c_cache_creation,
+        SUM(cost_thinking)    AS c_thinking,
+        SUM(cost_tool)        AS c_tool
+      FROM v_events
     )
-    WHERE total > 0;
+    SELECT cat, val FROM (
+      SELECT 'input'         AS cat, c_input         AS val FROM sums
+      UNION ALL SELECT 'output',          c_output         FROM sums
+      UNION ALL SELECT 'cache_read',      c_cache_read     FROM sums
+      UNION ALL SELECT 'cache_creation',  c_cache_creation FROM sums
+      UNION ALL SELECT 'thinking',        c_thinking       FROM sums
+      UNION ALL SELECT 'tool',            c_tool           FROM sums
+    ) WHERE val > 0;
 
   DELETE FROM snap_sankey;
   INSERT INTO snap_sankey (model, surface, count, credits)
@@ -91,8 +101,18 @@ export const REFRESH_SNAP_SQL = `
     FROM events
     GROUP BY modelId, surface;
 
+  DELETE FROM snap_weekday;
+  INSERT INTO snap_weekday (weekday, credits, event_count)
+    SELECT weekday, COALESCE(SUM(credits), 0), CAST(SUM(event_count) AS INTEGER)
+    FROM v_usage_by_weekday
+    GROUP BY weekday
+    ORDER BY weekday;
+
   DELETE FROM snap_dim_models;   INSERT INTO snap_dim_models   (name) SELECT DISTINCT modelId FROM events;
   DELETE FROM snap_dim_surfaces; INSERT INTO snap_dim_surfaces (name) SELECT DISTINCT surface FROM events;
   DELETE FROM snap_dim_sources;  INSERT INTO snap_dim_sources  (name) SELECT DISTINCT source  FROM events;
   DELETE FROM snap_dim_repos;    INSERT INTO snap_dim_repos    (name) SELECT DISTINCT COALESCE(repo, 'unattributed') FROM events;
 `;
+}
+
+export const REFRESH_SNAP_SQL = buildRefreshSnapSQL(90);

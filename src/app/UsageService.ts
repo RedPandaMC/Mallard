@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 import { evaluateAlerts, SnapshotSample } from '../domain/alerts';
 import { computeBudget } from '../domain/budget';
-import { buildDailyBarsData, buildHeatmapData, buildModelBreakdownData } from '../domain/chartData';
+import { buildChartData } from '../domain/chartData';
 import { forecastMonth } from '../domain/forecast';
 import { isIncrementalUpdate } from '../domain/snapshot';
 import {
@@ -27,12 +27,13 @@ import type { IBillingProvider } from '../billing/IBillingProvider';
 import { IngestService } from '../ingest/IngestService';
 import { PricingService } from '../pricing/PricingService';
 import { CurrencyService } from '../pricing/CurrencyService';
-import type { IEventReader } from '../store/EventReader';
+import type { IEventSnapshotReader } from '../store/EventReader';
 import type { RecordFilter } from '../store/EventRepository';
 import { UserConfigStore } from './UserConfigStore';
 import { MetricExporter, NullMetricExporter } from '../export/MetricExporter';
 import { activeBranch } from '../util/repo';
 import { defaultVscodeHost, VscodeHost } from '../util/vscodeHost';
+import { IntervalManager } from '../util/IntervalManager';
 
 /** Keep ~1h of recent samples for velocity alerting. */
 const HISTORY_WINDOW_MS = 60 * 60 * 1000;
@@ -48,7 +49,7 @@ export class UsageService implements vscode.Disposable {
 
   private snapshot?: UsageSnapshot;
   private filter: Filter = {};
-  private timer?: ReturnType<typeof setInterval>;
+  private readonly timer = new IntervalManager();
   private readonly alertFired = new Map<string, number>();
   private readonly history: SnapshotSample[] = [];
   private authStatus: AuthStatus = 'signed-out';
@@ -57,7 +58,7 @@ export class UsageService implements vscode.Disposable {
   private readonly exporter: MetricExporter;
 
   constructor(
-    private readonly reader: IEventReader,
+    private readonly reader: IEventSnapshotReader,
     private readonly pricing: PricingService,
     private readonly ingest: IngestService,
     private readonly userConfig: UserConfigStore,
@@ -230,13 +231,13 @@ export class UsageService implements vscode.Disposable {
     const peakHour = hourArr.indexOf(Math.max(...hourArr));
     const hourlyTimeline = { hours: hourArr, peakHour };
 
-    const chartData = {
-      dailyBars:      buildDailyBarsData(dayAggregates, budget, forecast, now),
-      modelBreakdown: buildModelBreakdownData(topModels, this.pricing.pricePerCredit, this.pricing.currentManifest),
-      heatmap:        buildHeatmapData(dayAggregates, now),
-      categoryBreakdown,
-      hourlyTimeline,
-    };
+    const chartData = buildChartData(
+      dayAggregates, topModels, budget, forecast, now,
+      categoryBreakdown, hourlyTimeline,
+      this.pricing.pricePerCredit, this.pricing.currentManifest,
+      cache.weekday,
+      userConfig.display,
+    );
 
     // ── Range from snap_daily extent ───────────────────────────────────────
     const rangeStart = cache.daily[0]?.dayStart ?? startOf(now - 29 * DAY_MS, 'day');
@@ -339,13 +340,13 @@ export class UsageService implements vscode.Disposable {
     const peakHour = hourArr.indexOf(Math.max(...hourArr));
     const hourlyTimeline = { hours: hourArr, peakHour };
 
-    const chartData = {
-      dailyBars:      buildDailyBarsData(dayAggregates, budget, forecast, now),
-      modelBreakdown: buildModelBreakdownData(topModels, this.pricing.pricePerCredit, this.pricing.currentManifest),
-      heatmap:        buildHeatmapData(dayAggregates, now),
-      categoryBreakdown,
-      hourlyTimeline,
-    };
+    const chartData = buildChartData(
+      dayAggregates, topModels, budget, forecast, now,
+      categoryBreakdown, hourlyTimeline,
+      this.pricing.pricePerCredit, this.pricing.currentManifest,
+      data.weekday,
+      userConfig.display,
+    );
 
     // ── Assemble snapshot ───────────────────────────────────────────────────
     const hasData    = data.totals.all.eventCount > 0;
@@ -403,12 +404,12 @@ export class UsageService implements vscode.Disposable {
   }
 
   private scheduleTimer(): void {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = setInterval(() => void this.refresh(), 10 * 60_000);
+    const mins = vscode.workspace.getConfiguration('mallard').get<number>('refreshIntervalMinutes', 10);
+    this.timer.schedule(() => void this.refresh(), Math.max(1, mins) * 60_000);
   }
 
   dispose(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.timer[Symbol.dispose]();
     this.ingest.dispose();
     this._onDidChange.dispose();
     this.subs.forEach((d) => d.dispose());

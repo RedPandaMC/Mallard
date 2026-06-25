@@ -190,6 +190,15 @@ export interface AlertGroup {
   active: JsonCondition;
 }
 
+export interface DisplayPrefs {
+  /** Days shown in the daily-bars and cumulative-area charts. Default 30. */
+  dailyBarsWindow?: number;
+  /** Weeks shown in the activity heatmap. Default 12. */
+  heatmapWeeks?: number;
+  /** Max models/repos shown in ranked lists. Default 8. */
+  topN?: number;
+}
+
 export interface UserConfig {
   /** Monthly USD budget; 0 = no budget set. */
   monthlyBudget: number;
@@ -210,6 +219,8 @@ export interface UserConfig {
   dashboard?: ConfigDashboard;
   /** GitHub billing auth configuration (PAT or VS Code session). */
   githubBilling?: GitHubBillingConfig;
+  /** Dashboard display preferences (chart windows, top-N). */
+  display?: DisplayPrefs;
 }
 
 /**
@@ -463,6 +474,8 @@ export interface DailyBarsData {
   points: DailyBarPoint[];
   budgetLine: number | null; // daily included-credits threshold
   projectedLine: number | null; // projected daily pace
+  /** Running cost total per day: `cumulativeCosts[i]` = sum of cost for days 0..i. */
+  cumulativeCosts: number[];
 }
 
 export interface ModelBreakdownData {
@@ -492,12 +505,21 @@ export interface CategoryBreakdownData {
   available: boolean;
 }
 
+/** Credits and event count indexed by weekday (0=Sun … 6=Sat). */
+export interface WeekdayData {
+  /** Credits per weekday, index 0=Sun … 6=Sat. */
+  totals: number[];
+  /** Index of the busiest weekday (0–6, Sun=0 basis). */
+  peak: number;
+}
+
 export interface ChartData {
   dailyBars: DailyBarsData;
   modelBreakdown: ModelBreakdownData;
   heatmap: HeatmapData;
   categoryBreakdown: CategoryBreakdownData;
   hourlyTimeline: HourlyTimelineData;
+  weekdayBreakdown: WeekdayData;
 }
 
 /** The single object every piece of UI consumes. */

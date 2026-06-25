@@ -357,6 +357,34 @@
         }
       },
       "additionalProperties": false
+    },
+    "display": {
+      "type": "object",
+      "description": "Dashboard display preferences.",
+      "properties": {
+        "dailyBarsWindow": {
+          "type": "integer",
+          "minimum": 7,
+          "maximum": 90,
+          "default": 30,
+          "description": "Number of days shown in the daily-bars and cumulative-area charts."
+        },
+        "heatmapWeeks": {
+          "type": "integer",
+          "minimum": 4,
+          "maximum": 52,
+          "default": 12,
+          "description": "Number of weeks shown in the activity heatmap."
+        },
+        "topN": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 20,
+          "default": 8,
+          "description": "How many models and repos to show in ranked lists."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
