@@ -41,6 +41,8 @@ import { mountEmptyState } from './components/EmptyState';
 import { mountSpendGauge } from './components/SpendGauge';
 import { mountAlertConfigPanel } from './components/AlertConfigPanel';
 import { mountRestrictionBanner } from './components/RestrictionBanner';
+import { mountModelList } from './components/ModelList';
+import { mountCurrencySelector } from './components/CurrencySelector';
 import { formatCredits, formatMoney } from '../src/domain/format';
 
 const LOGO_SRC = document.body.dataset.logo ?? '';
@@ -48,6 +50,11 @@ const LOGO_SRC = document.body.dataset.logo ?? '';
 function setSrDesc(bodyId: string, text: string): void {
   const el = document.getElementById(`desc-${bodyId}`);
   if (el) el.textContent = text;
+}
+
+function applyForcedScheme(scheme: 'light' | 'dark' | null): void {
+  document.body.removeAttribute('data-force-scheme');
+  if (scheme) document.body.setAttribute('data-force-scheme', scheme);
 }
 
 applyTheme();
@@ -106,6 +113,10 @@ function mountDashboard(root: HTMLElement): void {
           </div>
         </div>
         <div class="wv-header-right">
+          <div id="currency-selector" class="wv-currency-wrap"></div>
+          <button class="wv-icon-btn" id="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle light/dark mode">
+            <i class="codicon codicon-color-mode"></i>
+          </button>
           <div id="status-banner"></div>
         </div>
       </header>
@@ -117,6 +128,7 @@ function mountDashboard(root: HTMLElement): void {
         <div id="kpi-cards"></div>
         <div id="gh-billing-strip"></div>
         <div id="spend-gauge"></div>
+        <div id="model-list" class="wv-model-list-wrap"></div>
         <div class="wv-analysis-bar">
           <span class="wv-analysis-title">Analysis</span>
           <span class="wv-analysis-actions">
@@ -148,6 +160,20 @@ function mountDashboard(root: HTMLElement): void {
   const kpis = mountKpiCards(document.getElementById('kpi-cards')!);
   const ghStrip = mountGitHubBillingStrip(document.getElementById('gh-billing-strip')!);
   const gauge = mountSpendGauge(document.getElementById('spend-gauge')!);
+  const modelList = mountModelList(document.getElementById('model-list')!);
+  const currencySelector = mountCurrencySelector(
+    document.getElementById('currency-selector')!,
+    (code) => setState({ selectedCurrency: code }),
+  );
+
+  // Theme toggle: cycles null → light → dark → null
+  const themeToggleBtn = document.getElementById('theme-toggle')!;
+  themeToggleBtn.addEventListener('click', () => {
+    const current = state().forcedScheme;
+    const next = current === null ? 'light' : current === 'light' ? 'dark' : null;
+    setState({ forcedScheme: next });
+    applyForcedScheme(next);
+  });
   const dailyEl = document.getElementById('chart-daily')!;
   const heatmapEl = document.getElementById('chart-heatmap')!;
   const modelsEl = document.getElementById('chart-models')!;
@@ -263,6 +289,8 @@ function mountDashboard(root: HTMLElement): void {
       kpis.update(snapshot, metric);
       ghStrip.update(snapshot);
       gauge.update(snapshot.budget, snapshot.currency);
+      currencySelector.update(snapshot.fxRates, s.selectedCurrency);
+      modelList.update(snapshot, s.selectedCurrency);
 
       // dailyBars drives both the bar chart and the cumulative area view.
       if (dailyBarsChanged(prevDailyBars, snapshot.chartData.dailyBars)) {

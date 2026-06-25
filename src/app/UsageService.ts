@@ -26,6 +26,7 @@ import { opt } from '../util/lang';
 import type { IBillingProvider } from '../billing/IBillingProvider';
 import { IngestService } from '../ingest/IngestService';
 import { PricingService } from '../pricing/PricingService';
+import { CurrencyService } from '../pricing/CurrencyService';
 import type { IEventReader } from '../store/EventReader';
 import type { RecordFilter } from '../store/EventRepository';
 import { UserConfigStore } from './UserConfigStore';
@@ -60,6 +61,7 @@ export class UsageService implements vscode.Disposable {
     private readonly pricing: PricingService,
     private readonly ingest: IngestService,
     private readonly userConfig: UserConfigStore,
+    private readonly currency: CurrencyService,
     private readonly github?: IBillingProvider,
     exporter: MetricExporter = new NullMetricExporter(),
     private readonly host: VscodeHost = defaultVscodeHost,
@@ -247,6 +249,7 @@ export class UsageService implements vscode.Disposable {
       status:        hasData ? { kind: 'ok' } : this.ingest.getStatus(),
       currency:      'USD',
       pricePerCredit: this.pricing.pricePerCredit,
+      fxRates:       this.currency.currentRates(),
       filter:        this.filter,
       range:         { start: rangeStart, end: rangeEnd },
       forecast,
@@ -354,6 +357,7 @@ export class UsageService implements vscode.Disposable {
       status:        hasData ? { kind: 'ok' } : this.ingest.getStatus(),
       currency:      'USD',
       pricePerCredit: this.pricing.pricePerCredit,
+      fxRates:       this.currency.currentRates(),
       filter:        this.filter,
       range:         { start: rangeStart2, end: rangeEnd },
       forecast,

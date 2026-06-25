@@ -48,6 +48,7 @@ export default defineConfig({
           { text: 'Features', link: '/guide/features' },
           { text: 'Getting Started', link: '/guide/getting-started' },
           { text: 'Configuration', link: '/guide/configuration' },
+          { text: 'Troubleshooting', link: '/guide/troubleshooting' },
         ],
       },
       {

@@ -197,3 +197,12 @@ h1.title {
   border-left: 3px solid var(--ml-accent);
   background: var(--ml-panel2);
 }
+
+/* --- mobile: hide VPLocalNav so only the sticky top navbar shows ---------- */
+/* VPLocalNav is the secondary page-title bar that VitePress renders below
+   the main nav on small screens, causing a visual "double navbar" effect. */
+@media (max-width: 768px) {
+  .VPLocalNav { display: none !important; }
+  /* Compensate for the removed bar so content isn't hidden under the main nav */
+  .VPContent { padding-top: 0 !important; }
+}

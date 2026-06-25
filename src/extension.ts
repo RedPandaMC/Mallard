@@ -11,7 +11,7 @@ let _context: vscode.ExtensionContext | undefined;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   _context = context;
   const container = await buildContainer(context);
-  const { usage, restriction } = container;
+  const { usage, restriction, ingest } = container;
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.command = 'mallard.openDashboard';
@@ -55,12 +55,41 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (RELEVANT_CONFIG_KEYS.some((k) => e.affectsConfiguration(k))) {
-        usage.onConfigChanged();
+        if (e.affectsConfiguration('mallard.copilotLogPath')) {
+          void usage.refresh();
+        } else {
+          usage.onConfigChanged();
+        }
       }
     }),
   );
 
   await usage.start();
+
+  if (vscode.env.remoteName && !context.globalState.get<boolean>('mallard.remoteCopilotWarned')) {
+    const d = usage.onDidChangeSnapshot(() => {
+      d.dispose();
+      if (ingest.getConnectorLogPaths('copilot').length === 0) {
+        void vscode.window.showWarningMessage(
+          'Mallard: Running in a remote session. GitHub Copilot usage logs are on your local ' +
+          'machine and cannot be read here. Claude Code usage is tracked normally. ' +
+          'See the Mallard docs for details.',
+          'Learn more',
+          "Don't show again",
+        ).then(async (choice) => {
+          if (choice === 'Learn more') {
+            await vscode.env.openExternal(
+              vscode.Uri.parse('https://redpandamc.github.io/Mallard/guide/troubleshooting#remote-ssh'),
+            );
+          }
+          if (choice === "Don't show again") {
+            await context.globalState.update('mallard.remoteCopilotWarned', true);
+          }
+        });
+      }
+    });
+    context.subscriptions.push(d);
+  }
 }
 
 export async function deactivate(): Promise<void> {

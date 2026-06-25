@@ -31,6 +31,7 @@ export interface SnapshotOptions {
   now: number;
   currency: string;
   pricePerCredit: number;
+  fxRates?: Record<string, number>;
   monthlyBudget: number | null;
   includedCredits: number;
   filter: Filter;
@@ -118,6 +119,7 @@ export function buildSnapshot(events: readonly UsageEvent[], opts: SnapshotOptio
     status: opts.status,
     currency: opts.currency,
     pricePerCredit: opts.pricePerCredit,
+    fxRates: opts.fxRates ?? { USD: 1 },
     filter: opts.filter,
     range: computeRange(events, opts.now),
     forecast,
