@@ -34,12 +34,6 @@ export default defineConfig({
   themeConfig: {
     logo: '/icon.svg',
     siteTitle: 'MALLARD',
-    nav: [
-      { text: 'Features', link: '/guide/features' },
-      { text: 'Guide', link: '/guide/getting-started' },
-      { text: 'Reference', link: '/reference/commands' },
-      { text: 'Changelog', link: '/changelog' },
-    ],
 
     sidebar: [
       {
@@ -60,6 +54,11 @@ export default defineConfig({
       },
       { text: 'Changelog', link: '/changelog' },
     ],
+
+    docFooter: {
+      prev: '← Previous',
+      next: 'Next →',
+    },
 
     socialLinks: [{ icon: 'github', link: 'https://github.com/RedPandaMC/Mallard' }],
 
