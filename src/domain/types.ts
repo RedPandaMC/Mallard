@@ -509,6 +509,8 @@ export interface UsageSnapshot {
   status: ProviderStatus;
   currency: string;
   pricePerCredit: number;
+  /** USD-based exchange rates from Frankfurter (USD = 1.0, others relative). */
+  fxRates: Record<string, number>;
   filter: Filter;
   range: { start: number; end: number };
   forecast: Forecast;

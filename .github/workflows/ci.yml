@@ -52,5 +52,14 @@ jobs:
       - name: Compile integration tests
         run: bun run compile-tests
 
+      - name: Cache VS Code binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.vscode-test
+          key: vscode-test-${{ runner.os }}-stable-${{ hashFiles('.vscode-test.mjs') }}
+          restore-keys: |
+            vscode-test-${{ runner.os }}-stable-
+            vscode-test-${{ runner.os }}-
+
       - name: Integration tests (headless)
-        run: xvfb-run -a bun run test
+        run: xvfb-run -a bun vscode-test

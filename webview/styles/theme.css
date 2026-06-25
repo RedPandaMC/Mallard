@@ -139,3 +139,38 @@ body.vscode-high-contrast-light {
   --w-border: var(--vscode-contrastBorder, var(--w-border));
   --w-grid-line: color-mix(in srgb, var(--w-fg) 22%, transparent);
 }
+
+/* Manual light/dark override — applied by the theme toggle button.
+   These override VS Code's body class so the dashboard can be pinned to
+   one scheme independent of the editor theme. */
+body[data-force-scheme='light'] {
+  --w-bg: #ffffff;
+  --w-bg-card: #f5f5f5;
+  --w-fg: #1a1a1a;
+  --w-fg-muted: #555555;
+  --w-border: #e0e0e0;
+  --w-grid-line: rgba(0,0,0,0.06);
+  --w-input-bg: #ffffff;
+  --w-input-fg: #1a1a1a;
+  --w-input-border: #cccccc;
+  --w-tooltip-bg: #1a1a1a;
+  --w-tooltip-fg: #ffffff;
+  --w-accent: #e5231b;
+  --w-sev-warn: #f2766e;
+}
+
+body[data-force-scheme='dark'] {
+  --w-bg: #1e1e1e;
+  --w-bg-card: #252526;
+  --w-fg: #d4d4d4;
+  --w-fg-muted: #858585;
+  --w-border: #3c3c3c;
+  --w-grid-line: rgba(255,255,255,0.04);
+  --w-input-bg: #3c3c3c;
+  --w-input-fg: #d4d4d4;
+  --w-input-border: #555555;
+  --w-tooltip-bg: #d4d4d4;
+  --w-tooltip-fg: #1e1e1e;
+  --w-accent: #ff453a;
+  --w-sev-warn: #f2766e;
+}

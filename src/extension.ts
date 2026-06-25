@@ -55,7 +55,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (RELEVANT_CONFIG_KEYS.some((k) => e.affectsConfiguration(k))) {
-        usage.onConfigChanged();
+        if (e.affectsConfiguration('mallard.copilotLogPath')) {
+          void usage.refresh();
+        } else {
+          usage.onConfigChanged();
+        }
       }
     }),
   );

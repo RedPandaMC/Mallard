@@ -19,6 +19,7 @@ import { ConnectorRegistry } from './ingest/ConnectorRegistry';
 import { WorkspaceFolderMatcher } from './ingest/WorkspaceFolderMatcher';
 import { IngestService } from './ingest/IngestService';
 import { PricingService } from './pricing/PricingService';
+import { CurrencyService } from './pricing/CurrencyService';
 import { EventStore } from './store/EventStore';
 import { createMetricExporter } from './export/ExporterFactory';
 import { NullMetricExporter } from './export/MetricExporter';
@@ -43,6 +44,10 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const pricing = new PricingService(storageDir, bundledManifest, cfg.pricingManifestUrl || '');
   await pricing.load();
   pricing.startDailyRefresh();
+
+  const currency = new CurrencyService(storageDir);
+  await currency.load();
+  currency.startDailyRefresh();
 
   const store = await EventStore.open(storageDir);
   await store.writer.setPrices(pricing.allPrices());
@@ -90,7 +95,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     ...(workspaceFolders?.length ? { workspaceFolders } : {}),
   }) ?? new NullMetricExporter();
 
-  const usage = new UsageService(store.reader, pricing, ingest, userConfig, github, exporter);
+  const usage = new UsageService(store.reader, pricing, ingest, userConfig, currency, github, exporter);
   const restriction = new RestrictionEngine(storageDir);
 
   context.subscriptions.push(
@@ -109,6 +114,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
 
   context.subscriptions.push(
     { dispose: () => pricing.dispose() },
+    { dispose: () => currency.dispose() },
     { dispose: () => githubSession.dispose() },
     { dispose: () => store.dispose() },
     userConfig,

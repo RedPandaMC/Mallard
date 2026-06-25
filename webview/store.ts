@@ -21,6 +21,10 @@ export interface AppState {
   filter: Filter;
   datePreset: DatePreset;
   restriction: RestrictionState;
+  /** ISO 4217 currency code the user has selected for display. Defaults to USD. */
+  selectedCurrency: string;
+  /** Whether the dashboard is forced into light or dark mode (null = follow VS Code). */
+  forcedScheme: 'light' | 'dark' | null;
 }
 
 export const store = createStore<AppState>()(
@@ -33,6 +37,8 @@ export const store = createStore<AppState>()(
       filter: {},
       datePreset: 'month',
       restriction: DEFAULT_RESTRICTION_STATE,
+      selectedCurrency: 'USD',
+      forcedScheme: null,
     }),
   ),
 );
