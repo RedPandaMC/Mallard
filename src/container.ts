@@ -32,6 +32,7 @@ export interface Container {
   layout: LayoutStore;
   pricing: PricingService;
   restriction: RestrictionEngine;
+  ingest: IngestService;
 }
 
 export async function buildContainer(context: vscode.ExtensionContext): Promise<Container> {
@@ -124,7 +125,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     { dispose: () => exporter.dispose() },
   );
 
-  return { usage, store, userConfig, layout, pricing, restriction };
+  return { usage, store, userConfig, layout, pricing, restriction, ingest };
 }
 
 async function loadBundledManifest(context: vscode.ExtensionContext): Promise<PricingManifest> {

@@ -25,6 +25,10 @@ export class IngestService implements vscode.Disposable {
     return this.connectors.flatMap((c) => c.getLogPaths());
   }
 
+  getConnectorLogPaths(connectorId: string): string[] {
+    return this.connectors.find((c) => c.id === connectorId)?.getLogPaths() ?? [];
+  }
+
   getSearchedDirs(): string[] {
     return [...new Set(this.connectors.flatMap((c) => c.getSearchedDirs()))];
   }
