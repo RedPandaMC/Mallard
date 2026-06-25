@@ -3,7 +3,7 @@ import { RELEVANT_CONFIG_KEYS } from './config';
 import { buildContainer, Container } from './container';
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
-import { registerTriggerView } from './ui/TriggerView';
+import { SidebarView } from './ui/SidebarView';
 import { cleanupGlobalState, cleanupStorage } from './app/Lifecycle';
 
 let _context: vscode.ExtensionContext | undefined;
@@ -59,7 +59,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(restriction.onDidChange(updateStatusBar));
 
   registerCommands(context, container);
-  context.subscriptions.push(...registerTriggerView());
+  const sidebar = new SidebarView(context, usage);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(SidebarView.viewType, sidebar),
+    { dispose: () => sidebar.dispose() },
+  );
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {

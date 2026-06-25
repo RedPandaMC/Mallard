@@ -104,18 +104,12 @@
     "views": {
       "mallard": [
         {
-          "type": "tree",
-          "id": "mallard.trigger",
+          "type": "webview",
+          "id": "mallard.sidebar",
           "name": "Mallard"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "mallard.trigger",
-        "contents": "Mallard tracks your Copilot spend in real time.\n\n[Open Dashboard](command:mallard.openDashboard)"
-      }
-    ],
     "configuration": {
       "title": "Mallard",
       "properties": {
