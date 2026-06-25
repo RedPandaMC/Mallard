@@ -719,7 +719,7 @@ body {
   border-radius: var(--w-r2);
   overflow: hidden;
   contain: layout paint;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, opacity 0.2s, box-shadow 0.2s, filter 0.25s;
 }
 
 .wv-chart-section:hover {
@@ -783,10 +783,10 @@ body {
 .wv-chart-body.mini { height: var(--w-chart-mini); }
 .wv-chart-body.heatmap { height: 120px; }
 
-/* Analysis grid: two columns; each panel spans 1 (half) or 2 (full). */
+/* Analysis grid: column count driven by --wv-cols (set from config.dashboard.columns). */
 .wv-charts-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(var(--wv-cols, 2), 1fr);
   gap: var(--w-s3);
   align-items: start;
 }
@@ -847,6 +847,44 @@ body {
 .wv-panel-btn:hover { color: var(--w-fg); background: var(--w-bg-card); }
 .wv-chart-section.wv-dragging { opacity: 0.6; }
 .wv-chart-section.wv-hidden-panel .wv-panel-btn[data-act='hide'] { color: var(--vscode-foreground); opacity: 0.45; }
+
+/* Drop-target highlight during drag. */
+.wv-chart-section.wv-drop-target {
+  outline: 2px solid var(--w-accent) !important;
+  background: color-mix(in srgb, var(--w-accent) 8%, var(--w-bg-card));
+}
+
+/* Brief opacity flash on span/size toggle to confirm the change. */
+.wv-chart-section.wv-resizing { opacity: 0.7; }
+
+/* ─────────────────────────────────────────
+   Per-panel height tiers (compact / normal / tall)
+───────────────────────────────────────── */
+:root {
+  --wv-h-compact: 120px;
+  --wv-h-tall: calc(var(--w-chart-main) * 1.75);
+}
+.wv-chart-section[data-size='compact'] .wv-chart-body { height: var(--wv-h-compact); }
+.wv-chart-section[data-size='normal']  .wv-chart-body { height: var(--w-chart-main); }
+.wv-chart-section[data-size='tall']    .wv-chart-body { height: var(--wv-h-tall); }
+/* Mini-body panels respect compact by default, grow in tall mode. */
+.wv-chart-section[data-size] .wv-chart-body.mini         { height: var(--wv-h-compact); }
+.wv-chart-section[data-size] .wv-chart-body.heatmap      { height: var(--wv-h-compact); }
+.wv-chart-section[data-size='normal'] .wv-chart-body.mini    { height: var(--w-chart-mini); }
+.wv-chart-section[data-size='normal'] .wv-chart-body.heatmap { height: 120px; }
+.wv-chart-section[data-size='tall'] .wv-chart-body.mini      { height: var(--w-chart-main); }
+.wv-chart-section[data-size='tall'] .wv-chart-body.heatmap   { height: 200px; }
+
+/* ─────────────────────────────────────────
+   Model spotlight — dims all non-model panels
+───────────────────────────────────────── */
+.wv-charts-grid[data-focused='true'] .wv-chart-section:not([data-panel='models']) {
+  opacity: 0.35;
+  filter: grayscale(0.3);
+}
+.wv-charts-grid[data-focused='true'] .wv-chart-section[data-panel='models'] {
+  outline: 2px solid var(--w-accent);
+}
 
 /* ─────────────────────────────────────────
    Responsive

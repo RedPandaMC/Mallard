@@ -350,6 +350,11 @@
               "hidden": {
                 "type": "boolean",
                 "description": "Hide this panel. The panel can still be shown from the dashboard's edit mode."
+              },
+              "size": {
+                "type": "string",
+                "enum": ["compact", "normal", "tall"],
+                "description": "Height tier for this panel's chart body. Defaults to 'normal'."
               }
             },
             "additionalProperties": false

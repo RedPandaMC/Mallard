@@ -11,20 +11,39 @@ import { ChartComponent } from './ChartComponent';
 export interface ModelBreakdownHandle {
   update(snapshot: UsageSnapshot, metric?: Metric): void;
   resize(): void;
+  setFocused(models: ReadonlySet<string>): void;
 }
 
 class ModelBreakdownChart extends ChartComponent {
   protected notMerge = false;
   private metric: Metric = 'credits';
+  private focusedModels: ReadonlySet<string> = new Set();
 
   protected hasData(s: UsageSnapshot): boolean {
     return s.chartData.modelBreakdown.labels.length > 0;
   }
 
-  protected buildOption(s: UsageSnapshot): object {
+  override update(s: UsageSnapshot, metric?: Metric): void {
+    if (metric !== undefined) this.metric = metric;
+    super.update(s);
+  }
+
+  setFocused(models: ReadonlySet<string>): void {
+    this.focusedModels = models;
+  }
+
+  onMount(onModelClick: (label: string) => void): void {
+    this.chart.on('click', (params: unknown) => {
+      const p = params as { name?: string };
+      if (p.name) onModelClick(p.name);
+    });
+  }
+
+  protected override buildOption(s: UsageSnapshot): object {
     const { labels, credits, costs, tokens, cheapestEquivalentCosts } = s.chartData.modelBreakdown;
     const metric = this.metric;
     const currency = s.currency;
+    const focused = this.focusedModels;
 
     const values = metric === 'cost' ? costs : metric === 'tokens' ? tokens : credits;
 
@@ -41,7 +60,12 @@ class ModelBreakdownChart extends ChartComponent {
 
     const mainSeries = {
       type: 'bar' as const,
-      data: reversedValues,
+      data: reversedValues.map((v, i) => ({
+        value: v,
+        itemStyle: focused.size > 0 && !focused.has(reversedLabels[i] ?? '')
+          ? { opacity: 0.25 }
+          : undefined,
+      })),
       label: {
         show: true,
         position: 'right' as const,
@@ -86,18 +110,22 @@ class ModelBreakdownChart extends ChartComponent {
       yAxis: {
         type: 'category',
         data: reversedLabels,
-        axisLabel: { fontSize: 11 },
+        axisLabel: {
+          fontSize: 11,
+          color: (value: string) =>
+            focused.size > 0 && !focused.has(value) ? 'rgba(128,128,128,0.4)' : undefined,
+        },
       },
       series: [mainSeries, ...ghostSeries],
     };
   }
-
-  override update(s: UsageSnapshot, metric?: Metric): void {
-    if (metric !== undefined) this.metric = metric;
-    super.update(s);
-  }
 }
 
-export function mountModelBreakdown(el: HTMLElement): ModelBreakdownHandle {
-  return new ModelBreakdownChart(el);
+export function mountModelBreakdown(
+  el: HTMLElement,
+  onModelClick?: (label: string) => void,
+): ModelBreakdownHandle {
+  const chart = new ModelBreakdownChart(el);
+  if (onModelClick) chart.onMount(onModelClick);
+  return chart;
 }

@@ -295,10 +295,13 @@ export type PaletteMode = 'swiss' | 'theme';
  * a width span (1 = half, 2 = full, in the two-column grid), and a visibility
  * flag. Edited in the dashboard's edit mode and stored in globalState.
  */
+export type PanelSize = 'compact' | 'normal' | 'tall';
+
 export interface DashboardPanelLayout {
   id: string;
   span: 1 | 2;
   hidden: boolean;
+  size?: PanelSize;
 }
 
 export type DashboardLayout = DashboardPanelLayout[];
@@ -315,6 +318,7 @@ export interface ConfigPanelLayout {
   /** CSS grid-row shorthand. E.g. "span 1" or "span 2". Optional. */
   gridRow?: string;
   hidden?: boolean;
+  size?: PanelSize;
 }
 
 /** Dashboard block in config.json — sets column count and panel order/sizing. */
@@ -338,14 +342,14 @@ export const DASHBOARD_PANELS = [
 ] as const;
 
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
-  { id: 'daily', span: 2, hidden: false },
-  { id: 'heatmap', span: 2, hidden: false },
-  { id: 'models', span: 1, hidden: false },
-  { id: 'sankey', span: 1, hidden: false },
-  { id: 'category', span: 1, hidden: false },
-  { id: 'cumulative', span: 1, hidden: false },
-  { id: 'weekday', span: 1, hidden: false },
-  { id: 'hourly', span: 1, hidden: false },
+  { id: 'daily', span: 2, hidden: false, size: 'normal' },
+  { id: 'heatmap', span: 2, hidden: false, size: 'normal' },
+  { id: 'models', span: 1, hidden: false, size: 'normal' },
+  { id: 'sankey', span: 1, hidden: false, size: 'normal' },
+  { id: 'category', span: 1, hidden: false, size: 'normal' },
+  { id: 'cumulative', span: 1, hidden: false, size: 'normal' },
+  { id: 'weekday', span: 1, hidden: false, size: 'normal' },
+  { id: 'hourly', span: 1, hidden: false, size: 'normal' },
 /* c8 ignore next */
 ];
 
