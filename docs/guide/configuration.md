@@ -60,7 +60,7 @@ Rules live in the `rules` array. Each rule fires a VS Code notification and opti
 | --- | --- | --- |
 | `id` | yes | Unique identifier; used for cooldown bookkeeping. |
 | `severity` | yes | `"info"`, `"warning"`, or `"critical"`. |
-| `message` | yes | Notification text. Supports `{{ field.path }}` placeholders. |
+| `message` | yes | Notification text. Supports <code v-pre>{{ field.path }}</code> placeholders. |
 | `when` | yes | Condition that must be true for the rule to fire. |
 | `active` | no | Gate — rule is skipped unless this condition is true. |
 | `cooldown` | no | Min time between firings: `"30m"`, `"4h"`, `"1d"`. Default `1h`. |
