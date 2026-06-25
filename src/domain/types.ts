@@ -394,8 +394,8 @@ export interface BudgetState {
   pace: PaceStatus;
 }
 
-/** `'empty'` = no logs found or no events at all. */
-export type ProviderStatusKind = 'ok' | 'degraded' | 'empty';
+/** `'empty'` = no logs found or no events at all. `'loading'` = initial parse in progress. */
+export type ProviderStatusKind = 'ok' | 'degraded' | 'empty' | 'loading';
 
 export interface ProviderStatus {
   kind: ProviderStatusKind;

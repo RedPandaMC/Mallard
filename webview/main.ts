@@ -41,7 +41,6 @@ import { mountEmptyState } from './components/EmptyState';
 import { mountSpendGauge } from './components/SpendGauge';
 import { mountAlertConfigPanel } from './components/AlertConfigPanel';
 import { mountRestrictionBanner } from './components/RestrictionBanner';
-import { mountModelList } from './components/ModelList';
 import { mountCurrencySelector } from './components/CurrencySelector';
 import { formatCredits, formatMoney } from '../src/domain/format';
 
@@ -120,15 +119,16 @@ function mountDashboard(root: HTMLElement): void {
           <div id="status-banner"></div>
         </div>
       </header>
-      <div id="filter-bar"></div>
-      <div id="restriction-banner"></div>
-      <div id="alert-config"></div>
       <div id="empty-state"></div>
       <div id="content" hidden>
         <div id="kpi-cards"></div>
         <div id="gh-billing-strip"></div>
-        <div id="spend-gauge"></div>
-        <div id="model-list" class="wv-model-list-wrap"></div>
+        <div class="wv-gauge-row">
+          <div id="spend-gauge"></div>
+          <div id="restriction-banner"></div>
+        </div>
+        <div id="filter-bar"></div>
+        <div id="alert-config"></div>
         <div class="wv-analysis-bar">
           <span class="wv-analysis-title">Analysis</span>
           <span class="wv-analysis-actions">
@@ -140,6 +140,7 @@ function mountDashboard(root: HTMLElement): void {
             </button>
           </span>
         </div>
+        <div class="wv-section-label">More views</div>
         <div class="wv-charts-grid" id="charts-grid">
           ${panelHtml('daily', 'codicon-graph', 'Daily usage (last 30 days)', 'chart-daily', 'Daily usage bar chart')}
           ${panelHtml('heatmap', 'codicon-calendar', 'Activity (last 12 weeks)', 'chart-heatmap', 'Activity heatmap', 'heatmap')}
@@ -160,7 +161,6 @@ function mountDashboard(root: HTMLElement): void {
   const kpis = mountKpiCards(document.getElementById('kpi-cards')!);
   const ghStrip = mountGitHubBillingStrip(document.getElementById('gh-billing-strip')!);
   const gauge = mountSpendGauge(document.getElementById('spend-gauge')!);
-  const modelList = mountModelList(document.getElementById('model-list')!);
   const currencySelector = mountCurrencySelector(
     document.getElementById('currency-selector')!,
     (code) => setState({ selectedCurrency: code }),
@@ -290,7 +290,6 @@ function mountDashboard(root: HTMLElement): void {
       ghStrip.update(snapshot);
       gauge.update(snapshot.budget, snapshot.currency);
       currencySelector.update(snapshot.fxRates, s.selectedCurrency);
-      modelList.update(snapshot, s.selectedCurrency);
 
       // dailyBars drives both the bar chart and the cumulative area view.
       if (dailyBarsChanged(prevDailyBars, snapshot.chartData.dailyBars)) {

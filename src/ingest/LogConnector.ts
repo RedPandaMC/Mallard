@@ -1,6 +1,6 @@
 import type { CostCategory, UsageEvent } from '../domain/types';
 
-export type ConnectorStatus = 'idle' | 'ok' | 'empty' | 'error';
+export type ConnectorStatus = 'idle' | 'loading' | 'ok' | 'empty' | 'error';
 
 export interface ConnectorCapabilities {
   /** Token fields this connector can populate on a UsageEvent. */

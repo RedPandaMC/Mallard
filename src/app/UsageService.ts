@@ -103,10 +103,12 @@ export class UsageService implements vscode.Disposable {
   }
 
   async start(): Promise<void> {
-    await this.ingest.start();
+    // Emit an immediate snapshot so the dashboard shows a loading state
+    // while the initial log parse runs in the background.
     await this.compute();
     this.scheduleTimer();
     void this.refreshGitHub();
+    void this.ingest.start().then(() => this.compute());
   }
 
   onConfigChanged(): void {

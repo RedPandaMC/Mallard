@@ -127,9 +127,10 @@ body {
   border: 1px solid var(--w-border);
 }
 
-.wv-banner[data-kind='empty'] { border-color: var(--w-warn); color: var(--w-warn); }
-.wv-banner[data-kind='warn']  { border-color: var(--w-warn); color: var(--w-warn); }
-.wv-banner[data-kind='ok']    { border-color: var(--w-action); color: var(--w-action); }
+.wv-banner[data-kind='empty']   { border-color: var(--w-warn); color: var(--w-warn); }
+.wv-banner[data-kind='warn']    { border-color: var(--w-warn); color: var(--w-warn); }
+.wv-banner[data-kind='ok']      { border-color: var(--w-action); color: var(--w-action); }
+.wv-banner[data-kind='loading'] { border-color: var(--w-border); color: var(--w-fg-muted); }
 
 .wv-banner-dot {
   width: 6px;
@@ -142,6 +143,17 @@ body {
 /* live recording pulse while tracking */
 .wv-banner[data-kind='ok'] .wv-banner-dot {
   animation: wv-pulse 2s ease-in-out infinite;
+}
+
+/* spinning dot while loading */
+.wv-banner[data-kind='loading'] .wv-banner-dot {
+  animation: wv-spin 1s linear infinite;
+  border-radius: 1px;
+}
+
+@keyframes wv-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 @keyframes wv-pulse {
@@ -163,6 +175,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .wv-banner[data-kind='ok'] .wv-banner-dot { animation: none; }
+  .wv-banner[data-kind='loading'] .wv-banner-dot { animation: none; }
   .wv-banner-dot--flash { animation: none !important; }
 }
 
@@ -666,6 +679,34 @@ body {
 .wv-gauge-sub {
   font-size: 11px;
   color: var(--w-fg-muted);
+}
+
+/* ─────────────────────────────────────────
+   Gauge row (gauge + restriction banners side by side)
+───────────────────────────────────────── */
+.wv-gauge-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) 1fr;
+  gap: var(--w-s4);
+  align-items: start;
+}
+
+@media (max-width: 700px) {
+  .wv-gauge-row { grid-template-columns: 1fr; }
+}
+
+/* ─────────────────────────────────────────
+   Section label (e.g. "More views")
+───────────────────────────────────────── */
+.wv-section-label {
+  font-family: var(--w-label-font);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--w-fg-subtle);
+  padding: var(--w-s2) 0;
+  border-bottom: 1px solid var(--w-border);
 }
 
 /* ─────────────────────────────────────────

@@ -10,7 +10,16 @@ let _context: vscode.ExtensionContext | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   _context = context;
-  const container = await buildContainer(context);
+  let container: import('./container').Container;
+  try {
+    container = await buildContainer(context);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    void vscode.window.showErrorMessage(
+      `Mallard failed to start: ${msg}. Check the Output panel (Mallard) for details.`,
+    );
+    return;
+  }
   const { usage, restriction, ingest } = container;
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -106,9 +115,14 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
   const reg = (id: string, fn: (...args: unknown[]) => unknown) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
 
-  reg('mallard.openDashboard', () =>
-    DashboardPanel.show(context, usage, userConfig, layout, restriction),
-  );
+  reg('mallard.openDashboard', () => {
+    try {
+      DashboardPanel.show(context, usage, userConfig, layout, restriction);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      void vscode.window.showErrorMessage(`Mallard: Could not open dashboard — ${msg}`);
+    }
+  });
 
   reg('mallard.refresh', async () => {
     await usage.refresh();
