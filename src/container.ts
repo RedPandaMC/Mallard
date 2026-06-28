@@ -50,7 +50,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   await currency.load();
   currency.startDailyRefresh();
 
-  const store = await EventStore.open(storageDir);
+  const store = await EventStore.open(storageDir, cfg.dataRetentionDays);
   await store.writer.setPrices(pricing.allPrices());
 
   const COMPACT_INTERVAL_MS = 60 * 60 * 1000;

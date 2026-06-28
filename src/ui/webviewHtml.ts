@@ -15,7 +15,6 @@ export function renderHtml(webview: vscode.Webview, extensionUri: vscode.Uri): s
   const base = vscode.Uri.joinPath(extensionUri, 'dist', 'webview');
   const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(base, 'main.js'));
   const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(base, 'main.css'));
-  const workerUri = webview.asWebviewUri(vscode.Uri.joinPath(base, 'monaco.workers.js'));
   const logoUri = webview.asWebviewUri(
     vscode.Uri.joinPath(extensionUri, 'media', 'mallard-icon-128.png'),
   );
@@ -29,7 +28,6 @@ export function renderHtml(webview: vscode.Webview, extensionUri: vscode.Uri): s
     `font-src ${webview.cspSource}`,
     `style-src ${webview.cspSource} 'unsafe-inline'`,
     `script-src 'nonce-${nonce}'`,
-    `worker-src 'self' blob:`,
     `connect-src ${webview.cspSource}`,
   ].join('; ');
 
@@ -46,7 +44,6 @@ export function renderHtml(webview: vscode.Webview, extensionUri: vscode.Uri): s
   <body data-logo="${logoUri}">
     <div id="app"></div>
     <script nonce="${nonce}" src="${scriptUri}"></script>
-    <script nonce="${nonce}" src="${workerUri}"></script>
   </body>
 </html>`;
 }

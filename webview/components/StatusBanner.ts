@@ -18,10 +18,13 @@ export function mountStatusBanner(el: HTMLElement): StatusBannerHandle {
   return {
     update(s: UsageSnapshot) {
       const { status } = s;
-      let kind: 'ok' | 'warn' | 'empty' = 'ok';
+      let kind: 'ok' | 'warn' | 'empty' | 'loading' = 'ok';
       let msg = '';
 
-      if (status.kind === 'empty') {
+      if (status.kind === 'loading') {
+        kind = 'loading';
+        msg = status.reason ?? 'Reading log files…';
+      } else if (status.kind === 'empty') {
         kind = 'empty';
         msg = status.reason ?? 'No usage data found';
       } else if (status.kind === 'degraded') {

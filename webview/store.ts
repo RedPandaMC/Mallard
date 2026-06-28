@@ -25,6 +25,8 @@ export interface AppState {
   selectedCurrency: string;
   /** Whether the dashboard is forced into light or dark mode (null = follow VS Code). */
   forcedScheme: 'light' | 'dark' | null;
+  /** Model keys currently spotlighted — other panels dim when this is non-empty. */
+  focusedModels: ReadonlySet<string>;
 }
 
 export const store = createStore<AppState>()(
@@ -39,6 +41,7 @@ export const store = createStore<AppState>()(
       restriction: DEFAULT_RESTRICTION_STATE,
       selectedCurrency: 'USD',
       forcedScheme: null,
+      focusedModels: new Set<string>(),
     }),
   ),
 );

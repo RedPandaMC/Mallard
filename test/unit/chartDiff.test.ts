@@ -36,7 +36,7 @@ import {
 import type { DailyBarsData, HeatmapData, ModelBreakdownData, CategoryBreakdownData, HourlyTimelineData } from '../../src/domain/types';
 
 describe('dailyBarsChanged', () => {
-  const base: DailyBarsData = { points: [{ date: '06-20', credits: 5, cost: 0.2, colorIndex: 0 }], budgetLine: null, projectedLine: null };
+  const base: DailyBarsData = { points: [{ date: '06-20', credits: 5, cost: 0.2, colorIndex: 0 }], budgetLine: null, projectedLine: null, cumulativeCosts: [0.2] };
   it('returns true when prev is undefined', () => assert.ok(dailyBarsChanged(undefined, base)));
   it('returns false for identical data', () => assert.ok(!dailyBarsChanged(base, base)));
   it('returns true when a point credits changes', () => {

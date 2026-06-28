@@ -3,14 +3,23 @@ import { RELEVANT_CONFIG_KEYS } from './config';
 import { buildContainer, Container } from './container';
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
-import { registerTriggerView } from './ui/TriggerView';
+import { SidebarView } from './ui/SidebarView';
 import { cleanupGlobalState, cleanupStorage } from './app/Lifecycle';
 
 let _context: vscode.ExtensionContext | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   _context = context;
-  const container = await buildContainer(context);
+  let container: import('./container').Container;
+  try {
+    container = await buildContainer(context);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    void vscode.window.showErrorMessage(
+      `Mallard failed to start: ${msg}. Check the Output panel (Mallard) for details.`,
+    );
+    return;
+  }
   const { usage, restriction, ingest } = container;
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -50,7 +59,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(restriction.onDidChange(updateStatusBar));
 
   registerCommands(context, container);
-  context.subscriptions.push(...registerTriggerView());
+  const sidebar = new SidebarView(context, usage);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(SidebarView.viewType, sidebar),
+    { dispose: () => sidebar.dispose() },
+  );
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
@@ -106,9 +119,14 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
   const reg = (id: string, fn: (...args: unknown[]) => unknown) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
 
-  reg('mallard.openDashboard', () =>
-    DashboardPanel.show(context, usage, userConfig, layout, restriction),
-  );
+  reg('mallard.openDashboard', () => {
+    try {
+      DashboardPanel.show(context, usage, userConfig, layout, restriction);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      void vscode.window.showErrorMessage(`Mallard: Could not open dashboard — ${msg}`);
+    }
+  });
 
   reg('mallard.refresh', async () => {
     await usage.refresh();

@@ -18,6 +18,8 @@ export const CREATE_SQL = `
   CREATE INDEX IF NOT EXISTS idx_model ON events(modelId);
   CREATE INDEX IF NOT EXISTS idx_ts_model_surface_source
     ON events(ts, modelId, surface, source);
+  CREATE INDEX IF NOT EXISTS idx_repo   ON events(repo);
+  CREATE INDEX IF NOT EXISTS idx_branch ON events(branch);
 
   CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR);
   ALTER TABLE events ADD COLUMN IF NOT EXISTS branch VARCHAR;
@@ -262,6 +264,11 @@ export const CREATE_SQL = `
   CREATE TABLE IF NOT EXISTS snap_dim_surfaces (name VARCHAR PRIMARY KEY);
   CREATE TABLE IF NOT EXISTS snap_dim_sources  (name VARCHAR PRIMARY KEY);
   CREATE TABLE IF NOT EXISTS snap_dim_repos    (name VARCHAR PRIMARY KEY);
+  CREATE TABLE IF NOT EXISTS snap_weekday (
+    weekday     INTEGER PRIMARY KEY,
+    credits     DOUBLE  NOT NULL DEFAULT 0,
+    event_count INTEGER NOT NULL DEFAULT 0
+  );
 `;
 
 // ── DML: staging merge ────────────────────────────────────────────────────────

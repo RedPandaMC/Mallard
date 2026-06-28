@@ -15,7 +15,7 @@ import {
   REFRESH_FACTS_INSERT_MODELS_SQL,
   REFRESH_FACTS_INSERT_REPOS_SQL,
   REFRESH_FACTS_SQL,
-  REFRESH_SNAP_SQL,
+  buildRefreshSnapSQL,
 } from './schema';
 import type { RecordFilter } from './EventRepository';
 import { readRows, runPrepared } from './dbUtils';
@@ -33,7 +33,16 @@ export interface IEventWriter {
 // ── Implementation ────────────────────────────────────────────────────────────
 
 export class EventWriter implements IEventWriter {
-  constructor(private readonly conn: DuckDBConnection) {}
+  private readonly refreshSnapSQL: string;
+  private readonly retentionDays: number;
+
+  constructor(
+    private readonly conn: DuckDBConnection,
+    retentionDays = RAW_WINDOW_DAYS,
+  ) {
+    this.retentionDays = retentionDays;
+    this.refreshSnapSQL = buildRefreshSnapSQL(retentionDays);
+  }
 
   async insert(records: UsageEvent[]): Promise<number> {
     if (records.length === 0) return 0;
@@ -43,7 +52,7 @@ export class EventWriter implements IEventWriter {
     if ((total[0] ?? 0) > MAX_RAW_EVENTS) await this.compact();
     const todayStart = startOf(Date.now(), 'day');
     await this.refreshFacts(todayStart, todayStart + DAY_MS);
-    await this.conn.run(REFRESH_SNAP_SQL);
+    await this.conn.run(this.refreshSnapSQL);
     return inserted;
   }
 
@@ -91,7 +100,7 @@ export class EventWriter implements IEventWriter {
   }
 
   async compact(now = Date.now()): Promise<void> {
-    const cutoff = startOf(now - RAW_WINDOW_DAYS * DAY_MS, 'day');
+    const cutoff = startOf(now - this.retentionDays * DAY_MS, 'day');
     const cutoffBig = BigInt(cutoff);
 
     const countRows = await readRows(
@@ -107,7 +116,7 @@ export class EventWriter implements IEventWriter {
     await runPrepared(this.conn, COMPACT_ROLLUP_SQL, [cutoffBig]);
     await runPrepared(this.conn, COMPACT_DELETE_SQL, [cutoffBig]);
     await this.refreshFacts();
-    await this.conn.run(REFRESH_SNAP_SQL);
+    await this.conn.run(this.refreshSnapSQL);
   }
 
   async clear(): Promise<void> {

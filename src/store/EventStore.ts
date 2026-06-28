@@ -25,14 +25,15 @@ export class EventStore implements vscode.Disposable {
   private constructor(
     private readonly instance: DuckDBInstance,
     readonly conn: DuckDBConnection,
+    retentionDays?: number,
   ) {
     this.meta       = new MetaStore(conn);
     this.reader     = new EventReader(conn);
-    this.writer     = new EventWriter(conn);
+    this.writer     = new EventWriter(conn, retentionDays);
     this.fileReader = new DuckDBFileReader(conn, this.writer);
   }
 
-  static async open(dir: string): Promise<EventStore> {
+  static async open(dir: string, retentionDays?: number): Promise<EventStore> {
     mkdirSync(dir, { recursive: true });
     const instance = await DuckDBInstance.create(path.join(dir, 'events.duckdb'));
     const conn = await instance.connect();
@@ -46,7 +47,7 @@ export class EventStore implements vscode.Disposable {
     await conn.run(`SET TimeZone = '${tz.replace(/'/g, "''")}'`);
 
     await conn.run(CREATE_SQL);
-    return new EventStore(instance, conn);
+    return new EventStore(instance, conn, retentionDays);
   }
 
   // ── Convenience passthroughs ───────────────────────────────────────────────

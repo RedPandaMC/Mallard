@@ -28,11 +28,11 @@ describe('Mallard extension (integration)', () => {
     for (const cmd of EXPECTED_COMMANDS) {
       assert.ok(all.includes(cmd), `command ${cmd} should be registered`);
     }
-    // VS Code auto-registers per-view commands for the contributed `mallard.trigger`
+    // VS Code auto-registers per-view commands for the contributed `mallard.sidebar`
     // tree view (focus/open/removeView/resetViewLocation/toggleVisibility); those
     // are framework-generated, not part of the extension's command contract.
     const contributed = all
-      .filter((c) => c.startsWith('mallard.') && !c.startsWith('mallard.trigger.'))
+      .filter((c) => c.startsWith('mallard.') && !c.startsWith('mallard.sidebar.'))
       .sort();
     assert.deepStrictEqual(
       contributed,
@@ -58,6 +58,7 @@ describe('Mallard extension (integration)', () => {
     const props = ext.packageJSON.contributes.configuration.properties as Record<string, unknown>;
     assert.deepStrictEqual(Object.keys(props).sort(), [
       'mallard.copilotLogPath',
+      'mallard.dataRetentionDays',
       'mallard.metricExport.brokerUrl',
       'mallard.metricExport.caPath',
       'mallard.metricExport.certPath',
@@ -71,6 +72,7 @@ describe('Mallard extension (integration)', () => {
       'mallard.metricExport.webhook.url',
       'mallard.palette',
       'mallard.pricingManifestUrl',
+      'mallard.refreshIntervalMinutes',
     ]);
   });
 });

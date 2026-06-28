@@ -127,9 +127,10 @@ body {
   border: 1px solid var(--w-border);
 }
 
-.wv-banner[data-kind='empty'] { border-color: var(--w-warn); color: var(--w-warn); }
-.wv-banner[data-kind='warn']  { border-color: var(--w-warn); color: var(--w-warn); }
-.wv-banner[data-kind='ok']    { border-color: var(--w-action); color: var(--w-action); }
+.wv-banner[data-kind='empty']   { border-color: var(--w-warn); color: var(--w-warn); }
+.wv-banner[data-kind='warn']    { border-color: var(--w-warn); color: var(--w-warn); }
+.wv-banner[data-kind='ok']      { border-color: var(--w-action); color: var(--w-action); }
+.wv-banner[data-kind='loading'] { border-color: var(--w-border); color: var(--w-fg-muted); }
 
 .wv-banner-dot {
   width: 6px;
@@ -142,6 +143,17 @@ body {
 /* live recording pulse while tracking */
 .wv-banner[data-kind='ok'] .wv-banner-dot {
   animation: wv-pulse 2s ease-in-out infinite;
+}
+
+/* spinning dot while loading */
+.wv-banner[data-kind='loading'] .wv-banner-dot {
+  animation: wv-spin 1s linear infinite;
+  border-radius: 1px;
+}
+
+@keyframes wv-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 @keyframes wv-pulse {
@@ -163,6 +175,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .wv-banner[data-kind='ok'] .wv-banner-dot { animation: none; }
+  .wv-banner[data-kind='loading'] .wv-banner-dot { animation: none; }
   .wv-banner-dot--flash { animation: none !important; }
 }
 
@@ -669,6 +682,34 @@ body {
 }
 
 /* ─────────────────────────────────────────
+   Gauge row (gauge + restriction banners side by side)
+───────────────────────────────────────── */
+.wv-gauge-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) 1fr;
+  gap: var(--w-s4);
+  align-items: start;
+}
+
+@media (max-width: 700px) {
+  .wv-gauge-row { grid-template-columns: 1fr; }
+}
+
+/* ─────────────────────────────────────────
+   Section label (e.g. "More views")
+───────────────────────────────────────── */
+.wv-section-label {
+  font-family: var(--w-label-font);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--w-fg-subtle);
+  padding: var(--w-s2) 0;
+  border-bottom: 1px solid var(--w-border);
+}
+
+/* ─────────────────────────────────────────
    Chart sections
 ───────────────────────────────────────── */
 .wv-chart-section {
@@ -678,7 +719,7 @@ body {
   border-radius: var(--w-r2);
   overflow: hidden;
   contain: layout paint;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, opacity 0.2s, box-shadow 0.2s, filter 0.25s;
 }
 
 .wv-chart-section:hover {
@@ -742,10 +783,10 @@ body {
 .wv-chart-body.mini { height: var(--w-chart-mini); }
 .wv-chart-body.heatmap { height: 120px; }
 
-/* Analysis grid: two columns; each panel spans 1 (half) or 2 (full). */
+/* Analysis grid: column count driven by --wv-cols (set from config.dashboard.columns). */
 .wv-charts-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(var(--wv-cols, 2), 1fr);
   gap: var(--w-s3);
   align-items: start;
 }
@@ -806,6 +847,44 @@ body {
 .wv-panel-btn:hover { color: var(--w-fg); background: var(--w-bg-card); }
 .wv-chart-section.wv-dragging { opacity: 0.6; }
 .wv-chart-section.wv-hidden-panel .wv-panel-btn[data-act='hide'] { color: var(--vscode-foreground); opacity: 0.45; }
+
+/* Drop-target highlight during drag. */
+.wv-chart-section.wv-drop-target {
+  outline: 2px solid var(--w-accent) !important;
+  background: color-mix(in srgb, var(--w-accent) 8%, var(--w-bg-card));
+}
+
+/* Brief opacity flash on span/size toggle to confirm the change. */
+.wv-chart-section.wv-resizing { opacity: 0.7; }
+
+/* ─────────────────────────────────────────
+   Per-panel height tiers (compact / normal / tall)
+───────────────────────────────────────── */
+:root {
+  --wv-h-compact: 120px;
+  --wv-h-tall: calc(var(--w-chart-main) * 1.75);
+}
+.wv-chart-section[data-size='compact'] .wv-chart-body { height: var(--wv-h-compact); }
+.wv-chart-section[data-size='normal']  .wv-chart-body { height: var(--w-chart-main); }
+.wv-chart-section[data-size='tall']    .wv-chart-body { height: var(--wv-h-tall); }
+/* Mini-body panels respect compact by default, grow in tall mode. */
+.wv-chart-section[data-size] .wv-chart-body.mini         { height: var(--wv-h-compact); }
+.wv-chart-section[data-size] .wv-chart-body.heatmap      { height: var(--wv-h-compact); }
+.wv-chart-section[data-size='normal'] .wv-chart-body.mini    { height: var(--w-chart-mini); }
+.wv-chart-section[data-size='normal'] .wv-chart-body.heatmap { height: 120px; }
+.wv-chart-section[data-size='tall'] .wv-chart-body.mini      { height: var(--w-chart-main); }
+.wv-chart-section[data-size='tall'] .wv-chart-body.heatmap   { height: 200px; }
+
+/* ─────────────────────────────────────────
+   Model spotlight — dims all non-model panels
+───────────────────────────────────────── */
+.wv-charts-grid[data-focused='true'] .wv-chart-section:not([data-panel='models']) {
+  opacity: 0.35;
+  filter: grayscale(0.3);
+}
+.wv-charts-grid[data-focused='true'] .wv-chart-section[data-panel='models'] {
+  outline: 2px solid var(--w-accent);
+}
 
 /* ─────────────────────────────────────────
    Responsive

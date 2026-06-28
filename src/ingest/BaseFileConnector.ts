@@ -56,6 +56,7 @@ export abstract class BaseFileConnector implements LogConnector {
       return;
     }
     this.currentGlobs = globs;
+    this.status = 'loading';
     await this.runIngest(globs);
     this.watchDirs(allowedRoots);
   }

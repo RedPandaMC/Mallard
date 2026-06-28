@@ -2,7 +2,6 @@
 import { DuckDBConnection } from '@duckdb/node-api';
 import { z } from 'zod';
 import { CostCategory, Filter, SourceKind, Surface, UsageEvent } from '../domain/types';
-import { UNATTRIBUTED_REPO } from '../domain/aggregate';
 import { DAY_MS } from '../util/time';
 import {
   AggregateResult,
@@ -29,7 +28,9 @@ import {
   READ_SNAP_REPOS,
   READ_SNAP_SANKEY,
   READ_SNAP_TOTALS,
+  READ_SNAP_WEEKDAY,
 } from './schema';
+import { FilterClauseBuilder } from './FilterClauseBuilder';
 
 // ── SnapshotCache ─────────────────────────────────────────────────────────────
 
@@ -48,6 +49,8 @@ export interface SnapshotCache {
   categories: Array<{ category: string; cost: number }>;
   sankey:     Array<{ model: string; surface: string; count: number; credits: number }>;
   dims:       { models: string[]; surfaces: string[]; sources: string[]; repos: string[] };
+  /** Credits per weekday, index 0=Sun … 6=Sat. */
+  weekday:    number[];
 }
 
 // ── FilteredSnapshotData ───────────────────────────────────────────────────────
@@ -69,6 +72,8 @@ export interface FilteredSnapshotData {
   hourly:     Array<{ hourLocal: number; credits: number }>;
   /** Distinct values scoped to range filter only — keeps dropdowns stable. */
   dims:       { models: string[]; surfaces: string[]; sources: string[]; repos: string[] };
+  /** Credits per weekday, index 0=Sun … 6=Sat. */
+  weekday:    number[];
 }
 
 // ── FactRow ────────────────────────────────────────────────────────────────────
@@ -89,7 +94,14 @@ export interface FactRow {
 
 // ── Interfaces ─────────────────────────────────────────────────────────────────
 
-export interface IEventReader {
+/** Narrow interface for the two snapshot read paths used by UsageService. */
+export interface IEventSnapshotReader {
+  readSnapshotCache(): Promise<SnapshotCache>;
+  readFilteredSnapshot(filter: RecordFilter): Promise<FilteredSnapshotData>;
+  creditsByBranch(branch: string): Promise<number>;
+}
+
+export interface IEventReader extends IEventSnapshotReader {
   find(filter?: RecordFilter): Promise<UsageEvent[]>;
   findById(id: string): Promise<UsageEvent | null>;
   count(filter?: RecordFilter): Promise<number>;
@@ -100,9 +112,6 @@ export interface IEventReader {
   pivot(filter: RecordFilter, on: string, value: string): Promise<CrossTab>;
   rank(filter: RecordFilter, by: string, limit?: number): Promise<TimeBucket[]>;
   queryFacts(filter?: RecordFilter): Promise<FactRow[]>;
-  readSnapshotCache(): Promise<SnapshotCache>;
-  readFilteredSnapshot(filter: RecordFilter): Promise<FilteredSnapshotData>;
-  creditsByBranch(branch: string): Promise<number>;
   /** @deprecated Use find(). */
   query(filter?: Filter): Promise<UsageEvent[]>;
 }
@@ -171,83 +180,24 @@ function dateToId(ms: number): number {
 function buildFilterSQL(filter?: RecordFilter): { clause: string; params: unknown[] } {
   /* c8 ignore next */
   if (!filter) return { clause: '', params: [] };
-  const conditions: string[] = [];
-  const params: unknown[] = [];
-
-  if (filter.range) {
-    conditions.push('ts >= ? AND ts < ?');
-    params.push(filter.range.start, filter.range.end);
-  }
-  if (filter.models?.length) {
-    conditions.push(`modelId IN (${filter.models.map(() => '?').join(',')})`);
-    params.push(...filter.models);
-  }
-  if (filter.surfaces?.length) {
-    conditions.push(`surface IN (${filter.surfaces.map(() => '?').join(',')})`);
-    params.push(...filter.surfaces);
-  }
-  if (filter.sources?.length) {
-    conditions.push(`source IN (${filter.sources.map(() => '?').join(',')})`);
-    params.push(...filter.sources);
-  }
-  if (filter.branches?.length) {
-    conditions.push(`branch IN (${filter.branches.map(() => '?').join(',')})`);
-    params.push(...filter.branches);
-  }
-  if (filter.repos?.length) {
-    const named    = filter.repos.filter((r) => r !== UNATTRIBUTED_REPO);
-    const hasUnattr = filter.repos.includes(UNATTRIBUTED_REPO);
-    const repoParts: string[] = [];
-    if (named.length) {
-      repoParts.push(`repo IN (${named.map(() => '?').join(',')})`);
-      params.push(...named);
-    }
-    if (hasUnattr) repoParts.push('repo IS NULL');
-    if (repoParts.length) conditions.push(`(${repoParts.join(' OR ')})`);
-  }
-
-  return {
-    clause: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '',
-    params,
-  };
+  const fb = new FilterClauseBuilder()
+    .addRange(filter.range, 'ts')
+    .addIn(filter.models, 'modelId')
+    .addIn(filter.surfaces, 'surface')
+    .addIn(filter.sources, 'source')
+    .addIn(filter.branches, 'branch')
+    .addRepos(filter.repos, 'repo', 'repo IS NULL');
+  return { clause: fb.build(), params: fb.params };
 }
 
 function buildFactsFilterSQL(filter?: RecordFilter): { clause: string; params: unknown[] } {
-  const conditions: string[] = [];
-  const params: unknown[] = [];
-
-  if (filter?.range) {
-    conditions.push('f.date_id >= ? AND f.date_id < ?');
-    params.push(dateToId(filter.range.start), dateToId(filter.range.end));
-  }
-  if (filter?.models?.length) {
-    conditions.push(`m.name IN (${filter.models.map(() => '?').join(',')})`);
-    params.push(...filter.models);
-  }
-  if (filter?.surfaces?.length) {
-    conditions.push(`sf.name IN (${filter.surfaces.map(() => '?').join(',')})`);
-    params.push(...filter.surfaces);
-  }
-  if (filter?.sources?.length) {
-    conditions.push(`sc.name IN (${filter.sources.map(() => '?').join(',')})`);
-    params.push(...filter.sources);
-  }
-  if (filter?.repos?.length) {
-    const named    = filter.repos.filter((r) => r !== UNATTRIBUTED_REPO);
-    const hasUnattr = filter.repos.includes(UNATTRIBUTED_REPO);
-    const sub: string[] = [];
-    if (named.length) {
-      sub.push(`r.name IN (${named.map(() => '?').join(',')})`);
-      params.push(...named);
-    }
-    if (hasUnattr) sub.push(`r.name = 'unattributed'`);
-    if (sub.length) conditions.push(`(${sub.join(' OR ')})`);
-  }
-
-  return {
-    clause: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '',
-    params,
-  };
+  const fb = new FilterClauseBuilder()
+    .addRange(filter?.range, 'f.date_id', dateToId)
+    .addIn(filter?.models, 'm.name')
+    .addIn(filter?.surfaces, 'sf.name')
+    .addIn(filter?.sources, 'sc.name')
+    .addRepos(filter?.repos, 'r.name', `r.name = 'unattributed'`);
+  return { clause: fb.build(), params: fb.params };
 }
 
 
@@ -475,7 +425,7 @@ export class EventReader implements IEventReader {
 
   async readSnapshotCache(): Promise<SnapshotCache> {
     const [totalsRaw, daily, models, repos, hourly, categories, sankey,
-           dimModels, dimSurfaces, dimSources, dimRepos] = await Promise.all([
+           dimModels, dimSurfaces, dimSources, dimRepos, weekdayRows] = await Promise.all([
       readRows(this.conn, READ_SNAP_TOTALS, (r) => r),
       /* c8 ignore start */
       readRows(this.conn, READ_SNAP_DAILY,  (r) => ({
@@ -515,6 +465,10 @@ export class EventReader implements IEventReader {
       readRows(this.conn, READ_SNAP_DIM_SURFACES, (r) => String(r['name'] ?? '')),
       readRows(this.conn, READ_SNAP_DIM_SOURCES,  (r) => String(r['name'] ?? '')),
       readRows(this.conn, READ_SNAP_DIM_REPOS,    (r) => String(r['name'] ?? '')),
+      readRows(this.conn, READ_SNAP_WEEKDAY, (r) => ({
+        weekday: Number(r['weekday'] ?? 0),
+        credits: Number(r['credits'] ?? 0),
+      })),
       /* c8 ignore stop */
     ]);
 
@@ -534,6 +488,9 @@ export class EventReader implements IEventReader {
       /* c8 ignore stop */
     }
 
+    const weekdayArr = new Array<number>(7).fill(0);
+    for (const row of weekdayRows) weekdayArr[row.weekday] = row.credits;
+
     return {
       totals,
       daily,
@@ -548,6 +505,7 @@ export class EventReader implements IEventReader {
         sources:  dimSources,
         repos:    dimRepos,
       },
+      weekday: weekdayArr,
     };
   }
 
@@ -627,6 +585,12 @@ SELECT
             COALESCE(SUM(credits),0) AS credits FROM f GROUP BY 1`,
     'hour_local',
   )} AS hourly,
+  ${listJson(
+    `'weekday': weekday, 'credits': credits`,
+    `SELECT CAST(dayofweek(to_timestamp(ts/1000.0)::TIMESTAMPTZ) AS INTEGER) AS weekday,
+            COALESCE(SUM(credits),0) AS credits FROM f GROUP BY 1`,
+    'weekday',
+  )} AS weekday_data,
   (SELECT COALESCE(to_json(list(name ORDER BY name))::VARCHAR,'[]') FROM (SELECT DISTINCT modelId AS name FROM ro WHERE modelId IS NOT NULL)) AS dim_models,
   (SELECT COALESCE(to_json(list(name ORDER BY name))::VARCHAR,'[]') FROM (SELECT DISTINCT surface  AS name FROM ro WHERE surface  IS NOT NULL)) AS dim_surfaces,
   (SELECT COALESCE(to_json(list(name ORDER BY name))::VARCHAR,'[]') FROM (SELECT DISTINCT source   AS name FROM ro WHERE source   IS NOT NULL)) AS dim_sources,
@@ -661,11 +625,15 @@ SELECT
       if (cost > 0) categories.push({ category: cat, cost });
     }
 
-    const dailyArr  = parseArr<Record<string, unknown>>('daily');
-    const modelArr  = parseArr<Record<string, unknown>>('top_models');
-    const repoArr   = parseArr<Record<string, unknown>>('top_repos');
-    const sankeyArr = parseArr<Record<string, unknown>>('sankey');
-    const hourArr   = parseArr<Record<string, unknown>>('hourly');
+    const dailyArr   = parseArr<Record<string, unknown>>('daily');
+    const modelArr   = parseArr<Record<string, unknown>>('top_models');
+    const repoArr    = parseArr<Record<string, unknown>>('top_repos');
+    const sankeyArr  = parseArr<Record<string, unknown>>('sankey');
+    const hourArr    = parseArr<Record<string, unknown>>('hourly');
+    const wdArr      = parseArr<Record<string, unknown>>('weekday_data');
+
+    const weekdayArr = new Array<number>(7).fill(0);
+    for (const r of wdArr) weekdayArr[Number(r['weekday'] ?? 0)] = Number(r['credits'] ?? 0);
 
     return {
       totals: { all: mkTotals('all'), mtd: mkTotals('mtd'), today: mkTotals('today') },
@@ -705,6 +673,7 @@ SELECT
         sources:  parseArr<string>('dim_sources'),
         repos:    parseArr<string>('dim_repos'),
       },
+      weekday: weekdayArr,
     };
     /* c8 ignore stop */
   }

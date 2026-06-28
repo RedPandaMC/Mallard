@@ -10,7 +10,13 @@ import {
   DashboardLayout,
   DashboardPanelLayout,
   DEFAULT_DASHBOARD_LAYOUT,
+  PanelSize,
 } from './types';
+
+const VALID_SIZES = new Set<PanelSize>(['compact', 'normal', 'tall']);
+function validSize(s: unknown): PanelSize | undefined {
+  return VALID_SIZES.has(s as PanelSize) ? (s as PanelSize) : undefined;
+}
 
 /**
  * Keep stored entries (preserving their order/span/hidden), drop unknown panel
@@ -26,7 +32,7 @@ export function normalizeLayout(stored?: DashboardLayout): DashboardLayout {
   for (const p of stored ?? []) {
     if (!p || !known.has(p.id) || seen.has(p.id)) continue;
     seen.add(p.id);
-    out.push({ id: p.id, span: p.span === 2 ? 2 : 1, hidden: Boolean(p.hidden) });
+    out.push({ id: p.id, span: p.span === 2 ? 2 : 1, hidden: Boolean(p.hidden), size: validSize(p.size) ?? 'normal' });
   }
   for (const def of DEFAULT_DASHBOARD_LAYOUT) {
     if (!seen.has(def.id)) out.push({ ...def });
@@ -77,6 +83,8 @@ export function mergeConfigLayout(
       span: cp.gridColumn !== undefined ? gridColumnToSpan(cp.gridColumn) : (fallback?.span ?? 1),
       /* c8 ignore next */
       hidden: cp.hidden !== undefined ? cp.hidden : (fallback?.hidden ?? false),
+      /* c8 ignore next */
+      size: validSize(cp.size) ?? fallback?.size ?? 'normal',
     });
   }
 

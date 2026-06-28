@@ -104,18 +104,12 @@
     "views": {
       "mallard": [
         {
-          "type": "tree",
-          "id": "mallard.trigger",
+          "type": "webview",
+          "id": "mallard.sidebar",
           "name": "Mallard"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "mallard.trigger",
-        "contents": "Mallard tracks your Copilot spend in real time.\n\n[Open Dashboard](command:mallard.openDashboard)"
-      }
-    ],
     "configuration": {
       "title": "Mallard",
       "properties": {
@@ -141,6 +135,20 @@
           ],
           "default": "swiss",
           "description": "Dashboard chart palette. Both modes keep the duotone structure and are checked for accessibility."
+        },
+        "mallard.refreshIntervalMinutes": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 60,
+          "description": "How often Mallard re-reads logs and recomputes the snapshot (minutes). Lower values increase responsiveness at the cost of CPU."
+        },
+        "mallard.dataRetentionDays": {
+          "type": "number",
+          "default": 90,
+          "minimum": 30,
+          "maximum": 365,
+          "description": "How many days of raw per-request events to keep before rolling up into daily totals. Higher values use more disk."
         },
         "mallard.metricExport.brokerUrl": {
           "type": "string",

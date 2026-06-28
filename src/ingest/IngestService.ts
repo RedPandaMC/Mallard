@@ -12,6 +12,9 @@ export class IngestService implements vscode.Disposable {
 
   getStatus(): ProviderStatus {
     const statuses = this.connectors.map((c) => c.getStatus());
+    if (statuses.some((s) => s === 'loading')) {
+      return { kind: 'loading', reason: 'Reading log files…' };
+    }
     if (statuses.some((s) => s === 'ok')) {
       return { kind: 'ok', reason: `Tracking from ${this.connectors.length} connector(s)` };
     }

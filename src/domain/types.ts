@@ -190,6 +190,15 @@ export interface AlertGroup {
   active: JsonCondition;
 }
 
+export interface DisplayPrefs {
+  /** Days shown in the daily-bars and cumulative-area charts. Default 30. */
+  dailyBarsWindow?: number;
+  /** Weeks shown in the activity heatmap. Default 12. */
+  heatmapWeeks?: number;
+  /** Max models/repos shown in ranked lists. Default 8. */
+  topN?: number;
+}
+
 export interface UserConfig {
   /** Monthly USD budget; 0 = no budget set. */
   monthlyBudget: number;
@@ -210,6 +219,8 @@ export interface UserConfig {
   dashboard?: ConfigDashboard;
   /** GitHub billing auth configuration (PAT or VS Code session). */
   githubBilling?: GitHubBillingConfig;
+  /** Dashboard display preferences (chart windows, top-N). */
+  display?: DisplayPrefs;
 }
 
 /**
@@ -284,10 +295,13 @@ export type PaletteMode = 'swiss' | 'theme';
  * a width span (1 = half, 2 = full, in the two-column grid), and a visibility
  * flag. Edited in the dashboard's edit mode and stored in globalState.
  */
+export type PanelSize = 'compact' | 'normal' | 'tall';
+
 export interface DashboardPanelLayout {
   id: string;
   span: 1 | 2;
   hidden: boolean;
+  size?: PanelSize;
 }
 
 export type DashboardLayout = DashboardPanelLayout[];
@@ -304,6 +318,7 @@ export interface ConfigPanelLayout {
   /** CSS grid-row shorthand. E.g. "span 1" or "span 2". Optional. */
   gridRow?: string;
   hidden?: boolean;
+  size?: PanelSize;
 }
 
 /** Dashboard block in config.json — sets column count and panel order/sizing. */
@@ -327,14 +342,14 @@ export const DASHBOARD_PANELS = [
 ] as const;
 
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
-  { id: 'daily', span: 2, hidden: false },
-  { id: 'heatmap', span: 2, hidden: false },
-  { id: 'models', span: 1, hidden: false },
-  { id: 'sankey', span: 1, hidden: false },
-  { id: 'category', span: 1, hidden: false },
-  { id: 'cumulative', span: 1, hidden: false },
-  { id: 'weekday', span: 1, hidden: false },
-  { id: 'hourly', span: 1, hidden: false },
+  { id: 'daily', span: 2, hidden: false, size: 'normal' },
+  { id: 'heatmap', span: 2, hidden: false, size: 'normal' },
+  { id: 'models', span: 1, hidden: false, size: 'normal' },
+  { id: 'sankey', span: 1, hidden: false, size: 'normal' },
+  { id: 'category', span: 1, hidden: false, size: 'normal' },
+  { id: 'cumulative', span: 1, hidden: false, size: 'normal' },
+  { id: 'weekday', span: 1, hidden: false, size: 'normal' },
+  { id: 'hourly', span: 1, hidden: false, size: 'normal' },
 /* c8 ignore next */
 ];
 
@@ -394,8 +409,8 @@ export interface BudgetState {
   pace: PaceStatus;
 }
 
-/** `'empty'` = no logs found or no events at all. */
-export type ProviderStatusKind = 'ok' | 'degraded' | 'empty';
+/** `'empty'` = no logs found or no events at all. `'loading'` = initial parse in progress. */
+export type ProviderStatusKind = 'ok' | 'degraded' | 'empty' | 'loading';
 
 export interface ProviderStatus {
   kind: ProviderStatusKind;
@@ -463,6 +478,8 @@ export interface DailyBarsData {
   points: DailyBarPoint[];
   budgetLine: number | null; // daily included-credits threshold
   projectedLine: number | null; // projected daily pace
+  /** Running cost total per day: `cumulativeCosts[i]` = sum of cost for days 0..i. */
+  cumulativeCosts: number[];
 }
 
 export interface ModelBreakdownData {
@@ -492,12 +509,21 @@ export interface CategoryBreakdownData {
   available: boolean;
 }
 
+/** Credits and event count indexed by weekday (0=Sun … 6=Sat). */
+export interface WeekdayData {
+  /** Credits per weekday, index 0=Sun … 6=Sat. */
+  totals: number[];
+  /** Index of the busiest weekday (0–6, Sun=0 basis). */
+  peak: number;
+}
+
 export interface ChartData {
   dailyBars: DailyBarsData;
   modelBreakdown: ModelBreakdownData;
   heatmap: HeatmapData;
   categoryBreakdown: CategoryBreakdownData;
   hourlyTimeline: HourlyTimelineData;
+  weekdayBreakdown: WeekdayData;
 }
 
 /** The single object every piece of UI consumes. */

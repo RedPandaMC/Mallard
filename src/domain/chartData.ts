@@ -11,6 +11,7 @@ import {
   CostCategory,
   DailyBarsData,
   DailyBarPoint,
+  DisplayPrefs,
   Filter,
   Forecast,
   HeatmapData,
@@ -19,6 +20,7 @@ import {
   TopEntry,
   UsageAggregate,
   UsageEvent,
+  WeekdayData,
 } from './types';
 import { PricingManifest } from './pricing';
 import { matchesFilter } from './aggregate';
@@ -36,12 +38,13 @@ export function buildDailyBarsData(
   budget: BudgetState,
   forecast: Forecast,
   now: number,
+  window = DAILY_BARS_WINDOW,
 ): DailyBarsData {
   const byKey = new Map<string, UsageAggregate>(dayAggregates.map((a) => [a.bucketKey, a]));
-  const dailyBudget = budget.includedCredits > 0 ? budget.includedCredits / DAILY_BARS_WINDOW : 0;
+  const dailyBudget = budget.includedCredits > 0 ? budget.includedCredits / window : 0;
 
   const points: DailyBarPoint[] = [];
-  for (let i = DAILY_BARS_WINDOW - 1; i >= 0; i--) {
+  for (let i = window - 1; i >= 0; i--) {
     const ts = startOf(now - i * DAY_MS, 'day');
     const key = bucketKey(ts, 'day');
     const agg = byKey.get(key);
@@ -63,17 +66,21 @@ export function buildDailyBarsData(
 
   const budgetLine = dailyBudget > 0 ? dailyBudget : null;
   const projectedLine =
-    forecast.basis !== 'insufficient-data' ? forecast.projectedCredits / DAILY_BARS_WINDOW : null;
+    forecast.basis !== 'insufficient-data' ? forecast.projectedCredits / window : null;
 
-  return { points, budgetLine, projectedLine };
+  let run = 0;
+  const cumulativeCosts = points.map((p) => { run += p.cost; return run; });
+
+  return { points, budgetLine, projectedLine, cumulativeCosts };
 }
 
 export function buildModelBreakdownData(
   topModels: TopEntry[],
   pricePerCredit: number,
   manifest?: PricingManifest,
+  topN = 8,
 ): ModelBreakdownData {
-  const top = topModels.slice(0, 8);
+  const top = topModels.slice(0, topN);
   const multipliers = manifest?.models ?? {};
   const allMultipliers = Object.values(multipliers).filter((v) => v > 0);
   const minMultiplier = allMultipliers.length > 0 ? Math.min(...allMultipliers) : 1;
@@ -99,10 +106,10 @@ export function buildHourlyTimelineData(events: readonly UsageEvent[], filter?: 
   return { hours, peakHour };
 }
 
-export function buildHeatmapData(dayAggregates: UsageAggregate[], now: number): HeatmapData {
+export function buildHeatmapData(dayAggregates: UsageAggregate[], now: number, weeks = HEATMAP_WEEKS): HeatmapData {
   const today = startOf(now, 'day');
   const byStart = new Map<number, number>(dayAggregates.map((a) => [a.start, a.credits]));
-  const days = HEATMAP_WEEKS * 7;
+  const days = weeks * 7;
 
   const cells: Array<{ date: string; value: number }> = [];
   let max = 0;
@@ -150,6 +157,16 @@ export function buildCategoryBreakdownData(
   };
 }
 
+/**
+ * Builds a WeekdayData from a 7-element credits array (index 0=Sun … 6=Sat).
+ * Returns zero-filled data if the array is empty or shorter than 7.
+ */
+export function buildWeekdayData(totals: number[]): WeekdayData {
+  const filled = Array.from({ length: 7 }, (_, i) => totals[i] ?? 0);
+  const peak = filled.indexOf(Math.max(...filled));
+  return { totals: filled, peak };
+}
+
 /* c8 ignore next */
 export function buildChartData(
   dayAggregates: UsageAggregate[],
@@ -161,12 +178,15 @@ export function buildChartData(
   hourlyTimeline: HourlyTimelineData,
   pricePerCredit: number,
   manifest?: PricingManifest,
+  weekdayTotals?: number[],
+  display?: DisplayPrefs,
 ): ChartData {
   return {
-    dailyBars: buildDailyBarsData(dayAggregates, budget, forecast, now),
-    modelBreakdown: buildModelBreakdownData(topModels, pricePerCredit, manifest),
-    heatmap: buildHeatmapData(dayAggregates, now),
+    dailyBars: buildDailyBarsData(dayAggregates, budget, forecast, now, display?.dailyBarsWindow),
+    modelBreakdown: buildModelBreakdownData(topModels, pricePerCredit, manifest, display?.topN),
+    heatmap: buildHeatmapData(dayAggregates, now, display?.heatmapWeeks),
     categoryBreakdown,
     hourlyTimeline,
+    weekdayBreakdown: buildWeekdayData(weekdayTotals ?? []),
   };
 }
