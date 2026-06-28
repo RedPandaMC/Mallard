@@ -2,6 +2,7 @@ import { strict as assert } from 'assert';
 import { aggregateBy } from '../../src/domain/aggregate';
 import {
   buildCategoryBreakdownData,
+  buildChartData,
   buildDailyBarsData,
   buildHeatmapData,
   buildHourlyTimelineData,
@@ -224,5 +225,26 @@ describe('buildCategoryBreakdownData — filter', () => {
     const events = [makeEvent({ ts: 1_000_000, modelId: 'gpt-4o', costByCategory: { input: 0.05 } })];
     const result = buildCategoryBreakdownData(events, { models: ['claude-sonnet-4'] });
     assert.equal(result.available, false);
+  });
+});
+
+describe('buildChartData', () => {
+  it('applies display prefs to window sizes and topN', () => {
+    const now = startOf(Date.now(), 'day');
+    const events = [makeEvent({ ts: now - DAY_MS, credits: 5, cost: 0.20 })];
+    const dayAggs = aggregateBy(events, 'day');
+    const category = buildCategoryBreakdownData(events);
+    const hourly = buildHourlyTimelineData(events);
+
+    const result = buildChartData(
+      dayAggs, [], EMPTY_BUDGET, INSUF_FORECAST, now,
+      category, hourly, 0.04, undefined, undefined,
+      { dailyBarsWindow: 14, topN: 3, heatmapWeeks: 6 },
+    );
+
+    assert.strictEqual(result.dailyBars.points.length, 14);
+    // heatmap loop: for (i = weeks*7; i >= 0; i--) → inclusive → weeks*7+1 cells
+    assert.strictEqual(result.heatmap.cells.length, 6 * 7 + 1);
+    assert.ok(result.modelBreakdown.labels.length === 0); // no models in input
   });
 });

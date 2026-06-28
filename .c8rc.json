@@ -24,7 +24,8 @@
     "src/domain/restriction/hostScopes.ts",
     "src/export/ExporterFactory.ts",
     "src/export/MetricExporter.ts",
-    "src/export/WebhookProtocol.ts"
+    "src/export/WebhookProtocol.ts",
+    "src/store/FilterClauseBuilder.ts"
   ],
   "reporter": ["text", "lcov"],
   "branches": 100,
