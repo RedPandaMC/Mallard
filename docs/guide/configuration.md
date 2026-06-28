@@ -22,7 +22,7 @@ Click **Edit alert rules** in the dashboard to open it with inline validation, h
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `monthlyBudget` | 0 | USD budget; 0 disables budget alerts. |
-| `includedCredits` | 0 | Plan's monthly premium-request allowance; colours the gauge. |
+| `includedCredits` | 300 | Plan's monthly premium-request allowance; colours the gauge. |
 | `dailyCreditAlert` | 0 | Daily credit threshold; 0 disables it. |
 | `alerts.velocityEnabled` | false | Enable the spending-velocity alert. |
 | `alerts.velocityCreditsPerHour` | 40 | Credits/hour rate that triggers it. |
@@ -64,7 +64,7 @@ Rules live in the `rules` array. Each rule fires a VS Code notification and opti
 | `when` | yes | Condition that must be true for the rule to fire. |
 | `active` | no | Gate — rule is skipped unless this condition is true. |
 | `cooldown` | no | Min time between firings: `"30m"`, `"4h"`, `"1d"`. Default `1h`. |
-| `notify` | no | Show a VS Code notification popup. |
+| `notify` | no | `true` (default) shows a VS Code notification popup when the rule fires; `false` suppresses it (useful when you only want the restriction behaviour). |
 | `restrict` | no | Copilot restriction block (see below). |
 
 ### Condition operators
@@ -99,7 +99,8 @@ Rules live in the `rules` array. Each rule fires a VS Code notification and opti
 | `billing.netAmount` / `billing.quotaPercentRemaining` | number | GitHub billing (requires sign-in). |
 | `now.weekday` / `now.hour` / `now.minute` / `now.ts` | number | Current time values. |
 | `signedIn` | boolean | Whether signed in to GitHub. |
-| `currentBranch` / `currentBranchCredits` | string \| null, number | Active branch. |
+| `currentBranch` / `currentBranchCredits` | string \| null, number | Active branch name and credits consumed on it. |
+| `branchBudgets.<branch>` | number | Credit cap for the named branch, as set in the `branchBudgets` config key. Compare against `currentBranchCredits`. |
 | `vars.<name>` | any | User-defined variable (see `vars` block). |
 | `group.<id>` | boolean | Whether the named group is active. |
 

@@ -143,7 +143,9 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
 
   el.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      activePreset = btn.dataset.preset as DatePreset;
+      const preset = btn.dataset.preset;
+      if (!DATE_PRESETS.some((p) => p.id === preset)) return;
+      activePreset = preset as DatePreset;
       updatePresetUI();
       dispatchFilter();
     });
@@ -151,7 +153,9 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
 
   el.querySelectorAll<HTMLButtonElement>('[data-metric]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      setState({ metric: btn.dataset.metric as Metric });
+      const metric = btn.dataset.metric;
+      if (!METRICS.some((m) => m.id === metric)) return;
+      setState({ metric: metric as Metric });
     });
   });
 
@@ -296,6 +300,10 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
 
   return {
     update(s: UsageSnapshot, metric: Metric) {
+      // Sync with externally-set filter state (e.g. model spotlight from chart click)
+      activeModels = state().filter.models ?? [];
+      activePreset = state().datePreset;
+      updatePresetUI();
       updateMetricUI(metric);
 
       if (s.allRepos.length > 1) {

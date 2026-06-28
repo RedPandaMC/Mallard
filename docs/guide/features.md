@@ -102,10 +102,23 @@ Every call is attributed to its model and surface (chat, inline, agent, edit). T
 
 ## Branch-Aware Credit Tracking
 
-Usage is tagged to the active git branch. Set per-branch caps in `config.json`:
+Usage is tagged to the active git branch. Set per-branch caps (in credits) in `config.json`:
 
 ```json
 { "branchBudgets": { "feature/big-refactor": 500, "main": 200 } }
+```
+
+When credits consumed on a branch reach its cap, Mallard fires a critical notification: _"Branch 'main' has used 200 cr of its 200 cr cap."_ The notification respects a 4-hour cooldown so it won't repeat every refresh cycle.
+
+You can also reference branch caps in custom alert rules via the JSONLogic context:
+
+```json
+{
+  "id": "branch-budget-warning",
+  "severity": "warning",
+  "message": "Branch {{currentBranch}} approaching its cap ({{currentBranchCredits}} cr used).",
+  "when": { ">=": [{ "var": "currentBranchCredits" }, { "var": "branchBudgets.main" }] }
+}
 ```
 
 ---

@@ -88,5 +88,18 @@ export function evaluateAlerts(
     }
   }
 
+  if (s.currentBranch && config.branchBudgets) {
+    const cap = config.branchBudgets[s.currentBranch] ?? null;
+    if (cap !== null && s.currentBranchCredits >= cap) {
+      const key = `branch:${s.currentBranch}`;
+      if (ready(fired, key, BUDGET_COOLDOWN_MS, now)) {
+        out.push({
+          key,
+          message: `Mallard: Branch '${s.currentBranch}' has used ${Math.round(s.currentBranchCredits)} cr of its ${cap} cr cap.`,
+        });
+      }
+    }
+  }
+
   return out;
 }

@@ -74,6 +74,7 @@ function fetchWithRetry(url: string, token: string): Promise<unknown> {
   return pRetry(() => fetchJson(url, token), {
     retries: 2,
     minTimeout: 500,
+    maxTimeout: 2000,
     factor: 2,
   });
 }
