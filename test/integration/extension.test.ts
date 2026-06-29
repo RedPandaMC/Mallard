@@ -10,6 +10,9 @@ const EXPECTED_COMMANDS = [
   'mallard.showLogPath',
   'mallard.signIn',
   'mallard.exportReport',
+  'mallard.exportData',
+  'mallard.prepareUninstall',
+  'mallard.setMqttPassword',
   'mallard.simulateRestriction',
 ];
 
@@ -21,7 +24,7 @@ describe('Mallard extension (integration)', () => {
     assert.strictEqual(ext!.isActive, true);
   });
 
-  it('registers exactly the seven contributed mallard.* commands', async () => {
+  it('registers exactly the ten contributed mallard.* commands', async () => {
     const ext = vscode.extensions.getExtension(EXT_ID);
     await ext!.activate();
     const all = await vscode.commands.getCommands(true);
