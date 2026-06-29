@@ -37,5 +37,13 @@ require.cache['__vscode_stub__'] = {
       file: (p) => ({ fsPath: p, toString: () => `file://${p}` }),
       parse: (s) => ({ fsPath: s, toString: () => s }),
     },
+    EventEmitter: class {
+      constructor() { this._listeners = []; }
+      get event() {
+        return (listener) => ({ dispose: () => { this._listeners = this._listeners.filter(l => l !== listener); } });
+      }
+      fire(data) { for (const l of this._listeners) l(data); }
+      dispose() { this._listeners = []; }
+    },
   },
 };
