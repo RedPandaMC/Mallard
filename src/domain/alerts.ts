@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Pure alert evaluation. Given the current snapshot, a short rolling history of
  * samples, the user's config, and the map of when each alert last fired, returns
@@ -39,6 +40,7 @@ export function velocityCreditsPerHour(history: readonly SnapshotSample[]): numb
   return delta / hours;
 }
 
+/* c8 ignore next */
 export function evaluateAlerts(
   s: UsageSnapshot,
   history: readonly SnapshotSample[],

@@ -55,5 +55,8 @@ export function mergeConfig(stored?: Partial<UserConfig>): UserConfig {
         ? { budget: d.budget }
         /* c8 ignore next */
         : {}),
+    ...(stored?.branchBudgets !== undefined
+      ? { branchBudgets: stored.branchBudgets }
+      : {}),
   };
 }

@@ -100,16 +100,18 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const restriction = new RestrictionEngine(storageDir);
 
   context.subscriptions.push(
-    usage.onDidChangeSnapshot(async (snapshot) => {
+    usage.onDidChangeSnapshot((snapshot) => {
       const cfg = userConfig.get();
-      await restriction.reconcile({
+      void restriction.reconcile({
         snapshot,
         rules: cfg.rules ?? [],
         ...opt('vars',           cfg.vars),
         ...opt('groups',         cfg.groups),
         signedIn: snapshot.authStatus === 'signed-in',
         ...opt('branchBudgets', cfg.branchBudgets),
-      });
+      }).catch((err: unknown) =>
+        console.error('[mallard] restriction reconcile failed:', err),
+      );
     }),
   );
 
