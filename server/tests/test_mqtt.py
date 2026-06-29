@@ -1,7 +1,8 @@
-"""Tests for the MQTT subscriber message handler."""
+"""Tests for the MQTT subscriber message handler and reconnect loop."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -96,3 +97,57 @@ class TestMqttParseUrl:
         host, port = _parse_url("mqtt://mosquitto:1884")
         assert host == "mosquitto"
         assert port == 1884
+
+
+class TestMqttSubscriberLoop:
+    async def test_cancelled_exits_cleanly(self, mock_write_api, settings) -> None:
+        from src.mqtt import run_mqtt_subscriber
+
+        ctx = AsyncMock()
+        ctx.__aenter__ = AsyncMock(side_effect=asyncio.CancelledError())
+        ctx.__aexit__ = AsyncMock(return_value=False)
+        with patch("src.mqtt.aiomqtt.Client", return_value=ctx):
+            await run_mqtt_subscriber(settings, mock_write_api)
+
+    async def test_reconnects_on_connection_error(self, mock_write_api, settings) -> None:
+        from src.mqtt import run_mqtt_subscriber
+
+        call_count = 0
+
+        async def _enter():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise OSError("connection refused")
+            raise asyncio.CancelledError()
+
+        ctx = AsyncMock()
+        ctx.__aenter__ = AsyncMock(side_effect=_enter)
+        ctx.__aexit__ = AsyncMock(return_value=False)
+        with patch("src.mqtt.aiomqtt.Client", return_value=ctx):
+            with patch("src.mqtt.asyncio.sleep", AsyncMock()):
+                await run_mqtt_subscriber(settings, mock_write_api)
+        assert call_count == 2
+
+    async def test_processes_message_then_exits(self, mock_write_api, settings) -> None:
+        from src.mqtt import run_mqtt_subscriber
+
+        msg = MagicMock()
+        msg.payload = VALID_JSON.encode()
+        msg.topic = "mallard/metrics"
+
+        async def _messages():
+            yield msg
+            raise asyncio.CancelledError()
+
+        mock_client = AsyncMock()
+        mock_client.subscribe = AsyncMock()
+        mock_client.messages = _messages()
+
+        ctx = AsyncMock()
+        ctx.__aenter__ = AsyncMock(return_value=mock_client)
+        ctx.__aexit__ = AsyncMock(return_value=False)
+        with patch("src.mqtt.aiomqtt.Client", return_value=ctx):
+            await run_mqtt_subscriber(settings, mock_write_api)
+
+        mock_write_api.write.assert_called_once()
