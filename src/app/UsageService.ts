@@ -151,10 +151,15 @@ export class UsageService implements vscode.Disposable {
 
     const branch = activeBranch();
 
+    const displayCurrency = vscode.workspace.getConfiguration('mallard')
+      .get<string>('currency', 'USD').trim().toUpperCase() || 'USD';
+    const fxRates = this.currency.currentRates();
+    const fxRate = displayCurrency !== 'USD' ? (fxRates[displayCurrency] ?? 1) : 1;
+
     if (isEmptyFilter(this.filter)) {
-      await this.computeFromCache(now, userConfig, branch);
+      await this.computeFromCache(now, userConfig, branch, displayCurrency, fxRate);
     } else {
-      await this.computeFromEvents(now, userConfig, branch);
+      await this.computeFromEvents(now, userConfig, branch, displayCurrency, fxRate);
     }
   }
 
@@ -163,6 +168,8 @@ export class UsageService implements vscode.Disposable {
     now: number,
     userConfig: ReturnType<UserConfigStore['get']>,
     branch: string | undefined,
+    displayCurrency: string,
+    fxRate: number,
   ): Promise<void> {
     const [cache, currentBranchCredits] = await Promise.all([
       this.reader.readSnapshotCache(),
@@ -176,20 +183,20 @@ export class UsageService implements vscode.Disposable {
       start:       row.dayStart,
       end:         nextBucketStart(row.dayStart, 'day'),
       credits:     row.credits,
-      cost:        row.cost,
+      cost:        row.cost * fxRate,
       tokens:      Number(row.tokens),
       byModel:     {},
       eventCount:  row.eventCount,
       estimated:   false,
     }));
 
-    const forecast = forecastMonth(dayAggregates, now, this.pricing.pricePerCredit);
+    const forecast = forecastMonth(dayAggregates, now, this.pricing.pricePerCredit * fxRate);
 
     const budget = computeBudget({
       monthlyBudget:   userConfig.monthlyBudget > 0 ? userConfig.monthlyBudget : null,
       includedCredits: userConfig.includedCredits,
       mtdCredits:      cache.totals.mtd.credits,
-      mtdCost:         cache.totals.mtd.cost,
+      mtdCost:         cache.totals.mtd.cost * fxRate,
       forecast,
     });
 
@@ -202,14 +209,14 @@ export class UsageService implements vscode.Disposable {
     const topModels = cache.models.map((m) => ({
       key:     m.modelId,
       credits: m.credits,
-      cost:    m.cost,
+      cost:    m.cost * fxRate,
       tokens:  Number(m.tokens),
     }));
 
     const byRepo = cache.repos.map((r) => ({
       key:     r.repo,
       credits: r.credits,
-      cost:    r.cost,
+      cost:    r.cost * fxRate,
       tokens:  Number(r.tokens),
     }));
 
@@ -234,7 +241,7 @@ export class UsageService implements vscode.Disposable {
     const chartData = buildChartData(
       dayAggregates, topModels, budget, forecast, now,
       categoryBreakdown, hourlyTimeline,
-      this.pricing.pricePerCredit, this.pricing.currentManifest,
+      this.pricing.pricePerCredit * fxRate, this.pricing.currentManifest,
       cache.weekday,
       userConfig.display,
     );
@@ -250,15 +257,15 @@ export class UsageService implements vscode.Disposable {
       generatedAt:   now,
       source,
       status:        hasData ? { kind: 'ok' } : this.ingest.getStatus(),
-      currency:      'USD',
-      pricePerCredit: this.pricing.pricePerCredit,
+      currency:      displayCurrency,
+      pricePerCredit: this.pricing.pricePerCredit * fxRate,
       fxRates:       this.currency.currentRates(),
       filter:        this.filter,
       range:         { start: rangeStart, end: rangeEnd },
       forecast,
       budget,
       topModels,
-      today:         { credits: cache.totals.today.credits, cost: cache.totals.today.cost, tokens: Number(cache.totals.today.tokens) },
+      today:         { credits: cache.totals.today.credits, cost: cache.totals.today.cost * fxRate, tokens: Number(cache.totals.today.tokens) },
       allModels,
       allSurfaces,
       allSources,
@@ -285,6 +292,8 @@ export class UsageService implements vscode.Disposable {
     now: number,
     userConfig: ReturnType<UserConfigStore['get']>,
     branch: string | undefined,
+    displayCurrency: string,
+    fxRate: number,
   ): Promise<void> {
     const rangeStart = startOf(now - 365 * DAY_MS, 'day');
     const effectiveRange = this.filter.range ?? { start: rangeStart, end: now + DAY_MS };
@@ -302,19 +311,19 @@ export class UsageService implements vscode.Disposable {
       start:       row.dayStart,
       end:         nextBucketStart(row.dayStart, 'day'),
       credits:     row.credits,
-      cost:        row.cost,
+      cost:        row.cost * fxRate,
       tokens:      Number(row.tokens),
       byModel:     {},
       eventCount:  row.eventCount,
       estimated:   false,
     }));
 
-    const forecast = forecastMonth(dayAggregates, now, this.pricing.pricePerCredit);
+    const forecast = forecastMonth(dayAggregates, now, this.pricing.pricePerCredit * fxRate);
     const budget   = computeBudget({
       monthlyBudget:   userConfig.monthlyBudget > 0 ? userConfig.monthlyBudget : null,
       includedCredits: userConfig.includedCredits,
       mtdCredits:      data.totals.mtd.credits,
-      mtdCost:         data.totals.mtd.cost,
+      mtdCost:         data.totals.mtd.cost * fxRate,
       forecast,
     });
 
@@ -324,8 +333,8 @@ export class UsageService implements vscode.Disposable {
     const allSources  = data.dims.sources.filter( (s): s is SourceKind => SOURCE_KINDS.has(s as SourceKind));
     const allRepos    = data.dims.repos;
 
-    const topModels = data.topModels.map((m) => ({ key: m.modelId, credits: m.credits, cost: m.cost, tokens: Number(m.tokens) }));
-    const byRepo    = data.topRepos.map( (r) => ({ key: r.repo,    credits: r.credits, cost: r.cost, tokens: Number(r.tokens) }));
+    const topModels = data.topModels.map((m) => ({ key: m.modelId, credits: m.credits, cost: m.cost * fxRate, tokens: Number(m.tokens) }));
+    const byRepo    = data.topRepos.map( (r) => ({ key: r.repo,    credits: r.credits, cost: r.cost * fxRate, tokens: Number(r.tokens) }));
     const sankeyLinks = data.sankey.map((s) => ({ source: s.model, target: s.surface, value: s.credits }));
 
     // ── Chart data ──────────────────────────────────────────────────────────
@@ -343,7 +352,7 @@ export class UsageService implements vscode.Disposable {
     const chartData = buildChartData(
       dayAggregates, topModels, budget, forecast, now,
       categoryBreakdown, hourlyTimeline,
-      this.pricing.pricePerCredit, this.pricing.currentManifest,
+      this.pricing.pricePerCredit * fxRate, this.pricing.currentManifest,
       data.weekday,
       userConfig.display,
     );
@@ -358,15 +367,15 @@ export class UsageService implements vscode.Disposable {
       generatedAt:   now,
       source,
       status:        hasData ? { kind: 'ok' } : this.ingest.getStatus(),
-      currency:      'USD',
-      pricePerCredit: this.pricing.pricePerCredit,
+      currency:      displayCurrency,
+      pricePerCredit: this.pricing.pricePerCredit * fxRate,
       fxRates:       this.currency.currentRates(),
       filter:        this.filter,
       range:         { start: rangeStart2, end: rangeEnd },
       forecast,
       budget,
       topModels,
-      today:         { credits: data.totals.today.credits, cost: data.totals.today.cost, tokens: Number(data.totals.today.tokens) },
+      today:         { credits: data.totals.today.credits, cost: data.totals.today.cost * fxRate, tokens: Number(data.totals.today.tokens) },
       allModels,
       allSurfaces,
       allSources,

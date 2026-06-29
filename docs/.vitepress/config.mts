@@ -35,16 +35,11 @@ export default defineConfig({
     logo: '/icon.svg',
     siteTitle: 'MALLARD',
 
-    sidebar: [
-      {
-        text: 'Guide',
-        items: [
-          { text: 'Features', link: '/guide/features' },
-          { text: 'Getting Started', link: '/guide/getting-started' },
-          { text: 'Configuration', link: '/guide/configuration' },
-          { text: 'Troubleshooting', link: '/guide/troubleshooting' },
-        ],
-      },
+    nav: [
+      { text: 'Features',        link: '/guide/features' },
+      { text: 'Getting Started', link: '/guide/getting-started' },
+      { text: 'Configuration',   link: '/guide/configuration' },
+      { text: 'Troubleshooting', link: '/guide/troubleshooting' },
       {
         text: 'Reference',
         items: [

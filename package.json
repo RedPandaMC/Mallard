@@ -3,7 +3,7 @@
   "displayName": "Mallard",
   "description": "Get your Copilot spend all in a row. A live dashboard of cost, model usage, and where every credit goes — read from Copilot's local logs. No sign-in, no telemetry.",
   "version": "0.2.0",
-  "publisher": "jurreandenys",
+  "publisher": "RedPandaMC",
   "license": "MIT",
   "author": {
     "name": "Jurrean De Nys"
@@ -82,6 +82,24 @@
         "title": "Simulate Restriction State",
         "category": "Mallard",
         "icon": "$(debug-start)"
+      },
+      {
+        "command": "mallard.exportData",
+        "title": "Export Usage Data",
+        "category": "Mallard",
+        "icon": "$(table)"
+      },
+      {
+        "command": "mallard.prepareUninstall",
+        "title": "Prepare for Uninstall",
+        "category": "Mallard",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "mallard.setMqttPassword",
+        "title": "Set MQTT Export Password",
+        "category": "Mallard",
+        "icon": "$(key)"
       }
     ],
     "menus": {
@@ -113,6 +131,11 @@
     "configuration": {
       "title": "Mallard",
       "properties": {
+        "mallard.currency": {
+          "type": "string",
+          "default": "USD",
+          "description": "Display currency for all cost amounts in the dashboard and status bar (e.g. USD, EUR, GBP, JPY, AUD, CAD). Exchange rates are fetched daily from Frankfurter. MQTT and webhook metric exports always use USD regardless of this setting."
+        },
         "mallard.copilotLogPath": {
           "type": "string",
           "default": "",
@@ -167,12 +190,6 @@
           "default": "",
           "scope": "machine-overridable",
           "description": "MQTT username (optional)."
-        },
-        "mallard.metricExport.password": {
-          "type": "string",
-          "default": "",
-          "scope": "machine-overridable",
-          "description": "MQTT password (optional). Use machine-scoped settings to avoid syncing credentials."
         },
         "mallard.metricExport.certPath": {
           "type": "string",

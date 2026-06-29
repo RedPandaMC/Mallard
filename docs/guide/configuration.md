@@ -137,23 +137,27 @@ Group rules so you can toggle a whole set at once:
 
 ### Copilot restrictions
 
+Restrictions show popups to interrupt your workflow when a rule fires. No extensions are ever disabled. Popups fire only when at least one rule has a `restrict` block.
+
 ```json
 {
   "id": "hard-stop",
   "severity": "critical",
-  "message": "Budget exhausted — Copilot disabled.",
+  "message": "Budget exhausted.",
   "when": { ">=": [{ "var": "budget.percentOfBudget" }, 1] },
-  "restrict": { "mode": "hard", "scope": "copilot", "graceMinutes": 10,
-    "reEnableWhen": { "<": [{ "var": "budget.percentOfBudget" }, 0.9] } }
+  "restrict": { "mode": "hard", "scope": "copilot", "graceMinutes": 10 }
 }
 ```
 
 | Field | Values | Description |
 | --- | --- | --- |
-| `mode` | `"soft"` \| `"hard"` | `soft` shows a warning banner; `hard` disables Copilot. |
-| `scope` | `"copilot"` \| `"copilot+lab"` \| `"custom"` | Which extensions are affected. |
-| `graceMinutes` | 0–1440 | Minutes before a hard restriction takes effect. |
-| `reEnableWhen` | condition | Lifts the restriction automatically when this is true. |
+| `mode` | `"soft"` \| `"hard"` | `soft` shows a dismissable warning with Dismiss / Snooze options. `hard` shows a persistent error popup with no buttons — it re-fires on every snapshot refresh while the rule condition is still true. |
+| `scope` | `"copilot"` \| `"copilot+lab"` \| `"custom"` | Informational scope tag (no extensions are disabled). |
+| `graceMinutes` | 0–1440 | Minutes before the popup fires after the condition becomes true. |
+
+**Soft restriction** — the warning popup offers **Dismiss** (closes once) and **Snooze 15m** / **Snooze 1h** (suppresses for that duration).
+
+**Hard restriction** — the error popup has no buttons. The user can close it with ×, but it re-appears on the next snapshot refresh (`mallard.refreshIntervalMinutes`) as long as the rule condition remains true. This is intentionally persistent and disruptive.
 
 ## Dashboard layout
 
@@ -161,7 +165,7 @@ Click **Edit layout** to drag, resize, or hide panels. Your layout is saved and 
 
 ## Removing your data
 
-Run **Mallard: Clear All Data** before uninstalling to remove the DuckDB event store. VS Code does not delete extension storage on uninstall.
+Run **Mallard: Prepare for Uninstall** before removing the extension to wipe all events, settings, cached pricing, and secrets. VS Code does not delete extension storage on uninstall. See [Getting Started — Uninstalling](/guide/getting-started#uninstalling) for step-by-step instructions.
 
 ## VS Code settings
 

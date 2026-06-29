@@ -8,7 +8,6 @@ import * as path from 'path';
 import { AlertRule, DEFAULT_RESTRICTION_STATE, RestrictionState } from '../types';
 import { buildRuleContext, EvalBuildInput } from '../expr/context';
 import { evaluateRestrictionState } from './evaluator';
-import { resolveScopeIds } from './hostScopes';
 
 const STATE_FILE = 'restriction.json';
 
@@ -43,36 +42,16 @@ export class RestrictionEngine {
     return true;
   }
 
-  /** Wipe the restriction and re-enable whatever we previously disabled. */
+  /** Wipe the restriction state. */
   async clearAll(): Promise<void> {
-    if (this.state.active) {
-      const ids = await resolveScopeIds(this.state.scope, this.customExtensions());
-      for (const id of ids) {
-        try {
-          await vscode.commands.executeCommand('workbench.extensions.enableExtension', id);
-        } catch {
-          /* best-effort */
-        }
-      }
-    }
     this.state = { ...DEFAULT_RESTRICTION_STATE };
     this.writeToDisk();
     this._onDidChange.fire(this.getState());
   }
 
-  /** Snooze any auto-disable for `minutes` from now. */
+  /** Snooze the active restriction for `minutes` from now. */
   async snooze(minutes: number): Promise<void> {
     this.state.userOverrideUntil = Date.now() + minutes * 60_000;
-    if (this.state.active) {
-      const ids = await resolveScopeIds(this.state.scope, this.customExtensions());
-      for (const id of ids) {
-        try {
-          await vscode.commands.executeCommand('workbench.extensions.enableExtension', id);
-        } catch {
-          /* best-effort */
-        }
-      }
-    }
     this.writeToDisk();
     this._onDidChange.fire(this.getState());
   }
@@ -84,7 +63,6 @@ export class RestrictionEngine {
     const now = input.now ?? Date.now();
     const ctx = buildRuleContext(input);
     const desired = evaluateRestrictionState(input.rules, ctx, now);
-    const customIds = this.customExtensions();
     const state = this.state;
 
     // Honour active user override
@@ -101,14 +79,6 @@ export class RestrictionEngine {
     if (!desired.active) {
       // No rule wants to restrict — make sure the state is clean.
       if (state.active) {
-        const ids = await resolveScopeIds(state.scope, customIds);
-        for (const id of ids) {
-          try {
-            await vscode.commands.executeCommand('workbench.extensions.enableExtension', id);
-          } catch {
-            /* best-effort */
-          }
-        }
         this.state = { ...DEFAULT_RESTRICTION_STATE };
         this.writeToDisk();
         this._onDidChange.fire(this.getState());
@@ -157,17 +127,6 @@ export class RestrictionEngine {
       this.state.reasonMessage = desired.active.message;
     }
 
-    if (this.state.graceExpiresAt && this.state.graceExpiresAt <= now) {
-      // grace expired → apply the disable
-      const ids = await resolveScopeIds(this.state.scope, customIds);
-      for (const id of ids) {
-        try {
-          await vscode.commands.executeCommand('workbench.extensions.disableExtension', id);
-        } catch {
-          /* best-effort */
-        }
-      }
-    }
     this.writeToDisk();
     this._onDidChange.fire(this.getState());
     return this.state;

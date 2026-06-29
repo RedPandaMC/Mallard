@@ -15,6 +15,7 @@ import { EventWriter } from './EventWriter';
 import { EventReader } from './EventReader';
 import { MetaStore } from './MetaStore';
 import { DuckDBFileReader } from './DuckDBFileReader';
+import { runMigrations } from './migrations';
 
 export class EventStore implements vscode.Disposable {
   readonly reader: EventReader;
@@ -47,6 +48,7 @@ export class EventStore implements vscode.Disposable {
     await conn.run(`SET TimeZone = '${tz.replace(/'/g, "''")}'`);
 
     await conn.run(CREATE_SQL);
+    await runMigrations(conn, new MetaStore(conn));
     return new EventStore(instance, conn, retentionDays);
   }
 

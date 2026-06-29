@@ -112,6 +112,7 @@ export interface IEventReader extends IEventSnapshotReader {
   pivot(filter: RecordFilter, on: string, value: string): Promise<CrossTab>;
   rank(filter: RecordFilter, by: string, limit?: number): Promise<TimeBucket[]>;
   queryFacts(filter?: RecordFilter): Promise<FactRow[]>;
+  exportTo(filePath: string, format: 'csv' | 'json'): Promise<void>;
   /** @deprecated Use find(). */
   query(filter?: Filter): Promise<UsageEvent[]>;
 }
@@ -676,6 +677,14 @@ SELECT
       weekday: weekdayArr,
     };
     /* c8 ignore stop */
+  }
+
+  async exportTo(filePath: string, format: 'csv' | 'json'): Promise<void> {
+    const safePath = filePath.replace(/'/g, "''");
+    const fmt = format === 'json' ? 'JSON' : 'CSV, HEADER true';
+    await this.conn.run(
+      `COPY (SELECT * FROM events ORDER BY ts DESC) TO '${safePath}' (FORMAT ${fmt})`,
+    );
   }
 
   async creditsByBranch(branch: string): Promise<number> {

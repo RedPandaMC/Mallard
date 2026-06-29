@@ -55,3 +55,31 @@ billing data. If you are already signed in to GitHub in VS Code this usually
 succeeds without a prompt. Once connected, the dashboard shows a connected status
 with the actual charge reported by GitHub, which aggregates usage across every
 machine you use.
+
+## Mallard: Export Usage Data
+
+ID `mallard.exportData`. Exports the raw event log to a file. A save dialog lets
+you choose CSV or JSON format — the format is inferred from the file extension
+you type (`.csv` or `.json`). The output contains one row per event with all
+stored fields (timestamp, model, surface, source, credits, cost, tokens, repo,
+branch).
+
+## Mallard: Set MQTT Export Password
+
+ID `mallard.setMqttPassword`. Prompts for the MQTT broker password and stores it
+in VS Code's SecretStorage. Secrets are never written to settings files and are
+not synced across machines by Settings Sync. Leave the input blank to clear a
+previously saved password.
+
+## Mallard: Prepare for Uninstall
+
+ID `mallard.prepareUninstall`. Clears all Mallard data before you uninstall the
+extension. VS Code does not delete extension storage on uninstall, so running
+this command first ensures nothing is left behind. After confirmation it:
+
+1. Wipes the DuckDB event store.
+2. Resets budget and alert settings.
+3. Clears the saved layout and pricing cache.
+4. Deletes all `globalState` keys and secrets.
+
+Once the command completes, uninstall from the Extensions view as usual.

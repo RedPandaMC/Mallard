@@ -5,6 +5,8 @@ import { defaultReportPath, generateReport } from './app/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
 import { SidebarView } from './ui/SidebarView';
 import { cleanupGlobalState, cleanupStorage } from './app/Lifecycle';
+import { formatCredits } from './domain/format';
+import { severityFor } from './domain/budget';
 
 let _context: vscode.ExtensionContext | undefined;
 
@@ -20,7 +22,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
     return;
   }
-  const { usage, restriction, ingest } = container;
+  const { usage, restriction, ingest, userConfig } = container;
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.command = 'mallard.openDashboard';
@@ -40,23 +42,52 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       statusBar.backgroundColor = undefined;
       statusBar.tooltip = 'Restriction rule is being overridden.';
       statusBar.show();
-    } else if (auth === 'signed-in') {
-      statusBar.text = `$(verified-filled) ${s?.githubBilling?.quota?.plan ?? 'GitHub'}`;
-      statusBar.backgroundColor = undefined;
-      statusBar.tooltip = 'Open Mallard dashboard';
+    } else if (s) {
+      const cr = formatCredits(s.today.credits);
+      const severity = severityFor(s.budget);
+      statusBar.backgroundColor =
+        severity === 'error'   ? new vscode.ThemeColor('statusBarItem.errorBackground')
+        : severity === 'warning' ? new vscode.ThemeColor('statusBarItem.warningBackground')
+        : undefined;
+      if (auth === 'signed-in') {
+        const plan = s.githubBilling?.quota?.plan ?? 'GitHub';
+        statusBar.text = `$(verified-filled) ${plan} · ${cr} cr`;
+      } else {
+        statusBar.text = `$(graph) ${cr} cr today`;
+      }
+      const mtdCr = formatCredits(s.budget.usedCredits);
+      statusBar.tooltip = new vscode.MarkdownString(`**Today:** ${cr} cr\n\n**MTD:** ${mtdCr} cr`);
       statusBar.show();
-    } else if (auth === 'signed-out') {
+    } else {
+      // No snapshot yet — show sign-in prompt (auth is 'signed-out' when s is undefined)
       statusBar.text = '$(account) Sign in to GitHub';
       statusBar.backgroundColor = undefined;
       statusBar.tooltip = 'Click to sign in to GitHub for billing verification';
       statusBar.show();
-    } else {
-      statusBar.hide();
     }
   };
   updateStatusBar();
   context.subscriptions.push(usage.onDidChangeSnapshot(updateStatusBar));
   context.subscriptions.push(restriction.onDidChange(updateStatusBar));
+
+  context.subscriptions.push(
+    restriction.onDidChange(async (state) => {
+      if (!state.active) return;
+      const cfg = userConfig.get();
+      const rule = cfg.rules?.find((r) => r.id === state.ruleId);
+      if (!rule?.restrict) return;
+      const msg = state.reasonMessage || 'Copilot usage limit reached.';
+      if (rule.restrict.mode === 'soft') {
+        const choice = await vscode.window.showWarningMessage(
+          `Mallard · ${msg}`, 'Dismiss', 'Snooze 15m', 'Snooze 1h',
+        );
+        if (choice === 'Snooze 15m') await restriction.snooze(15);
+        if (choice === 'Snooze 1h') await restriction.snooze(60);
+      } else {
+        void vscode.window.showErrorMessage(`Mallard · ${msg}`);
+      }
+    }),
+  );
 
   registerCommands(context, container);
   const sidebar = new SidebarView(context, usage);
@@ -229,5 +260,55 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     channel.clear();
     channel.appendLine(JSON.stringify(report, null, 2));
     channel.show(true);
+  });
+
+  reg('mallard.exportData', async () => {
+    const saveUri = await vscode.window.showSaveDialog({
+      filters: { CSV: ['csv'], JSON: ['json'] },
+      title: 'Export Mallard Usage Data',
+    });
+    if (!saveUri) return;
+    const ext = saveUri.fsPath.split('.').pop()?.toLowerCase();
+    const format = ext === 'json' ? 'json' : 'csv';
+    await store.reader.exportTo(saveUri.fsPath, format as 'csv' | 'json');
+    void vscode.window.showInformationMessage(`Mallard: Data exported to ${saveUri.fsPath}`);
+  });
+
+  reg('mallard.prepareUninstall', async () => {
+    const ok = await vscode.window.showWarningMessage(
+      'This will delete all Mallard data (events, settings, cached pricing). This cannot be undone.',
+      { modal: true },
+      'Delete everything',
+    );
+    if (ok !== 'Delete everything') return;
+    await store.clear();
+    await userConfig.reset();
+    await layout.reset();
+    await pricing.clearCache();
+    await restriction.clearAll();
+    for (const key of context.globalState.keys()) {
+      await context.globalState.update(key, undefined);
+    }
+    for (const secretKey of ['mallard.mqtt.password', 'mallard.webhook.secret']) {
+      await context.secrets.delete(secretKey);
+    }
+    void vscode.window.showInformationMessage(
+      'All Mallard data cleared. You can now uninstall via the Extensions view.',
+    );
+  });
+
+  reg('mallard.setMqttPassword', async () => {
+    const pwd = await vscode.window.showInputBox({
+      prompt: 'Enter MQTT export password (leave blank to clear)',
+      password: true,
+    });
+    if (pwd === undefined) return;
+    if (pwd === '') {
+      await context.secrets.delete('mallard.mqtt.password');
+      void vscode.window.showInformationMessage('Mallard: MQTT password cleared.');
+    } else {
+      await context.secrets.store('mallard.mqtt.password', pwd);
+      void vscode.window.showInformationMessage('Mallard: MQTT password saved securely.');
+    }
   });
 }

@@ -7,6 +7,7 @@ import { PaletteMode } from './domain/types';
  * (see {@link import('./app/UserConfigStore').UserConfigStore}).
  */
 export interface MallardConfig {
+  currency: string;
   copilotLogPath: string;
   pricingManifestUrl: string;
   palette: PaletteMode;
@@ -18,7 +19,6 @@ export interface MallardConfig {
     brokerUrl: string;
     topic: string;
     username: string;
-    password: string;
     certPath: string;
     keyPath: string;
     caPath: string;
@@ -26,6 +26,7 @@ export interface MallardConfig {
 }
 
 export const RELEVANT_CONFIG_KEYS = [
+  'mallard.currency',
   'mallard.copilotLogPath',
   'mallard.pricingManifestUrl',
   'mallard.palette',
@@ -36,6 +37,7 @@ export const RELEVANT_CONFIG_KEYS = [
 export function readConfig(): MallardConfig {
   const c = vscode.workspace.getConfiguration('mallard');
   return {
+    currency: c.get<string>('currency', 'USD').trim().toUpperCase() || 'USD',
     copilotLogPath: c.get('copilotLogPath', ''),
     pricingManifestUrl: c.get('pricingManifestUrl', ''),
     palette: c.get<string>('palette', 'swiss') === 'theme' ? 'theme' : 'swiss',
@@ -45,7 +47,6 @@ export function readConfig(): MallardConfig {
       brokerUrl: c.get('metricExport.brokerUrl', ''),
       topic: c.get('metricExport.topic', 'mallard/metrics'),
       username: c.get('metricExport.username', ''),
-      password: c.get('metricExport.password', ''),
       certPath: c.get('metricExport.certPath', ''),
       keyPath: c.get('metricExport.keyPath', ''),
       caPath: c.get('metricExport.caPath', ''),

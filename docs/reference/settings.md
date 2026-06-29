@@ -8,6 +8,7 @@ thresholds are not settings; you edit them in the dashboard (see
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
+| `mallard.currency` | `string` | `"USD"` | Display currency for all cost amounts (e.g. `EUR`, `GBP`, `JPY`). Exchange rates are fetched daily from Frankfurter. MQTT and webhook exports always use USD. |
 | `mallard.copilotLogPath` | `string` | `""` | Override the log directory. Blank means auto-detect via `vscode.env.logUri`. |
 | `mallard.pricingManifestUrl` | `string` | `""` | Override the pricing manifest URL. Blank means use the built-in URL. |
 | `mallard.palette` | `"swiss" \| "theme"` | `"swiss"` | Dashboard chart palette. `swiss` is the fixed duotone; `theme` derives the accent from your VS Code theme. Both keep the duotone structure and are checked for accessibility. |
@@ -29,7 +30,6 @@ so credentials are not synced across machines by VS Code Settings Sync.
 | `mallard.metricExport.brokerUrl` | `string` | `""` | MQTT broker URL. Only `mqtts://` and `wss://` (TLS) are accepted. Leave empty to disable. |
 | `mallard.metricExport.topic` | `string` | `"mallard/metrics"` | MQTT topic prefix. A stable anonymous instance hash is appended automatically. |
 | `mallard.metricExport.username` | `string` | `""` | MQTT username (optional). |
-| `mallard.metricExport.password` | `string` | `""` | MQTT password (optional). Store in machine-scoped settings to avoid syncing credentials. |
 | `mallard.metricExport.certPath` | `string` | `""` | Path to client certificate PEM file for mTLS. When set alongside `keyPath`, overrides username/password auth. |
 | `mallard.metricExport.keyPath` | `string` | `""` | Path to client private key PEM file for mTLS. |
 | `mallard.metricExport.caPath` | `string` | `""` | Path to broker CA certificate PEM file. Pins the broker CA to prevent MITM attacks. |
@@ -87,9 +87,10 @@ with `cafile`, `certfile`, and `keyfile`, then point Mallard at your CA:
 
 ```json
 "mallard.metricExport.brokerUrl": "mqtts://your-cluster.s1.eu.hivemq.cloud:8883",
-"mallard.metricExport.username": "your-username",
-"mallard.metricExport.password": "your-password"
+"mallard.metricExport.username": "your-username"
 ```
+
+Then run **Mallard: Set MQTT Export Password** from the Command Palette to store the password in VS Code's SecretStorage (never synced or written to settings files).
 
 **EMQX with mTLS:**
 
