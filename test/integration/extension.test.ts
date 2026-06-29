@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 
-const EXT_ID = 'jurreandenys.mallard';
+const EXT_ID = 'RedPandaMC.mallard';
 
 const EXPECTED_COMMANDS = [
   'mallard.openDashboard',
