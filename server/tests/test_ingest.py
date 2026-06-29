@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -128,6 +128,29 @@ class TestIngestValidation:
             headers={"X-API-Key": "test-key-valid", "Content-Type": "application/json"},
         )
         assert response.status_code == 422
+
+
+class TestIngestRouteDirectly:
+    """Call the route handler directly to cover the belt-and-suspenders 413 path.
+
+    The middleware in main.py intercepts oversized requests before they reach the
+    handler, so TestClient can never trigger line 35. Calling the coroutine directly
+    with a mock request bypasses the middleware and exercises the fallback check.
+    """
+
+    async def test_belt_and_suspenders_413(self, valid_payload: dict) -> None:
+        from src.routers.ingest import ingest
+        from src.schemas import IngestPayload
+
+        mock_request = MagicMock()
+        mock_request.headers.get = MagicMock(return_value=str(64 * 1024 + 1))
+
+        result = await ingest(
+            payload=IngestPayload(**valid_payload),
+            request=mock_request,
+            key_hash="testhash",
+        )
+        assert result.status_code == 413
 
 
 class TestIngestInfluxFailure:
