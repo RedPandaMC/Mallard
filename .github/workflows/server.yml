@@ -53,10 +53,12 @@ jobs:
           API_KEYS: testkey
         run: pytest --cov=src --cov-report=xml -v
 
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v5
         with:
           files: server/coverage.xml
           flags: server
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   build-push:
     name: Build & Push Image
