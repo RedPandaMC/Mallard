@@ -1,9 +1,11 @@
-"""Tests for the MQTT subscriber message handler and reconnect loop."""
+"""Tests for the embedded MQTT broker, auth plugin, and message handler."""
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,18 +19,16 @@ def mock_write_api() -> MagicMock:
 @pytest.fixture()
 def settings(monkeypatch) -> MagicMock:
     s = MagicMock()
-    s.mqtt_broker_url = "mqtt://localhost:1883"
-    s.mqtt_topic = "mallard/metrics"
-    s.mqtt_username = ""
-    s.mqtt_password = ""
     s.influx_bucket = "metrics"
     s.influx_org = "mallard"
+    s.mqtt_port = 8083
+    s.hashed_mqtt_credentials = {hashlib.sha256(b"secret").hexdigest()}
     return s
 
 
-def _make_message(payload: bytes | str) -> MagicMock:
+def _make_message(data: bytes | str) -> MagicMock:
     msg = MagicMock()
-    msg.payload = payload if isinstance(payload, bytes) else payload.encode()
+    msg.data = data if isinstance(data, bytes) else data.encode()
     msg.topic = "mallard/metrics"
     return msg
 
@@ -72,82 +72,142 @@ class TestMqttHandleMessage:
         from src.mqtt import _handle_message
 
         mock_write_api.write.side_effect = RuntimeError("influxdb down")
-        # Should log error but not propagate
         _handle_message(_make_message(VALID_JSON), mock_write_api, settings)
 
 
-class TestMqttParseUrl:
-    def test_mqtt_default_port(self) -> None:
-        from src.mqtt import _parse_url
+class TestMallardAuthPlugin:
+    """Test the amqtt auth plugin directly by instantiating it with a minimal context."""
 
-        host, port = _parse_url("mqtt://broker.example.com")
-        assert host == "broker.example.com"
-        assert port == 1883
+    def _make_plugin(self):
+        from src.mqtt import _MallardAuthPlugin
 
-    def test_mqtts_default_port(self) -> None:
-        from src.mqtt import _parse_url
+        ctx = MagicMock()
+        ctx.config = _MallardAuthPlugin.Config()
+        ctx.logger = logging.getLogger("test.auth")
+        return _MallardAuthPlugin(ctx)
 
-        host, port = _parse_url("mqtts://broker.example.com")
-        assert host == "broker.example.com"
-        assert port == 8883
+    async def test_rejects_missing_password(self, settings) -> None:
+        from src.mqtt import _ctx
 
-    def test_explicit_port(self) -> None:
-        from src.mqtt import _parse_url
+        _ctx["settings"] = settings
+        plugin = self._make_plugin()
+        session = MagicMock()
+        session.password = None
 
-        host, port = _parse_url("mqtt://mosquitto:1884")
-        assert host == "mosquitto"
-        assert port == 1884
+        result = await plugin.authenticate(session=session)
+        assert result is False
+
+    async def test_rejects_empty_password(self, settings) -> None:
+        from src.mqtt import _ctx
+
+        _ctx["settings"] = settings
+        plugin = self._make_plugin()
+        session = MagicMock()
+        session.password = ""
+
+        result = await plugin.authenticate(session=session)
+        assert result is False
+
+    async def test_rejects_wrong_password(self, settings) -> None:
+        from src.mqtt import _ctx
+
+        _ctx["settings"] = settings
+        plugin = self._make_plugin()
+        session = MagicMock()
+        session.password = "wrong-password"
+
+        result = await plugin.authenticate(session=session)
+        assert result is False
+
+    async def test_accepts_valid_credential(self, settings) -> None:
+        from src.mqtt import _ctx
+
+        _ctx["settings"] = settings
+        plugin = self._make_plugin()
+        session = MagicMock()
+        session.password = "secret"
+
+        result = await plugin.authenticate(session=session)
+        assert result is True
+
+    async def test_rejects_when_no_credentials_configured(self) -> None:
+        from src.mqtt import _ctx
+
+        s = MagicMock()
+        s.hashed_mqtt_credentials = set()  # no credentials configured
+        _ctx["settings"] = s
+        plugin = self._make_plugin()
+        session = MagicMock()
+        session.password = "any-password"
+
+        result = await plugin.authenticate(session=session)
+        assert result is False
 
 
-class TestMqttSubscriberLoop:
-    async def test_cancelled_exits_cleanly(self, mock_write_api, settings) -> None:
-        from src.mqtt import run_mqtt_subscriber
+class TestMallardMessagePlugin:
+    """Test the amqtt message plugin directly."""
 
-        ctx = AsyncMock()
-        ctx.__aenter__ = AsyncMock(side_effect=asyncio.CancelledError())
-        ctx.__aexit__ = AsyncMock(return_value=False)
-        with patch("src.mqtt.aiomqtt.Client", return_value=ctx):
-            await run_mqtt_subscriber(settings, mock_write_api)
+    def _make_plugin(self):
+        from src.mqtt import _MallardMessagePlugin
 
-    async def test_reconnects_on_connection_error(self, mock_write_api, settings) -> None:
-        from src.mqtt import run_mqtt_subscriber
+        ctx = MagicMock()
+        ctx.config = _MallardMessagePlugin.Config()
+        ctx.logger = logging.getLogger("test.msg")
+        return _MallardMessagePlugin(ctx)
 
-        call_count = 0
+    async def test_valid_message_calls_write(self, mock_write_api, settings) -> None:
+        from src.mqtt import _ctx
 
-        async def _enter():
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise OSError("connection refused")
-            raise asyncio.CancelledError()
+        _ctx["write_api"] = mock_write_api
+        _ctx["settings"] = settings
+        plugin = self._make_plugin()
 
-        ctx = AsyncMock()
-        ctx.__aenter__ = AsyncMock(side_effect=_enter)
-        ctx.__aexit__ = AsyncMock(return_value=False)
-        with patch("src.mqtt.aiomqtt.Client", return_value=ctx):
-            with patch("src.mqtt.asyncio.sleep", AsyncMock()):
-                await run_mqtt_subscriber(settings, mock_write_api)
-        assert call_count == 2
-
-    async def test_processes_message_then_exits(self, mock_write_api, settings) -> None:
-        from src.mqtt import run_mqtt_subscriber
-
-        msg = MagicMock()
-        msg.payload = VALID_JSON.encode()
-        msg.topic = "mallard/metrics"
-
-        async def _messages():
-            yield msg
-            raise asyncio.CancelledError()
-
-        mock_client = AsyncMock()
-        mock_client.subscribe = AsyncMock()
-        mock_client.messages = _messages()
-
-        ctx = AsyncMock()
-        ctx.__aenter__ = AsyncMock(return_value=mock_client)
-        ctx.__aexit__ = AsyncMock(return_value=False)
-        with patch("src.mqtt.aiomqtt.Client", return_value=ctx):
-            await run_mqtt_subscriber(settings, mock_write_api)
-
+        await plugin.on_broker_message_received(
+            client_id="test-client", message=_make_message(VALID_JSON)
+        )
         mock_write_api.write.assert_called_once()
+
+    async def test_none_message_does_not_crash(self, mock_write_api, settings) -> None:
+        from src.mqtt import _ctx
+
+        _ctx["write_api"] = mock_write_api
+        _ctx["settings"] = settings
+        plugin = self._make_plugin()
+
+        await plugin.on_broker_message_received(client_id="test-client", message=None)
+        mock_write_api.write.assert_not_called()
+
+    async def test_invalid_json_does_not_crash(self, mock_write_api, settings) -> None:
+        from src.mqtt import _ctx
+
+        _ctx["write_api"] = mock_write_api
+        _ctx["settings"] = settings
+        plugin = self._make_plugin()
+
+        await plugin.on_broker_message_received(
+            client_id="test-client", message=_make_message(b"not json {{")
+        )
+        mock_write_api.write.assert_not_called()
+
+
+class TestMqttBrokerLifecycle:
+    """Test run_mqtt_broker starts cleanly and shuts down on cancellation."""
+
+    async def test_starts_and_stops_on_cancel(self, settings, mock_write_api) -> None:
+        from src.mqtt import run_mqtt_broker
+
+        mock_broker = AsyncMock()
+        mock_broker.start = AsyncMock()
+        mock_broker.shutdown = AsyncMock()
+
+        mock_event_instance = MagicMock()
+        mock_event_instance.wait = AsyncMock(side_effect=asyncio.CancelledError())
+
+        with (
+            patch("src.mqtt.Broker", return_value=mock_broker),
+            patch("src.mqtt.asyncio.Event", return_value=mock_event_instance),
+        ):
+            await run_mqtt_broker(settings, mock_write_api)
+
+        mock_broker.start.assert_called_once()
+        mock_broker.shutdown.assert_called_once()

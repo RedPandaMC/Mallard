@@ -9,5 +9,5 @@ data:
   INFLUX_BUCKET: "metrics"
   LOG_LEVEL: "INFO"
   RATE_LIMIT: "60/minute"
-  MQTT_BROKER_URL: "mqtt://mosquitto:1883"
-  MQTT_TOPIC: "mallard/metrics"
+  MQTT_ENABLED: "true"
+  MQTT_PORT: "8083"

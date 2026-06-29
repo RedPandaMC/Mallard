@@ -14,9 +14,14 @@ spec:
       labels:
         app: influxdb
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
         - name: influxdb
-          image: influxdb:2
+          image: influxdb:2.7
           ports:
             - containerPort: 8086
           envFrom:

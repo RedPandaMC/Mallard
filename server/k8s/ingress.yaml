@@ -6,6 +6,8 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 spec:
   tls:
     - hosts:
@@ -29,3 +31,10 @@ spec:
                 name: mallard-server
                 port:
                   number: 8080
+          - path: /mqtt
+            pathType: Prefix
+            backend:
+              service:
+                name: mallard-server
+                port:
+                  number: 8083

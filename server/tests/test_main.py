@@ -39,12 +39,13 @@ class TestRateLimitKeyFunction:
 
 
 class TestMqttLifespan:
-    def test_mqtt_task_created_when_broker_url_configured(
+    def test_mqtt_task_created_when_enabled(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         for k, v in _ENV.items():
             monkeypatch.setenv(k, v)
-        monkeypatch.setenv("MQTT_BROKER_URL", "mqtt://localhost:1883")
+        monkeypatch.setenv("MQTT_ENABLED", "true")
+        monkeypatch.setenv("MQTT_CREDENTIALS", "test-mqtt-password")
 
         import src.config as config_module
 
@@ -62,7 +63,7 @@ class TestMqttLifespan:
 
         with (
             patch("src.influx.make_client", return_value=mock_influx),
-            patch("src.mqtt.run_mqtt_subscriber", _noop_mqtt),
+            patch("src.mqtt.run_mqtt_broker", _noop_mqtt),
         ):
             import src.main as main_module
 

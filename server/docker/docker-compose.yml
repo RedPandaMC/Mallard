@@ -1,7 +1,6 @@
 # Mallard BYO Server — Docker Compose
 # Usage: cp .env.example .env && docker compose up -d
-# First-time MQTT setup: see README (create Mosquitto password file)
-# Access Grafana at http://localhost:3000 (admin / see .env GF_SECURITY_ADMIN_PASSWORD)
+# Access Grafana at https://localhost:3000 (admin / see .env GF_SECURITY_ADMIN_PASSWORD)
 
 version: "3.9"
 
@@ -17,7 +16,7 @@ networks:
 services:
   # ── InfluxDB v2 ─────────────────────────────────────────────────────────────
   influxdb:
-    image: influxdb:2
+    image: influxdb:2.7
     restart: unless-stopped
     environment:
       DOCKER_INFLUXDB_INIT_MODE: setup
@@ -37,37 +36,16 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # ── Eclipse Mosquitto MQTT broker ────────────────────────────────────────────
-  # Optional: enables MQTT export from the Mallard extension.
-  # Before first start, create the password file:
-  #   docker compose run --rm mosquitto mosquitto_passwd -c /mosquitto/config/passwd mallard
-  mosquitto:
-    image: eclipse-mosquitto:2
-    restart: unless-stopped
-    volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - mosquitto_passwd:/mosquitto/config
-      - mosquitto_data:/mosquitto/data
-    expose:
-      - "1883"
-    networks:
-      - internal
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    healthcheck:
-      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1",
-             "-u", "${MQTT_USERNAME:-mallard}", "-P", "${MQTT_PASSWORD:-changeme}", "-W", "3"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
 
   # ── Mallard FastAPI ingest server ───────────────────────────────────────────
   server:
@@ -83,18 +61,16 @@ services:
       API_KEYS: ${API_KEYS:?required}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       RATE_LIMIT: ${RATE_LIMIT:-60/minute}
-      # MQTT subscriber — set MQTT_BROKER_URL to empty string to disable
-      MQTT_BROKER_URL: ${MQTT_BROKER_URL:-mqtt://mosquitto:1883}
-      MQTT_TOPIC: ${MQTT_TOPIC:-mallard/metrics}
-      MQTT_USERNAME: ${MQTT_USERNAME:-mallard}
-      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      # Embedded MQTT broker (WebSocket on port 8083, proxied by Caddy at /mqtt)
+      MQTT_ENABLED: ${MQTT_ENABLED:-false}
+      MQTT_PORT: ${MQTT_PORT:-8083}
+      MQTT_CREDENTIALS: ${MQTT_CREDENTIALS:-}
     depends_on:
       influxdb:
         condition: service_healthy
-      mosquitto:
-        condition: service_started
     expose:
       - "8080"
+      - "8083"
     networks:
       - internal
     security_opt:
@@ -104,6 +80,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
     healthcheck:
       test: ["CMD", "python", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
@@ -113,12 +94,12 @@ services:
 
   # ── Grafana ──────────────────────────────────────────────────────────────────
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.6
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?required}
-      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-http://localhost:3000}
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-https://localhost/grafana}
       GF_USERS_ALLOW_SIGN_UP: "false"
       INFLUX_TOKEN: ${INFLUX_TOKEN}
     volumes:
@@ -127,14 +108,19 @@ services:
       - ../grafana/dashboards:/etc/grafana/dashboards:ro
     depends_on:
       - influxdb
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     networks:
       - internal
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 15s
@@ -146,7 +132,7 @@ services:
   # For production: set SERVER_DOMAIN=your.host + ACME_EMAIL in .env,
   # then remove `tls internal` from Caddyfile — Caddy handles Let's Encrypt automatically.
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.10-alpine
     restart: unless-stopped
     ports:
       - "80:80"
@@ -166,11 +152,14 @@ services:
       - proxy
     security_opt:
       - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
 volumes:
   influxdb_data:
   grafana_data:
-  mosquitto_passwd:
-  mosquitto_data:
   caddy_data:
   caddy_config:

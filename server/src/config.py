@@ -36,11 +36,12 @@ class Settings(BaseSettings):
         "INFO", description="Python logging level"
     )
 
-    # MQTT (optional — subscriber only activated when broker URL is set)
-    mqtt_broker_url: str = Field("", description="MQTT broker URL, e.g. mqtt://mosquitto:1883")
-    mqtt_topic: str = Field("mallard/metrics", description="Topic to subscribe to")
-    mqtt_username: str = Field("", description="MQTT username")
-    mqtt_password: str = Field("", description="MQTT password")
+    # MQTT (optional — embedded broker started when mqtt_enabled = true)
+    mqtt_enabled: bool = Field(False, description="Start the embedded MQTT broker on mqtt_port")
+    mqtt_port: int = Field(8083, description="WebSocket MQTT port (internal; proxied by Caddy/Ingress)")
+    mqtt_credentials: str = Field(
+        "", description="Comma-separated MQTT passwords (independent of API_KEYS)"
+    )
 
     @field_validator("influx_url")
     @classmethod
@@ -63,6 +64,17 @@ class Settings(BaseSettings):
             hashlib.sha256(key.strip().encode()).hexdigest()
             for key in self.api_keys.split(",")
             if key.strip()
+        }
+
+    @cached_property
+    def hashed_mqtt_credentials(self) -> set[str]:
+        """SHA-256 hashes of the configured MQTT passwords (computed once)."""
+        if not self.mqtt_credentials.strip():
+            return set()
+        return {
+            hashlib.sha256(cred.strip().encode()).hexdigest()
+            for cred in self.mqtt_credentials.split(",")
+            if cred.strip()
         }
 
 

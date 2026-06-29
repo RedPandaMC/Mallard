@@ -7,9 +7,10 @@ metadata:
   namespace: mallard
 spec:
   podSelector: {}
-  policyTypes: [Ingress]
+  policyTypes: [Ingress, Egress]
+  egress: []
 ---
-# Allow ingress-nginx to reach the mallard-server on 8080.
+# Allow ingress-nginx to reach the mallard-server on 8080 (HTTP) and 8083 (MQTT WebSocket).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -19,7 +20,7 @@ spec:
   podSelector:
     matchLabels:
       app: mallard-server
-  policyTypes: [Ingress]
+  policyTypes: [Ingress, Egress]
   ingress:
     - from:
         - namespaceSelector:
@@ -27,6 +28,21 @@ spec:
               kubernetes.io/metadata.name: ingress-nginx
       ports:
         - port: 8080
+        - port: 8083
+  egress:
+    # mallard-server → InfluxDB
+    - to:
+        - podSelector:
+            matchLabels:
+              app: influxdb
+      ports:
+        - port: 8086
+    # mallard-server → DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
 ---
 # Allow the mallard-server and Grafana to reach InfluxDB on 8086.
 apiVersion: networking.k8s.io/v1
@@ -38,7 +54,7 @@ spec:
   podSelector:
     matchLabels:
       app: influxdb
-  policyTypes: [Ingress]
+  policyTypes: [Ingress, Egress]
   ingress:
     - from:
         - podSelector:
@@ -49,6 +65,13 @@ spec:
               app: grafana
       ports:
         - port: 8086
+  egress:
+    # InfluxDB → DNS only
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
 ---
 # Allow ingress-nginx to reach Grafana on 3000.
 apiVersion: networking.k8s.io/v1
@@ -60,7 +83,7 @@ spec:
   podSelector:
     matchLabels:
       app: grafana
-  policyTypes: [Ingress]
+  policyTypes: [Ingress, Egress]
   ingress:
     - from:
         - namespaceSelector:
@@ -68,22 +91,17 @@ spec:
               kubernetes.io/metadata.name: ingress-nginx
       ports:
         - port: 3000
----
-# Allow the mallard-server to reach Mosquitto on 1883.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-server-to-mosquitto
-  namespace: mallard
-spec:
-  podSelector:
-    matchLabels:
-      app: mosquitto
-  policyTypes: [Ingress]
-  ingress:
-    - from:
+  egress:
+    # Grafana → InfluxDB
+    - to:
         - podSelector:
             matchLabels:
-              app: mallard-server
+              app: influxdb
       ports:
-        - port: 1883
+        - port: 8086
+    # Grafana → DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP

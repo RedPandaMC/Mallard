@@ -15,7 +15,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from .config import get_settings
 from .influx import make_client
-from .mqtt import run_mqtt_subscriber
+from .mqtt import run_mqtt_broker
 from .routers import health as health_router
 from .routers import ingest as ingest_router
 
@@ -54,16 +54,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.influx_client = influx_client
     app.state.write_api = write_api
 
-    if settings.mqtt_broker_url:
+    if settings.mqtt_enabled:
         import asyncio
-        mqtt_task = asyncio.create_task(run_mqtt_subscriber(settings, write_api))
+        mqtt_task = asyncio.create_task(run_mqtt_broker(settings, write_api))
         app.state.mqtt_task = mqtt_task
-        logger.info("MQTT subscriber started for %s", settings.mqtt_broker_url)
+        logger.info("MQTT broker started on port %d", settings.mqtt_port)
 
     yield
 
     logger.info("Shutting down — closing InfluxDB client")
-    if settings.mqtt_broker_url and hasattr(app.state, "mqtt_task"):
+    if settings.mqtt_enabled and hasattr(app.state, "mqtt_task"):
         app.state.mqtt_task.cancel()
     write_api.close()
     influx_client.close()
