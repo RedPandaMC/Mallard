@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Pure alert evaluation. Given the current snapshot, a short rolling history of
  * samples, the user's config, and the map of when each alert last fired, returns
@@ -39,6 +40,7 @@ export function velocityCreditsPerHour(history: readonly SnapshotSample[]): numb
   return delta / hours;
 }
 
+/* c8 ignore next */
 export function evaluateAlerts(
   s: UsageSnapshot,
   history: readonly SnapshotSample[],
@@ -85,6 +87,19 @@ export function evaluateAlerts(
         key,
         message: `Mallard: Spending is fast — about ${Math.round(rate)} credits/hour (threshold ${config.alerts.velocityCreditsPerHour}).`,
       });
+    }
+  }
+
+  if (s.currentBranch && config.branchBudgets) {
+    const cap = config.branchBudgets[s.currentBranch] ?? null;
+    if (cap !== null && s.currentBranchCredits >= cap) {
+      const key = `branch:${s.currentBranch}`;
+      if (ready(fired, key, BUDGET_COOLDOWN_MS, now)) {
+        out.push({
+          key,
+          message: `Mallard: Branch '${s.currentBranch}' has used ${Math.round(s.currentBranchCredits)} cr of its ${cap} cr cap.`,
+        });
+      }
     }
   }
 

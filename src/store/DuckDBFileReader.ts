@@ -3,6 +3,7 @@ import { DuckDBConnection } from '@duckdb/node-api';
 import type { UsageEvent } from '../domain/types';
 import type { ParseContext } from '../ingest/otelParse';
 import type { IEventWriter } from './EventWriter';
+import { defaultLogger, Logger } from '../util/logger';
 
 export type RowMapper = (row: Record<string, unknown>, ctx: ParseContext) => UsageEvent | null;
 
@@ -23,6 +24,7 @@ export class DuckDBFileReader {
   constructor(
     private readonly conn: DuckDBConnection,
     private readonly writer: IEventWriter,
+    private readonly logger: Logger = defaultLogger,
   ) {}
 
   /**
@@ -68,7 +70,8 @@ export class DuckDBFileReader {
         `SELECT *, filename FROM read_ndjson([${globList}], ignore_errors := true, auto_detect := true, filename := true) ${tsFilter}`,
       );
       rows = result.getRowObjects() as Record<string, unknown>[];
-    } catch {
+    } catch (err) {
+      this.logger.warn('duckdb', `ingest failed for [${globArray.join(', ')}]: ${String(err)}`);
       return 0;
     }
 
@@ -95,7 +98,8 @@ export class DuckDBFileReader {
       );
       const rows = result.getRowObjects() as Record<string, unknown>[];
       return Number(rows[0]?.['cnt'] ?? 0) > 0;
-    } catch {
+    } catch (err) {
+      this.logger.warn('duckdb', `hasField failed for [${globArray.join(', ')}]: ${String(err)}`);
       return false;
     }
   }

@@ -15,6 +15,7 @@ const SIZE_CYCLE: PanelSize[] = ['compact', 'normal', 'tall'];
 
 /** FLIP animation for a set of elements after DOM reorder. */
 function flip(elements: HTMLElement[]): void {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const before = elements.map((el) => el.getBoundingClientRect());
   requestAnimationFrame(() => {
     elements.forEach((el, i) => {
@@ -25,7 +26,7 @@ function flip(elements: HTMLElement[]): void {
       el.style.transform = `translate(${dx}px,${dy}px)`;
       el.style.transition = 'none';
       requestAnimationFrame(() => {
-        el.style.transition = 'transform 0.22s cubic-bezier(0.4,0,0.2,1)';
+        el.style.transition = reduceMotion ? 'none' : 'transform 0.22s cubic-bezier(0.4,0,0.2,1)';
         el.style.transform = '';
       });
     });

@@ -20,6 +20,16 @@ describe('mergeConfig', () => {
     assert.equal(out.alerts.velocityCreditsPerHour, 50);
   });
 
+  it('preserves branchBudgets when present', () => {
+    const out = mergeConfig({ branchBudgets: { main: 200, 'feature/x': 500 } });
+    assert.deepEqual(out.branchBudgets, { main: 200, 'feature/x': 500 });
+  });
+
+  it('omits branchBudgets when not present', () => {
+    const out = mergeConfig({});
+    assert.equal(out.branchBudgets, undefined);
+  });
+
   it('preserves v2 fields when present', () => {
     const out = mergeConfig({
       version: 2,

@@ -9,7 +9,7 @@ import { mkdirSync, readFileSync, writeFileSync, watch, FSWatcher } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { UserConfig } from '../domain/types';
+import { UserConfig, SEED_USER_CONFIG } from '../domain/types';
 import { JsonConditionSchema } from '../domain/expr/jsonCondition';
 import { mergeConfig } from './mergeConfig';
 
@@ -123,7 +123,7 @@ export class UserConfigStore implements vscode.Disposable {
       const parsed = ConfigSchema.safeParse(JSON.parse(readFileSync(this.file, 'utf8')));
       return mergeConfig(parsed.success ? (parsed.data as Partial<UserConfig>) : {});
     } catch {
-      const def = mergeConfig({});
+      const def = seedIfMissing ? mergeConfig(SEED_USER_CONFIG) : mergeConfig({});
       if (seedIfMissing) {
         this.current = def;
         this.writeToDisk();

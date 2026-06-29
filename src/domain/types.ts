@@ -259,6 +259,12 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
   budget: { monthlyUsd: 0, includedCredits: 300 },
 };
 
+/** Opinionated first-install config. Only written when config.json does not yet exist. */
+export const SEED_USER_CONFIG: Partial<UserConfig> = {
+  dailyCreditAlert: 50,
+  alerts: { velocityEnabled: true, velocityCreditsPerHour: 100 },
+};
+
 export interface RestrictionState {
   version: 1;
   active: boolean;
