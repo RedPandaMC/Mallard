@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mallard-server-config
+  namespace: mallard
+data:
+  INFLUX_URL: "http://influxdb:8086"
+  INFLUX_ORG: "mallard"
+  INFLUX_BUCKET: "metrics"
+  LOG_LEVEL: "INFO"
+  RATE_LIMIT: "60/minute"
