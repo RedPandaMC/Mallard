@@ -13,9 +13,12 @@ spec:
       labels:
         app: mallard-server
     spec:
+      serviceAccountName: mallard-server
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+        runAsGroup: 1000
       containers:
         - name: mallard-server
           image: ghcr.io/redpandamc/mallard-server:latest
@@ -26,12 +29,28 @@ spec:
                 name: mallard-server-config
             - secretRef:
                 name: mallard-server-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             httpGet:
               path: /health
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
           resources:
             requests:
               cpu: "100m"
@@ -39,3 +58,6 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+      volumes:
+        - name: tmp
+          emptyDir: {}

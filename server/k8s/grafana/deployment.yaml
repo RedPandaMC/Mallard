@@ -13,6 +13,8 @@ spec:
       labels:
         app: grafana
     spec:
+      serviceAccountName: grafana
+      automountServiceAccountToken: false
       containers:
         - name: grafana
           image: grafana/grafana:latest
@@ -23,9 +25,27 @@ spec:
                 name: grafana-config
             - secretRef:
                 name: grafana-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
           volumeMounts:
             - name: grafana-data
               mountPath: /var/lib/grafana
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
           resources:
             requests:
               cpu: "100m"
@@ -35,4 +55,5 @@ spec:
               memory: "512Mi"
       volumes:
         - name: grafana-data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: grafana-data

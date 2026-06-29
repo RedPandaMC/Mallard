@@ -42,7 +42,7 @@ def write_payload(write_api: "WriteApi", bucket: str, org: str, payload: IngestP
         .field("today_cost_usd", payload.today_cost_usd)
         .field("top_model", payload.top_model or "")
         .field("active_models_count", len(payload.active_models))
-        .time(payload.ts, WritePrecision.MILLISECONDS)
+        .time(payload.ts, WritePrecision.MS)
     )
 
     # Store individual active models as separate fields for querying

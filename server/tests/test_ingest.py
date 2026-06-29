@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -127,3 +128,18 @@ class TestIngestValidation:
             headers={"X-API-Key": "test-key-valid", "Content-Type": "application/json"},
         )
         assert response.status_code == 422
+
+
+class TestIngestInfluxFailure:
+    def test_influx_write_failure_returns_503(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        with patch("src.routers.ingest.write_payload", side_effect=RuntimeError("InfluxDB down")):
+            response = client.post(
+                "/api/v1/ingest",
+                json=valid_payload,
+                headers={"X-API-Key": "test-key-valid"},
+            )
+        assert response.status_code == 503
+        body = response.json()
+        assert "detail" in body

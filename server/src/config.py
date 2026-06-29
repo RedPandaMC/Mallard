@@ -6,6 +6,8 @@ import hashlib
 from functools import cached_property
 from typing import Annotated
 
+from typing import Literal
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -30,7 +32,15 @@ class Settings(BaseSettings):
     rate_limit: str = Field("60/minute", description="Per-key rate limit (slowapi format)")
 
     # Logging
-    log_level: str = Field("INFO", description="Python logging level")
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        "INFO", description="Python logging level"
+    )
+
+    # MQTT (optional — subscriber only activated when broker URL is set)
+    mqtt_broker_url: str = Field("", description="MQTT broker URL, e.g. mqtt://mosquitto:1883")
+    mqtt_topic: str = Field("mallard/metrics", description="Topic to subscribe to")
+    mqtt_username: str = Field("", description="MQTT username")
+    mqtt_password: str = Field("", description="MQTT password")
 
     @field_validator("influx_url")
     @classmethod

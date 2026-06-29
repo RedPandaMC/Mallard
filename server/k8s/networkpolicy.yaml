@@ -1,0 +1,89 @@
+---
+# Deny all ingress by default; subsequent policies open specific ports.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: mallard
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# Allow ingress-nginx to reach the mallard-server on 8080.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-server
+  namespace: mallard
+spec:
+  podSelector:
+    matchLabels:
+      app: mallard-server
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 8080
+---
+# Allow the mallard-server and Grafana to reach InfluxDB on 8086.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-server-and-grafana-to-influxdb
+  namespace: mallard
+spec:
+  podSelector:
+    matchLabels:
+      app: influxdb
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: mallard-server
+        - podSelector:
+            matchLabels:
+              app: grafana
+      ports:
+        - port: 8086
+---
+# Allow ingress-nginx to reach Grafana on 3000.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-grafana
+  namespace: mallard
+spec:
+  podSelector:
+    matchLabels:
+      app: grafana
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 3000
+---
+# Allow the mallard-server to reach Mosquitto on 1883.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-server-to-mosquitto
+  namespace: mallard
+spec:
+  podSelector:
+    matchLabels:
+      app: mosquitto
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: mallard-server
+      ports:
+        - port: 1883

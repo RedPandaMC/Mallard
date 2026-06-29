@@ -1,8 +1,18 @@
 # Mallard BYO Server — Docker Compose
 # Usage: cp .env.example .env && docker compose up -d
+# First-time MQTT setup: see README (create Mosquitto password file)
 # Access Grafana at http://localhost:3000 (admin / see .env GF_SECURITY_ADMIN_PASSWORD)
 
 version: "3.9"
+
+networks:
+  # Backend services communicate here; no outbound internet access
+  internal:
+    driver: bridge
+    internal: true
+  # Caddy uses this network for outbound ACME HTTP-01 challenges (Let's Encrypt)
+  proxy:
+    driver: bridge
 
 services:
   # ── InfluxDB v2 ─────────────────────────────────────────────────────────────
@@ -18,13 +28,46 @@ services:
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:?required}
     volumes:
       - influxdb_data:/var/lib/influxdb2
-    ports:
-      - "8086:8086"
+    # Port NOT published to host — only reachable on the internal network
+    expose:
+      - "8086"
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ── Eclipse Mosquitto MQTT broker ────────────────────────────────────────────
+  # Optional: enables MQTT export from the Mallard extension.
+  # Before first start, create the password file:
+  #   docker compose run --rm mosquitto mosquitto_passwd -c /mosquitto/config/passwd mallard
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_passwd:/mosquitto/config
+      - mosquitto_data:/mosquitto/data
+    expose:
+      - "1883"
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1",
+             "-u", "${MQTT_USERNAME:-mallard}", "-P", "${MQTT_PASSWORD:-changeme}", "-W", "3"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
   # ── Mallard FastAPI ingest server ───────────────────────────────────────────
   server:
@@ -40,13 +83,30 @@ services:
       API_KEYS: ${API_KEYS:?required}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       RATE_LIMIT: ${RATE_LIMIT:-60/minute}
+      # MQTT subscriber — set MQTT_BROKER_URL to empty string to disable
+      MQTT_BROKER_URL: ${MQTT_BROKER_URL:-mqtt://mosquitto:1883}
+      MQTT_TOPIC: ${MQTT_TOPIC:-mallard/metrics}
+      MQTT_USERNAME: ${MQTT_USERNAME:-mallard}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
     depends_on:
       influxdb:
         condition: service_healthy
+      mosquitto:
+        condition: service_started
     expose:
       - "8080"
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -57,7 +117,7 @@ services:
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?required}
       GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-http://localhost:3000}
       GF_USERS_ALLOW_SIGN_UP: "false"
       INFLUX_TOKEN: ${INFLUX_TOKEN}
@@ -69,40 +129,48 @@ services:
       - influxdb
     ports:
       - "3000:3000"
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 15s
       timeout: 5s
       retries: 3
 
-  # ── Nginx TLS reverse proxy ───────────────────────────────────────────────────
-  nginx:
-    image: nginx:alpine
+  # ── Caddy TLS reverse proxy ───────────────────────────────────────────────────
+  # Automatic HTTPS: tls internal = self-signed for localhost dev.
+  # For production: set SERVER_DOMAIN=your.host + ACME_EMAIL in .env,
+  # then remove `tls internal` from Caddyfile — Caddy handles Let's Encrypt automatically.
+  caddy:
+    image: caddy:2-alpine
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      SERVER_DOMAIN: ${SERVER_DOMAIN:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-}
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - nginx_certs:/etc/nginx/certs
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
-      - server
-      - grafana
-    # Generate a self-signed TLS certificate on first start, then launch nginx
-    entrypoint: >
-      sh -c "
-        if [ ! -f /etc/nginx/certs/server.crt ]; then
-          apk add --no-cache openssl &&
-          mkdir -p /etc/nginx/certs &&
-          openssl req -x509 -nodes -days 365 -newkey rsa:2048
-            -keyout /etc/nginx/certs/server.key
-            -out /etc/nginx/certs/server.crt
-            -subj '/CN=mallard-server/O=Mallard/C=US';
-        fi &&
-        nginx -g 'daemon off;'
-      "
+      server:
+        condition: service_healthy
+    networks:
+      - internal
+      - proxy
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   influxdb_data:
   grafana_data:
-  nginx_certs:
+  mosquitto_passwd:
+  mosquitto_data:
+  caddy_data:
+  caddy_config:

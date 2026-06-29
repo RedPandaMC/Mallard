@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from ..auth import require_api_key
@@ -40,12 +40,19 @@ async def ingest(
     write_api = request.app.state.write_api
     settings = request.app.state.settings
 
-    write_payload(
-        write_api=write_api,
-        bucket=settings.influx_bucket,
-        org=settings.influx_org,
-        payload=payload,
-    )
+    try:
+        write_payload(
+            write_api=write_api,
+            bucket=settings.influx_bucket,
+            org=settings.influx_org,
+            payload=payload,
+        )
+    except Exception as exc:
+        logger.error("InfluxDB write failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Metric storage unavailable",
+        ) from exc
 
     logger.info(
         "Ingested payload: instance=%s schema_v=%d key_hash_prefix=%s…",

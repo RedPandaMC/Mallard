@@ -13,6 +13,7 @@ dependencies = [
     "influxdb-client>=1.47",
     "pydantic-settings>=2.0",
     "slowapi>=0.1.9",
+    "aiomqtt>=2.0",
 ]
 
 [project.optional-dependencies]

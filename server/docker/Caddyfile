@@ -1,0 +1,21 @@
+{
+	admin off
+	email {$ACME_EMAIL}
+}
+
+# Mallard ingest API
+# For localhost dev: tls internal issues a self-signed cert automatically.
+# For production: set SERVER_DOMAIN=your.hostname and remove the `tls internal` line —
+# Caddy obtains and auto-renews a Let's Encrypt certificate.
+{$SERVER_DOMAIN:localhost} {
+	tls internal
+
+	reverse_proxy server:8080
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+}

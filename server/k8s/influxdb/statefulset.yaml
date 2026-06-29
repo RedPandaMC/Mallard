@@ -24,9 +24,27 @@ spec:
                 name: influxdb-config
             - secretRef:
                 name: influxdb-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
           volumeMounts:
             - name: influxdb-data
               mountPath: /var/lib/influxdb2
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8086
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8086
+            initialDelaySeconds: 10
+            periodSeconds: 10
           resources:
             requests:
               cpu: "250m"
