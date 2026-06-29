@@ -36,10 +36,9 @@ class TestConstantTimeComparison:
         h2 = hashlib.sha256(b"secret2").hexdigest()
         assert hmac.compare_digest(h1, h2) is False
 
-    def test_compare_digest_requires_same_length(self) -> None:
-        # Different-length strings raise TypeError — this is expected security behaviour
-        with pytest.raises(TypeError):
-            hmac.compare_digest("short", "a" * 64)
+    def test_compare_digest_different_lengths_returns_false(self) -> None:
+        # Python 3.12+: compare_digest on strings of different lengths returns False
+        assert hmac.compare_digest("short", "a" * 64) is False
 
 
 class TestAuthModule:
