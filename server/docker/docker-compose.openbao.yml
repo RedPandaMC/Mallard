@@ -1,0 +1,47 @@
+services:
+  openbao:
+    image: quay.io/openbao/openbao:latest
+    command: server -dev -dev-root-token-id=${OPENBAO_DEV_ROOT_TOKEN:-dev-root-token}
+    ports:
+      - "8200:8200"
+    environment:
+      BAO_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    healthcheck:
+      test: ["CMD-SHELL", "bao status || true"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    cap_add:
+      - IPC_LOCK
+
+  openbao-init:
+    image: quay.io/openbao/openbao:latest
+    depends_on:
+      openbao:
+        condition: service_healthy
+    environment:
+      BAO_ADDR: http://openbao:8200
+      BAO_TOKEN: ${OPENBAO_DEV_ROOT_TOKEN:-dev-root-token}
+      API_KEYS: ${API_KEYS:-}
+      MQTT_CREDENTIALS: ${MQTT_CREDENTIALS:-}
+      INFLUX_TOKEN: ${INFLUX_TOKEN:-}
+    entrypoint: >
+      sh -c "
+        bao secrets enable -path=secret kv-v2 &&
+        bao kv put secret/mallard/server
+          api_keys=\"$${API_KEYS}\"
+          mqtt_credentials=\"$${MQTT_CREDENTIALS}\"
+          influx_token=\"$${INFLUX_TOKEN}\" &&
+        echo 'OpenBao seeded successfully'
+      "
+    restart: "no"
+
+  server:
+    environment:
+      SECRET_MANAGER_TYPE: openbao
+      SECRET_MANAGER_URL: http://openbao:8200
+      SECRET_MANAGER_TOKEN: ${OPENBAO_DEV_ROOT_TOKEN:-dev-root-token}
+      OPENBAO_SECRET_PATH: secret/data/mallard/server
+    depends_on:
+      openbao-init:
+        condition: service_completed_successfully

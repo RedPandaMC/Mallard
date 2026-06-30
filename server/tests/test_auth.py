@@ -56,7 +56,9 @@ class TestAuthModule:
         from src.auth import _constant_time_match
 
         h = hashlib.sha256(b"valid-key").hexdigest()
+        # Accepts both set[str] and dict[str, str] (iterates keys)
         assert _constant_time_match(h, {h}) is True
+        assert _constant_time_match(h, {h: "label"}) is True
 
     def test_constant_time_match_invalid_key(self) -> None:
         from src.auth import _constant_time_match
@@ -64,12 +66,14 @@ class TestAuthModule:
         stored = hashlib.sha256(b"valid-key").hexdigest()
         candidate = hashlib.sha256(b"wrong-key").hexdigest()
         assert _constant_time_match(candidate, {stored}) is False
+        assert _constant_time_match(candidate, {stored: "label"}) is False
 
     def test_constant_time_match_empty_set(self) -> None:
         from src.auth import _constant_time_match
 
         h = hashlib.sha256(b"any-key").hexdigest()
         assert _constant_time_match(h, set()) is False
+        assert _constant_time_match(h, {}) is False
 
     def test_constant_time_match_multiple_keys(self) -> None:
         from src.auth import _constant_time_match
@@ -77,8 +81,9 @@ class TestAuthModule:
         h1 = hashlib.sha256(b"key-1").hexdigest()
         h2 = hashlib.sha256(b"key-2").hexdigest()
         h3 = hashlib.sha256(b"key-3").hexdigest()
-        # h2 is in the set
+        # h2 is in the collection
         assert _constant_time_match(h2, {h1, h2, h3}) is True
+        assert _constant_time_match(h2, {h1: "a", h2: "b", h3: "c"}) is True
 
     def test_raw_key_not_in_hash(self) -> None:
         """Ensure the stored value is a hex digest, not the raw key."""

@@ -14,7 +14,17 @@ log {
 # For production: set SERVER_DOMAIN=your.hostname and remove the `tls internal` line —
 # Caddy obtains and auto-renews a Let's Encrypt certificate.
 {$SERVER_DOMAIN:localhost} {
-	tls internal
+	tls internal {
+		# Optional mTLS: present a CA cert to accept but not require client certs.
+		# Set MALLARD_CA_CERT=/certs/mallard-ca.crt and mount the cert into the container.
+		# client_auth {
+		#   mode verify_if_given
+		#   trusted_ca_cert_file {$MALLARD_CA_CERT:/dev/null}
+		# }
+	}
+
+	# Forward client cert CN as a header so the server can use it as the InfluxDB source tag.
+	request_header SSL_CLIENT_S_DN_CN {tls_client_subject}
 
 	# WebSocket MQTT — the Mallard extension connects to wss://host/mqtt
 	@mqtt path /mqtt

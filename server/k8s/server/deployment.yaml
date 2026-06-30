@@ -12,6 +12,8 @@ spec:
     metadata:
       labels:
         app: mallard-server
+      annotations:
+        reloader.stakater.com/auto: "true"
     spec:
       serviceAccountName: mallard-server
       automountServiceAccountToken: false

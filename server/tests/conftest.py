@@ -16,6 +16,7 @@ _DEFAULT_ENV = {
     "INFLUX_TOKEN": "testtoken",
     "INFLUX_ORG": "mallard",
     "INFLUX_BUCKET": "metrics",
+    # Bare keys (no label) — label will be "unknown"; labeled keys also supported
     "API_KEYS": "test-key-valid,second-key",
     "LOG_LEVEL": "DEBUG",
     "RATE_LIMIT": "1000/minute",  # effectively unlimited during tests
@@ -72,10 +73,13 @@ def client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> Te
 
         # Manually set app.state because lifespan doesn't run in TestClient by default
         from src.config import get_settings
+        from src.credential_verifier import StaticCredentialVerifier
 
-        app.state.settings = get_settings()
+        settings = get_settings()
+        app.state.settings = settings
         app.state.influx_client = mock_influx_client
         app.state.write_api = mock_influx_client.write_api()
+        app.state.verifier = StaticCredentialVerifier(settings)
 
         with TestClient(app, raise_server_exceptions=False) as tc:
             yield tc

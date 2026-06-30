@@ -28,12 +28,19 @@ def make_client(settings: Settings) -> InfluxDBClient:
     )
 
 
-def write_payload(write_api: "WriteApi", bucket: str, org: str, payload: IngestPayload) -> None:
+def write_payload(
+    write_api: "WriteApi",
+    bucket: str,
+    org: str,
+    payload: IngestPayload,
+    source: str = "unknown",
+) -> None:
     """Convert *payload* to an InfluxDB Point and write it synchronously."""
     point = (
         Point(_MEASUREMENT)
         .tag("instance_id", payload.instance_id)
         .tag("schema_version", str(payload.schema_version))
+        .tag("source", source)
         .field("credits_velocity_per_hour", payload.credits_velocity_per_hour)
         .field("mtd_budget_pct", payload.mtd_budget_pct)
         .field("mtd_credits", payload.mtd_credits)

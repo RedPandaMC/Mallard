@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
-from ..auth import require_api_key
+from ..credential_verifier import CredentialVerifier
+from ..deps import get_verifier
 from ..influx import write_payload
 from ..schemas import IngestPayload
 
@@ -19,15 +21,26 @@ router = APIRouter(prefix="/api/v1", tags=["ingest"])
 _MAX_BODY_BYTES = 64 * 1024
 
 
+def _extract_bearer(auth_header: str) -> str:
+    """Extract token from 'Bearer <token>'; return empty string if not a Bearer header."""
+    prefix = "Bearer "
+    return auth_header[len(prefix):] if auth_header.startswith(prefix) else ""
+
+
 @router.post("/ingest", status_code=status.HTTP_202_ACCEPTED)
 async def ingest(
     payload: IngestPayload,
     request: Request,
-    key_hash: str = Depends(require_api_key),
+    verifier: Annotated[CredentialVerifier, Depends(get_verifier)],
 ) -> JSONResponse:
     """
     Accepts a Mallard metric payload, validates it, and writes one InfluxDB point.
     Rate-limited to RATE_LIMIT per unique API key (enforced via slowapi middleware).
+
+    Auth precedence:
+      1. mTLS client cert — CN forwarded as SSL_CLIENT_S_DN_CN by nginx ingress.
+      2. X-API-Key header.
+      3. Authorization: Bearer <token> (token treated as API key value).
     """
     # Belt-and-suspenders body size check (middleware does the primary enforcement)
     content_length = request.headers.get("content-length")
@@ -36,6 +49,29 @@ async def ingest(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             content={"detail": "Request body exceeds 64 KB limit"},
         )
+
+    # mTLS: cert CN forwarded by nginx ingress; ingress has already verified the cert
+    cert_cn = request.headers.get("SSL_CLIENT_S_DN_CN", "").strip()
+
+    if cert_cn:
+        source = cert_cn
+    else:
+        # Extract API key from X-API-Key header or Bearer token
+        api_key = request.headers.get("X-API-Key") or _extract_bearer(
+            request.headers.get("Authorization", "")
+        )
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing credentials",
+            )
+        identity = await verifier.verify_api_key(api_key)
+        if identity is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials",
+            )
+        source = identity.label
 
     write_api = request.app.state.write_api
     settings = request.app.state.settings
@@ -46,6 +82,7 @@ async def ingest(
             bucket=settings.influx_bucket,
             org=settings.influx_org,
             payload=payload,
+            source=source,
         )
     except Exception as exc:
         logger.error("InfluxDB write failed: %s", exc)
@@ -55,10 +92,10 @@ async def ingest(
         ) from exc
 
     logger.info(
-        "Ingested payload: instance=%s schema_v=%d key_hash_prefix=%s…",
+        "Ingested payload: instance=%s schema_v=%d source=%s",
         payload.instance_id,
         payload.schema_version,
-        key_hash[:8],
+        source,
     )
 
     return JSONResponse(

@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac
 import json
 import logging
 from dataclasses import dataclass
@@ -22,6 +20,7 @@ if TYPE_CHECKING:
     from influxdb_client.client.write_api import WriteApi
 
     from .config import Settings
+    from .credential_verifier import CredentialVerifier
 
 logger = logging.getLogger(__name__)
 
@@ -29,16 +28,8 @@ logger = logging.getLogger(__name__)
 _ctx: dict = {}
 
 
-def _hash_key(key: str) -> str:
-    return hashlib.sha256(key.encode()).hexdigest()
-
-
-def _constant_time_match(candidate: str, hashed_keys: set[str]) -> bool:
-    return any(hmac.compare_digest(candidate, h) for h in hashed_keys)
-
-
 class _MallardAuthPlugin(BaseAuthPlugin):
-    """Validates MQTT passwords against hashed_mqtt_credentials (independent of HTTP API keys)."""
+    """Validates MQTT passwords via the configured CredentialVerifier."""
 
     @dataclass
     class Config:
@@ -48,7 +39,13 @@ class _MallardAuthPlugin(BaseAuthPlugin):
         password = session.password
         if not password:
             return False
-        return _constant_time_match(_hash_key(password), _ctx["settings"].hashed_mqtt_credentials)
+        verifier: CredentialVerifier = _ctx["verifier"]
+        identity = await verifier.verify_mqtt_credential(password)
+        if identity is None:
+            return False
+        # Record label for source tagging; keyed by client_id for lookup in message handler
+        _ctx.setdefault("client_labels", {})[session.client_id] = identity.label
+        return True
 
 
 class _MallardMessagePlugin(BasePlugin):
@@ -61,10 +58,19 @@ class _MallardMessagePlugin(BasePlugin):
     async def on_broker_message_received(self, *, client_id: str = "", message=None, **kwargs) -> None:
         if message is None:
             return
-        _handle_message(message, _ctx["write_api"], _ctx["settings"])
+        source = _ctx.get("client_labels", {}).get(client_id, "unknown")
+        _handle_message(message, _ctx["write_api"], _ctx["settings"], source)
+
+    async def on_broker_client_disconnected(self, *, client_id: str = "", **kwargs) -> None:
+        _ctx.get("client_labels", {}).pop(client_id, None)
 
 
-def _handle_message(message, write_api: "WriteApi", settings: "Settings") -> None:
+def _handle_message(
+    message,
+    write_api: "WriteApi",
+    settings: "Settings",
+    source: str = "unknown",
+) -> None:
     try:
         data = json.loads(message.data)
         payload = IngestPayload.model_validate(data)
@@ -73,18 +79,25 @@ def _handle_message(message, write_api: "WriteApi", settings: "Settings") -> Non
             bucket=settings.influx_bucket,
             org=settings.influx_org,
             payload=payload,
+            source=source,
         )
-        logger.debug("MQTT: ingested instance=%s", payload.instance_id)
+        logger.debug("MQTT: ingested instance=%s source=%s", payload.instance_id, source)
     except (json.JSONDecodeError, ValidationError) as exc:
         logger.warning("MQTT: rejected message: %s", exc)
     except Exception as exc:
         logger.error("MQTT: write failed: %s", exc)
 
 
-async def run_mqtt_broker(settings: "Settings", write_api: "WriteApi") -> None:
+async def run_mqtt_broker(
+    settings: "Settings",
+    write_api: "WriteApi",
+    verifier: "CredentialVerifier",
+) -> None:
     """Start the embedded amqtt broker on the configured WebSocket port; blocks until cancelled."""
     _ctx["settings"] = settings
     _ctx["write_api"] = write_api
+    _ctx["verifier"] = verifier
+    _ctx["client_labels"] = {}
 
     config = {
         "listeners": {

@@ -55,7 +55,7 @@ class TestMqttLifespan:
         mock_influx.write_api.return_value = MagicMock()
         mock_influx.ping.return_value = True
 
-        async def _noop_mqtt(settings, write_api) -> None:
+        async def _noop_mqtt(settings, write_api, verifier) -> None:
             try:
                 await asyncio.sleep(3600)
             except asyncio.CancelledError:

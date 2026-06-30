@@ -14,6 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from .config import get_settings
+from .credential_verifier import create_verifier
 from .influx import make_client
 from .mqtt import run_mqtt_broker
 from .routers import health as health_router
@@ -48,15 +49,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     influx_client = make_client(settings)
     write_api = influx_client.write_api(write_options=SYNCHRONOUS)
+    verifier = create_verifier(settings)
 
     # Stash on app.state so routers can access them via request.app.state
     app.state.settings = settings
     app.state.influx_client = influx_client
     app.state.write_api = write_api
+    app.state.verifier = verifier
 
     if settings.mqtt_enabled:
         import asyncio
-        mqtt_task = asyncio.create_task(run_mqtt_broker(settings, write_api))
+        mqtt_task = asyncio.create_task(run_mqtt_broker(settings, write_api, verifier))
         app.state.mqtt_task = mqtt_task
         logger.info("MQTT broker started on port %d", settings.mqtt_port)
 

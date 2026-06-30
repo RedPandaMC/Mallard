@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -58,6 +57,70 @@ class TestIngestAuthentication:
             headers={"X-API-Key": "second-key"},
         )
         assert response.status_code == 202
+
+    def test_bearer_token_accepted(self, client: TestClient, valid_payload: dict) -> None:
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={"Authorization": "Bearer test-key-valid"},
+        )
+        assert response.status_code == 202
+
+    def test_bearer_token_wrong_returns_401(self, client: TestClient, valid_payload: dict) -> None:
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={"Authorization": "Bearer totally-wrong-key"},
+        )
+        assert response.status_code == 401
+
+    def test_bearer_token_empty_returns_401(self, client: TestClient, valid_payload: dict) -> None:
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={"Authorization": "Bearer "},
+        )
+        assert response.status_code == 401
+
+    def test_cert_cn_header_bypasses_api_key(self, client: TestClient, valid_payload: dict) -> None:
+        """mTLS: ingress forwards SSL_CLIENT_S_DN_CN — no API key needed."""
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={"SSL_CLIENT_S_DN_CN": "team-alpha"},
+        )
+        assert response.status_code == 202
+
+    def test_cert_cn_header_wrong_api_key_still_accepted(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """cert CN takes precedence over (even invalid) API key."""
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={"SSL_CLIENT_S_DN_CN": "team-alpha", "X-API-Key": "wrong-key"},
+        )
+        assert response.status_code == 202
+
+    def test_empty_cert_cn_falls_back_to_api_key(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={"SSL_CLIENT_S_DN_CN": "  ", "X-API-Key": "test-key-valid"},
+        )
+        assert response.status_code == 202
+
+    def test_empty_cert_cn_without_api_key_returns_401(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={"SSL_CLIENT_S_DN_CN": ""},
+        )
+        assert response.status_code == 401
 
 
 class TestIngestValidation:
@@ -139,16 +202,22 @@ class TestIngestRouteDirectly:
     """
 
     async def test_belt_and_suspenders_413(self, valid_payload: dict) -> None:
+        from src.credential_verifier import StaticCredentialVerifier
         from src.routers.ingest import ingest
         from src.schemas import IngestPayload
 
         mock_request = MagicMock()
         mock_request.headers.get = MagicMock(return_value=str(64 * 1024 + 1))
 
+        mock_settings = MagicMock()
+        mock_settings.hashed_api_keys = {}
+        mock_settings.hashed_mqtt_credentials = {}
+        verifier = StaticCredentialVerifier(mock_settings)
+
         result = await ingest(
             payload=IngestPayload(**valid_payload),
             request=mock_request,
-            key_hash="testhash",
+            verifier=verifier,
         )
         assert result.status_code == 413
 
@@ -166,3 +235,25 @@ class TestIngestInfluxFailure:
         assert response.status_code == 503
         body = response.json()
         assert "detail" in body
+
+
+class TestExtractBearer:
+    def test_valid_bearer_header(self) -> None:
+        from src.routers.ingest import _extract_bearer
+
+        assert _extract_bearer("Bearer my-token") == "my-token"
+
+    def test_empty_bearer_header(self) -> None:
+        from src.routers.ingest import _extract_bearer
+
+        assert _extract_bearer("Bearer ") == ""
+
+    def test_non_bearer_header(self) -> None:
+        from src.routers.ingest import _extract_bearer
+
+        assert _extract_bearer("Basic dXNlcjpwYXNz") == ""
+
+    def test_empty_string(self) -> None:
+        from src.routers.ingest import _extract_bearer
+
+        assert _extract_bearer("") == ""

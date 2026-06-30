@@ -44,9 +44,13 @@ def _make_test_client() -> TestClient:
         app = main_module.create_app()
         from src.config import get_settings
 
-        app.state.settings = get_settings()
+        from src.credential_verifier import StaticCredentialVerifier
+
+        settings = get_settings()
+        app.state.settings = settings
         app.state.influx_client = mock_client
         app.state.write_api = mock_write_api
+        app.state.verifier = StaticCredentialVerifier(settings)
         return TestClient(app, raise_server_exceptions=False)
 
 

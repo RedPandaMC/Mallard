@@ -1,0 +1,57 @@
+services:
+  infisical-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: infisical
+      POSTGRES_PASSWORD: ${INFISICAL_DB_PASSWORD}
+      POSTGRES_DB: infisical
+    volumes:
+      - infisical-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infisical"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  infisical-redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${INFISICAL_DB_PASSWORD}
+    volumes:
+      - infisical-redis-data:/data
+
+  infisical:
+    image: infisical/infisical:latest-postgres
+    depends_on:
+      infisical-db:
+        condition: service_healthy
+      infisical-redis:
+        condition: service_started
+    ports:
+      - "8888:8080"
+    environment:
+      DB_CONNECTION_URI: postgresql://infisical:${INFISICAL_DB_PASSWORD}@infisical-db:5432/infisical
+      REDIS_URL: redis://:${INFISICAL_DB_PASSWORD}@infisical-redis:6379
+      AUTH_SECRET: ${INFISICAL_AUTH_SECRET}
+      ENCRYPTION_KEY: ${INFISICAL_ENCRYPTION_KEY}
+      SITE_URL: http://localhost:8888
+      NODE_ENV: production
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/status | grep -q ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  server:
+    environment:
+      SECRET_MANAGER_TYPE: infisical
+      SECRET_MANAGER_URL: http://infisical:8080
+      SECRET_MANAGER_TOKEN: ${INFISICAL_MACHINE_TOKEN}
+      INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID}
+      INFISICAL_ENV_SLUG: prod
+    depends_on:
+      infisical:
+        condition: service_healthy
+
+volumes:
+  infisical-db-data:
+  infisical-redis-data:
