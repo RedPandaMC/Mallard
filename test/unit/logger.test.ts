@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { ConsoleLogger, defaultLogger } from '../../src/client_extension/util/logger';
+import { ConsoleLogger, defaultLogger } from '../../src/extension/util/logger';
 
 describe('ConsoleLogger', () => {
   it('info() calls console.log with formatted prefix', () => {

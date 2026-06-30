@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { UserConfigStore } from '../../src/client_extension/app/UserConfigStore';
+import { UserConfigStore } from '../../src/extension/app/UserConfigStore';
 
 async function makeTmpDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'mallard-ucs-test-'));

@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { FilterClauseBuilder } from '../../src/client_extension/store/FilterClauseBuilder';
+import { FilterClauseBuilder } from '../../src/extension/store/FilterClauseBuilder';
 
 describe('FilterClauseBuilder', () => {
   it('build() returns empty string when no conditions added', () => {

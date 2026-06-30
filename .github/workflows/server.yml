@@ -3,9 +3,9 @@ name: Server CI
 on:
   push:
     branches: [main]
-    paths: ["server/**", "src/server/**", "pyproject.toml"]
+    paths: ["src/server/**", "pyproject.toml"]
   pull_request:
-    paths: ["server/**", "src/server/**", "pyproject.toml"]
+    paths: ["src/server/**", "pyproject.toml"]
 
 jobs:
   test:
@@ -41,6 +41,12 @@ jobs:
 
       - name: Install dependencies
         run: uv pip install --system -e ".[dev]"
+
+      - name: Audit Python dependencies (pip-audit)
+        run: pip-audit --skip-editable
+
+      - name: Security scan (bandit)
+        run: bandit -r src/server -x src/server/tests -ll
 
       - name: Run tests
         env:
@@ -81,7 +87,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: server/Dockerfile
+          file: src/server/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |

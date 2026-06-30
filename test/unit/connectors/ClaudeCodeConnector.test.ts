@@ -1,11 +1,11 @@
 import { strict as assert } from 'assert';
-import { ClaudeCodeConnector } from '../../../src/client_extension/ingest/ClaudeCodeConnector';
-import { WorkspaceFolderMatcher } from '../../../src/client_extension/ingest/WorkspaceFolderMatcher';
-import type { IWorkspaceFolderMatcher } from '../../../src/client_extension/ingest/WorkspaceFolderMatcher';
-import type { ParseContext } from '../../../src/client_extension/ingest/otelParse';
-import type { PricingService } from '../../../src/client_extension/pricing/PricingService';
-import type { IMetaStore as MetaStore } from '../../../src/client_extension/store/MetaStore';
-import type { DuckDBFileReader } from '../../../src/client_extension/store/DuckDBFileReader';
+import { ClaudeCodeConnector } from '../../../src/extension/ingest/ClaudeCodeConnector';
+import { WorkspaceFolderMatcher } from '../../../src/extension/ingest/WorkspaceFolderMatcher';
+import type { IWorkspaceFolderMatcher } from '../../../src/extension/ingest/WorkspaceFolderMatcher';
+import type { ParseContext } from '../../../src/extension/ingest/otelParse';
+import type { PricingService } from '../../../src/extension/pricing/PricingService';
+import type { IMetaStore as MetaStore } from '../../../src/extension/store/MetaStore';
+import type { DuckDBFileReader } from '../../../src/extension/store/DuckDBFileReader';
 
 const noopMatcher: IWorkspaceFolderMatcher = { resolve: () => undefined };
 
@@ -60,7 +60,7 @@ describe('ClaudeCodeConnector — lifecycle', () => {
   it('buildContext() with hasField=true sets surface to "agent"', async () => {
     const connector = makeConnectorWithHasField(true);
     const ctx = await (connector as unknown as {
-      buildContext(g: string[]): Promise<import('../../../src/client_extension/ingest/otelParse').ParseContext>;
+      buildContext(g: string[]): Promise<import('../../../src/extension/ingest/otelParse').ParseContext>;
     }).buildContext([]);
     assert.equal(ctx.surface, 'agent');
   });
@@ -68,7 +68,7 @@ describe('ClaudeCodeConnector — lifecycle', () => {
   it('buildContext() with hasField=false sets surface to "chat"', async () => {
     const connector = makeConnectorWithHasField(false);
     const ctx = await (connector as unknown as {
-      buildContext(g: string[]): Promise<import('../../../src/client_extension/ingest/otelParse').ParseContext>;
+      buildContext(g: string[]): Promise<import('../../../src/extension/ingest/otelParse').ParseContext>;
     }).buildContext([]);
     assert.equal(ctx.surface, 'chat');
   });

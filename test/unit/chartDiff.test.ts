@@ -33,7 +33,7 @@ import {
   categoryBreakdownChanged,
   hourlyChanged,
 } from '../../webview/chartDiff';
-import type { DailyBarsData, HeatmapData, ModelBreakdownData, CategoryBreakdownData, HourlyTimelineData } from '../../src/client_extension/domain/types';
+import type { DailyBarsData, HeatmapData, ModelBreakdownData, CategoryBreakdownData, HourlyTimelineData } from '../../src/extension/domain/types';
 
 describe('dailyBarsChanged', () => {
   const base: DailyBarsData = { points: [{ date: '06-20', credits: 5, cost: 0.2, colorIndex: 0 }], budgetLine: null, projectedLine: null, cumulativeCosts: [0.2] };

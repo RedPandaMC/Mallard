@@ -27,9 +27,15 @@ export function mountCurrencySelector(
         return;
       }
       (select as HTMLSelectElement & { _list?: string })._list = newList;
-      select.innerHTML = codes
-        .map((c) => `<option value="${c}"${c === selected ? ' selected' : ''}>${c}</option>`)
-        .join('');
+      select.replaceChildren(
+        ...codes.map((c) => {
+          const opt = document.createElement('option');
+          opt.value = c;
+          opt.textContent = c;
+          opt.selected = c === selected;
+          return opt;
+        }),
+      );
       if (current && codes.includes(current)) select.value = current;
     },
   };

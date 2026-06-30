@@ -23,6 +23,7 @@ spec:
         runAsGroup: 1000
       containers:
         - name: mallard-server
+          # trivy:ignore:KSV013 -- intentional: CI tags both :latest and :<sha>; deployment uses :latest + imagePullPolicy Always
           image: ghcr.io/redpandamc/mallard-server:latest
           ports:
             - containerPort: 8080

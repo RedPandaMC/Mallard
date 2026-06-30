@@ -4,7 +4,7 @@ import type {
   ModelBreakdownData,
   CategoryBreakdownData,
   HourlyTimelineData,
-} from '../src/client_extension/domain/types';
+} from '../src/extension/domain/types';
 
 function numsEqual(a: readonly number[], b: readonly number[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);

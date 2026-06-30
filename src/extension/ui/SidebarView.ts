@@ -336,6 +336,7 @@ export class SidebarView implements vscode.WebviewViewProvider {
     }
 
     window.addEventListener('message', e => {
+      if (!e.origin.startsWith('vscode-webview://')) return;
       const msg = e.data;
       if (msg.type === 'snapshot') render(msg.payload);
     });

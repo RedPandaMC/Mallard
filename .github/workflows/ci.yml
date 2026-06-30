@@ -28,6 +28,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Audit Node dependencies (bun audit)
+        run: bun audit --level high --production
+
       - name: Type-check (host + webview)
         run: bun run check-types
 

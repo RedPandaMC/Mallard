@@ -4,16 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - "server/**"
       - "src/server/**"
-      - "server/k8s/**"
       - "pyproject.toml"
   pull_request:
-    paths:
-      - "server/**"
-      - "src/server/**"
-      - "server/k8s/**"
-      - "pyproject.toml"
+    branches: [main]
   # Fires after Server CI finishes on main — ensures the image is already pushed
   # before we try to scan it.
   workflow_run:
@@ -30,6 +24,49 @@ permissions:
   packages: read          # pull ghcr.io image for image scans
 
 jobs:
+  # ── Dependency review (PRs only) ────────────────────────────────────────────
+  # Blocks a PR if it introduces a new dependency with a known HIGH/CRITICAL CVE.
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: always
+
+  # ── CodeQL (TypeScript / JavaScript) ────────────────────────────────────────
+  # Static analysis of the extension and webview source.
+  codeql:
+    name: CodeQL (TypeScript)
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request' ||
+      github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          config-file: .github/codeql/codeql-config.yml
+
+      - uses: github/codeql-action/autobuild@v3
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: codeql-typescript
+
   # ── IaC / repo scan ────────────────────────────────────────────────────────
   # Runs on every PR and every push — scans Dockerfile, K8s YAML, Python deps.
   trivy-iac:
@@ -56,7 +93,7 @@ jobs:
           #   universal-auth-secret.yaml  — placeholder values, not real credentials
           #   patch-server-envfrom.yaml   — kustomize strategic-merge patch; security
           #   agent-injector-patch.yaml     context is inherited from the base Deployment
-          skip-files: "server/k8s/infisical/universal-auth-secret.yaml,server/k8s/infisical/patch-server-envfrom.yaml,server/k8s/openbao/agent-injector-patch.yaml"
+          skip-files: "src/server/k8s/infisical/universal-auth-secret.yaml,src/server/k8s/infisical/patch-server-envfrom.yaml,src/server/k8s/openbao/agent-injector-patch.yaml"
 
       - name: Upload Trivy IaC SARIF
         uses: github/codeql-action/upload-sarif@v3
@@ -89,7 +126,7 @@ jobs:
 
       - name: Run Kubescape (NSA + MITRE)
         run: |
-          kubescape scan framework NSA,MITRE server/k8s/ \
+          kubescape scan framework NSA,MITRE src/server/k8s/ \
             --format sarif \
             --output results.sarif \
             --severity-threshold high || true
