@@ -8,9 +8,9 @@
   },
   "include": [
     "webview/**/*.ts",
-    "src/domain/types.ts",
-    "src/domain/expr/**/*.ts",
-    "src/domain/alertRules.ts",
-    "src/ui/messaging.ts"
+    "src/client_extension/domain/types.ts",
+    "src/client_extension/domain/expr/**/*.ts",
+    "src/client_extension/domain/alertRules.ts",
+    "src/client_extension/ui/messaging.ts"
   ]
 }

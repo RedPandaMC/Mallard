@@ -4,8 +4,8 @@
  */
 import * as assert from 'assert';
 import { makeEvent, makeStubVscodeHost } from './helpers';
-import { DEFAULT_USER_CONFIG } from '../../src/domain/types';
-import { buildSnapshot } from '../../src/domain/snapshot';
+import { DEFAULT_USER_CONFIG } from '../../src/client_extension/domain/types';
+import { buildSnapshot } from '../../src/client_extension/domain/snapshot';
 
 function makeOpts(now: number) {
   return {

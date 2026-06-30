@@ -1,7 +1,7 @@
 import { strict as assert } from 'assert';
-import { aggregateBy } from '../../../src/domain/aggregate';
-import { fitHoltWinters, seasonalForecaster } from '../../../src/domain/forecasters/seasonal';
-import { startOf, nextBucketStart, DAY_MS } from '../../../src/util/time';
+import { aggregateBy } from '../../../src/client_extension/domain/aggregate';
+import { fitHoltWinters, seasonalForecaster } from '../../../src/client_extension/domain/forecasters/seasonal';
+import { startOf, nextBucketStart, DAY_MS } from '../../../src/client_extension/util/time';
 import { makeEvent } from '../helpers';
 
 describe('fitHoltWinters', () => {

@@ -22,14 +22,14 @@ _ENV = {
 
 class TestRateLimitKeyFunction:
     def test_returns_api_key_header(self) -> None:
-        from src.main import _get_key_for_rate_limit
+        from server.main import _get_key_for_rate_limit
 
         req = MagicMock()
         req.headers = {"X-API-Key": "abc123"}
         assert _get_key_for_rate_limit(req) == "abc123"
 
     def test_falls_back_to_client_ip_when_header_absent(self) -> None:
-        from src.main import _get_key_for_rate_limit
+        from server.main import _get_key_for_rate_limit
 
         req = MagicMock()
         req.headers = MagicMock()
@@ -47,7 +47,7 @@ class TestMqttLifespan:
         monkeypatch.setenv("MQTT_ENABLED", "true")
         monkeypatch.setenv("MQTT_CREDENTIALS", "test-mqtt-password")
 
-        import src.config as config_module
+        import server.config as config_module
 
         monkeypatch.setattr(config_module, "_settings", None)
 
@@ -62,10 +62,10 @@ class TestMqttLifespan:
                 return
 
         with (
-            patch("src.influx.make_client", return_value=mock_influx),
-            patch("src.mqtt.run_mqtt_broker", _noop_mqtt),
+            patch("server.influx.make_client", return_value=mock_influx),
+            patch("server.mqtt.run_mqtt_broker", _noop_mqtt),
         ):
-            import src.main as main_module
+            import server.main as main_module
 
             importlib.reload(main_module)
             app = main_module.create_app()

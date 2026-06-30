@@ -15,31 +15,31 @@ import pytest
 
 class TestCredentialStoreParseLabled:
     def test_labeled_entry(self) -> None:
-        from src.credential_verifier import CredentialStore
+        from server.credential_verifier import CredentialStore
 
         result = CredentialStore.parse_labeled("team-alpha:mykey")
         h = hashlib.sha256(b"mykey").hexdigest()
         assert result == {h: "team-alpha"}
 
     def test_bare_entry_gets_unknown_label(self) -> None:
-        from src.credential_verifier import CredentialStore
+        from server.credential_verifier import CredentialStore
 
         result = CredentialStore.parse_labeled("bare-key")
         h = hashlib.sha256(b"bare-key").hexdigest()
         assert result == {h: "unknown"}
 
     def test_empty_string_returns_empty_dict(self) -> None:
-        from src.credential_verifier import CredentialStore
+        from server.credential_verifier import CredentialStore
 
         assert CredentialStore.parse_labeled("") == {}
 
     def test_whitespace_only_entries_skipped(self) -> None:
-        from src.credential_verifier import CredentialStore
+        from server.credential_verifier import CredentialStore
 
         assert CredentialStore.parse_labeled("  ,  ,  ") == {}
 
     def test_multiple_entries_parsed(self) -> None:
-        from src.credential_verifier import CredentialStore
+        from server.credential_verifier import CredentialStore
 
         result = CredentialStore.parse_labeled("alice:pass1,bob:pass2")
         h1 = hashlib.sha256(b"pass1").hexdigest()
@@ -48,14 +48,14 @@ class TestCredentialStoreParseLabled:
         assert result[h2] == "bob"
 
     def test_label_whitespace_stripped(self) -> None:
-        from src.credential_verifier import CredentialStore
+        from server.credential_verifier import CredentialStore
 
         result = CredentialStore.parse_labeled("  team-x  :secret")
         h = hashlib.sha256(b"secret").hexdigest()
         assert result[h] == "team-x"
 
     def test_mixed_bare_and_labeled(self) -> None:
-        from src.credential_verifier import CredentialStore
+        from server.credential_verifier import CredentialStore
 
         result = CredentialStore.parse_labeled("bare,labeled:key")
         h_bare = hashlib.sha256(b"bare").hexdigest()
@@ -75,7 +75,7 @@ class TestStaticCredentialVerifier:
         return s
 
     async def test_verify_api_key_valid(self) -> None:
-        from src.credential_verifier import StaticCredentialVerifier, VerifiedIdentity
+        from server.credential_verifier import StaticCredentialVerifier, VerifiedIdentity
 
         h = hashlib.sha256(b"good-key").hexdigest()
         verifier = StaticCredentialVerifier(self._make_settings({h: "my-label"}, {}))
@@ -83,7 +83,7 @@ class TestStaticCredentialVerifier:
         assert result == VerifiedIdentity(label="my-label")
 
     async def test_verify_api_key_invalid(self) -> None:
-        from src.credential_verifier import StaticCredentialVerifier
+        from server.credential_verifier import StaticCredentialVerifier
 
         h = hashlib.sha256(b"good-key").hexdigest()
         verifier = StaticCredentialVerifier(self._make_settings({h: "label"}, {}))
@@ -91,13 +91,13 @@ class TestStaticCredentialVerifier:
         assert result is None
 
     async def test_verify_api_key_empty_store(self) -> None:
-        from src.credential_verifier import StaticCredentialVerifier
+        from server.credential_verifier import StaticCredentialVerifier
 
         verifier = StaticCredentialVerifier(self._make_settings({}, {}))
         assert await verifier.verify_api_key("any") is None
 
     async def test_verify_mqtt_credential_valid(self) -> None:
-        from src.credential_verifier import StaticCredentialVerifier, VerifiedIdentity
+        from server.credential_verifier import StaticCredentialVerifier, VerifiedIdentity
 
         h = hashlib.sha256(b"mqtt-pass").hexdigest()
         verifier = StaticCredentialVerifier(self._make_settings({}, {h: "device-1"}))
@@ -105,7 +105,7 @@ class TestStaticCredentialVerifier:
         assert result == VerifiedIdentity(label="device-1")
 
     async def test_verify_mqtt_credential_invalid(self) -> None:
-        from src.credential_verifier import StaticCredentialVerifier
+        from server.credential_verifier import StaticCredentialVerifier
 
         h = hashlib.sha256(b"mqtt-pass").hexdigest()
         verifier = StaticCredentialVerifier(self._make_settings({}, {h: "device-1"}))
@@ -113,7 +113,7 @@ class TestStaticCredentialVerifier:
         assert result is None
 
     async def test_verify_mqtt_credential_empty_store(self) -> None:
-        from src.credential_verifier import StaticCredentialVerifier
+        from server.credential_verifier import StaticCredentialVerifier
 
         verifier = StaticCredentialVerifier(self._make_settings({}, {}))
         assert await verifier.verify_mqtt_credential("any") is None
@@ -124,7 +124,7 @@ class TestStaticCredentialVerifier:
 
 class TestRemoteCredentialVerifierCaching:
     def _make_infisical_verifier(self, ttl: int = 30):
-        from src.credential_verifier import InfisicalCredentialVerifier
+        from server.credential_verifier import InfisicalCredentialVerifier
 
         s = MagicMock()
         s.secret_manager_url = "http://infisical"
@@ -136,7 +136,7 @@ class TestRemoteCredentialVerifierCaching:
         return v
 
     def _mock_store(self, api_key: str = "key", label: str = "lbl"):
-        from src.credential_verifier import CredentialStore
+        from server.credential_verifier import CredentialStore
 
         h = hashlib.sha256(api_key.encode()).hexdigest()
         return CredentialStore(
@@ -168,7 +168,7 @@ class TestRemoteCredentialVerifierCaching:
         with patch.object(verifier, "_fetch_store", new=AsyncMock(return_value=store)) as mock_fetch:
             await verifier._get_store()
             # Force TTL expiry by resetting fetched_at to distant past
-            from src.credential_verifier import CredentialStore
+            from server.credential_verifier import CredentialStore
 
             old_store = CredentialStore(fetched_at=time.monotonic() - 100)
             verifier._store = old_store
@@ -194,7 +194,7 @@ class TestRemoteCredentialVerifierCaching:
         assert fetch_count == 1
 
     async def test_verify_api_key_via_cached_store(self) -> None:
-        from src.credential_verifier import VerifiedIdentity
+        from server.credential_verifier import VerifiedIdentity
 
         verifier = self._make_infisical_verifier()
         store = self._mock_store(api_key="my-key", label="my-team")
@@ -204,7 +204,7 @@ class TestRemoteCredentialVerifierCaching:
         assert result == VerifiedIdentity(label="my-team")
 
     async def test_verify_mqtt_via_cached_store(self) -> None:
-        from src.credential_verifier import CredentialStore, VerifiedIdentity
+        from server.credential_verifier import CredentialStore, VerifiedIdentity
 
         verifier = self._make_infisical_verifier()
         h = hashlib.sha256(b"mqtt-pass").hexdigest()
@@ -229,7 +229,7 @@ class TestInfisicalFetchStore:
         return s
 
     async def test_success_parses_response(self) -> None:
-        from src.credential_verifier import InfisicalCredentialVerifier
+        from server.credential_verifier import InfisicalCredentialVerifier
 
         response_json = {
             "secrets": [
@@ -247,7 +247,7 @@ class TestInfisicalFetchStore:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.get = AsyncMock(return_value=mock_response)
 
-        with patch("src.credential_verifier.httpx.AsyncClient", return_value=mock_client):
+        with patch("server.credential_verifier.httpx.AsyncClient", return_value=mock_client):
             verifier = InfisicalCredentialVerifier(self._make_settings())
             store = await verifier._fetch_store()
 
@@ -257,7 +257,7 @@ class TestInfisicalFetchStore:
         assert store.mqtt_credentials[hm] == "device-1"
 
     async def test_missing_keys_graceful(self) -> None:
-        from src.credential_verifier import InfisicalCredentialVerifier
+        from server.credential_verifier import InfisicalCredentialVerifier
 
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -268,7 +268,7 @@ class TestInfisicalFetchStore:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.get = AsyncMock(return_value=mock_response)
 
-        with patch("src.credential_verifier.httpx.AsyncClient", return_value=mock_client):
+        with patch("server.credential_verifier.httpx.AsyncClient", return_value=mock_client):
             verifier = InfisicalCredentialVerifier(self._make_settings())
             store = await verifier._fetch_store()
 
@@ -276,7 +276,7 @@ class TestInfisicalFetchStore:
         assert store.mqtt_credentials == {}
 
     async def test_http_error_raises(self) -> None:
-        from src.credential_verifier import InfisicalCredentialVerifier
+        from server.credential_verifier import InfisicalCredentialVerifier
 
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock(
@@ -288,26 +288,26 @@ class TestInfisicalFetchStore:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.get = AsyncMock(return_value=mock_response)
 
-        with patch("src.credential_verifier.httpx.AsyncClient", return_value=mock_client):
+        with patch("server.credential_verifier.httpx.AsyncClient", return_value=mock_client):
             verifier = InfisicalCredentialVerifier(self._make_settings())
             with pytest.raises(Exception):
                 await verifier._fetch_store()
 
     async def test_network_error_raises(self) -> None:
-        from src.credential_verifier import InfisicalCredentialVerifier
+        from server.credential_verifier import InfisicalCredentialVerifier
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.get = AsyncMock(side_effect=httpx.ConnectError("refused"))
 
-        with patch("src.credential_verifier.httpx.AsyncClient", return_value=mock_client):
+        with patch("server.credential_verifier.httpx.AsyncClient", return_value=mock_client):
             verifier = InfisicalCredentialVerifier(self._make_settings())
             with pytest.raises(httpx.ConnectError):
                 await verifier._fetch_store()
 
     async def test_uses_ca_cert_path_when_set(self) -> None:
-        from src.credential_verifier import InfisicalCredentialVerifier
+        from server.credential_verifier import InfisicalCredentialVerifier
 
         s = self._make_settings()
         s.secret_manager_ca_cert_path = "/path/to/ca.crt"
@@ -331,7 +331,7 @@ class TestInfisicalFetchStore:
             async def get(self, *args, **kwargs):
                 return mock_response
 
-        with patch("src.credential_verifier.httpx.AsyncClient", _FakeClient):
+        with patch("server.credential_verifier.httpx.AsyncClient", _FakeClient):
             verifier = InfisicalCredentialVerifier(s)
             await verifier._fetch_store()
 
@@ -360,14 +360,14 @@ class TestOpenBaoFetchStore:
         return r
 
     async def test_success_parses_kv_response(self) -> None:
-        from src.credential_verifier import OpenBaoCredentialVerifier
+        from server.credential_verifier import OpenBaoCredentialVerifier
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.get = AsyncMock(return_value=self._mock_response("team:k", "dev:p"))
 
-        with patch("src.credential_verifier.httpx.AsyncClient", return_value=mock_client):
+        with patch("server.credential_verifier.httpx.AsyncClient", return_value=mock_client):
             verifier = OpenBaoCredentialVerifier(self._make_settings())
             store = await verifier._fetch_store()
 
@@ -377,7 +377,7 @@ class TestOpenBaoFetchStore:
         assert store.mqtt_credentials[hp] == "dev"
 
     async def test_namespace_header_sent_when_set(self) -> None:
-        from src.credential_verifier import OpenBaoCredentialVerifier
+        from server.credential_verifier import OpenBaoCredentialVerifier
 
         captured_headers: list = []
 
@@ -398,14 +398,14 @@ class TestOpenBaoFetchStore:
                 r.json = MagicMock(return_value={"data": {"data": {}}})
                 return r
 
-        with patch("src.credential_verifier.httpx.AsyncClient", _FakeClient):
+        with patch("server.credential_verifier.httpx.AsyncClient", _FakeClient):
             verifier = OpenBaoCredentialVerifier(self._make_settings(namespace="ns1"))
             await verifier._fetch_store()
 
         assert captured_headers[0].get("X-Vault-Namespace") == "ns1"
 
     async def test_no_namespace_header_when_empty(self) -> None:
-        from src.credential_verifier import OpenBaoCredentialVerifier
+        from server.credential_verifier import OpenBaoCredentialVerifier
 
         captured_headers: list = []
 
@@ -426,14 +426,14 @@ class TestOpenBaoFetchStore:
                 r.json = MagicMock(return_value={"data": {"data": {}}})
                 return r
 
-        with patch("src.credential_verifier.httpx.AsyncClient", _FakeClient):
+        with patch("server.credential_verifier.httpx.AsyncClient", _FakeClient):
             verifier = OpenBaoCredentialVerifier(self._make_settings(namespace=""))
             await verifier._fetch_store()
 
         assert "X-Vault-Namespace" not in captured_headers[0]
 
     async def test_http_error_raises(self) -> None:
-        from src.credential_verifier import OpenBaoCredentialVerifier
+        from server.credential_verifier import OpenBaoCredentialVerifier
 
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock(side_effect=Exception("HTTP 403"))
@@ -443,20 +443,20 @@ class TestOpenBaoFetchStore:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.get = AsyncMock(return_value=mock_response)
 
-        with patch("src.credential_verifier.httpx.AsyncClient", return_value=mock_client):
+        with patch("server.credential_verifier.httpx.AsyncClient", return_value=mock_client):
             verifier = OpenBaoCredentialVerifier(self._make_settings())
             with pytest.raises(Exception):
                 await verifier._fetch_store()
 
     async def test_network_error_raises(self) -> None:
-        from src.credential_verifier import OpenBaoCredentialVerifier
+        from server.credential_verifier import OpenBaoCredentialVerifier
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.get = AsyncMock(side_effect=httpx.ConnectError("refused"))
 
-        with patch("src.credential_verifier.httpx.AsyncClient", return_value=mock_client):
+        with patch("server.credential_verifier.httpx.AsyncClient", return_value=mock_client):
             verifier = OpenBaoCredentialVerifier(self._make_settings())
             with pytest.raises(httpx.ConnectError):
                 await verifier._fetch_store()
@@ -472,19 +472,19 @@ class TestCreateVerifierFactory:
         return s
 
     def test_empty_type_returns_static(self) -> None:
-        from src.credential_verifier import StaticCredentialVerifier, create_verifier
+        from server.credential_verifier import StaticCredentialVerifier, create_verifier
 
         result = create_verifier(self._make_settings(""))
         assert isinstance(result, StaticCredentialVerifier)
 
     def test_infisical_type_returns_infisical(self) -> None:
-        from src.credential_verifier import InfisicalCredentialVerifier, create_verifier
+        from server.credential_verifier import InfisicalCredentialVerifier, create_verifier
 
         result = create_verifier(self._make_settings("infisical"))
         assert isinstance(result, InfisicalCredentialVerifier)
 
     def test_openbao_type_returns_openbao(self) -> None:
-        from src.credential_verifier import OpenBaoCredentialVerifier, create_verifier
+        from server.credential_verifier import OpenBaoCredentialVerifier, create_verifier
 
         result = create_verifier(self._make_settings("openbao"))
         assert isinstance(result, OpenBaoCredentialVerifier)
@@ -495,13 +495,13 @@ class TestCreateVerifierFactory:
 
 class TestVerifiedIdentity:
     def test_equality(self) -> None:
-        from src.credential_verifier import VerifiedIdentity
+        from server.credential_verifier import VerifiedIdentity
 
         assert VerifiedIdentity("a") == VerifiedIdentity("a")
         assert VerifiedIdentity("a") != VerifiedIdentity("b")
 
     def test_immutable(self) -> None:
-        from src.credential_verifier import VerifiedIdentity
+        from server.credential_verifier import VerifiedIdentity
 
         identity = VerifiedIdentity("label")
         with pytest.raises((AttributeError, TypeError)):
@@ -513,14 +513,14 @@ class TestVerifiedIdentity:
 
 class TestCredentialStoreDefaults:
     def test_default_empty_dicts(self) -> None:
-        from src.credential_verifier import CredentialStore
+        from server.credential_verifier import CredentialStore
 
         store = CredentialStore()
         assert store.api_keys == {}
         assert store.mqtt_credentials == {}
 
     def test_fetched_at_is_recent(self) -> None:
-        from src.credential_verifier import CredentialStore
+        from server.credential_verifier import CredentialStore
 
         before = time.monotonic()
         store = CredentialStore()

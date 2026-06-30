@@ -202,9 +202,9 @@ class TestIngestRouteDirectly:
     """
 
     async def test_belt_and_suspenders_413(self, valid_payload: dict) -> None:
-        from src.credential_verifier import StaticCredentialVerifier
-        from src.routers.ingest import ingest
-        from src.schemas import IngestPayload
+        from server.credential_verifier import StaticCredentialVerifier
+        from server.routers.ingest import ingest
+        from server.schemas import IngestPayload
 
         mock_request = MagicMock()
         mock_request.headers.get = MagicMock(return_value=str(64 * 1024 + 1))
@@ -226,7 +226,7 @@ class TestIngestInfluxFailure:
     def test_influx_write_failure_returns_503(
         self, client: TestClient, valid_payload: dict
     ) -> None:
-        with patch("src.routers.ingest.write_payload", side_effect=RuntimeError("InfluxDB down")):
+        with patch("server.routers.ingest.write_payload", side_effect=RuntimeError("InfluxDB down")):
             response = client.post(
                 "/api/v1/ingest",
                 json=valid_payload,
@@ -239,21 +239,21 @@ class TestIngestInfluxFailure:
 
 class TestExtractBearer:
     def test_valid_bearer_header(self) -> None:
-        from src.routers.ingest import _extract_bearer
+        from server.routers.ingest import _extract_bearer
 
         assert _extract_bearer("Bearer my-token") == "my-token"
 
     def test_empty_bearer_header(self) -> None:
-        from src.routers.ingest import _extract_bearer
+        from server.routers.ingest import _extract_bearer
 
         assert _extract_bearer("Bearer ") == ""
 
     def test_non_bearer_header(self) -> None:
-        from src.routers.ingest import _extract_bearer
+        from server.routers.ingest import _extract_bearer
 
         assert _extract_bearer("Basic dXNlcjpwYXNz") == ""
 
     def test_empty_string(self) -> None:
-        from src.routers.ingest import _extract_bearer
+        from server.routers.ingest import _extract_bearer
 
         assert _extract_bearer("") == ""

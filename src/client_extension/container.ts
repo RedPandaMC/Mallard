@@ -21,8 +21,7 @@ import { IngestService } from './ingest/IngestService';
 import { PricingService } from './pricing/PricingService';
 import { CurrencyService } from './pricing/CurrencyService';
 import { EventStore } from './store/EventStore';
-import { createMetricExporter } from './export/ExporterFactory';
-import { NullMetricExporter } from './export/MetricExporter';
+import { AuthProvider } from './export/AuthProvider';
 import { opt } from './util/lang';
 
 export interface Container {
@@ -83,27 +82,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const userConfig = new UserConfigStore(storageDir);
   const layout = new LayoutStore(context.globalState);
 
-  // Migrate legacy plaintext MQTT password from settings to SecretStorage.
-  const legacyCfg = vscode.workspace.getConfiguration('mallard');
-  const legacyPwd = legacyCfg.get<string>('metricExport.password', '');
-  if (legacyPwd) {
-    await context.secrets.store('mallard.mqtt.password', legacyPwd);
-    await legacyCfg.update('metricExport.password', undefined, vscode.ConfigurationTarget.Global);
-  }
-  const mqttPassword = (await context.secrets.get('mallard.mqtt.password')) ?? '';
-
-  const ve = cfg.metricExport;
-  const workspaceFolders = vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath);
-  const exporter = createMetricExporter({
-    ...opt('brokerUrl',  ve.brokerUrl  || undefined),
-    ...opt('topic',      ve.topic      || undefined),
-    ...opt('username',   ve.username   || undefined),
-    ...opt('password',   mqttPassword  || undefined),
-    ...opt('certPath',   ve.certPath   || undefined),
-    ...opt('keyPath',    ve.keyPath    || undefined),
-    ...opt('caPath',     ve.caPath     || undefined),
-    ...(workspaceFolders?.length ? { workspaceFolders } : {}),
-  }) ?? new NullMetricExporter();
+  const exporter = await new AuthProvider(cfg, context).createExporter();
 
   const usage = new UsageService(store.reader, pricing, ingest, userConfig, currency, github, exporter);
   const restriction = new RestrictionEngine(storageDir);

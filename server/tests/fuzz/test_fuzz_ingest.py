@@ -28,7 +28,7 @@ def _make_test_client() -> TestClient:
     os.environ.setdefault("API_KEYS", "test-key-valid")
     os.environ.setdefault("RATE_LIMIT", "100000/minute")
 
-    import src.config as config_module
+    import server.config as config_module
 
     config_module._settings = None
 
@@ -37,14 +37,14 @@ def _make_test_client() -> TestClient:
     mock_write_api = MagicMock()
     mock_client.write_api.return_value = mock_write_api
 
-    with patch("src.influx.make_client", return_value=mock_client):
-        import src.main as main_module
+    with patch("server.influx.make_client", return_value=mock_client):
+        import server.main as main_module
 
         importlib.reload(main_module)
         app = main_module.create_app()
-        from src.config import get_settings
+        from server.config import get_settings
 
-        from src.credential_verifier import StaticCredentialVerifier
+        from server.credential_verifier import StaticCredentialVerifier
 
         settings = get_settings()
         app.state.settings = settings

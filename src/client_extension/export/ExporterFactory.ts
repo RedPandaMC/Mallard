@@ -16,7 +16,6 @@ export interface MqttExporterConfig {
 
 export interface WebhookExporterConfig {
   url: string;
-  apiKey?: string;
   secret?: string;
   headers?: Record<string, string>;
   retries?: number;
@@ -43,7 +42,6 @@ export function createWebhookExporter(cfg: Partial<WebhookExporterConfig>): Metr
   if (!cfg.url) return null;
   const protocol = new WebhookProtocol({
     url: cfg.url,
-    ...(cfg.apiKey ? { apiKey: cfg.apiKey } : {}),
     ...(cfg.secret ? { secret: cfg.secret } : {}),
     ...(cfg.headers ? { headers: cfg.headers } : {}),
     ...(cfg.retries !== undefined ? { retries: cfg.retries } : {}),

@@ -12,10 +12,10 @@
  * by the integration test suite.
  */
 import { strict as assert } from 'assert';
-import { MetricPayloadSerializer } from '../../src/export/payload';
-import { buildSnapshot } from '../../src/domain/snapshot';
+import { MetricPayloadSerializer } from '../../src/client_extension/export/payload';
+import { buildSnapshot } from '../../src/client_extension/domain/snapshot';
 import { makeEvent } from './helpers';
-import type { MetricProtocol, MetricSerializer } from '../../src/export/MetricExporter';
+import type { MetricProtocol, MetricSerializer } from '../../src/client_extension/export/MetricExporter';
 
 // ── Minimal local re-implementation of MetricExporter (vscode-free) ──────────
 

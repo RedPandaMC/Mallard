@@ -5,8 +5,8 @@
  */
 import type { TooltipComponentOption } from './echarts';
 import { readTheme } from '../theme';
-import { UsageSnapshot } from '../../src/domain/types';
-import { formatCredits } from '../../src/domain/format';
+import { UsageSnapshot } from '../../src/client_extension/domain/types';
+import { formatCredits } from '../../src/client_extension/domain/format';
 import { ChartComponent } from './ChartComponent';
 
 export interface HeatmapHandle {

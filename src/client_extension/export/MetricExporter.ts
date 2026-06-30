@@ -96,7 +96,7 @@ export class MqttProtocol implements MetricProtocol {
   constructor(opts: MqttProtocolOptions, private readonly logger: Logger = defaultLogger) {
     if (!opts.brokerUrl.startsWith('mqtts://') && !opts.brokerUrl.startsWith('wss://')) {
       void vscode.window.showWarningMessage(
-        'Mallard: mallard.metricExport.brokerUrl must use mqtts:// or wss:// (TLS required). ' +
+        'Mallard: mallard.mqtt.url must use mqtts:// or wss:// (TLS required). ' +
           'Metric export is disabled until a secure URL is configured.',
       );
       this.resolvedTopic = '';

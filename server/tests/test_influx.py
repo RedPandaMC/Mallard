@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from src.schemas import IngestPayload
+from server.schemas import IngestPayload
 
 
 @pytest.fixture()
@@ -28,14 +28,14 @@ def sample_payload() -> IngestPayload:
 
 class TestWritePayload:
     def test_write_called_once(self, sample_payload: IngestPayload) -> None:
-        from src.influx import write_payload
+        from server.influx import write_payload
 
         mock_api = MagicMock()
         write_payload(mock_api, bucket="metrics", org="mallard", payload=sample_payload)
         assert mock_api.write.call_count == 1
 
     def test_write_receives_correct_bucket_and_org(self, sample_payload: IngestPayload) -> None:
-        from src.influx import write_payload
+        from server.influx import write_payload
 
         mock_api = MagicMock()
         write_payload(mock_api, bucket="my-bucket", org="my-org", payload=sample_payload)
@@ -48,7 +48,7 @@ class TestWritePayload:
         """The InfluxDB Point should use the 'mallard_metrics' measurement."""
         from influxdb_client import Point
 
-        from src.influx import write_payload, _MEASUREMENT
+        from server.influx import write_payload, _MEASUREMENT
 
         captured_points: list[Point] = []
 
@@ -65,7 +65,7 @@ class TestWritePayload:
         assert captured_points[0]._name == _MEASUREMENT
 
     def test_point_contains_instance_id_tag(self, sample_payload: IngestPayload) -> None:
-        from src.influx import write_payload
+        from server.influx import write_payload
 
         captured: list = []
 
@@ -81,7 +81,7 @@ class TestWritePayload:
         assert point._tags.get("instance_id") == "inst-abc"
 
     def test_point_contains_numeric_fields(self, sample_payload: IngestPayload) -> None:
-        from src.influx import write_payload
+        from server.influx import write_payload
 
         captured: list = []
 
@@ -99,8 +99,8 @@ class TestWritePayload:
         assert point._fields["credits_velocity_per_hour"] == 2.5
 
     def test_null_top_model_stored_as_empty_string(self) -> None:
-        from src.influx import write_payload
-        from src.schemas import IngestPayload
+        from server.influx import write_payload
+        from server.schemas import IngestPayload
 
         payload = IngestPayload(
             instance_id="inst-xyz",
@@ -134,7 +134,7 @@ class TestMakeClient:
     def test_make_client_passes_url_token_org(self) -> None:
         from unittest.mock import patch
 
-        from src.config import Settings
+        from server.config import Settings
 
         settings = Settings(
             influx_url="http://myinflux:8086",
@@ -144,8 +144,8 @@ class TestMakeClient:
             api_keys="k1",
         )
 
-        with patch("src.influx.InfluxDBClient") as MockClient:
-            from src.influx import make_client
+        with patch("server.influx.InfluxDBClient") as MockClient:
+            from server.influx import make_client
 
             make_client(settings)
             MockClient.assert_called_once_with(
@@ -158,7 +158,7 @@ class TestMakeClient:
 class TestPingInflux:
     @pytest.mark.asyncio
     async def test_ping_returns_true_on_success(self) -> None:
-        from src.influx import ping_influx
+        from server.influx import ping_influx
 
         mock_client = MagicMock()
         mock_client.ping.return_value = True
@@ -167,7 +167,7 @@ class TestPingInflux:
 
     @pytest.mark.asyncio
     async def test_ping_returns_false_on_exception(self) -> None:
-        from src.influx import ping_influx
+        from server.influx import ping_influx
 
         mock_client = MagicMock()
         mock_client.ping.side_effect = Exception("connection refused")

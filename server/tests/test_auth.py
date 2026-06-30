@@ -45,7 +45,7 @@ class TestAuthModule:
     """Unit tests for src.auth functions."""
 
     def test_hash_key_returns_sha256_hex(self) -> None:
-        from src.auth import _hash_key
+        from server.auth import _hash_key
 
         raw = "my-api-key"
         result = _hash_key(raw)
@@ -53,7 +53,7 @@ class TestAuthModule:
         assert result == expected
 
     def test_constant_time_match_valid_key(self) -> None:
-        from src.auth import _constant_time_match
+        from server.auth import _constant_time_match
 
         h = hashlib.sha256(b"valid-key").hexdigest()
         # Accepts both set[str] and dict[str, str] (iterates keys)
@@ -61,7 +61,7 @@ class TestAuthModule:
         assert _constant_time_match(h, {h: "label"}) is True
 
     def test_constant_time_match_invalid_key(self) -> None:
-        from src.auth import _constant_time_match
+        from server.auth import _constant_time_match
 
         stored = hashlib.sha256(b"valid-key").hexdigest()
         candidate = hashlib.sha256(b"wrong-key").hexdigest()
@@ -69,14 +69,14 @@ class TestAuthModule:
         assert _constant_time_match(candidate, {stored: "label"}) is False
 
     def test_constant_time_match_empty_set(self) -> None:
-        from src.auth import _constant_time_match
+        from server.auth import _constant_time_match
 
         h = hashlib.sha256(b"any-key").hexdigest()
         assert _constant_time_match(h, set()) is False
         assert _constant_time_match(h, {}) is False
 
     def test_constant_time_match_multiple_keys(self) -> None:
-        from src.auth import _constant_time_match
+        from server.auth import _constant_time_match
 
         h1 = hashlib.sha256(b"key-1").hexdigest()
         h2 = hashlib.sha256(b"key-2").hexdigest()
@@ -98,7 +98,7 @@ class TestSettingsHashedKeys:
         monkeypatch.setenv("INFLUX_TOKEN", "tok")
         monkeypatch.setenv("API_KEYS", "key-a,key-b")
 
-        import src.config as config_module
+        import server.config as config_module
 
         monkeypatch.setattr(config_module, "_settings", None)
         settings = config_module.get_settings()
@@ -113,7 +113,7 @@ class TestSettingsHashedKeys:
         monkeypatch.setenv("INFLUX_TOKEN", "tok")
         monkeypatch.setenv("API_KEYS", "plain-text-key")
 
-        import src.config as config_module
+        import server.config as config_module
 
         monkeypatch.setattr(config_module, "_settings", None)
         settings = config_module.get_settings()

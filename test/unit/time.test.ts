@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { bucketKey, DAY_MS, daysInMonth, isoWeek, nextBucketStart, startOf } from '../../src/util/time';
+import { bucketKey, DAY_MS, daysInMonth, isoWeek, nextBucketStart, startOf } from '../../src/client_extension/util/time';
 
 describe('time bucketing', () => {
   const ts = new Date(2026, 5, 12, 14, 30).getTime(); // June 12 2026, 14:30 local

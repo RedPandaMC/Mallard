@@ -22,7 +22,6 @@ const REQUEST_TIMEOUT_MS = 10_000;
 
 export interface WebhookProtocolOptions {
   url: string;
-  apiKey?: string;
   secret?: string;
   headers?: Record<string, string>;
   retries?: number;
@@ -35,7 +34,7 @@ export class WebhookProtocol implements MetricProtocol {
   constructor(opts: WebhookProtocolOptions, private readonly logger: Logger = defaultLogger) {
     if (!opts.url.startsWith('https://')) {
       void vscode.window.showWarningMessage(
-        'Mallard: metricExport.webhook.url must use https:// (TLS required). ' +
+        'Mallard: mallard.server.url must use https:// (TLS required). ' +
           'Webhook export is disabled until a secure URL is configured.',
       );
       this.opts = { url: '' };
@@ -53,13 +52,9 @@ export class WebhookProtocol implements MetricProtocol {
   }
 
   private async post(body: string): Promise<void> {
-    const { url, apiKey, secret, headers = {}, retries = 3 } = this.opts;
+    const { url, secret, headers = {}, retries = 3 } = this.opts;
 
     const extraHeaders: Record<string, string> = { ...headers, 'Content-Type': 'application/json' };
-
-    if (apiKey) {
-      extraHeaders['X-API-Key'] = apiKey;
-    }
 
     if (secret) {
       const sig = crypto.createHmac('sha256', secret).update(body, 'utf8').digest('hex');

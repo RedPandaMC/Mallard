@@ -1,7 +1,7 @@
 import { strict as assert } from 'assert';
-import { aggregateBy } from '../../../src/domain/aggregate';
-import { linearForecaster } from '../../../src/domain/forecasters/linear';
-import { startOf, nextBucketStart, DAY_MS } from '../../../src/util/time';
+import { aggregateBy } from '../../../src/client_extension/domain/aggregate';
+import { linearForecaster } from '../../../src/client_extension/domain/forecasters/linear';
+import { startOf, nextBucketStart, DAY_MS } from '../../../src/client_extension/util/time';
 import { makeEvent } from '../helpers';
 
 function makeDayEvents(dayOffsets: number[], creditsPerDay: number, monthStart: number) {

@@ -1,5 +1,5 @@
 import { post } from '../api';
-import { UserConfig } from '../../src/domain/types';
+import { UserConfig } from '../../src/client_extension/domain/types';
 
 export interface AlertConfigPanelHandle {
   update(config: UserConfig): void;

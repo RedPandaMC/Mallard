@@ -1,7 +1,7 @@
 import * as assert from 'assert';
-import { evaluateRestrictionState } from '../../src/domain/restriction/evaluator';
-import { scopeIds, customIdsFor, knownScopeNames } from '../../src/domain/restriction/scopes';
-import { AlertRule } from '../../src/domain/types';
+import { evaluateRestrictionState } from '../../src/client_extension/domain/restriction/evaluator';
+import { scopeIds, customIdsFor, knownScopeNames } from '../../src/client_extension/domain/restriction/scopes';
+import { AlertRule } from '../../src/client_extension/domain/types';
 
 describe('evaluateRestrictionState', () => {
   it('returns null when no rule has a restrict block', () => {

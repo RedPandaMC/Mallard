@@ -10,31 +10,31 @@ from pydantic import ValidationError
 
 class TestSettingsValidators:
     def test_empty_influx_url_raises(self) -> None:
-        from src.config import Settings
+        from server.config import Settings
 
         with pytest.raises(ValidationError, match="INFLUX_URL must not be empty"):
             Settings(influx_url="", influx_token="tok", api_keys="key")
 
     def test_whitespace_influx_url_raises(self) -> None:
-        from src.config import Settings
+        from server.config import Settings
 
         with pytest.raises(ValidationError, match="INFLUX_URL must not be empty"):
             Settings(influx_url="   ", influx_token="tok", api_keys="key")
 
     def test_valid_influx_url_is_stripped(self) -> None:
-        from src.config import Settings
+        from server.config import Settings
 
         s = Settings(influx_url="  http://x:8086  ", influx_token="tok", api_keys="k")
         assert s.influx_url == "http://x:8086"
 
     def test_empty_api_keys_raises(self) -> None:
-        from src.config import Settings
+        from server.config import Settings
 
         with pytest.raises(ValidationError, match="API_KEYS must contain at least one key"):
             Settings(influx_url="http://x:8086", influx_token="tok", api_keys="")
 
     def test_whitespace_only_api_keys_raises(self) -> None:
-        from src.config import Settings
+        from server.config import Settings
 
         with pytest.raises(ValidationError, match="API_KEYS must contain at least one key"):
             Settings(influx_url="http://x:8086", influx_token="tok", api_keys="   ")
@@ -42,21 +42,21 @@ class TestSettingsValidators:
 
 class TestParseLabeledFunction:
     def test_bare_key_gets_unknown_label(self) -> None:
-        from src.config import _parse_labeled
+        from server.config import _parse_labeled
 
         result = _parse_labeled("mykey")
         h = hashlib.sha256(b"mykey").hexdigest()
         assert result == {h: "unknown"}
 
     def test_labeled_key_stores_label(self) -> None:
-        from src.config import _parse_labeled
+        from server.config import _parse_labeled
 
         result = _parse_labeled("team-alpha:mykey")
         h = hashlib.sha256(b"mykey").hexdigest()
         assert result == {h: "team-alpha"}
 
     def test_multiple_entries(self) -> None:
-        from src.config import _parse_labeled
+        from server.config import _parse_labeled
 
         result = _parse_labeled("alice:pass1,bob:pass2")
         h1 = hashlib.sha256(b"pass1").hexdigest()
@@ -65,17 +65,17 @@ class TestParseLabeledFunction:
         assert result[h2] == "bob"
 
     def test_empty_string_returns_empty_dict(self) -> None:
-        from src.config import _parse_labeled
+        from server.config import _parse_labeled
 
         assert _parse_labeled("") == {}
 
     def test_whitespace_only_entries_skipped(self) -> None:
-        from src.config import _parse_labeled
+        from server.config import _parse_labeled
 
         assert _parse_labeled("  ,  ,  ") == {}
 
     def test_mixed_bare_and_labeled(self) -> None:
-        from src.config import _parse_labeled
+        from server.config import _parse_labeled
 
         result = _parse_labeled("bare-key,team:secret")
         h_bare = hashlib.sha256(b"bare-key").hexdigest()
@@ -90,7 +90,7 @@ class TestHashedCredentials:
         monkeypatch.setenv("INFLUX_TOKEN", "tok")
         monkeypatch.setenv("API_KEYS", "key-a,key-b")
 
-        import src.config as config_module
+        import server.config as config_module
 
         monkeypatch.setattr(config_module, "_settings", None)
         settings = config_module.get_settings()
@@ -106,7 +106,7 @@ class TestHashedCredentials:
         monkeypatch.setenv("INFLUX_TOKEN", "tok")
         monkeypatch.setenv("API_KEYS", "team-alpha:key-a,team-beta:key-b")
 
-        import src.config as config_module
+        import server.config as config_module
 
         monkeypatch.setattr(config_module, "_settings", None)
         settings = config_module.get_settings()
@@ -121,7 +121,7 @@ class TestHashedCredentials:
         monkeypatch.setenv("INFLUX_TOKEN", "tok")
         monkeypatch.setenv("API_KEYS", "plain-text-key")
 
-        import src.config as config_module
+        import server.config as config_module
 
         monkeypatch.setattr(config_module, "_settings", None)
         settings = config_module.get_settings()
@@ -136,7 +136,7 @@ class TestHashedCredentials:
         monkeypatch.setenv("API_KEYS", "k")
         monkeypatch.setenv("MQTT_CREDENTIALS", "")
 
-        import src.config as config_module
+        import server.config as config_module
 
         monkeypatch.setattr(config_module, "_settings", None)
         settings = config_module.get_settings()
@@ -148,7 +148,7 @@ class TestHashedCredentials:
         monkeypatch.setenv("API_KEYS", "k")
         monkeypatch.setenv("MQTT_CREDENTIALS", "sensor-1:mqtt-pass")
 
-        import src.config as config_module
+        import server.config as config_module
 
         monkeypatch.setattr(config_module, "_settings", None)
         settings = config_module.get_settings()
@@ -161,7 +161,7 @@ class TestHashedCredentials:
         monkeypatch.setenv("INFLUX_TOKEN", "tok")
         monkeypatch.setenv("API_KEYS", "k")
 
-        import src.config as config_module
+        import server.config as config_module
 
         monkeypatch.setattr(config_module, "_settings", None)
         settings = config_module.get_settings()

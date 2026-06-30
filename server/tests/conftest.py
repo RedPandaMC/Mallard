@@ -31,7 +31,7 @@ def _patch_env_and_settings(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(k, v)
 
     # Reset the cached singleton so each test gets a fresh Settings instance
-    import src.config as config_module
+    import server.config as config_module
 
     monkeypatch.setattr(config_module, "_settings", None)
 
@@ -58,22 +58,22 @@ def client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> Te
     _patch_env_and_settings(monkeypatch)
 
     with (
-        patch("src.influx.make_client", return_value=mock_influx_client),
+        patch("server.influx.make_client", return_value=mock_influx_client),
         patch(
-            "src.influx.InfluxDBClient",
+            "server.influx.InfluxDBClient",
             return_value=mock_influx_client,
         ),
     ):
         import importlib
 
-        import src.main as main_module
+        import server.main as main_module
 
         importlib.reload(main_module)  # pick up fresh settings
         app = main_module.create_app()
 
         # Manually set app.state because lifespan doesn't run in TestClient by default
-        from src.config import get_settings
-        from src.credential_verifier import StaticCredentialVerifier
+        from server.config import get_settings
+        from server.credential_verifier import StaticCredentialVerifier
 
         settings = get_settings()
         app.state.settings = settings

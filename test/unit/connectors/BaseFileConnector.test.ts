@@ -1,11 +1,11 @@
 import { strict as assert } from 'assert';
-import { BaseFileConnector } from '../../../src/ingest/BaseFileConnector';
-import type { IFsWatcher } from '../../../src/ingest/IFsWatcher';
-import type { ParseContext } from '../../../src/ingest/otelParse';
-import type { PricingService } from '../../../src/pricing/PricingService';
-import type { IMetaStore as MetaStore } from '../../../src/store/MetaStore';
-import type { DuckDBFileReader } from '../../../src/store/DuckDBFileReader';
-import type { UsageEvent } from '../../../src/domain/types';
+import { BaseFileConnector } from '../../../src/client_extension/ingest/BaseFileConnector';
+import type { IFsWatcher } from '../../../src/client_extension/ingest/IFsWatcher';
+import type { ParseContext } from '../../../src/client_extension/ingest/otelParse';
+import type { PricingService } from '../../../src/client_extension/pricing/PricingService';
+import type { IMetaStore as MetaStore } from '../../../src/client_extension/store/MetaStore';
+import type { DuckDBFileReader } from '../../../src/client_extension/store/DuckDBFileReader';
+import type { UsageEvent } from '../../../src/client_extension/domain/types';
 
 // ── Minimal concrete subclass for testing ──────────────────────────────────────
 

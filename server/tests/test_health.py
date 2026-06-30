@@ -23,7 +23,7 @@ class TestHealthEndpoint:
         assert body["influx"] == "pong"
 
     def test_health_influx_down(self, client: TestClient, monkeypatch) -> None:
-        import src.influx as influx_module
+        import server.influx as influx_module
 
         async def _ping_false(_client):
             return False

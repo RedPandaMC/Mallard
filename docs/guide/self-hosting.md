@@ -25,8 +25,10 @@ The stack exposes a single HTTPS endpoint via Caddy. For local dev a self-signed
 Configure the extension to send to your server:
 
 ```json
-"mallard.metricExport.webhook.url": "https://your-server/api/v1/ingest",
-"mallard.metricExport.webhook.apiKey": "your-api-key"
+"mallard.server.url": "https://your-server",
+"mallard.export.transport": "webhook",
+"mallard.webhook.auth": "apiKey",
+"mallard.webhook.apiKey": "your-api-key"
 ```
 
 `apiKey` is sent as the `X-API-Key` header on every request. Use the same value you put in `API_KEYS` in `.env`.
@@ -61,8 +63,10 @@ MQTT_CREDENTIALS=alice:my-password
 ```
 
 ```json
-"mallard.metricExport.brokerUrl": "wss://your-server/mqtt",
-"mallard.metricExport.username": "alice"
+"mallard.server.url": "https://your-server",
+"mallard.export.transport": "mqtt",
+"mallard.mqtt.auth": "password",
+"mallard.mqtt.username": "alice"
 ```
 
 Then run **Mallard: Set MQTT Export Password** in the Command Palette to store the password.
@@ -100,7 +104,7 @@ Set `SECRET_MANAGER_TYPE=infisical` or `SECRET_MANAGER_TYPE=openbao` plus the co
 
 ## mTLS (optional)
 
-For certificate-based auth without an API key, provision a client cert via cert-manager:
+For certificate-based auth, provision a client cert via cert-manager:
 
 ```bash
 kubectl apply -f server/k8s/cert-manager/client-cert-template.yaml
@@ -109,9 +113,12 @@ kubectl apply -f server/k8s/cert-manager/client-cert-template.yaml
 The cert's Common Name becomes the `source` tag. Configure the extension with the exported cert:
 
 ```json
-"mallard.metricExport.certPath": "/path/to/client.crt",
-"mallard.metricExport.keyPath": "/path/to/client.key",
-"mallard.metricExport.caPath": "/path/to/ca.crt"
+"mallard.server.url": "https://your-server",
+"mallard.export.transport": "webhook",
+"mallard.webhook.auth": "certificate",
+"mallard.shared.certificate.file": "/path/to/client.crt",
+"mallard.shared.certificate.keyFile": "/path/to/client.key",
+"mallard.shared.certificate.caFile": "/path/to/ca.crt"
 ```
 
 See `server/k8s/cert-manager/README.md` for full provisioning steps.
