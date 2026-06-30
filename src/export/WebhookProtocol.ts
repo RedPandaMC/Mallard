@@ -22,6 +22,7 @@ const REQUEST_TIMEOUT_MS = 10_000;
 
 export interface WebhookProtocolOptions {
   url: string;
+  apiKey?: string;
   secret?: string;
   headers?: Record<string, string>;
   retries?: number;
@@ -52,9 +53,13 @@ export class WebhookProtocol implements MetricProtocol {
   }
 
   private async post(body: string): Promise<void> {
-    const { url, secret, headers = {}, retries = 3 } = this.opts;
+    const { url, apiKey, secret, headers = {}, retries = 3 } = this.opts;
 
     const extraHeaders: Record<string, string> = { ...headers, 'Content-Type': 'application/json' };
+
+    if (apiKey) {
+      extraHeaders['X-API-Key'] = apiKey;
+    }
 
     if (secret) {
       const sig = crypto.createHmac('sha256', secret).update(body, 'utf8').digest('hex');

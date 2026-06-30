@@ -4,12 +4,9 @@ A self-hosted ingest server for the Mallard VS Code extension. It receives metri
 
 ## Quick starts
 
-- [Docker Compose](docs/quickstart-docker.md) — local dev or single-host production
-- [Kubernetes](docs/quickstart-kubernetes.md) — cert-manager, Ingress, HPA, PDB
+See the [Self-hosted server guide](https://redpandamc.github.io/Mallard/guide/self-hosting) on the docs site for Docker Compose and Kubernetes quickstarts.
 
 ## Architecture
-
-See [docs/architecture.md](docs/architecture.md) for a full ASCII diagram and component role descriptions.
 
 ```
 VS Code Extension
@@ -72,7 +69,7 @@ API_KEYS=team-alpha:key-abc123,team-beta:key-def456
 MQTT_CREDENTIALS=alice:mqtt-pass1,ci-pipeline:mqtt-pass2
 ```
 
-Bare values (no label) get `source=unknown`. See [docs/identity-tagging.md](docs/identity-tagging.md).
+Bare values (no label) get `source=unknown`.
 
 ---
 
@@ -86,7 +83,7 @@ The server accepts three credential types (HTTP):
 
 For MQTT: CONNECT password is verified against `MQTT_CREDENTIALS`.
 
-See [docs/extension-auth.md](docs/extension-auth.md) for the full auth contract used by the VS Code extension.
+See [docs/extension-auth.md](docs/extension-auth.md) for the full auth contract between the server and the VS Code extension.
 
 ---
 
@@ -100,9 +97,7 @@ For production, set `SERVER_DOMAIN=your.hostname` and `ACME_EMAIL=you@example.co
 
 ### Kubernetes
 
-cert-manager automates TLS. See [docs/cert-manager.md](docs/cert-manager.md) for:
-- Issuer selection (staging / prod / selfsigned / internal CA)
-- mTLS client certificate issuance and distribution
+cert-manager automates TLS. See `server/k8s/cert-manager/README.md` for issuer selection and mTLS client certificate issuance.
 
 ---
 
@@ -110,10 +105,10 @@ cert-manager automates TLS. See [docs/cert-manager.md](docs/cert-manager.md) for
 
 Two self-hosted secret managers are supported as optional overlays:
 
-| Manager | Docs |
-|---|---|
-| Infisical | [docs/secret-management-infisical.md](docs/secret-management-infisical.md) |
-| OpenBao | [docs/secret-management-openbao.md](docs/secret-management-openbao.md) |
+| Manager | K8s | Docker Compose |
+|---|---|---|
+| Infisical | `kubectl apply -k server/k8s/infisical/` — see `server/k8s/infisical/README.md` | `docker compose -f docker-compose.yml -f docker-compose.infisical.yml up -d` |
+| OpenBao | `kubectl apply -k server/k8s/openbao/` — see `server/k8s/openbao/install.md` | `docker compose -f docker-compose.yml -f docker-compose.openbao.yml up -d` |
 
 When a secret manager is active, `API_KEYS` and `MQTT_CREDENTIALS` env vars are ignored — credentials are fetched from the manager with a 30-second TTL cache. Rotation requires no restart.
 
@@ -161,11 +156,11 @@ Returns `{"status": "ok"|"degraded", "influx": "pong"|"error"}`. Always HTTP 200
 
 ## Operations
 
-See [docs/operations.md](docs/operations.md) for:
-- Credential rotation (static and remote)
-- Scaling with HPA and PDB
-- InfluxDB backup
-- Log level configuration
+- **Static rotation (K8s):** update `mallard-server-secrets`; Stakater Reloader triggers a rolling restart automatically (HPA min=2 + PDB minAvailable=1 ensure zero downtime).
+- **Static rotation (Docker Compose):** edit `.env`, then `docker compose restart server`.
+- **Remote rotation (Infisical/OpenBao):** update the credential in the secret manager; the server re-fetches within 30 seconds — no restart needed.
+- **Scaling:** `kubectl get hpa -n mallard` / `kubectl get pdb -n mallard`
+- **InfluxDB backup:** `docker compose exec influxdb influx backup /tmp/backup --token $INFLUX_TOKEN`
 
 ---
 

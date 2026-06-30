@@ -39,6 +39,7 @@ export default defineConfig({
       { text: 'Features',        link: '/guide/features' },
       { text: 'Getting Started', link: '/guide/getting-started' },
       { text: 'Configuration',   link: '/guide/configuration' },
+      { text: 'Self-hosted',     link: '/guide/self-hosting' },
       { text: 'Troubleshooting', link: '/guide/troubleshooting' },
       {
         text: 'Reference',

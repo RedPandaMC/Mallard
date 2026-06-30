@@ -17,17 +17,29 @@ See [Configuration](/guide/configuration) for full descriptions and examples.
 
 ## Metric export settings (`mallard.metricExport.*`)
 
-Mallard can stream a usage feature vector to an MQTT broker after every snapshot.
-This is useful for storing time-series data in InfluxDB, Grafana, or a vector
-database for anomaly detection and clustering. Only `mqtts://` (TLS) and
-`wss://` (WebSocket TLS) broker URLs are accepted.
-
+Mallard can stream a usage feature vector to a self-hosted server or MQTT broker after every snapshot.
 All `metricExport` settings are machine-scoped (`"scope": "machine-overridable"`)
 so credentials are not synced across machines by VS Code Settings Sync.
 
+See [Self-hosted server](/guide/self-hosting) for full setup instructions.
+
+### Webhook
+
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `mallard.metricExport.brokerUrl` | `string` | `""` | MQTT broker URL. Only `mqtts://` and `wss://` (TLS) are accepted. Leave empty to disable. |
+| `mallard.metricExport.webhook.url` | `string` | `""` | HTTP webhook URL. Only `https://` accepted. Leave empty to disable. |
+| `mallard.metricExport.webhook.apiKey` | `string` | `""` | API key sent as `X-API-Key` header. Use when connecting to a self-hosted Mallard server. |
+| `mallard.metricExport.webhook.secret` | `string` | `""` | HMAC-SHA256 signing secret. Each POST includes an `X-Mallard-Signature-256` header for receiver verification. |
+| `mallard.metricExport.webhook.headers` | `object` | `{}` | Extra HTTP headers (e.g. `{"Authorization": "Bearer token"}`). |
+| `mallard.metricExport.webhook.retries` | `number` | `3` | Retries on 5xx or network errors with exponential backoff. |
+
+### MQTT
+
+Only `mqtts://` (TLS) and `wss://` (WebSocket TLS) broker URLs are accepted.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `mallard.metricExport.brokerUrl` | `string` | `""` | MQTT broker URL. Leave empty to disable. |
 | `mallard.metricExport.topic` | `string` | `"mallard/metrics"` | MQTT topic prefix. A stable anonymous instance hash is appended automatically. |
 | `mallard.metricExport.username` | `string` | `""` | MQTT username (optional). |
 | `mallard.metricExport.certPath` | `string` | `""` | Path to client certificate PEM file for mTLS. When set alongside `keyPath`, overrides username/password auth. |
@@ -68,7 +80,23 @@ Example payload:
 }
 ```
 
-### Connection examples
+### Webhook example (self-hosted Mallard server)
+
+```json
+"mallard.metricExport.webhook.url": "https://your-server/api/v1/ingest",
+"mallard.metricExport.webhook.apiKey": "team-alpha:key-abc123"
+```
+
+### MQTT connection examples
+
+**Self-hosted Mallard server:**
+
+```json
+"mallard.metricExport.brokerUrl": "wss://your-server/mqtt",
+"mallard.metricExport.username": "alice"
+```
+
+Then run **Mallard: Set MQTT Export Password** from the Command Palette.
 
 **Local Mosquitto (TLS):**
 

@@ -215,6 +215,12 @@
           "scope": "machine-overridable",
           "description": "HTTP webhook URL to POST metric payloads to. Only https:// accepted. Leave empty to disable."
         },
+        "mallard.metricExport.webhook.apiKey": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "API key sent as the X-API-Key header on every webhook request. Use this when connecting to a self-hosted Mallard server."
+        },
         "mallard.metricExport.webhook.secret": {
           "type": "string",
           "default": "",

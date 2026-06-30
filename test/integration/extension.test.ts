@@ -69,6 +69,7 @@ describe('Mallard extension (integration)', () => {
       'mallard.metricExport.keyPath',
       'mallard.metricExport.topic',
       'mallard.metricExport.username',
+      'mallard.metricExport.webhook.apiKey',
       'mallard.metricExport.webhook.headers',
       'mallard.metricExport.webhook.retries',
       'mallard.metricExport.webhook.secret',

@@ -22,6 +22,13 @@ export interface MallardConfig {
     certPath: string;
     keyPath: string;
     caPath: string;
+    webhook: {
+      url: string;
+      apiKey: string;
+      secret: string;
+      headers: Record<string, string>;
+      retries: number;
+    };
   };
 }
 
@@ -50,6 +57,13 @@ export function readConfig(): MallardConfig {
       certPath: c.get('metricExport.certPath', ''),
       keyPath: c.get('metricExport.keyPath', ''),
       caPath: c.get('metricExport.caPath', ''),
+      webhook: {
+        url: c.get('metricExport.webhook.url', ''),
+        apiKey: c.get('metricExport.webhook.apiKey', ''),
+        secret: c.get('metricExport.webhook.secret', ''),
+        headers: c.get<Record<string, string>>('metricExport.webhook.headers', {}),
+        retries: c.get('metricExport.webhook.retries', 3),
+      },
     },
   };
 }
