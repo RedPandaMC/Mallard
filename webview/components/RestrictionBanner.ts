@@ -3,7 +3,7 @@
  * `restriction` field (sent by the host whenever the restriction engine
  * changes state) and renders the appropriate affordance.
  */
-import { RestrictionState } from '../../src/domain/types';
+import { RestrictionState } from '../../src/client_extension/domain/types';
 import { post } from '../api';
 
 export interface RestrictionBannerHandle {

@@ -1,6 +1,6 @@
 import { initChart } from './echarts';
 import type { EChartsOption } from './echarts';
-import type { UsageSnapshot } from '../../src/domain/types';
+import type { UsageSnapshot } from '../../src/client_extension/domain/types';
 
 type EChartsInstance = ReturnType<typeof initChart>;
 

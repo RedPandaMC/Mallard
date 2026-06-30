@@ -29,7 +29,7 @@ billing API for the authoritative charge.
 - **DuckDB-backed.** Full event detail for 90 days; older events roll up to daily rows automatically. A layered SQL view hierarchy (`v_usage_daily` → weekly/monthly, plus hourly and weekday distributions) keeps aggregation in the database rather than JS.
 - **Branch-aware.** Tags every event to the active git branch and repo, with per-branch credit caps.
 - **Programmable alerts.** JSONLogic condition language with cooldowns, group toggles, and message templates; validated by a bundled JSON Schema.
-- **Copilot restriction.** Rules can hard-disable Copilot when a budget is exhausted, with grace period and auto-re-enable.
+- **Copilot restriction.** Rules can show soft (dismissable/snoozeable) or hard (persistent, re-fires every refresh) popups when a budget is exhausted.
 - **Metric streaming.** Push a metric payload to an MQTT broker or HTTP webhook after each snapshot.
 - **Printable export.** Self-contained HTML report, PDF-ready in any browser.
 - **GitHub billing reconciliation.** Opt-in: authoritative charge across all your machines.
@@ -122,7 +122,7 @@ context field list, message templates, rule groups, and user-defined variables.
 ## Privacy and security
 
 - Usage data lives in per-user global storage, never in settings or git.
-  Run "Mallard: Clear All Data" before uninstalling to wipe everything.
+  Run **Mallard: Prepare for Uninstall** before removing the extension to wipe all data. VS Code does not delete extension storage on uninstall.
 - The webview uses a strict Content-Security-Policy with a per-load nonce:
   no inline scripts, no eval, no external origins.
 - MQTT metric export requires TLS; plain-text connections are rejected.

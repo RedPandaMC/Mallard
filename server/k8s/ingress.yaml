@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mallard-ingress
+  namespace: mallard
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # mTLS: present the mallard-ca secret so nginx can verify client certs.
+    # "optional" keeps plain API-key clients working when no cert is presented.
+    nginx.ingress.kubernetes.io/auth-tls-secret: "mallard/mallard-ca-key-pair"
+    nginx.ingress.kubernetes.io/auth-tls-verify-client: "optional"
+    nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: "true"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header SSL_CLIENT_S_DN_CN $ssl_client_s_dn_cn;
+spec:
+  tls:
+    - hosts:
+        - mallard.example.com   # Replace with your actual domain
+      secretName: mallard-tls
+  rules:
+    - host: mallard.example.com   # Replace with your actual domain
+      http:
+        paths:
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: mallard-server
+                port:
+                  number: 8080
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: mallard-server
+                port:
+                  number: 8080
+          - path: /mqtt
+            pathType: Prefix
+            backend:
+              service:
+                name: mallard-server
+                port:
+                  number: 8083

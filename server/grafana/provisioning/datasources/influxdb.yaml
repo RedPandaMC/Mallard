@@ -1,0 +1,17 @@
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB
+    uid: mallard-influx
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: true
+    jsonData:
+      version: Flux
+      organization: mallard
+      defaultBucket: metrics
+      tlsSkipVerify: false
+    secureJsonData:
+      token: ${INFLUX_TOKEN}
+    editable: true

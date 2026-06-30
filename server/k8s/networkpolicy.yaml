@@ -1,0 +1,107 @@
+---
+# Deny all ingress by default; subsequent policies open specific ports.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: mallard
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  egress: []
+---
+# Allow ingress-nginx to reach the mallard-server on 8080 (HTTP) and 8083 (MQTT WebSocket).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-server
+  namespace: mallard
+spec:
+  podSelector:
+    matchLabels:
+      app: mallard-server
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 8080
+        - port: 8083
+  egress:
+    # mallard-server → InfluxDB
+    - to:
+        - podSelector:
+            matchLabels:
+              app: influxdb
+      ports:
+        - port: 8086
+    # mallard-server → DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# Allow the mallard-server and Grafana to reach InfluxDB on 8086.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-server-and-grafana-to-influxdb
+  namespace: mallard
+spec:
+  podSelector:
+    matchLabels:
+      app: influxdb
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: mallard-server
+        - podSelector:
+            matchLabels:
+              app: grafana
+      ports:
+        - port: 8086
+  egress:
+    # InfluxDB → DNS only
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# Allow ingress-nginx to reach Grafana on 3000.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-grafana
+  namespace: mallard
+spec:
+  podSelector:
+    matchLabels:
+      app: grafana
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 3000
+  egress:
+    # Grafana → InfluxDB
+    - to:
+        - podSelector:
+            matchLabels:
+              app: influxdb
+      ports:
+        - port: 8086
+    # Grafana → DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP

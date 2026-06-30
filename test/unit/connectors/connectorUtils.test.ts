@@ -7,7 +7,7 @@ import {
   parseTimestamp,
   splitCostSimple,
   splitCostByBreakdown,
-} from '../../../src/ingest/connectorUtils';
+} from '../../../src/client_extension/ingest/connectorUtils';
 
 describe('connectorUtils', () => {
   // ── num ──────────────────────────────────────────────────────────────────────

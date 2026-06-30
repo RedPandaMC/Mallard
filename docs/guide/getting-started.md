@@ -28,3 +28,11 @@ Each Copilot log entry includes the model, input/output token counts, surface (c
 ## GitHub billing reconciliation
 
 Run **Mallard: Sign In to GitHub** (or use the dashboard button) to pull the authoritative charge from GitHub's API. This shows spend across all your machines, not just the current one. Sign-in is optional and never shown at startup. See [Features](/guide/features#github-billing-reconciliation) for details.
+
+## Uninstalling
+
+VS Code does not delete extension storage on uninstall, so run this one command first:
+
+1. Open the Command Palette and run **Mallard: Prepare for Uninstall**.
+2. Confirm the modal — this deletes all events, settings, cached pricing, and secrets.
+3. Uninstall Mallard from the Extensions view as usual.

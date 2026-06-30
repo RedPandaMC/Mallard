@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
-import { buildRuleContext } from '../../src/domain/expr/context';
-import type { UsageSnapshot } from '../../src/domain/types';
+import { buildRuleContext } from '../../src/client_extension/domain/expr/context';
+import type { UsageSnapshot } from '../../src/client_extension/domain/types';
 
 function minimalSnapshot(overrides: Partial<UsageSnapshot> = {}): UsageSnapshot {
   return {

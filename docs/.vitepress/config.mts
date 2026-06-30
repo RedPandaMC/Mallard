@@ -35,25 +35,63 @@ export default defineConfig({
     logo: '/icon.svg',
     siteTitle: 'MALLARD',
 
-    sidebar: [
+    nav: [
+      { text: 'Features',        link: '/guide/features' },
+      { text: 'Getting Started', link: '/guide/getting-started' },
+      { text: 'Configuration',   link: '/guide/configuration' },
       {
-        text: 'Guide',
+        text: 'Self-hosted',
         items: [
-          { text: 'Features', link: '/guide/features' },
-          { text: 'Getting Started', link: '/guide/getting-started' },
-          { text: 'Configuration', link: '/guide/configuration' },
-          { text: 'Troubleshooting', link: '/guide/troubleshooting' },
+          { text: 'Overview',           link: '/guide/self-hosting' },
+          { text: 'Secret Management',  link: '/guide/secret-management' },
+          { text: 'cert-manager',       link: '/guide/cert-manager' },
+          { text: 'Identity Tagging',   link: '/guide/identity-tagging' },
         ],
       },
+      { text: 'Troubleshooting', link: '/guide/troubleshooting' },
       {
         text: 'Reference',
         items: [
-          { text: 'Commands', link: '/reference/commands' },
-          { text: 'Settings', link: '/reference/settings' },
+          { text: 'Commands',       link: '/reference/commands' },
+          { text: 'Settings',       link: '/reference/settings' },
+          { text: 'Extension Auth', link: '/reference/extension-auth' },
         ],
       },
       { text: 'Changelog', link: '/changelog' },
     ],
+
+    sidebar: {
+      '/guide/': [
+        {
+          text: 'Guide',
+          items: [
+            { text: 'Features',        link: '/guide/features' },
+            { text: 'Getting Started', link: '/guide/getting-started' },
+            { text: 'Configuration',   link: '/guide/configuration' },
+            { text: 'Troubleshooting', link: '/guide/troubleshooting' },
+          ],
+        },
+        {
+          text: 'Self-hosted Server',
+          items: [
+            { text: 'Overview',          link: '/guide/self-hosting' },
+            { text: 'Secret Management', link: '/guide/secret-management' },
+            { text: 'cert-manager',      link: '/guide/cert-manager' },
+            { text: 'Identity Tagging',  link: '/guide/identity-tagging' },
+          ],
+        },
+      ],
+      '/reference/': [
+        {
+          text: 'Reference',
+          items: [
+            { text: 'Commands',       link: '/reference/commands' },
+            { text: 'Settings',       link: '/reference/settings' },
+            { text: 'Extension Auth', link: '/reference/extension-auth' },
+          ],
+        },
+      ],
+    },
 
     docFooter: {
       prev: '← Previous',

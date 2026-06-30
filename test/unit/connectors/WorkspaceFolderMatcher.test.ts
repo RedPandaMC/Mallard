@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { WorkspaceFolderMatcher } from '../../../src/ingest/WorkspaceFolderMatcher';
+import { WorkspaceFolderMatcher } from '../../../src/client_extension/ingest/WorkspaceFolderMatcher';
 import type { WorkspaceFolder } from 'vscode';
 
 function makeFolder(name: string, fsPath: string): WorkspaceFolder {

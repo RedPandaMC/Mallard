@@ -1,0 +1,165 @@
+# Mallard BYO Server — Docker Compose
+# Usage: cp .env.example .env && docker compose up -d
+# Access Grafana at https://localhost:3000 (admin / see .env GF_SECURITY_ADMIN_PASSWORD)
+
+version: "3.9"
+
+networks:
+  # Backend services communicate here; no outbound internet access
+  internal:
+    driver: bridge
+    internal: true
+  # Caddy uses this network for outbound ACME HTTP-01 challenges (Let's Encrypt)
+  proxy:
+    driver: bridge
+
+services:
+  # ── InfluxDB v2 ─────────────────────────────────────────────────────────────
+  influxdb:
+    image: influxdb:2.7
+    restart: unless-stopped
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_ADMIN_USER:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_ADMIN_PASSWORD:?required}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-mallard}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-metrics}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:?required}
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    # Port NOT published to host — only reachable on the internal network
+    expose:
+      - "8086"
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Mallard FastAPI ingest server ───────────────────────────────────────────
+  server:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: ${INFLUX_TOKEN:?required}
+      INFLUX_ORG: ${INFLUX_ORG:-mallard}
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-metrics}
+      API_KEYS: ${API_KEYS:?required}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RATE_LIMIT: ${RATE_LIMIT:-60/minute}
+      # Embedded MQTT broker (WebSocket on port 8083, proxied by Caddy at /mqtt)
+      MQTT_ENABLED: ${MQTT_ENABLED:-false}
+      MQTT_PORT: ${MQTT_PORT:-8083}
+      MQTT_CREDENTIALS: ${MQTT_CREDENTIALS:-}
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    expose:
+      - "8080"
+      - "8083"
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Grafana ──────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.6
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?required}
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-https://localhost/grafana}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/etc/grafana/dashboards:ro
+    depends_on:
+      - influxdb
+    expose:
+      - "3000"
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Caddy TLS reverse proxy ───────────────────────────────────────────────────
+  # Automatic HTTPS: tls internal = self-signed for localhost dev.
+  # For production: set SERVER_DOMAIN=your.host + ACME_EMAIL in .env,
+  # then remove `tls internal` from Caddyfile — Caddy handles Let's Encrypt automatically.
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SERVER_DOMAIN: ${SERVER_DOMAIN:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - internal
+      - proxy
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+volumes:
+  influxdb_data:
+  grafana_data:
+  caddy_data:
+  caddy_config:

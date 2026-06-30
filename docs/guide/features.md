@@ -129,9 +129,9 @@ When multiple repos are open, Mallard attributes usage to the active workspace. 
 
 ---
 
-## Metric Streaming (MQTT)
+## Metric Streaming
 
-After each snapshot Mallard can publish a JSON usage-vector to an MQTT broker over TLS. Configure under `mallard.metricExport.*` — see the [Settings reference](/reference/settings) for payload schema, broker examples, and mTLS options.
+After each snapshot Mallard can publish a JSON usage-vector to a self-hosted server via webhook or MQTT. Set `mallard.server.url` and `mallard.export.transport` — see the [Settings reference](/reference/settings) for payload schema, transport options, and mTLS.
 
 ---
 

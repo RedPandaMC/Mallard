@@ -10,11 +10,11 @@
 import * as fc from 'fast-check';
 import { strict as assert } from 'assert';
 import * as path from 'path';
-import { isHostBoundMsg } from '../../src/ui/messaging';
-import { isPathSafe } from '../../src/ingest/locate';
-import { evalCondition } from '../../src/domain/expr/jsonCondition';
-import { formatMoney, formatNumber, formatTokens, formatCredits } from '../../src/domain/format';
-import type { JsonCondition } from '../../src/domain/types';
+import { isHostBoundMsg } from '../../src/client_extension/ui/messaging';
+import { isPathSafe } from '../../src/client_extension/ingest/locate';
+import { evalCondition } from '../../src/client_extension/domain/expr/jsonCondition';
+import { formatMoney, formatNumber, formatTokens, formatCredits } from '../../src/client_extension/domain/format';
+import type { JsonCondition } from '../../src/client_extension/domain/types';
 
 const VALID_TYPES = [
   'ready', 'refresh', 'setFilter', 'setConfig', 'setLayout',

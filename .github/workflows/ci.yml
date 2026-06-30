@@ -1,4 +1,4 @@
-name: CI
+name: Extension CI
 
 on:
   push:
@@ -41,10 +41,11 @@ jobs:
         run: bun run test:coverage
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: coverage/lcov.info
           fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Build bundles
         run: bun run package

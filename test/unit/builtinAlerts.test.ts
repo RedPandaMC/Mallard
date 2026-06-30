@@ -3,8 +3,8 @@ import {
   evaluateAlerts,
   velocityCreditsPerHour,
   SnapshotSample,
-} from '../../src/domain/alerts';
-import { DEFAULT_USER_CONFIG, UsageSnapshot, UserConfig } from '../../src/domain/types';
+} from '../../src/client_extension/domain/alerts';
+import { DEFAULT_USER_CONFIG, UsageSnapshot, UserConfig } from '../../src/client_extension/domain/types';
 
 function snap(overrides: Partial<UsageSnapshot> = {}): UsageSnapshot {
   return {

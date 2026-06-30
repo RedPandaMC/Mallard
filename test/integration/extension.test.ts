@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 
-const EXT_ID = 'jurreandenys.mallard';
+const EXT_ID = 'RedPandaMC.mallard';
 
 const EXPECTED_COMMANDS = [
   'mallard.openDashboard',
@@ -10,6 +10,9 @@ const EXPECTED_COMMANDS = [
   'mallard.showLogPath',
   'mallard.signIn',
   'mallard.exportReport',
+  'mallard.exportData',
+  'mallard.prepareUninstall',
+  'mallard.setMqttPassword',
   'mallard.simulateRestriction',
 ];
 
@@ -21,7 +24,7 @@ describe('Mallard extension (integration)', () => {
     assert.strictEqual(ext!.isActive, true);
   });
 
-  it('registers exactly the seven contributed mallard.* commands', async () => {
+  it('registers exactly the ten contributed mallard.* commands', async () => {
     const ext = vscode.extensions.getExtension(EXT_ID);
     await ext!.activate();
     const all = await vscode.commands.getCommands(true);
@@ -58,21 +61,22 @@ describe('Mallard extension (integration)', () => {
     const props = ext.packageJSON.contributes.configuration.properties as Record<string, unknown>;
     assert.deepStrictEqual(Object.keys(props).sort(), [
       'mallard.copilotLogPath',
+      'mallard.currency',
       'mallard.dataRetentionDays',
-      'mallard.metricExport.brokerUrl',
-      'mallard.metricExport.caPath',
-      'mallard.metricExport.certPath',
-      'mallard.metricExport.keyPath',
-      'mallard.metricExport.password',
-      'mallard.metricExport.topic',
-      'mallard.metricExport.username',
-      'mallard.metricExport.webhook.headers',
-      'mallard.metricExport.webhook.retries',
-      'mallard.metricExport.webhook.secret',
-      'mallard.metricExport.webhook.url',
+      'mallard.export.transport',
+      'mallard.mqtt.auth',
+      'mallard.mqtt.url',
+      'mallard.mqtt.username',
       'mallard.palette',
       'mallard.pricingManifestUrl',
       'mallard.refreshIntervalMinutes',
+      'mallard.server.url',
+      'mallard.shared.certificate.caFile',
+      'mallard.shared.certificate.file',
+      'mallard.shared.certificate.keyFile',
+      'mallard.webhook.apiKey',
+      'mallard.webhook.auth',
+      'mallard.webhook.bearerToken',
     ]);
   });
 });

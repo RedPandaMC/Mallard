@@ -3,7 +3,7 @@
   "displayName": "Mallard",
   "description": "Get your Copilot spend all in a row. A live dashboard of cost, model usage, and where every credit goes — read from Copilot's local logs. No sign-in, no telemetry.",
   "version": "0.2.0",
-  "publisher": "jurreandenys",
+  "publisher": "RedPandaMC",
   "license": "MIT",
   "author": {
     "name": "Jurrean De Nys"
@@ -82,6 +82,24 @@
         "title": "Simulate Restriction State",
         "category": "Mallard",
         "icon": "$(debug-start)"
+      },
+      {
+        "command": "mallard.exportData",
+        "title": "Export Usage Data",
+        "category": "Mallard",
+        "icon": "$(table)"
+      },
+      {
+        "command": "mallard.prepareUninstall",
+        "title": "Prepare for Uninstall",
+        "category": "Mallard",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "mallard.setMqttPassword",
+        "title": "Set MQTT Export Password",
+        "category": "Mallard",
+        "icon": "$(key)"
       }
     ],
     "menus": {
@@ -113,6 +131,11 @@
     "configuration": {
       "title": "Mallard",
       "properties": {
+        "mallard.currency": {
+          "type": "string",
+          "default": "USD",
+          "description": "Display currency for all cost amounts in the dashboard and status bar (e.g. USD, EUR, GBP, JPY, AUD, CAD). Exchange rates are fetched daily from Frankfurter. MQTT and webhook metric exports always use USD regardless of this setting."
+        },
         "mallard.copilotLogPath": {
           "type": "string",
           "default": "",
@@ -150,73 +173,88 @@
           "maximum": 365,
           "description": "How many days of raw per-request events to keep before rolling up into daily totals. Higher values use more disk."
         },
-        "mallard.metricExport.brokerUrl": {
+        "mallard.server.url": {
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "MQTT broker URL to publish usage feature vectors to (e.g. mqtts://broker.example.com:8883 or wss://...). Only mqtts:// and wss:// (TLS) are accepted. Leave empty to disable."
+          "description": "Base URL of your self-hosted Mallard server (e.g. https://mallard.example.com). Used as the webhook endpoint and as the fallback MQTT WebSocket host."
         },
-        "mallard.metricExport.topic": {
+        "mallard.export.transport": {
           "type": "string",
-          "default": "mallard/v2/metrics",
+          "enum": ["", "webhook", "mqtt"],
+          "enumDescriptions": [
+            "Metric export disabled.",
+            "POST usage metrics as JSON to the server's HTTP webhook endpoint.",
+            "Publish usage metrics over MQTT/WebSocket to the server."
+          ],
+          "default": "",
           "scope": "machine-overridable",
-          "description": "MQTT topic prefix. A stable anonymous instance hash is appended automatically."
+          "description": "Transport to use for metric export. Set mallard.server.url first. Leave blank to disable."
         },
-        "mallard.metricExport.username": {
+        "mallard.webhook.auth": {
+          "type": "string",
+          "enum": ["apiKey", "bearer", "certificate"],
+          "enumDescriptions": [
+            "Send an X-API-Key header. Set mallard.webhook.apiKey.",
+            "Send an Authorization: Bearer header. Set mallard.webhook.bearerToken.",
+            "Authenticate with a client TLS certificate. Set mallard.shared.certificate.*."
+          ],
+          "default": "apiKey",
+          "scope": "machine-overridable",
+          "description": "Auth method for webhook transport."
+        },
+        "mallard.webhook.apiKey": {
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "MQTT username (optional)."
+          "description": "API key sent as X-API-Key on every webhook POST. Active when mallard.webhook.auth = apiKey."
         },
-        "mallard.metricExport.password": {
+        "mallard.webhook.bearerToken": {
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "MQTT password (optional). Use machine-scoped settings to avoid syncing credentials."
+          "description": "Token sent as Authorization: Bearer on every webhook POST. Active when mallard.webhook.auth = bearer."
         },
-        "mallard.metricExport.certPath": {
+        "mallard.mqtt.url": {
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "Path to client certificate PEM file for mTLS auth. When set alongside keyPath, overrides username/password."
+          "description": "MQTT broker WebSocket URL (e.g. wss://mallard.example.com/mqtt). Overrides mallard.server.url for MQTT. Only wss:// accepted."
         },
-        "mallard.metricExport.keyPath": {
+        "mallard.mqtt.auth": {
+          "type": "string",
+          "enum": ["password", "certificate"],
+          "enumDescriptions": [
+            "Authenticate with username and password. Set mallard.mqtt.username and run Mallard: Set MQTT Export Password.",
+            "Authenticate with a client TLS certificate. Set mallard.shared.certificate.*."
+          ],
+          "default": "password",
+          "scope": "machine-overridable",
+          "description": "Auth method for MQTT transport."
+        },
+        "mallard.mqtt.username": {
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "Path to client private key PEM file for mTLS auth."
+          "description": "MQTT username. Active when mallard.mqtt.auth = password."
         },
-        "mallard.metricExport.caPath": {
+        "mallard.shared.certificate.file": {
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "Path to broker CA certificate PEM file. Pins the broker CA to prevent MITM attacks."
+          "description": "Path to PEM client certificate file. Used by any transport where auth = certificate."
         },
-        "mallard.metricExport.webhook.url": {
+        "mallard.shared.certificate.keyFile": {
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "HTTP webhook URL to POST metric payloads to. Only https:// accepted. Leave empty to disable."
+          "description": "Path to PEM private key file paired with mallard.shared.certificate.file."
         },
-        "mallard.metricExport.webhook.secret": {
+        "mallard.shared.certificate.caFile": {
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "HMAC-SHA256 signing secret. Each POST includes an X-Mallard-Signature-256 header so receivers can verify authenticity."
-        },
-        "mallard.metricExport.webhook.headers": {
-          "type": "object",
-          "default": {},
-          "scope": "machine-overridable",
-          "description": "Extra HTTP headers to include in webhook requests. Example: { \"Authorization\": \"Bearer token\" }."
-        },
-        "mallard.metricExport.webhook.retries": {
-          "type": "number",
-          "default": 3,
-          "minimum": 0,
-          "maximum": 10,
-          "scope": "machine-overridable",
-          "description": "Number of retries on 5xx or network errors with exponential backoff."
+          "description": "Path to CA bundle PEM file to verify the server's TLS certificate."
         }
       }
     },
@@ -232,7 +270,7 @@
     "watch": "bun esbuild.mjs --watch",
     "package": "bun esbuild.mjs --production",
     "check-types": "tsc -p tsconfig.host.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
-    "lint": "eslint src webview test",
+    "lint": "eslint src/client_extension webview test",
     "test:unit": "mocha",
     "test:coverage": "c8 mocha",
     "bench": "tsx test/bench/benchmark.ts",

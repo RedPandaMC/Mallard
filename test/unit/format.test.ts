@@ -5,8 +5,8 @@ import {
   formatTokens,
   formatCredits,
   formatMetric,
-} from '../../src/domain/format';
-import type { Metric } from '../../src/domain/types';
+} from '../../src/client_extension/domain/format';
+import type { Metric } from '../../src/client_extension/domain/types';
 
 describe('formatMoney', () => {
   it('formats zero', () => {

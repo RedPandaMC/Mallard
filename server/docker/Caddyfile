@@ -1,0 +1,49 @@
+{
+	admin off
+	email {$ACME_EMAIL}
+}
+
+log {
+	output stdout
+	format json
+	level INFO
+}
+
+# Mallard ingest API + MQTT WebSocket
+# For localhost dev: tls internal issues a self-signed cert automatically.
+# For production: set SERVER_DOMAIN=your.hostname and remove the `tls internal` line —
+# Caddy obtains and auto-renews a Let's Encrypt certificate.
+{$SERVER_DOMAIN:localhost} {
+	tls internal {
+		# Optional mTLS: present a CA cert to accept but not require client certs.
+		# Set MALLARD_CA_CERT=/certs/mallard-ca.crt and mount the cert into the container.
+		# client_auth {
+		#   mode verify_if_given
+		#   trusted_ca_cert_file {$MALLARD_CA_CERT:/dev/null}
+		# }
+	}
+
+	# Forward client cert CN as a header so the server can use it as the InfluxDB source tag.
+	request_header SSL_CLIENT_S_DN_CN {tls_client_subject}
+
+	# WebSocket MQTT — the Mallard extension connects to wss://host/mqtt
+	@mqtt path /mqtt
+	reverse_proxy @mqtt server:8083 {
+		header_up Connection {http.request.header.Connection}
+		header_up Upgrade {http.request.header.Upgrade}
+	}
+
+	# Grafana dashboard
+	@grafana path /grafana*
+	reverse_proxy @grafana grafana:3000
+
+	# API and health
+	reverse_proxy server:8080
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+}

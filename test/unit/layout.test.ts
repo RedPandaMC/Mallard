@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
-import { gridColumnToSpan, mergeConfigLayout, normalizeLayout } from '../../src/domain/layout';
-import { DASHBOARD_PANELS, DEFAULT_DASHBOARD_LAYOUT } from '../../src/domain/types';
+import { gridColumnToSpan, mergeConfigLayout, normalizeLayout } from '../../src/client_extension/domain/layout';
+import { DASHBOARD_PANELS, DEFAULT_DASHBOARD_LAYOUT } from '../../src/client_extension/domain/types';
 
 describe('normalizeLayout', () => {
   it('returns the defaults when nothing is stored', () => {

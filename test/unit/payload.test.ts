@@ -1,7 +1,7 @@
 import { strict as assert } from 'assert';
-import { buildMetricPayload } from '../../src/export/payload';
-import { buildSnapshot, SnapshotOptions } from '../../src/domain/snapshot';
-import { UsageSnapshot } from '../../src/domain/types';
+import { buildMetricPayload } from '../../src/client_extension/export/payload';
+import { buildSnapshot, SnapshotOptions } from '../../src/client_extension/domain/snapshot';
+import { UsageSnapshot } from '../../src/client_extension/domain/types';
 import { makeEvent } from './helpers';
 
 function opts(over: Partial<SnapshotOptions> = {}): SnapshotOptions {

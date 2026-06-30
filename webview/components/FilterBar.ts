@@ -7,8 +7,8 @@
  */
 import { post } from '../api';
 import { setState, state } from '../store';
-import { DatePreset, Filter, Metric, SourceKind, Surface, UsageSnapshot } from '../../src/domain/types';
-import { DAY_MS, nextBucketStart, startOf } from '../../src/util/time';
+import { DatePreset, Filter, Metric, SourceKind, Surface, UsageSnapshot } from '../../src/client_extension/domain/types';
+import { DAY_MS, nextBucketStart, startOf } from '../../src/client_extension/util/time';
 
 export interface FilterBarHandle {
   update(snapshot: UsageSnapshot, metric: Metric): void;

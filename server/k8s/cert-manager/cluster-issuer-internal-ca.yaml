@@ -1,0 +1,10 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: mallard-ca
+spec:
+  ca:
+    # Operator creates this Secret once:
+    #   kubectl create secret tls mallard-ca-key-pair \
+    #     --cert=ca.crt --key=ca.key -n cert-manager
+    secretName: mallard-ca-key-pair

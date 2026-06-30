@@ -1,0 +1,17 @@
+# Template: copy, rename, and set commonName per team/person.
+# The CN becomes the `source` tag in InfluxDB for all data from that identity.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mallard-client-team-alpha
+  namespace: mallard
+spec:
+  secretName: mallard-client-team-alpha-tls
+  issuerRef:
+    name: mallard-ca
+    kind: ClusterIssuer
+  commonName: team-alpha
+  usages:
+    - client auth
+  duration: 8760h    # 1 year
+  renewBefore: 720h  # renew 30 days before expiry
