@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     api_keys: str = Field(..., description="Comma-separated API keys (label:key or bare key)")
 
     # Server
-    server_host: str = Field("0.0.0.0", description="Bind address")
+    server_host: str = Field("0.0.0.0", description="Bind address")  # nosec B104 — intentional for containerised deployment
     server_port: int = Field(8080, description="Listen port")
 
     # Rate limiting
