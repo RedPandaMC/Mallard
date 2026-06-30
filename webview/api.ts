@@ -16,6 +16,9 @@ export function onMessage(handler: Handler): void {
 }
 
 window.addEventListener('message', (e: MessageEvent) => {
+  // VS Code routes webview messages through its own bus; the origin is always
+  // a vscode-webview:// URI. Reject anything else to guard against cross-frame injection.
+  if (!e.origin.startsWith('vscode-webview://')) return;
   if (isWebviewBoundMsg(e.data)) {
     for (const h of _handlers) h(e.data as WebviewBoundMsg);
   }

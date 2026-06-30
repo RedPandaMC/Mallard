@@ -64,10 +64,14 @@ export function mountGitHubBillingStrip(el: HTMLElement): GitHubBillingStripHand
           if (divergence > 0.1) {
             const warn = document.createElement('div');
             warn.className = 'wv-gh-divergence';
-            warn.innerHTML =
-              `<i class="codicon codicon-warning"></i> ` +
-              `Local estimate (${formatMoney(localCost, currency)}) differs from API ` +
-              `(${formatMoney(totalNetAmount, currency)}). Other devices may account for the difference.`;
+            const icon = document.createElement('i');
+            icon.className = 'codicon codicon-warning';
+            icon.setAttribute('aria-hidden', 'true');
+            warn.appendChild(icon);
+            warn.append(
+              ` Local estimate (${formatMoney(localCost, currency)}) differs from API ` +
+              `(${formatMoney(totalNetAmount, currency)}). Other devices may account for the difference.`,
+            );
             el.appendChild(warn);
           }
         }

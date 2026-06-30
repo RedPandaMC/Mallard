@@ -2,10 +2,10 @@
 # List CVE IDs or Trivy rule IDs here (one per line) to suppress known-acceptable findings.
 #
 # File-path exclusions are handled via skip-files in .github/workflows/security.yml:
-#   server/k8s/infisical/universal-auth-secret.yaml  — example file with placeholder values
-#   server/k8s/infisical/patch-server-envfrom.yaml   — kustomize strategic-merge patch
-#   server/k8s/openbao/agent-injector-patch.yaml     — kustomize strategic-merge patch
+#   src/server/k8s/infisical/universal-auth-secret.yaml  — example file with placeholder values
+#   src/server/k8s/infisical/patch-server-envfrom.yaml   — kustomize strategic-merge patch
+#   src/server/k8s/openbao/agent-injector-patch.yaml     — kustomize strategic-merge patch
 #
 # Kustomize patches are intentionally partial resources; their security context is
-# supplied by the base Deployment (server/k8s/server/deployment.yaml). Trivy evaluates
+# supplied by the base Deployment (src/server/k8s/server/deployment.yaml). Trivy evaluates
 # them in isolation and incorrectly flags KSV-0118 (default security context).
