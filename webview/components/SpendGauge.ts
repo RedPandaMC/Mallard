@@ -1,5 +1,5 @@
-import { BudgetState } from '../../src/client_extension/domain/types';
-import { formatCredits, formatMoney } from '../../src/client_extension/domain/format';
+import { BudgetState } from '../../src/extension/domain/types';
+import { formatCredits, formatMoney } from '../../src/extension/domain/format';
 
 export interface SpendGaugeHandle {
   update(budget: BudgetState, currency: string): void;

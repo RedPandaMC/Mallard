@@ -2,8 +2,8 @@ import { strict as assert } from 'assert';
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { EventStore } from '../../../src/client_extension/store/EventStore';
-import { DAY_MS, startOf } from '../../../src/client_extension/util/time';
+import { EventStore } from '../../../src/extension/store/EventStore';
+import { DAY_MS, startOf } from '../../../src/extension/util/time';
 import { makeEvent } from '../helpers';
 
 async function tmpDir(): Promise<string> {

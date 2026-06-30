@@ -31,7 +31,7 @@ packages = ["src/server"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["server/tests"]
+testpaths = ["src/server/tests"]
 pythonpath = ["src"]
 
 [tool.coverage.run]

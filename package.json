@@ -270,7 +270,7 @@
     "watch": "bun esbuild.mjs --watch",
     "package": "bun esbuild.mjs --production",
     "check-types": "tsc -p tsconfig.host.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
-    "lint": "eslint src/client_extension webview test",
+    "lint": "eslint src/extension webview test",
     "test:unit": "mocha",
     "test:coverage": "c8 mocha",
     "bench": "tsx test/bench/benchmark.ts",

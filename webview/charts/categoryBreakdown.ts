@@ -5,8 +5,8 @@
  */
 import type { TooltipComponentOption } from './echarts';
 import { readTheme } from '../theme';
-import { UsageSnapshot } from '../../src/client_extension/domain/types';
-import { formatMoney } from '../../src/client_extension/domain/format';
+import { UsageSnapshot } from '../../src/extension/domain/types';
+import { formatMoney } from '../../src/extension/domain/format';
 import { ChartComponent } from './ChartComponent';
 
 const LABELS: Record<string, string> = {

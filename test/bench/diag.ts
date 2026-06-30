@@ -1,9 +1,9 @@
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { EventStore } from '../../src/client_extension/store/EventStore';
-import { DAY_MS } from '../../src/client_extension/util/time';
-import type { UsageEvent } from '../../src/client_extension/domain/types';
+import { EventStore } from '../../src/extension/store/EventStore';
+import { DAY_MS } from '../../src/extension/util/time';
+import type { UsageEvent } from '../../src/extension/domain/types';
 
 const MODELS   = ['gpt-4o','claude-sonnet-4-6','claude-haiku-4-5','o3','gemini-2-flash'];
 const SURFACES: UsageEvent['surface'][] = ['chat','inline','agent','edit','unknown'];

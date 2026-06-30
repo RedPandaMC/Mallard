@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { bindParam } from '../../../src/client_extension/store/dbUtils';
+import { bindParam } from '../../../src/extension/store/dbUtils';
 
 type Calls = { method: string; value?: unknown }[];
 

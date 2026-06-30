@@ -1,6 +1,6 @@
 import { deriveAccent, ensureContrast, parseColor, toHex } from './color';
-import type { PaletteMode } from '../src/client_extension/domain/types';
-import type { ThemeKind } from '../src/client_extension/ui/messaging';
+import type { PaletteMode } from '../src/extension/domain/types';
+import type { ThemeKind } from '../src/extension/ui/messaging';
 
 function cssVar(name: string, fallback = ''): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;

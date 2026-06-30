@@ -12,21 +12,21 @@
 [![Docs](https://github.com/RedPandaMC/Mallard/actions/workflows/docs.yml/badge.svg)](https://github.com/RedPandaMC/Mallard/actions/workflows/docs.yml)
 [![Coverage](https://codecov.io/gh/RedPandaMC/Mallard/branch/main/graph/badge.svg)](https://codecov.io/gh/RedPandaMC/Mallard)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/RedPandaMC.mallard)](https://marketplace.visualstudio.com/items?itemName=RedPandaMC.mallard)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/RedPandaMC.mallard)](https://marketplace.visualstudio.com/items?itemName=RedPandaMC.mallard)
+[![Stars](https://img.shields.io/github/stars/RedPandaMC/Mallard?style=flat)](https://github.com/RedPandaMC/Mallard/stargazers)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)](https://www.typescriptlang.org/)
 
-`COPILOT SPEND PLUGIN` — local-first, no sign-in
+`COPILOT SPEND PLUGIN` · local-first, no sign-in
 
 </div>
 
 ---
 
-Mallard reads the OpenTelemetry logs Copilot writes to VS Code's log directory
-and builds a live cost breakdown: today, month-to-date, and a projected
-month-end total, split by model, surface, cost type, and repository. Core
-features work offline with no sign-in. You can optionally connect to GitHub's
-billing API for the authoritative charge.
+Mallard reads the OpenTelemetry logs Copilot writes to VS Code's log directory and builds a live cost breakdown: today, month-to-date, and a projected month-end total, split by model, surface, cost type, and repository. No sign-in required. Connect GitHub billing if you want the authoritative charge.
 
 - **No sign-in required.** Reads OTel logs Copilot already writes to disk.
-- **DuckDB-backed.** Full event detail for 90 days; older events roll up to daily rows automatically. A layered SQL view hierarchy (`v_usage_daily` → weekly/monthly, plus hourly and weekday distributions) keeps aggregation in the database rather than JS.
+- **DuckDB-backed.** Full event detail for 90 days; older events roll up to daily rows automatically.
 - **Branch-aware.** Tags every event to the active git branch and repo, with per-branch credit caps.
 - **Programmable alerts.** JSONLogic condition language with cooldowns, group toggles, and message templates; validated by a bundled JSON Schema.
 - **Copilot restriction.** Rules can show soft (dismissable/snoozeable) or hard (persistent, re-fires every refresh) popups when a budget is exhausted.
@@ -42,7 +42,7 @@ billing API for the authoritative charge.
    code --install-extension RedPandaMC.mallard
    ```
 
-2. Use Copilot normally. Mallard starts collecting right away — no sign-in required.
+2. Use Copilot normally. Mallard starts collecting right away.
 
 3. Open the dashboard from the Mallard icon in the activity bar, or run
    "Mallard: Open Dashboard" from the Command Palette.
@@ -56,7 +56,7 @@ Copilot writes JSON-lines OTel logs with the model name, input/output token coun
 surface, and a timestamp. Mallard watches those files, stores events in a local DuckDB
 database, and computes a render-ready snapshot for the dashboard.
 
-Token counts are estimates — connect GitHub billing for the authoritative charge. Costs
+Token counts are estimates. Connect GitHub billing for the authoritative charge. Costs
 are split into input and output; richer categories such as tool and reasoning are not
 available in the local logs.
 

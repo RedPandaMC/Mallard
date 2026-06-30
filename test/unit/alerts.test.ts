@@ -1,6 +1,6 @@
 import * as assert from 'assert';
-import { evaluateAlertRules } from '../../src/client_extension/domain/alertRules';
-import { AlertRule, UsageSnapshot } from '../../src/client_extension/domain/types';
+import { evaluateAlertRules } from '../../src/extension/domain/alertRules';
+import { AlertRule, UsageSnapshot } from '../../src/extension/domain/types';
 
 function snap(percentOfBudget: number, todayCredits: number, todayCost = 0): UsageSnapshot {
   return {

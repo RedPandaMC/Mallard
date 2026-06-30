@@ -1,8 +1,8 @@
 import { strict as assert } from 'assert';
-import { aggregateBy } from '../../src/client_extension/domain/aggregate';
-import { forecastMonth, selectForecaster, fitHoltWinters } from '../../src/client_extension/domain/forecast';
-import { linearForecaster } from '../../src/client_extension/domain/forecasters/linear';
-import { seasonalForecaster } from '../../src/client_extension/domain/forecasters/seasonal';
+import { aggregateBy } from '../../src/extension/domain/aggregate';
+import { forecastMonth, selectForecaster, fitHoltWinters } from '../../src/extension/domain/forecast';
+import { linearForecaster } from '../../src/extension/domain/forecasters/linear';
+import { seasonalForecaster } from '../../src/extension/domain/forecasters/seasonal';
 import { makeEvent } from './helpers';
 
 describe('forecast', () => {

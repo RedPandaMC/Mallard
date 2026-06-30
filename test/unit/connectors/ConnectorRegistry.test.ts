@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
-import { ConnectorRegistry } from '../../../src/client_extension/ingest/ConnectorRegistry';
-import type { LogConnector } from '../../../src/client_extension/ingest/LogConnector';
+import { ConnectorRegistry } from '../../../src/extension/ingest/ConnectorRegistry';
+import type { LogConnector } from '../../../src/extension/ingest/LogConnector';
 
 function makeStub(id: string): LogConnector {
   return {

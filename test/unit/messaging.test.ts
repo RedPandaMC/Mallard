@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { isHostBoundMsg, isWebviewBoundMsg } from '../../src/client_extension/ui/messaging';
+import { isHostBoundMsg, isWebviewBoundMsg } from '../../src/extension/ui/messaging';
 
 describe('isHostBoundMsg', () => {
   it('accepts "ready"', () => assert.equal(isHostBoundMsg({ type: 'ready' }), true));

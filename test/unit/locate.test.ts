@@ -11,7 +11,7 @@ import {
   locateClaudeCodeLogDirs,
   platformDefaults,
   vscodeLogRoot,
-} from '../../src/client_extension/ingest/locate';
+} from '../../src/extension/ingest/locate';
 
 async function mkdir(p: string): Promise<void> {
   await fs.mkdir(p, { recursive: true });

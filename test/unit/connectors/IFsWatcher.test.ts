@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { NoopFsWatcher } from '../../../src/client_extension/ingest/IFsWatcher';
+import { NoopFsWatcher } from '../../../src/extension/ingest/IFsWatcher';
 
 describe('NoopFsWatcher', () => {
   it('watch() returns a handle whose close() does not throw', () => {
