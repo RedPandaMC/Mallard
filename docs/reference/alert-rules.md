@@ -1,8 +1,6 @@
 # Alert Rules Reference
 
-Every field, operator, and context path available in a `config.json` rule. See
-[Configuration — Custom alert rules](/guide/configuration#custom-alert-rules) for a
-walkthrough with examples.
+Every field, operator, and context path available in a `config.json` rule.
 
 ## Rule fields
 

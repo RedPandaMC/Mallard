@@ -2,8 +2,6 @@
 
 cert-manager is a Kubernetes operator that manages the **lifecycle of TLS certificates**: it provisions them (from Let's Encrypt, an internal CA, or a self-signed issuer) and renews them automatically before they expire. Let's Encrypt certificates expire every 90 days; cert-manager handles that renewal silently with no operator involvement.
 
-> **cert-manager handles TLS certificates. Infisical and OpenBao handle application secrets (API keys, passwords, tokens).** They are completely different concerns and you will typically use all three together: cert-manager for HTTPS + mTLS, and Infisical or OpenBao for credentials. See [Secret Management](/guide/secret-management).
-
 ## What cert-manager provides for Mallard
 
 | Concern | Who handles it |

@@ -32,8 +32,6 @@ Set a monthly budget, included-credit allowance, daily threshold, and velocity a
 }
 ```
 
-See [Configuration](/guide/configuration) for the full schema.
-
 ## Custom alert rules
 
 Write precise conditions using a JSONLogic-inspired language. Rules can fire VS Code notifications on any combination of spend, velocity, model, surface, branch, or time-of-day signals:
@@ -49,8 +47,6 @@ Write precise conditions using a JSONLogic-inspired language. Rules can fire VS 
   }]
 }
 ```
-
-See [Configuration — Custom alert rules](/guide/configuration#custom-alert-rules) for the full rule syntax, context field reference, and message templates.
 
 ## Rule groups
 
@@ -107,7 +103,7 @@ Run **Mallard: Sign In to GitHub** to pull the authoritative charge from GitHub'
 
 ## Metric streaming
 
-After each snapshot Mallard can publish a JSON usage vector to a self-hosted server via webhook or MQTT. Set `mallard.server.url` and `mallard.export.transport`. See [Self-hosted server](/guide/self-hosting) and [Settings reference](/reference/settings).
+After each snapshot Mallard can publish a JSON usage vector to a self-hosted server via webhook or MQTT. Set `mallard.server.url` and `mallard.export.transport`.
 
 ## Export
 

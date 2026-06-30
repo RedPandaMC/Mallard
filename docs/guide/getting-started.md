@@ -27,7 +27,7 @@ Each Copilot log entry includes the model, input/output token counts, surface (c
 
 ## GitHub billing reconciliation
 
-Run **Mallard: Sign In to GitHub** (or use the dashboard button) to pull the authoritative charge from GitHub's API. This shows spend across all your machines, not just the current one. Sign-in is optional and never shown at startup. See [Features](/guide/features#github-billing-reconciliation) for details.
+Run **Mallard: Sign In to GitHub** (or use the dashboard button) to pull the authoritative charge from GitHub's API. This shows spend across all your machines, not just the current one. Sign-in is optional and never shown at startup.
 
 ## Uninstalling
 

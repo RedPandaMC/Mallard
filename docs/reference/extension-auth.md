@@ -45,7 +45,7 @@ Sent as the MQTT CONNECT `password` field over `wss://<host>/mqtt`. The `usernam
 
 **Extension settings:** `mallard.shared.certificate.file`, `mallard.shared.certificate.keyFile`
 
-The extension presents a client certificate when establishing the TLS connection. The certificate must be issued by the server operator using the `mallard-ca` ClusterIssuer (see [cert-manager guide](/guide/cert-manager)).
+The extension presents a client certificate when establishing the TLS connection. The certificate must be issued by the server operator using the `mallard-ca` ClusterIssuer.
 
 The CN (Common Name) field of the certificate becomes the `source` tag — no separate API key is needed.
 
@@ -66,9 +66,6 @@ kubectl get secret mallard-client-team-alpha-tls -n mallard \
 kubectl get secret mallard-client-team-alpha-tls -n mallard \
   -o jsonpath='{.data.tls\.key}' | base64 -d > team-alpha.key
 ```
-
-See the [Settings Reference](/reference/settings#webhook-auth) for the full list of
-`mallard.webhook.*`, `mallard.mqtt.*`, and `mallard.shared.certificate.*` settings.
 
 ## Named credentials and the `source` tag
 

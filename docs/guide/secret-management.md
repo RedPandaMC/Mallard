@@ -11,8 +11,6 @@ Dynamic secret managers solve both problems. The server fetches live credentials
 
 Two self-hosted providers are supported: **Infisical** and **OpenBao**. Both are open-source and run entirely on your infrastructure — no vendor cloud required.
 
-> **This page covers application secrets only (API keys, passwords, connection strings).** TLS certificate management is a completely separate concern handled by cert-manager — see [cert-manager guide](/guide/cert-manager).
-
 ## Choosing a secret manager
 
 | | Infisical | OpenBao |
@@ -244,4 +242,4 @@ Regardless of which provider you use, the rotation flow is the same:
 
 No server restart required.
 
-For **static credentials** (no secret manager), rotation on Kubernetes is handled by [Stakater Reloader](/guide/self-hosting#high-availability): update the `mallard-server-secrets` Secret and Reloader triggers a zero-downtime rolling restart.
+For **static credentials** (no secret manager), rotation on Kubernetes is handled by Stakater Reloader: update the `mallard-server-secrets` Secret and Reloader triggers a zero-downtime rolling restart.

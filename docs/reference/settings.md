@@ -1,8 +1,7 @@
 # Settings Reference
 
 Mallard reads only a few VS Code settings. Budget, included credits, and alert
-thresholds are not settings; you edit them in the dashboard (see
-[Configuration](/guide/configuration)) and they are stored per user.
+thresholds are not settings; you edit them in the dashboard and they are stored per user.
 
 ## Core settings
 
@@ -15,15 +14,11 @@ thresholds are not settings; you edit them in the dashboard (see
 | `mallard.refreshIntervalMinutes` | `number` | `10` | How often Mallard re-scans logs and rebuilds the snapshot. Range: 1–60 minutes. Lower values update the dashboard faster but increase CPU usage. |
 | `mallard.dataRetentionDays` | `number` | `90` | How many days of raw events to keep before rolling up to daily rows. Range: 30–365. Older events are stored as daily aggregates; per-event detail is lost after this window. |
 
-See [Configuration](/guide/configuration) for full descriptions and examples.
-
 ## Metric export settings
 
 Mallard can stream a usage feature vector to a self-hosted server after every snapshot.
 All export settings are machine-scoped (`"scope": "machine-overridable"`)
 so credentials are not synced across machines by VS Code Settings Sync.
-
-See [Self-hosted server](/guide/self-hosting) for full setup instructions.
 
 ### Server and transport
 

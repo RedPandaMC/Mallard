@@ -121,15 +121,11 @@ The server treats the bearer token identically to an API key — it is hashed an
 
 Run **Mallard: Set MQTT Export Password** from the Command Palette to store the password securely in VS Code's SecretStorage. Passwords are never written to settings files.
 
-See [Settings reference](/reference/settings) for the full list of extension settings and the payload schema.
-
 ## Named credentials and the `source` tag
 
 Every API key and MQTT credential can carry a **label** (`label:secret`), written as the
 `source` tag on every InfluxDB data point — this is what lets you filter Grafana
-dashboards by team, machine, or person. See the
-[Auth & Identity Reference](/reference/extension-auth#named-credentials-and-the-source-tag)
-for the credential format, Flux query examples, and per-source Grafana filtering.
+dashboards by team, machine, or person.
 
 ## MQTT configuration
 
@@ -150,7 +146,7 @@ The K8s manifests in `server/k8s/` deploy the full stack to a `mallard` namespac
 
 ### 1 — Install cert-manager
 
-cert-manager handles TLS certificate lifecycle: it provisions and auto-renews the HTTPS certificate for your ingress, and can issue mTLS client certificates for the extension. It does **not** manage application secrets — that is covered by [Infisical or OpenBao](/guide/secret-management).
+cert-manager handles TLS certificate lifecycle: it provisions and auto-renews the HTTPS certificate for your ingress, and can issue mTLS client certificates for the extension. It does **not** manage application secrets.
 
 ```bash
 helm repo add jetstack https://charts.jetstack.io --force-update
@@ -163,8 +159,6 @@ Then apply the ClusterIssuers (ACME + self-signed CA):
 ```bash
 kubectl apply -f server/k8s/cert-manager/
 ```
-
-See [cert-manager guide](/guide/cert-manager) for issuer selection, self-signed vs Let's Encrypt, and mTLS client certificate provisioning.
 
 ### 2 — Create the namespace and secrets
 
@@ -211,13 +205,9 @@ Two secret managers are supported:
 | Infisical | Full-featured secret management platform | `docker-compose.infisical.yml` overlay | `server/k8s/infisical/` kustomize overlay |
 | OpenBao | HashiCorp Vault fork (community-maintained) | `docker-compose.openbao.yml` overlay | `server/k8s/openbao/` kustomize overlay |
 
-See the [Secret Management guide](/guide/secret-management) for detailed setup steps for both providers.
-
 ## mTLS — client certificate auth (optional)
 
 Instead of API keys or passwords, the extension can authenticate with a TLS client
 certificate — the certificate's Common Name becomes the `source` tag in InfluxDB, no
 separate credential entry needed. Requires cert-manager with the `mallard-ca`
-ClusterIssuer and the nginx mTLS annotations already in `server/k8s/ingress.yaml`. See
-[cert-manager guide — client certificates](/guide/cert-manager#client-certificates) for
-issuing certificates and the extension config to use them.
+ClusterIssuer and the nginx mTLS annotations already in `server/k8s/ingress.yaml`.

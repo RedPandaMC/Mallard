@@ -54,8 +54,7 @@ Rules live in the `rules` array. Each rule fires a VS Code notification and opti
 }
 ```
 
-Full field list, condition operators, and every context path are in the
-[Alert Rules Reference](/reference/alert-rules). The most-used context fields are
+The most-used context fields are
 `today.credits`, `budget.percentOfBudget`, `budget.pace`, and `velocity.creditsPerHour`.
 
 ### User-defined variables
@@ -103,9 +102,6 @@ Restrictions interrupt your workflow when a rule fires.
 }
 ```
 
-Full field list (`mode`, `scope`, `graceMinutes`) is in the
-[Alert Rules Reference — Restriction fields](/reference/alert-rules#restriction-fields).
-
 **Soft restriction** — shows a VS Code warning notification with **Dismiss** (closes once) and **Snooze** options. Does not disable any extensions.
 
 **Hard restriction** — disables the Copilot extensions listed in `scope` and shows an error notification. Re-fires on every snapshot refresh while the condition remains true.
@@ -116,9 +112,4 @@ Click **Edit layout** to drag, resize, or hide panels. Your layout is saved and 
 
 ## Removing your data
 
-Run **Mallard: Prepare for Uninstall** before removing the extension to wipe all events, settings, cached pricing, and secrets. VS Code does not delete extension storage on uninstall. See [Getting Started — Uninstalling](/guide/getting-started#uninstalling) for step-by-step instructions.
-
-## VS Code settings
-
-See the [Settings Reference](/reference/settings) for every `mallard.*` setting, including
-display, log-path, and metric-export options.
+Run **Mallard: Prepare for Uninstall** before removing the extension to wipe all events, settings, cached pricing, and secrets. VS Code does not delete extension storage on uninstall.
