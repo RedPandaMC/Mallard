@@ -27,12 +27,12 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["../src/server"]
+packages = ["src/server"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
-pythonpath = ["../src"]
+testpaths = ["server/tests"]
+pythonpath = ["src"]
 
 [tool.coverage.run]
 source = ["server"]
