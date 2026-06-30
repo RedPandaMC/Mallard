@@ -1,0 +1,173 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "src/server/**"
+      - "server/k8s/**"
+      - "pyproject.toml"
+  pull_request:
+    paths:
+      - "server/**"
+      - "src/server/**"
+      - "server/k8s/**"
+      - "pyproject.toml"
+  # Fires after Server CI finishes on main — ensures the image is already pushed
+  # before we try to scan it.
+  workflow_run:
+    workflows: ["Server CI"]
+    types: [completed]
+    branches: [main]
+  # Weekly drift scan: catches new CVEs even when no code changed.
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+  security-events: write  # upload SARIF → GitHub Security tab
+  packages: read          # pull ghcr.io image for image scans
+
+jobs:
+  # ── IaC / repo scan ────────────────────────────────────────────────────────
+  # Runs on every PR and every push — scans Dockerfile, K8s YAML, Python deps.
+  trivy-iac:
+    name: Trivy IaC & repo scan
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request' ||
+      github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy (filesystem / IaC)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: "."
+          scanners: "vuln,misconfig,secret"
+          format: sarif
+          output: trivy-iac.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Upload Trivy IaC SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-iac.sarif
+          category: trivy-iac
+
+  # ── Kubernetes manifest scan ────────────────────────────────────────────────
+  # Runs on every PR and push; uses NSA + MITRE frameworks. Findings surface in
+  # the GitHub Security tab — the action does not support exit-code-based
+  # build failure, so use continue-on-error to avoid blocking on known gaps.
+  kubescape:
+    name: Kubescape K8s scan
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request' ||
+      github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Kubescape (NSA + MITRE)
+        uses: kubescape/github-action@v1
+        continue-on-error: true
+        with:
+          files: server/k8s/
+          frameworks: NSA,MITRE
+          severity-threshold: high
+          format: sarif
+          output-file: kubescape.sarif
+
+      - name: Upload Kubescape SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: kubescape.sarif
+          category: kubescape
+
+  # ── Container image CVE scan (Trivy) ───────────────────────────────────────
+  # Runs after Server CI pushes the image to GHCR, and on the weekly schedule.
+  # Does NOT fail the build — new CVEs in python:3.12-slim should be visible in
+  # the Security tab without blocking unrelated PRs.
+  trivy-image:
+    name: Trivy image scan
+    if: >
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy (image)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ghcr.io/redpandamc/mallard-server:latest
+          format: sarif
+          output: trivy-image.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload Trivy image SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+
+  # ── Docker Scout CVE + recommendations ─────────────────────────────────────
+  # Optional: requires DOCKERHUB_USERNAME + DOCKERHUB_TOKEN repo secrets.
+  # If those secrets are not configured, the job fails gracefully (continue-on-error)
+  # without blocking CI. Add them in Settings → Secrets → Actions.
+  docker-scout:
+    name: Docker Scout
+    if: >
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    continue-on-error: true  # graceful skip when DOCKERHUB_TOKEN is not configured
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub (required by Scout)
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker Scout CVE scan
+        uses: docker/scout-action@v1
+        with:
+          command: cves,recommendations
+          image: ghcr.io/redpandamc/mallard-server:latest
+          only-severities: high,critical
+          ignore-unfixed: true
+          sarif-file: scout.sarif
+
+      - name: Upload Docker Scout SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: scout.sarif
+          category: docker-scout
