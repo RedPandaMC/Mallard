@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { changed } from '../../webview/chartDiff';
+import { changed } from '../../src/extension-frontend/chartDiff';
 
 describe('changed', () => {
   it('returns true when prev is undefined', () => {
@@ -32,7 +32,7 @@ import {
   modelBreakdownChanged,
   categoryBreakdownChanged,
   hourlyChanged,
-} from '../../webview/chartDiff';
+} from '../../src/extension-frontend/chartDiff';
 import type { DailyBarsData, HeatmapData, ModelBreakdownData, CategoryBreakdownData, HourlyTimelineData } from '../../src/extension-backend/domain/types';
 
 describe('dailyBarsChanged', () => {
