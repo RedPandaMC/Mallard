@@ -15,7 +15,12 @@
 [![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/RedPandaMC.mallard)](https://marketplace.visualstudio.com/items?itemName=RedPandaMC.mallard)
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/RedPandaMC.mallard)](https://marketplace.visualstudio.com/items?itemName=RedPandaMC.mallard)
 [![Stars](https://img.shields.io/github/stars/RedPandaMC/Mallard?style=flat)](https://github.com/RedPandaMC/Mallard/stargazers)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![DuckDB](https://img.shields.io/badge/DuckDB-embedded-FCD12A?logo=duckdb&logoColor=black)](https://duckdb.org/)
+[![Bun](https://img.shields.io/badge/Bun-runtime-F9F1E1?logo=bun&logoColor=black)](https://bun.sh/)
+[![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 
 `COPILOT SPEND PLUGIN` · local-first, no sign-in
 
