@@ -42,19 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Trivy (filesystem / IaC — table output for log visibility)
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
-        with:
-          scan-type: fs
-          scan-ref: "."
-          scanners: "vuln,misconfig,secret"
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          skip-files: "server/k8s/infisical/universal-auth-secret.yaml"
-
-      - name: Run Trivy (filesystem / IaC — SARIF)
+      - name: Run Trivy (filesystem / IaC)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
@@ -64,11 +52,15 @@ jobs:
           output: trivy-iac.sarif
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          skip-files: "server/k8s/infisical/universal-auth-secret.yaml"
+          # Exclude files that Trivy cannot evaluate correctly:
+          #   universal-auth-secret.yaml  — placeholder values, not real credentials
+          #   patch-server-envfrom.yaml   — kustomize strategic-merge patch; security
+          #   agent-injector-patch.yaml     context is inherited from the base Deployment
+          skip-files: "server/k8s/infisical/universal-auth-secret.yaml,server/k8s/infisical/patch-server-envfrom.yaml,server/k8s/openbao/agent-injector-patch.yaml"
 
       - name: Upload Trivy IaC SARIF
         uses: github/codeql-action/upload-sarif@v3
-        if: always() && github.event_name != 'pull_request'
+        if: always()
         with:
           sarif_file: trivy-iac.sarif
           category: trivy-iac
