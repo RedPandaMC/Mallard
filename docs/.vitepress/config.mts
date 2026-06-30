@@ -60,6 +60,11 @@ export default defineConfig({
       { text: 'Changelog', link: '/changelog' },
     ],
 
+    editLink: {
+      pattern: 'https://github.com/RedPandaMC/Mallard/edit/main/docs/:path',
+      text: 'Edit this page on GitHub',
+    },
+
     docFooter: {
       prev: '← Previous',
       next: 'Next →',
