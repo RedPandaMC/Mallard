@@ -311,6 +311,7 @@
     "prettier": "^3.3.3",
     "tsx": "^4.22.4",
     "typescript": "^5.5.4",
+    "eslint-plugin-security": "^3.0.1",
     "typescript-eslint": "^8.0.0",
     "vitepress": "^1.6.4",
     "zustand": "^5.0.14"
