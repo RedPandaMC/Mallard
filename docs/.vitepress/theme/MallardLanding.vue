@@ -1,9 +1,21 @@
 <script setup lang="ts">
 const features = [
-  ['01', 'Live dashboard', 'A 30-day chart, model breakdown, spend by cost type, and a model→surface flow — computed locally.'],
-  ['02', 'Simple alerts', 'Set a monthly budget, daily threshold, and velocity warning from the dashboard. No JSON schemas.'],
-  ['03', 'Automatic pricing', 'Credit multipliers ship with the extension and refresh daily — never touch a settings file.'],
-  ['04', 'Stays local', 'Reads only the log files Copilot already writes to your machine. No network requests.'],
+  ['01', 'Spend dashboard', 'KPI cards for today, MTD, and projected month-end. 30-day bar chart with pace line, model breakdown, and a Sankey flow from model to surface (chat, inline, agent, edit).'],
+  ['02', 'Budget gauge', 'Set a monthly USD budget and included-credits allowance. The gauge colours at 80% and 100%. Projected month-end recalculates every snapshot.'],
+  ['03', 'Custom alert rules', '32 context fields covering spend, velocity, forecast, branch, and time-of-day. JSONLogic operators, per-rule cooldown, and {{field}} message templates.'],
+  ['04', 'Copilot restriction', 'Soft mode fires a dismissable warning. Hard mode disables Copilot extensions until the condition clears. Simulate first — see what would fire before enabling.'],
+  ['05', 'Branch tracking', 'Every event tagged to the active git branch and workspace. Set per-branch credit caps in config.json. A repo selector in the dashboard isolates spend to one project.'],
+  ['06', 'GitHub billing', 'Optional sign-in pulls authoritative spend from GitHub\'s billing API — across all your machines, not just this one. Every other feature works without it.'],
+  ['07', 'Metric streaming', 'Publish a usage feature vector to a self-hosted server after each snapshot. Webhook (API key, Bearer, mTLS) or MQTT over WebSocket.'],
+  ['08', 'Offline & private', 'Reads only the OTel log files Copilot already writes locally. No account, no telemetry, no background requests. Pricing manifests update daily; bundled copy is the fallback.'],
+];
+
+const stack = [
+  ['FastAPI', 'single stateless process — webhook + MQTT ingest'],
+  ['InfluxDB v2', 'time-series storage, line protocol write'],
+  ['Grafana', '4 pre-built dashboards: overview, model, team, velocity'],
+  ['cert-manager', 'HTTPS auto-renewal + mTLS client certificate issuance'],
+  ['Infisical / OpenBao', 'live credential rotation without container restarts'],
 ];
 </script>
 
@@ -40,14 +52,37 @@ const features = [
       </div>
     </section>
 
-    <!-- index · four points -->
+    <!-- features · 8-card grid -->
     <section class="ml-why">
-      <div class="ml-why-head"><span>Why Mallard</span><span>Four points</span></div>
+      <div class="ml-why-head"><span>Features</span><span>Eight points</span></div>
       <div class="ml-why-grid">
         <div v-for="f in features" :key="f[0]" class="ml-card">
           <div class="ml-num">{{ f[0] }}</div>
           <div class="ml-card-t">{{ f[1] }}</div>
           <p class="ml-card-p">{{ f[2] }}</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- self-hosted server strip -->
+    <section class="ml-server">
+      <div class="ml-server-head"><span>Self-hosted server</span><span class="ml-num">Optional</span></div>
+      <div class="ml-server-body">
+        <div class="ml-server-l">
+          <p class="ml-server-desc">Deploy the ingest stack to a $5 VPS or your Kubernetes cluster. Every team member's spend, model mix, and velocity in a shared Grafana dashboard — filtered by the <code>source</code> tag that labels each credential.</p>
+          <div class="ml-server-transports">
+            <span class="ml-pill">Webhook</span>
+            <span class="ml-pill">MQTT / WSS</span>
+            <span class="ml-pill">mTLS</span>
+            <span class="ml-pill">API key</span>
+            <span class="ml-pill">Bearer token</span>
+          </div>
+        </div>
+        <div class="ml-server-r">
+          <div v-for="s in stack" :key="s[0]" class="ml-stack-row">
+            <span class="ml-stack-name ml-num">{{ s[0] }}</span>
+            <span class="ml-stack-desc">{{ s[1] }}</span>
+          </div>
         </div>
       </div>
     </section>
@@ -90,15 +125,31 @@ const features = [
 .ml-row { display: flex; justify-content: space-between; padding: 13px 0; border-bottom: 1px solid var(--ml-line); font-family: var(--vp-font-family-mono); font-size: 12.5px; color: var(--ml-mut); }
 .ml-row-last { border-bottom: none; }
 
-/* why */
-.ml-why { border: 1px solid var(--ml-line); }
+/* features */
+.ml-why { border: 1px solid var(--ml-line); border-bottom: none; }
 .ml-why-head { display: flex; align-items: baseline; justify-content: space-between; padding: 22px 24px; border-bottom: 1px solid var(--ml-line); font-family: var(--vp-font-family-mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ml-mut); }
 .ml-why-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
-.ml-card { padding: 30px 26px; border-right: 1px solid var(--ml-line); }
-.ml-card:last-child { border-right: none; }
+.ml-card { padding: 30px 26px; border-right: 1px solid var(--ml-line); border-bottom: 1px solid var(--ml-line); }
+.ml-card:nth-child(4n) { border-right: none; }
+.ml-card:nth-child(n+5) { border-bottom: none; }
 .ml-card .ml-num { display: block; font-size: 13px; margin-bottom: 18px; }
 .ml-card-t { font-family: var(--ml-display); font-weight: 700; font-size: 17px; letter-spacing: -0.01em; margin-bottom: 10px; color: var(--vp-c-text-1); }
 .ml-card-p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ml-mut2); }
+
+/* self-hosted server strip */
+.ml-server { border: 1px solid var(--ml-line); }
+.ml-server-head { display: flex; align-items: baseline; justify-content: space-between; padding: 22px 24px; border-bottom: 1px solid var(--ml-line); font-family: var(--vp-font-family-mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ml-mut); }
+.ml-server-body { display: grid; grid-template-columns: 1.2fr 1fr; }
+.ml-server-l { padding: 40px 40px; border-right: 1px solid var(--ml-line); }
+.ml-server-r { padding: 40px 40px; }
+.ml-server-desc { margin: 0 0 28px; font-size: 15px; line-height: 1.6; color: var(--ml-mut2); max-width: 48ch; }
+.ml-server-desc code { font-family: var(--vp-font-family-mono); font-size: 13px; color: var(--ml-accent); background: none; }
+.ml-server-transports { display: flex; flex-wrap: wrap; gap: 8px; }
+.ml-pill { font-family: var(--vp-font-family-mono); font-size: 11px; letter-spacing: 0.08em; padding: 5px 10px; border: 1px solid var(--ml-line); color: var(--ml-mut); }
+.ml-stack-row { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 0; border-bottom: 1px solid var(--ml-line); gap: 24px; }
+.ml-stack-row:last-child { border-bottom: none; }
+.ml-stack-name { font-size: 12px; white-space: nowrap; }
+.ml-stack-desc { font-family: var(--vp-font-family-mono); font-size: 11.5px; color: var(--ml-mut); text-align: right; }
 
 @media (max-width: 860px) {
   .ml-hero { grid-template-columns: 1fr; }
@@ -106,11 +157,17 @@ const features = [
   .ml-hero-r { padding: 40px 28px; }
   .ml-h1 { font-size: 52px; }
   .ml-why-grid { grid-template-columns: 1fr 1fr; }
-  .ml-card:nth-child(2) { border-right: none; }
-  .ml-card:nth-child(1), .ml-card:nth-child(2) { border-bottom: 1px solid var(--ml-line); }
+  .ml-card:nth-child(4n) { border-right: 1px solid var(--ml-line); }
+  .ml-card:nth-child(2n) { border-right: none; }
+  .ml-card:nth-child(n+5) { border-bottom: 1px solid var(--ml-line); }
+  .ml-card:nth-child(n+7) { border-bottom: none; }
+  .ml-server-body { grid-template-columns: 1fr; }
+  .ml-server-l { border-right: none; border-bottom: 1px solid var(--ml-line); padding: 32px 28px; }
+  .ml-server-r { padding: 32px 28px; }
 }
 @media (max-width: 520px) {
   .ml-why-grid { grid-template-columns: 1fr; }
   .ml-card { border-right: none; border-bottom: 1px solid var(--ml-line); }
+  .ml-card:last-child { border-bottom: none; }
 }
 </style>
