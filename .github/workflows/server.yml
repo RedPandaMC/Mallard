@@ -42,6 +42,9 @@ jobs:
       - name: Install dependencies
         run: uv pip install --system -e ".[dev]"
 
+      - name: Audit Python dependencies (pip-audit)
+        run: pip-audit --skip-editable
+
       - name: Security scan (bandit)
         run: bandit -r src/server -x src/server/tests -ll
 
