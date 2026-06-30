@@ -11,10 +11,6 @@ Dynamic secret managers solve both problems. The server fetches live credentials
 
 Two self-hosted providers are supported: **Infisical** and **OpenBao**. Both are open-source and run entirely on your infrastructure — no vendor cloud required.
 
-> **This page covers application secrets only (API keys, passwords, connection strings).** TLS certificate management is a completely separate concern handled by cert-manager — see [cert-manager guide](/guide/cert-manager).
-
----
-
 ## Choosing a secret manager
 
 | | Infisical | OpenBao |
@@ -24,8 +20,6 @@ Two self-hosted providers are supported: **Infisical** and **OpenBao**. Both are
 | **Secret format** | Key-value pairs in a project+environment | KV v2 engine at a configurable path |
 | **Auth method** | Machine identity with Universal Auth | AppRole (role-id + secret-id) |
 | **When to pick it** | You want a polished UI and team-level access controls | You already run Vault / want Vault compatibility |
-
----
 
 ## How the server uses secret managers
 
@@ -41,8 +35,6 @@ The credential format expected from the secret manager is identical to the stati
 API_KEYS=label:key,...
 MQTT_CREDENTIALS=label:password,...
 ```
-
----
 
 ## Infisical
 
@@ -129,8 +121,6 @@ kubectl get secret mallard-app-secrets -n mallard -o yaml
 # The server pod should reflect the new credentials within one sync interval (default 60s):
 kubectl logs -n mallard deploy/mallard-server | grep "credential store refreshed"
 ```
-
----
 
 ## OpenBao
 
@@ -241,8 +231,6 @@ kubectl apply -k server/k8s/openbao/
 
 The kustomize overlay patches the server Deployment with Vault Agent Injector annotations. The agent sidecar authenticates via AppRole and writes credentials to `/vault/secrets/config`.
 
----
-
 ## Credential rotation
 
 Regardless of which provider you use, the rotation flow is the same:
@@ -254,4 +242,4 @@ Regardless of which provider you use, the rotation flow is the same:
 
 No server restart required.
 
-For **static credentials** (no secret manager), rotation on Kubernetes is handled by [Stakater Reloader](/guide/self-hosting#high-availability): update the `mallard-server-secrets` Secret and Reloader triggers a zero-downtime rolling restart.
+For **static credentials** (no secret manager), rotation on Kubernetes is handled by Stakater Reloader: update the `mallard-server-secrets` Secret and Reloader triggers a zero-downtime rolling restart.

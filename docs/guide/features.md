@@ -1,24 +1,27 @@
 # Features
 
-Mallard is a local-first Copilot spend tracker. All features below work without a sign-in and make no network calls — your usage data never leaves your machine.
-
----
+Mallard is a local-first Copilot spend tracker. No sign-in is needed for anything except GitHub billing reconciliation — all other features run entirely offline.
 
 ## Dashboard
 
-Open from the activity bar icon or **Mallard: Open Dashboard**. The dashboard contains KPI cards (today, month-to-date, projected, top model), a spend gauge, a 30-day bar chart, per-model breakdown, surface flow (Sankey), and spend by cost type. A pop-out button opens the same view as a full editor tab.
+Open from the activity bar icon or **Mallard: Open Dashboard**. The dashboard shows:
 
----
+- **KPI cards** — today, month-to-date, projected month-end, and top model
+- **Spend gauge** — credits used against your included allowance, with severity colouring at 80% and 100% of budget
+- **30-day bar chart** — daily spend with a projected-pace line and previous-period comparison bars
+- **Model breakdown** — top models by credits
+- **Sankey flow chart** — credits from each model to each surface (chat, inline, agent, edit)
+- **Cost-type chart** — input vs output token spend
 
-## Arrangeable Analysis View
+A pop-out button opens the same view as a full editor tab.
 
-Click **Edit layout** to reorder, resize, or hide panels. Your arrangement is saved automatically. Use **Reset layout** to return to defaults.
+## Layout
 
----
+Click **Edit layout** to drag, resize, or hide panels. Your arrangement is saved automatically. **Reset layout** restores defaults.
 
-## Budget & Alerts
+## Budget and alerts
 
-Set a monthly budget, included-credit allowance, daily credit threshold, and velocity alert from the dashboard or directly in `config.json` (click **Edit alert rules**):
+Set a monthly budget, included-credit allowance, daily threshold, and velocity alert from the dashboard or directly in `config.json` (click **Edit alert rules**):
 
 ```json
 {
@@ -29,19 +32,9 @@ Set a monthly budget, included-credit allowance, daily credit threshold, and vel
 }
 ```
 
-| Field | Description |
-| --- | --- |
-| `monthlyBudget` | USD budget for the month. `0` disables budget alerts. |
-| `includedCredits` | Monthly premium-request allowance (colours the gauge). |
-| `dailyCreditAlert` | Daily credit threshold. `0` disables it. |
-| `alerts.velocityEnabled` | Enable the spending-velocity alert. |
-| `alerts.velocityCreditsPerHour` | Credits/hour rate that triggers the alert. |
+## Custom alert rules
 
----
-
-## Custom Alert Rules
-
-Write precise rules in `config.json` using a JSONLogic-inspired condition language. See [Configuration](/guide/configuration#custom-alert-rules) for the full rule syntax and context field reference.
+Write precise conditions using a JSONLogic-inspired language. Rules can fire VS Code notifications on any combination of spend, velocity, model, surface, branch, or time-of-day signals:
 
 ```json
 {
@@ -55,29 +48,9 @@ Write precise rules in `config.json` using a JSONLogic-inspired condition langua
 }
 ```
 
----
+## Rule groups
 
-## Copilot Restriction
-
-A `restrict` block on any rule can soft-warn or hard-disable Copilot when the condition fires:
-
-```json
-{
-  "id": "budget-exhausted",
-  "severity": "critical",
-  "message": "Monthly budget exhausted — Copilot disabled.",
-  "when": { ">=": [{ "var": "budget.percentOfBudget" }, 1] },
-  "restrict": { "mode": "hard", "scope": "copilot", "graceMinutes": 10 }
-}
-```
-
-Run **Mallard: Simulate Restriction** for a dry run without actually disabling anything.
-
----
-
-## Rule Groups
-
-Group rules so you can toggle a whole set at once from the dashboard without deleting them:
+Group rules to toggle a whole set at once from the dashboard without deleting them:
 
 ```json
 {
@@ -92,61 +65,52 @@ Group rules so you can toggle a whole set at once from the dashboard without del
 }
 ```
 
----
+## Copilot restriction
 
-## Spend by Model & Surface
+Add a `restrict` block to any rule to show a popup when the condition fires. No extensions are disabled — the popup creates friction.
 
-Every call is attributed to its model and surface (chat, inline, agent, edit). The dashboard's per-model breakdown and Sankey flow chart show exactly where credits come from.
+```json
+{
+  "id": "budget-exhausted",
+  "severity": "critical",
+  "message": "Monthly budget exhausted.",
+  "when": { ">=": [{ "var": "budget.percentOfBudget" }, 1] },
+  "restrict": { "mode": "hard", "scope": "copilot", "graceMinutes": 10 }
+}
+```
 
----
+`soft` shows a dismissable warning notification with Dismiss and Snooze options — no extensions are disabled. `hard` disables the Copilot extensions in `scope` (for `"copilot"`: `github.copilot` and `github.copilot-chat`) and shows a persistent error notification that re-fires on every snapshot refresh while the condition is true.
 
-## Branch-Aware Credit Tracking
+Run **Mallard: Simulate Restriction State** from the Command Palette for a dry run — it reports what would happen without disabling anything.
 
-Usage is tagged to the active git branch. Set per-branch caps (in credits) in `config.json`:
+## Branch-aware tracking
+
+Every event is tagged to the active git branch and repo. Set per-branch credit caps in `config.json`:
 
 ```json
 { "branchBudgets": { "feature/big-refactor": 500, "main": 200 } }
 ```
 
-When credits consumed on a branch reach its cap, Mallard fires a critical notification: _"Branch 'main' has used 200 cr of its 200 cr cap."_ The notification respects a 4-hour cooldown so it won't repeat every refresh cycle.
+When a branch hits its cap, Mallard fires a critical notification (4-hour cooldown). Custom rules can reference `currentBranchCredits` and `branchBudgets.<branch>` in conditions.
 
-You can also reference branch caps in custom alert rules via the JSONLogic context:
+## Per-repo filtering
 
-```json
-{
-  "id": "branch-budget-warning",
-  "severity": "warning",
-  "message": "Branch {{currentBranch}} approaching its cap ({{currentBranchCredits}} cr used).",
-  "when": { ">=": [{ "var": "currentBranchCredits" }, { "var": "branchBudgets.main" }] }
-}
-```
+When multiple repos are open, Mallard attributes usage to the active workspace. A dropdown in the dashboard filters all charts and KPIs to a single repo.
 
----
+## GitHub billing reconciliation
 
-## Per-Repo Filtering
+Run **Mallard: Sign In to GitHub** to pull the authoritative charge from GitHub's billing API — spend across all your machines, not just the current one. Sign-in is optional; all other features work without it.
 
-When multiple repos are open, Mallard attributes usage to the active workspace. A dropdown filters all charts and KPIs to a single repo.
+## Metric streaming
 
----
+After each snapshot Mallard can publish a JSON usage vector to a self-hosted server via webhook or MQTT. Set `mallard.server.url` and `mallard.export.transport`.
 
-## Metric Streaming
+## Export
 
-After each snapshot Mallard can publish a JSON usage-vector to a self-hosted server via webhook or MQTT. Set `mallard.server.url` and `mallard.export.transport` — see the [Settings reference](/reference/settings) for payload schema, transport options, and mTLS.
+**Mallard: Export Monthly Report** saves a standalone, printable HTML file. No external requests; prints to PDF from any browser.
 
----
+**Mallard: Export Usage Data** exports the raw event log as CSV or JSON — one row per event with timestamp, model, surface, source, credits, cost, tokens, repo, and branch.
 
-## GitHub Billing Reconciliation {#github-billing-reconciliation}
+## Automatic pricing
 
-Connect via **Mallard: Sign In to GitHub** to pull the authoritative charge from GitHub's billing API. Once signed in, the dashboard shows the reconciled total alongside the local estimate. Sign-in is optional — all other features work without it.
-
----
-
-## Exportable Report
-
-Run **Mallard: Export Monthly Report** to save a standalone, printable HTML report. No external requests — prints to PDF cleanly from any browser.
-
----
-
-## Automatic Pricing
-
-Credit multipliers ship with the extension and refresh daily from a validated URL. The bundled copy is the fallback when the network is unavailable. Override via `mallard.pricingManifestUrl` for a custom plan.
+Credit multipliers ship with the extension and refresh daily from a validated URL. The bundled copy is the fallback when the network is unavailable. Override with `mallard.pricingManifestUrl` for a custom plan.

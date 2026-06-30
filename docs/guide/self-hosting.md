@@ -19,34 +19,27 @@ Mallard ships an optional ingest server that receives metric payloads from one o
 
 Source: `server/` in this repo.
 
----
-
 ## How it works
 
-```
-VS Code extension
-  │
-  │  POST /api/v1/ingest  (webhook)
-  │    or  MQTT over WSS
-  ▼
-Caddy / nginx-ingress
-  │  TLS termination, API key check
-  ▼
-FastAPI server  ──────────────────────────────▶  InfluxDB v2
-  │  parse & validate payload                     (time-series store)
-  │  write_api → line protocol                        │
-  │                                                    │
-  └──────────────────────────────────────────────▶ Grafana
-                                               pre-built dashboards
+```mermaid
+flowchart LR
+    ext[VS Code extension]
+    proxy[Caddy / nginx-ingress]
+    api[FastAPI server]
+    db[(InfluxDB v2)]
+    graf[Grafana]
+
+    ext -->|webhook or MQTT/WSS| proxy
+    proxy -->|TLS termination + auth| api
+    api -->|line protocol| db
+    db --> graf
 ```
 
 The server is a single stateless FastAPI process. It accepts either:
 - **Webhook** — a `POST` to `/api/v1/ingest` with an `X-API-Key` header (or `Authorization: Bearer` for token-based auth, or a TLS client certificate for mTLS).
-- **MQTT** — a message published to `mallard/metrics` over a WebSocket-wrapped MQTT connection (`wss://your-server/mqtt`). The embedded amqtt broker runs inside the same process.
+- **MQTT** — a message published over a WebSocket-wrapped MQTT connection (`wss://your-server/mqtt`). The embedded amqtt broker accepts any topic — it doesn't filter by topic name, only by the authenticated client.
 
 InfluxDB stores every snapshot as a measurement named `mallard_metrics`. Grafana reads from InfluxDB via Flux queries and ships four pre-built dashboards: overview, per-model breakdown, team comparison, and velocity trends.
-
----
 
 ## Quick start (Docker Compose)
 
@@ -93,8 +86,6 @@ ACME_EMAIL=ops@your-org.com
 
 Caddy detects a real hostname and obtains a Let's Encrypt certificate automatically. The API then becomes `https://mallard.your-org.com/api/v1/ingest`.
 
----
-
 ## Connecting the extension
 
 Once the server is running, configure VS Code:
@@ -130,33 +121,11 @@ The server treats the bearer token identically to an API key — it is hashed an
 
 Run **Mallard: Set MQTT Export Password** from the Command Palette to store the password securely in VS Code's SecretStorage. Passwords are never written to settings files.
 
-See [Settings reference](/reference/settings) for the full list of extension settings and the payload schema.
-
----
-
 ## Named credentials and the `source` tag
 
-Every API key and MQTT credential can carry a **label**. The label is written as the `source` tag on every InfluxDB data point, which lets you filter Grafana dashboards by team, machine, or person.
-
-Format: `label:secret` (comma-separated for multiple):
-
-```bash
-# .env
-API_KEYS=alice:key-abc123,bob:key-def456,ci-pipeline:key-ghi789
-MQTT_CREDENTIALS=alice:mqtt-pass1,ci-pipeline:mqtt-pass2
-```
-
-If you don't provide a label (bare key, no colon), the source tag is `"unknown"`.
-
-Querying by source in Flux:
-
-```flux
-from(bucket: "metrics")
-  |> range(start: -7d)
-  |> filter(fn: (r) => r["source"] == "alice")
-```
-
----
+Every API key and MQTT credential can carry a **label** (`label:secret`), written as the
+`source` tag on every InfluxDB data point — this is what lets you filter Grafana
+dashboards by team, machine, or person.
 
 ## MQTT configuration
 
@@ -171,15 +140,13 @@ The broker listens on WebSocket at `/mqtt`. Extension clients connect via `wss:/
 
 > **Note:** MQTT credentials are separate from API keys — set both `API_KEYS` and `MQTT_CREDENTIALS` if you use both transports.
 
----
-
 ## Kubernetes
 
 The K8s manifests in `server/k8s/` deploy the full stack to a `mallard` namespace. Prerequisites: a running Kubernetes cluster (1.28+) with an nginx ingress controller.
 
 ### 1 — Install cert-manager
 
-cert-manager handles TLS certificate lifecycle: it provisions and auto-renews the HTTPS certificate for your ingress, and can issue mTLS client certificates for the extension. It does **not** manage application secrets — that is covered by [Infisical or OpenBao](/guide/secret-management).
+cert-manager handles TLS certificate lifecycle: it provisions and auto-renews the HTTPS certificate for your ingress, and can issue mTLS client certificates for the extension. It does **not** manage application secrets.
 
 ```bash
 helm repo add jetstack https://charts.jetstack.io --force-update
@@ -192,8 +159,6 @@ Then apply the ClusterIssuers (ACME + self-signed CA):
 ```bash
 kubectl apply -f server/k8s/cert-manager/
 ```
-
-See [cert-manager guide](/guide/cert-manager) for issuer selection, self-signed vs Let's Encrypt, and mTLS client certificate provisioning.
 
 ### 2 — Create the namespace and secrets
 
@@ -229,8 +194,6 @@ helm install reloader stakater/reloader --namespace reloader --create-namespace
 
 The server Deployment carries the `reloader.stakater.com/auto: "true"` annotation. When you update the `mallard-server-secrets` Secret (e.g. rotate an API key), Reloader triggers a zero-downtime rolling restart automatically.
 
----
-
 ## Dynamic credentials (optional)
 
 Instead of storing credentials in a Kubernetes Secret or `.env` file, you can pull them from a self-hosted secret manager. The server fetches credentials on first request and caches them for 30 seconds, so revocation propagates within one cache interval.
@@ -242,27 +205,9 @@ Two secret managers are supported:
 | Infisical | Full-featured secret management platform | `docker-compose.infisical.yml` overlay | `server/k8s/infisical/` kustomize overlay |
 | OpenBao | HashiCorp Vault fork (community-maintained) | `docker-compose.openbao.yml` overlay | `server/k8s/openbao/` kustomize overlay |
 
-See the [Secret Management guide](/guide/secret-management) for detailed setup steps for both providers.
-
----
-
 ## mTLS — client certificate auth (optional)
 
-Instead of API keys or passwords, the extension can authenticate with a TLS client certificate. The certificate's Common Name becomes the `source` tag in InfluxDB — no separate credential entry needed.
-
-Requires:
-- cert-manager with the `mallard-ca` ClusterIssuer (see [cert-manager guide](/guide/cert-manager))
-- The nginx mTLS annotations already in `server/k8s/ingress.yaml`
-
-Configure the extension:
-
-```json
-"mallard.server.url": "https://mallard.your-org.com",
-"mallard.export.transport": "webhook",
-"mallard.webhook.auth": "certificate",
-"mallard.shared.certificate.file": "/home/alice/.certs/alice.crt",
-"mallard.shared.certificate.keyFile": "/home/alice/.certs/alice.key",
-"mallard.shared.certificate.caFile": "/home/alice/.certs/mallard-ca.crt"
-```
-
-See [cert-manager guide — client certs](/guide/cert-manager#client-certificates) for how to issue and distribute client certificates per team member.
+Instead of API keys or passwords, the extension can authenticate with a TLS client
+certificate — the certificate's Common Name becomes the `source` tag in InfluxDB, no
+separate credential entry needed. Requires cert-manager with the `mallard-ca`
+ClusterIssuer and the nginx mTLS annotations already in `server/k8s/ingress.yaml`.

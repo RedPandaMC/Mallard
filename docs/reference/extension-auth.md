@@ -1,17 +1,15 @@
-# Extension Auth Contract
+# Authentication & Identity Reference
 
-This document is the specification for the VS Code extension. It defines every authentication method the server supports, what the extension must send, and how settings should be structured. Extension changes should match this contract exactly.
+The self-hosted Mallard server supports four authentication methods. The method you choose controls what the extension sends and what `source` label is written to InfluxDB — the tag that lets Grafana dashboards break down spend by team member, machine, or CI pipeline without a separate configuration step per dashboard.
 
 ## Supported auth methods
 
-| Method | Transport | What extension sends | Server validates against | Status |
-|---|---|---|---|---|
-| API key | HTTP webhook | `X-API-Key: <key>` header | `API_KEYS` / live secret store | **current** |
-| MQTT password | MQTT/WSS | CONNECT password field | `MQTT_CREDENTIALS` / live secret store | **current** |
-| Bearer token | HTTP webhook | `Authorization: Bearer <token>` | same hash store as API key | **current** |
-| mTLS certificate | HTTP + MQTT | Client TLS certificate | CA cert issued by `mallard-ca` | **current** |
-
----
+| Method | Transport | What the extension sends | Server validates against |
+|---|---|---|---|
+| API key | HTTP webhook | `X-API-Key: <key>` header | `API_KEYS` / live secret store |
+| MQTT password | MQTT/WSS | CONNECT password field | `MQTT_CREDENTIALS` / live secret store |
+| Bearer token | HTTP webhook | `Authorization: Bearer <token>` | same hash store as API key |
+| mTLS certificate | HTTP + MQTT | Client TLS certificate | CA cert issued by `mallard-ca` |
 
 ## API key (current)
 
@@ -25,8 +23,6 @@ X-API-Key: <api-key>
 
 The key is looked up in the server's credential store. The label associated with the key becomes the `source` tag in InfluxDB. Example store entry: `team-alpha:key-abc123` → `source=team-alpha`.
 
----
-
 ## Bearer token (current)
 
 **Extension setting:** `mallard.webhook.bearerToken`
@@ -39,21 +35,17 @@ Authorization: Bearer <token>
 
 The token value is treated identically to an API key — it goes through the same hash lookup. This allows the extension to use a token obtained from an IdP (Infisical machine token, OpenBao token, OAuth access token) directly.
 
----
-
 ## MQTT password (current)
 
 **Extension settings:** `mallard.mqtt.username`, `mallard.mqtt.password`
 
 Sent as the MQTT CONNECT `password` field over `wss://<host>/mqtt`. The `username` field is accepted but the server only validates the password. Credential format: `label:password` — same structure as API key.
 
----
-
 ## mTLS client certificate (current)
 
 **Extension settings:** `mallard.shared.certificate.file`, `mallard.shared.certificate.keyFile`
 
-The extension presents a client certificate when establishing the TLS connection. The certificate must be issued by the server operator using the `mallard-ca` ClusterIssuer (see [cert-manager guide](/guide/cert-manager)).
+The extension presents a client certificate when establishing the TLS connection. The certificate must be issued by the server operator using the `mallard-ca` ClusterIssuer.
 
 The CN (Common Name) field of the certificate becomes the `source` tag — no separate API key is needed.
 
@@ -75,40 +67,54 @@ kubectl get secret mallard-client-team-alpha-tls -n mallard \
   -o jsonpath='{.data.tls\.key}' | base64 -d > team-alpha.key
 ```
 
----
+## Named credentials and the `source` tag
 
-## Extension settings (full schema)
+Every API key, MQTT password, and certificate maps to a `source` tag written on each
+InfluxDB data point:
 
-```jsonc
-{
-  // ── Server ──────────────────────────────────────────────────────────────────
-  "mallard.server.url": "https://your-server",
+| Auth method | Source of the `source` tag |
+| --- | --- |
+| API key (static) | The label in `API_KEYS=label:key` |
+| MQTT password (static) | The label in `MQTT_CREDENTIALS=label:password` |
+| Bearer token | Treated as an API key — the label from the credential store |
+| mTLS client certificate | The Common Name (CN) field of the certificate |
+| Infisical / OpenBao | Same label format, fetched live from the secret store |
+| Unlabelled key (bare secret) | `"unknown"` |
 
-  // ── Transport ────────────────────────────────────────────────────────────────
-  "mallard.export.transport": "webhook",  // "webhook" | "mqtt"
+Format: `label:secret`, comma-separated for multiple identities:
 
-  // ── Webhook auth ─────────────────────────────────────────────────────────────
-  "mallard.webhook.auth": "apiKey",       // "apiKey" | "bearer" | "certificate"
-  "mallard.webhook.apiKey": "",           // used when auth = "apiKey"
-  "mallard.webhook.bearerToken": "",      // used when auth = "bearer"
-                                          // auth = "certificate" → uses shared cert below
-
-  // ── MQTT ─────────────────────────────────────────────────────────────────────
-  "mallard.mqtt.url": "",                 // override if different from server.url + /mqtt
-  "mallard.mqtt.auth": "password",        // "password" | "certificate"
-  "mallard.mqtt.username": "",            // used when auth = "password" (informational)
-  "mallard.mqtt.password": "",            // used when auth = "password"
-                                          // auth = "certificate" → uses shared cert below
-
-  // ── Shared certificate ────────────────────────────────────────────────────────
-  // Used by any transport/auth that sets auth = "certificate"
-  "mallard.shared.certificate.file": "",    // path to PEM client certificate
-  "mallard.shared.certificate.keyFile": "", // path to PEM private key
-  "mallard.shared.certificate.caFile": ""   // CA bundle to verify the server's TLS cert
-}
+```bash
+# .env (Docker Compose)
+API_KEYS=alice:key-abc123,bob:key-def456,ci-pipeline:key-ghi789
+MQTT_CREDENTIALS=alice:mqtt-pass1,ci-pipeline:mqtt-pass2
 ```
 
----
+Labels are arbitrary strings — usernames, machine names, team names, whatever fits your
+naming convention.
+
+## Querying by source in Flux
+
+```flux
+// Total credits used by Alice in the last 7 days
+from(bucket: "metrics")
+  |> range(start: -7d)
+  |> filter(fn: (r) => r["_measurement"] == "mallard_metrics" and r["source"] == "alice")
+  |> sum()
+
+// Compare spend across all team members in a single query
+from(bucket: "metrics")
+  |> range(start: -30d)
+  |> filter(fn: (r) => r["_measurement"] == "mallard_metrics")
+  |> group(columns: ["source"])
+  |> sum()
+```
+
+## Per-team Grafana dashboards
+
+The pre-built Grafana dashboards include a `source` variable that drives all panels.
+Select a source from the dropdown to filter the entire dashboard to one identity. To add
+a new source, add a new labelled credential — Grafana queries InfluxDB for the distinct
+list of `source` values dynamically, so no dashboard edit is needed.
 
 ## Auth precedence on the server (HTTP)
 
@@ -118,8 +124,6 @@ kubectl get secret mallard-client-team-alpha-tls -n mallard \
 4. None of the above → `401 Unauthorized`
 
 The extension should send exactly one credential per request. Sending both a cert and an API key is valid (the cert takes precedence), but is not necessary.
-
----
 
 ## Backward compatibility
 

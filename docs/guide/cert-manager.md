@@ -2,8 +2,6 @@
 
 cert-manager is a Kubernetes operator that manages the **lifecycle of TLS certificates**: it provisions them (from Let's Encrypt, an internal CA, or a self-signed issuer) and renews them automatically before they expire. Let's Encrypt certificates expire every 90 days; cert-manager handles that renewal silently with no operator involvement.
 
-> **cert-manager handles TLS certificates. Infisical and OpenBao handle application secrets (API keys, passwords, tokens).** They are completely different concerns and you will typically use all three together: cert-manager for HTTPS + mTLS, and Infisical or OpenBao for credentials. See [Secret Management](/guide/secret-management).
-
 ## What cert-manager provides for Mallard
 
 | Concern | Who handles it |
@@ -13,8 +11,6 @@ cert-manager is a Kubernetes operator that manages the **lifecycle of TLS certif
 | API keys (`API_KEYS` env var) | Static `.env` or Infisical/OpenBao |
 | MQTT passwords (`MQTT_CREDENTIALS`) | Static `.env` or Infisical/OpenBao |
 | InfluxDB token (`INFLUX_TOKEN`) | Static `.env` or Infisical/OpenBao |
-
----
 
 ## Installing cert-manager
 
@@ -34,8 +30,6 @@ kubectl wait --namespace cert-manager \
   --selector=app.kubernetes.io/instance=cert-manager \
   --timeout=90s
 ```
-
----
 
 ## Applying the ClusterIssuers
 
@@ -63,8 +57,6 @@ This creates four ClusterIssuers and the reusable client certificate template:
 | `mallard-ca` | Internal CA for issuing mTLS client certificates |
 | `client-cert-template.yaml` | Example Certificate resource for one team member |
 
----
-
 ## Choosing an issuer
 
 The ingress uses `letsencrypt-prod` by default. Switch by editing the annotation in `server/k8s/ingress.yaml`:
@@ -79,8 +71,6 @@ cert-manager.io/cluster-issuer: letsencrypt-prod   # change to staging or selfsi
 - `letsencrypt-prod` — for production. Rate limited (5 failed validations per hostname per hour). Requires your domain to be publicly reachable via HTTP.
 - `selfsigned` — for air-gapped clusters or local development where you control all clients. Clients must trust the cert manually.
 - `mallard-ca` — only for issuing mTLS client certificates (see below). Do not use this for the ingress.
-
----
 
 ## Checking certificate status
 
@@ -97,8 +87,6 @@ Common failure causes:
 - HTTP-01 challenge: the ingress must be publicly reachable on port 80 before the cert is issued.
 - DNS-01 challenge: requires a DNS provider webhook (not configured here by default).
 - Rate limits: switch to `letsencrypt-staging` to test without burning rate limit quota.
-
----
 
 ## mTLS client certificates {#client-certificates}
 
@@ -196,8 +184,6 @@ kubectl delete secret mallard-client-alice-tls -n mallard
 ```
 
 Because the ingress checks the client certificate against the CA and the CA key pair is still in `mallard-ca-key-pair`, you must also regenerate the CA if the key is compromised. For a compromised key (not just an expired cert), issue a new CA, re-issue all client certs, and update the ingress `auth-tls-secret` annotation.
-
----
 
 ## cert-manager with Docker Compose
 
