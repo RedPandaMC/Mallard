@@ -7,10 +7,10 @@
     "types": []
   },
   "include": [
-    "webview/**/*.ts",
-    "src/extension/domain/types.ts",
-    "src/extension/domain/expr/**/*.ts",
-    "src/extension/domain/alertRules.ts",
-    "src/extension/ui/messaging.ts"
+    "src/extension-frontend/**/*.ts",
+    "src/extension-backend/domain/types.ts",
+    "src/extension-backend/domain/expr/**/*.ts",
+    "src/extension-backend/domain/alertRules.ts",
+    "src/extension-backend/ui/messaging.ts"
   ]
 }

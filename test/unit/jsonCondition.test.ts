@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
-import { evalCondition, evalSimpleCondition, evalRule, compileConditions, resolveVar, JsonConditionSchema } from '../../src/extension/domain/expr/jsonCondition';
-import type { JsonCondition, JsonOperand } from '../../src/extension/domain/types';
+import { evalCondition, evalSimpleCondition, evalRule, compileConditions, resolveVar, JsonConditionSchema } from '../../src/extension-backend/domain/expr/jsonCondition';
+import type { JsonCondition, JsonOperand } from '../../src/extension-backend/domain/types';
 
 const ctx: Record<string, unknown> = {
   today: { credits: 50, cost: 2.5, tokens: 1000 },

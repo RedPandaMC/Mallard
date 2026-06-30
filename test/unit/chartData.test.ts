@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { aggregateBy } from '../../src/extension/domain/aggregate';
+import { aggregateBy } from '../../src/extension-backend/domain/aggregate';
 import {
   buildCategoryBreakdownData,
   buildChartData,
@@ -7,10 +7,10 @@ import {
   buildHeatmapData,
   buildHourlyTimelineData,
   buildModelBreakdownData,
-} from '../../src/extension/domain/chartData';
-import { PricingManifest } from '../../src/extension/domain/pricing';
-import { BudgetState, Forecast, TopEntry } from '../../src/extension/domain/types';
-import { DAY_MS, startOf } from '../../src/extension/util/time';
+} from '../../src/extension-backend/domain/chartData';
+import { PricingManifest } from '../../src/extension-backend/domain/pricing';
+import { BudgetState, Forecast, TopEntry } from '../../src/extension-backend/domain/types';
+import { DAY_MS, startOf } from '../../src/extension-backend/util/time';
 import { makeEvent } from './helpers';
 
 const EMPTY_BUDGET: BudgetState = {

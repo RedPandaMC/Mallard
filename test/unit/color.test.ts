@@ -6,7 +6,7 @@ import {
   ensureContrast,
   distinctUnderCvd,
   deriveAccent,
-} from '../../webview/color';
+} from '../../src/extension-frontend/color';
 
 describe('color utilities', () => {
   it('parses hex (3/6 digit) and rgb()/rgba() strings', () => {

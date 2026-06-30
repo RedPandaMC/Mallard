@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
-import { computeBudget, severityFor } from '../../src/extension/domain/budget';
-import { Forecast } from '../../src/extension/domain/types';
+import { computeBudget, severityFor } from '../../src/extension-backend/domain/budget';
+import { Forecast } from '../../src/extension-backend/domain/types';
 
 function forecastWithCost(projectedCost: number): Forecast {
   return {

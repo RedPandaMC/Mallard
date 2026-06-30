@@ -17,11 +17,11 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { performance } from 'perf_hooks';
 
-import { EventStore } from '../../src/extension/store/EventStore';
-import { buildSnapshot } from '../../src/extension/domain/snapshot';
-import type { UsageEvent } from '../../src/extension/domain/types';
-import type { RecordFilter } from '../../src/extension/store/EventRepository';
-import { DAY_MS } from '../../src/extension/util/time';
+import { EventStore } from '../../src/extension-backend/store/EventStore';
+import { buildSnapshot } from '../../src/extension-backend/domain/snapshot';
+import type { UsageEvent } from '../../src/extension-backend/domain/types';
+import type { RecordFilter } from '../../src/extension-backend/store/EventRepository';
+import { DAY_MS } from '../../src/extension-backend/util/time';
 
 // ─── Data generators ────────────────────────────────────────────────────────
 

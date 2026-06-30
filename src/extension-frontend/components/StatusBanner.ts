@@ -1,4 +1,4 @@
-import { UsageSnapshot } from '../../src/extension/domain/types';
+import { UsageSnapshot } from '../../extension-backend/domain/types';
 
 export interface StatusBannerHandle {
   update(snapshot: UsageSnapshot): void;

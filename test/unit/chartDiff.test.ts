@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { changed } from '../../webview/chartDiff';
+import { changed } from '../../src/extension-frontend/chartDiff';
 
 describe('changed', () => {
   it('returns true when prev is undefined', () => {
@@ -32,8 +32,8 @@ import {
   modelBreakdownChanged,
   categoryBreakdownChanged,
   hourlyChanged,
-} from '../../webview/chartDiff';
-import type { DailyBarsData, HeatmapData, ModelBreakdownData, CategoryBreakdownData, HourlyTimelineData } from '../../src/extension/domain/types';
+} from '../../src/extension-frontend/chartDiff';
+import type { DailyBarsData, HeatmapData, ModelBreakdownData, CategoryBreakdownData, HourlyTimelineData } from '../../src/extension-backend/domain/types';
 
 describe('dailyBarsChanged', () => {
   const base: DailyBarsData = { points: [{ date: '06-20', credits: 5, cost: 0.2, colorIndex: 0 }], budgetLine: null, projectedLine: null, cumulativeCosts: [0.2] };

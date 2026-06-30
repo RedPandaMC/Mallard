@@ -11,8 +11,8 @@ import {
   tokensOf,
   topBy,
   UNATTRIBUTED_REPO,
-} from '../../src/extension/domain/aggregate';
-import type { UsageEvent } from '../../src/extension/domain/types';
+} from '../../src/extension-backend/domain/aggregate';
+import type { UsageEvent } from '../../src/extension-backend/domain/types';
 import { makeEvent } from './helpers';
 
 describe('aggregate', () => {

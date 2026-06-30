@@ -5,8 +5,8 @@
  */
 import type { TooltipComponentOption } from './echarts';
 import { readTheme } from '../theme';
-import { UsageSnapshot } from '../../src/extension/domain/types';
-import { formatMoney } from '../../src/extension/domain/format';
+import { UsageSnapshot } from '../../extension-backend/domain/types';
+import { formatMoney } from '../../extension-backend/domain/format';
 import { ChartComponent } from './ChartComponent';
 
 export interface CumulativeAreaHandle {

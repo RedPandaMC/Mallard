@@ -3,8 +3,8 @@
  */
 import type { EChartsOption, TooltipComponentOption, SeriesOption } from './echarts';
 import { readTheme } from '../theme';
-import { UsageSnapshot } from '../../src/extension/domain/types';
-import { formatMoney, formatCredits } from '../../src/extension/domain/format';
+import { UsageSnapshot } from '../../extension-backend/domain/types';
+import { formatMoney, formatCredits } from '../../extension-backend/domain/format';
 import { ChartComponent } from './ChartComponent';
 
 export interface DailyBarsHandle {

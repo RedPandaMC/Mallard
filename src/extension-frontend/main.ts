@@ -22,7 +22,7 @@ import {
   HeatmapData,
   HourlyTimelineData,
   ModelBreakdownData,
-} from '../src/extension/domain/types';
+} from '../extension-backend/domain/types';
 import { applyTheme } from './charts/echarts';
 import { applyPalette } from './theme';
 import { mountDailyBars } from './charts/dailyBars';
@@ -42,7 +42,7 @@ import { mountSpendGauge } from './components/SpendGauge';
 import { mountAlertConfigPanel } from './components/AlertConfigPanel';
 import { mountRestrictionBanner } from './components/RestrictionBanner';
 import { mountCurrencySelector } from './components/CurrencySelector';
-import { formatCredits, formatMoney } from '../src/extension/domain/format';
+import { formatCredits, formatMoney } from '../extension-backend/domain/format';
 
 const LOGO_SRC = document.body.dataset.logo ?? '';
 
@@ -407,7 +407,7 @@ function mountDashboard(root: HTMLElement): void {
   });
 }
 
-function updateSrDescriptions(snapshot: import('../src/extension/domain/types').UsageSnapshot): void {
+function updateSrDescriptions(snapshot: import('../extension-backend/domain/types').UsageSnapshot): void {
   const { dailyBars, heatmap, modelBreakdown, categoryBreakdown, hourlyTimeline } = snapshot.chartData;
 
   const peakDay = dailyBars.points.reduce(

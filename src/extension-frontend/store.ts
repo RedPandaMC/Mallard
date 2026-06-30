@@ -11,7 +11,7 @@ import {
   RestrictionState,
   UsageSnapshot,
   UserConfig,
-} from '../src/extension/domain/types';
+} from '../extension-backend/domain/types';
 
 export interface AppState {
   snapshot: UsageSnapshot | null;

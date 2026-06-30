@@ -6,8 +6,8 @@
  * IntersectionObserver needed here.
  */
 import type { TooltipComponentOption } from './echarts';
-import { UsageSnapshot } from '../../src/extension/domain/types';
-import { formatCredits } from '../../src/extension/domain/format';
+import { UsageSnapshot } from '../../extension-backend/domain/types';
+import { formatCredits } from '../../extension-backend/domain/format';
 import { ChartComponent } from './ChartComponent';
 
 export interface SankeyHandle {
