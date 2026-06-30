@@ -1,5 +1,5 @@
-import { SourceKind, Surface, UsageEvent } from '../../src/extension/domain/types';
-import { VscodeHost } from '../../src/extension/util/vscodeHost';
+import { SourceKind, Surface, UsageEvent } from '../../src/extension-backend/domain/types';
+import { VscodeHost } from '../../src/extension-backend/util/vscodeHost';
 
 export interface StubVscodeHost extends VscodeHost {
   warnings: string[];

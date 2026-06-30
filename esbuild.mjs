@@ -5,7 +5,7 @@ const watch = process.argv.includes('--watch');
 
 /** @type {import('esbuild').BuildOptions} */
 const hostConfig = {
-  entryPoints: ['src/extension/extension.ts'],
+  entryPoints: ['src/extension-backend/extension.ts'],
   bundle: true,
   format: 'cjs',
   platform: 'node',
@@ -21,7 +21,7 @@ const hostConfig = {
 
 /** @type {import('esbuild').BuildOptions} */
 const webviewConfig = {
-  entryPoints: ['webview/main.ts'],
+  entryPoints: ['src/extension-frontend/main.ts'],
   bundle: true,
   format: 'iife',
   platform: 'browser',

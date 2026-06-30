@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { getNonce } from '../../src/extension/util/nonce';
+import { getNonce } from '../../src/extension-backend/util/nonce';
 
 describe('getNonce', () => {
   it('returns a non-empty string', () => {

@@ -2,7 +2,7 @@ import { strict as assert } from 'assert';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { cleanupStorage, cleanupGlobalState } from '../../../src/extension/app/Lifecycle';
+import { cleanupStorage, cleanupGlobalState } from '../../../src/extension-backend/app/Lifecycle';
 import type { Memento } from 'vscode';
 
 async function makeTmpDir(): Promise<string> {

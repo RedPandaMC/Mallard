@@ -5,5 +5,5 @@
     "outDir": "out",
     "incremental": true
   },
-  "include": ["src/extension/**/*.ts", "test/**/*.ts"]
+  "include": ["src/extension-backend/**/*.ts", "test/**/*.ts"]
 }

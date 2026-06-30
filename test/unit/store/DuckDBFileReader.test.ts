@@ -1,7 +1,7 @@
 import { strict as assert } from 'assert';
-import { DuckDBFileReader } from '../../../src/extension/store/DuckDBFileReader';
-import type { UsageEvent } from '../../../src/extension/domain/types';
-import type { ParseContext } from '../../../src/extension/ingest/otelParse';
+import { DuckDBFileReader } from '../../../src/extension-backend/store/DuckDBFileReader';
+import type { UsageEvent } from '../../../src/extension-backend/domain/types';
+import type { ParseContext } from '../../../src/extension-backend/ingest/otelParse';
 
 const baseCtx: ParseContext = { pricePerCredit: 0.04, now: Date.now() };
 

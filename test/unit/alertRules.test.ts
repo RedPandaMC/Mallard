@@ -1,6 +1,6 @@
 import * as assert from 'assert';
-import { parseAlertRules, evaluateAlertRules } from '../../src/extension/domain/alertRules';
-import { AlertRule, UsageSnapshot } from '../../src/extension/domain/types';
+import { parseAlertRules, evaluateAlertRules } from '../../src/extension-backend/domain/alertRules';
+import { AlertRule, UsageSnapshot } from '../../src/extension-backend/domain/types';
 
 function snap(todayCredits = 0): UsageSnapshot {
   return {

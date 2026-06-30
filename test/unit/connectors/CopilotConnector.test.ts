@@ -1,9 +1,9 @@
 import { strict as assert } from 'assert';
-import { CopilotConnector } from '../../../src/extension/ingest/CopilotConnector';
-import type { ParseContext } from '../../../src/extension/ingest/otelParse';
-import type { PricingService } from '../../../src/extension/pricing/PricingService';
-import type { IMetaStore as MetaStore } from '../../../src/extension/store/MetaStore';
-import type { DuckDBFileReader } from '../../../src/extension/store/DuckDBFileReader';
+import { CopilotConnector } from '../../../src/extension-backend/ingest/CopilotConnector';
+import type { ParseContext } from '../../../src/extension-backend/ingest/otelParse';
+import type { PricingService } from '../../../src/extension-backend/pricing/PricingService';
+import type { IMetaStore as MetaStore } from '../../../src/extension-backend/store/MetaStore';
+import type { DuckDBFileReader } from '../../../src/extension-backend/store/DuckDBFileReader';
 
 const now = new Date('2026-01-15T10:00:00.000Z').getTime();
 

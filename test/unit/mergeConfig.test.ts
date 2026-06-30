@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { mergeConfig } from '../../src/extension/app/mergeConfig';
+import { mergeConfig } from '../../src/extension-backend/app/mergeConfig';
 
 describe('mergeConfig', () => {
   it('falls back to defaults for negative numbers', () => {

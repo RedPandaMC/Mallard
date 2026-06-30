@@ -5,7 +5,7 @@ import {
   priceRequest,
   resolveMultiplier,
   PricingManifest,
-} from '../../src/extension/domain/pricing';
+} from '../../src/extension-backend/domain/pricing';
 
 describe('pricing', () => {
   it('resolves known model multipliers (longest match wins)', () => {
