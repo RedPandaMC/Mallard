@@ -3,9 +3,9 @@ name: Server CI
 on:
   push:
     branches: [main]
-    paths: ["server/**"]
+    paths: ["server/**", "src/server/**"]
   pull_request:
-    paths: ["server/**"]
+    paths: ["server/**", "src/server/**"]
 
 jobs:
   test:
@@ -51,7 +51,7 @@ jobs:
           INFLUX_ORG: mallard
           INFLUX_BUCKET: metrics
           API_KEYS: testkey
-        run: pytest --cov=src --cov-report=xml -v
+        run: pytest --cov=server --cov-report=xml -v
 
       - uses: codecov/codecov-action@v5
         with:

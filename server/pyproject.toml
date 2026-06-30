@@ -27,7 +27,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = [{include = "server", from = "../src"}]
+packages = ["../src/server"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
