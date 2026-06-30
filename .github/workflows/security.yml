@@ -89,7 +89,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: kubescape.sarif
+          sarif_file: results.sarif
           category: kubescape
 
   # ── Container image CVE scan (Trivy) ───────────────────────────────────────

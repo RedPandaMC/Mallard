@@ -1,0 +1,3 @@
+# Suppress false-positive secret findings on example/placeholder files.
+# These files contain literal placeholder strings, not real credentials.
+server/k8s/infisical/universal-auth-secret.yaml
