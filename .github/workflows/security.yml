@@ -42,7 +42,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Trivy (filesystem / IaC)
+      - name: Run Trivy (filesystem / IaC — table output for log visibility)
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          scan-type: fs
+          scan-ref: "."
+          scanners: "vuln,misconfig,secret"
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          skip-files: "server/k8s/infisical/universal-auth-secret.yaml"
+
+      - name: Run Trivy (filesystem / IaC — SARIF)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
@@ -52,13 +64,10 @@ jobs:
           output: trivy-iac.sarif
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          # Exclude example/placeholder files that contain literal placeholder strings
           skip-files: "server/k8s/infisical/universal-auth-secret.yaml"
 
       - name: Upload Trivy IaC SARIF
         uses: github/codeql-action/upload-sarif@v3
-        # Only upload on push/schedule — uploading on PRs creates a blocking
-        # Code Scanning check run that cannot be dismissed from the workflow.
         if: always() && github.event_name != 'pull_request'
         with:
           sarif_file: trivy-iac.sarif
