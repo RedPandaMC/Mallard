@@ -1,3 +1,3 @@
-# Suppress false-positive secret findings on example/placeholder files.
-# These files contain literal placeholder strings, not real credentials.
-server/k8s/infisical/universal-auth-secret.yaml
+# Trivy vulnerability/rule ignore file.
+# List CVE IDs or Trivy rule IDs here (one per line) to suppress known-acceptable findings.
+# File-path exclusions are handled via skip-files in .github/workflows/security.yml.
