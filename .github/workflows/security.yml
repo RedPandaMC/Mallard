@@ -57,7 +57,9 @@ jobs:
 
       - name: Upload Trivy IaC SARIF
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        # Only upload on push/schedule — uploading on PRs creates a blocking
+        # Code Scanning check run that cannot be dismissed from the workflow.
+        if: always() && github.event_name != 'pull_request'
         with:
           sarif_file: trivy-iac.sarif
           category: trivy-iac
@@ -94,7 +96,7 @@ jobs:
 
       - name: Upload Kubescape SARIF
         uses: github/codeql-action/upload-sarif@v3
-        if: always() && hashFiles('results.sarif') != ''
+        if: always() && hashFiles('results.sarif') != '' && github.event_name != 'pull_request'
         with:
           sarif_file: results.sarif
           category: kubescape
