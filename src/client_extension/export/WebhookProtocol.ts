@@ -74,7 +74,11 @@ export class WebhookProtocol implements MetricProtocol {
     await pRetry(
       async () => {
         const status = hasCert
-          ? await this._postWithClientCert(url, body, extraHeaders, { certFile, keyFile, caFile })
+          ? await this._postWithClientCert(url, body, extraHeaders, {
+              ...(certFile ? { certFile } : {}),
+              ...(keyFile ? { keyFile } : {}),
+              ...(caFile ? { caFile } : {}),
+            })
           : await this._postWithFetch(url, body, extraHeaders);
 
         if (status >= 500) {

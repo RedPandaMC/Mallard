@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Trivy (filesystem / IaC)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
           scan-ref: "."
@@ -76,7 +76,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Kubescape (NSA + MITRE)
-        uses: kubescape/github-action@v1
+        uses: kubescape/github-action@main
         continue-on-error: true
         with:
           files: server/k8s/
@@ -113,7 +113,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy (image)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           scan-type: image
           image-ref: ghcr.io/redpandamc/mallard-server:latest
