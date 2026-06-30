@@ -4,8 +4,8 @@
  * using the cheapest available model, making the premium model premium visible.
  */
 import type { TooltipComponentOption } from './echarts';
-import { Metric, UsageSnapshot } from '../../src/extension/domain/types';
-import { formatCredits, formatMoney, formatTokens } from '../../src/extension/domain/format';
+import { Metric, UsageSnapshot } from '../../extension-backend/domain/types';
+import { formatCredits, formatMoney, formatTokens } from '../../extension-backend/domain/format';
 import { ChartComponent } from './ChartComponent';
 
 export interface ModelBreakdownHandle {

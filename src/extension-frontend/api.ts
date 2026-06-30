@@ -1,4 +1,4 @@
-import { HostBoundMsg, WebviewBoundMsg, isWebviewBoundMsg } from '../src/extension/ui/messaging';
+import { HostBoundMsg, WebviewBoundMsg, isWebviewBoundMsg } from '../extension-backend/ui/messaging';
 
 declare function acquireVsCodeApi(): { postMessage(msg: HostBoundMsg): void };
 

@@ -4,7 +4,7 @@
  * reorder, toggle width/height, and show/hide panels. Every change is sent
  * back to the host via onChange so it is stored permanently.
  */
-import { DashboardLayout, PanelSize } from '../src/extension/domain/types';
+import { DashboardLayout, PanelSize } from '../extension-backend/domain/types';
 
 export interface LayoutManager {
   apply(layout: DashboardLayout): void;

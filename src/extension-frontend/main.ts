@@ -407,7 +407,7 @@ function mountDashboard(root: HTMLElement): void {
   });
 }
 
-function updateSrDescriptions(snapshot: import('../src/extension/domain/types').UsageSnapshot): void {
+function updateSrDescriptions(snapshot: import('../extension-backend/domain/types').UsageSnapshot): void {
   const { dailyBars, heatmap, modelBreakdown, categoryBreakdown, hourlyTimeline } = snapshot.chartData;
 
   const peakDay = dailyBars.points.reduce(

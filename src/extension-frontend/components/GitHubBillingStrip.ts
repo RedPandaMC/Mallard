@@ -5,8 +5,8 @@
  * - signed-in   → "✓ Verified by GitHub · $X.XX actual"
  * - divergence  → yellow warning when local estimate differs from API by >10%
  */
-import { AuthStatus, UsageSnapshot } from '../../src/extension/domain/types';
-import { formatMoney } from '../../src/extension/domain/format';
+import { AuthStatus, UsageSnapshot } from '../../extension-backend/domain/types';
+import { formatMoney } from '../../extension-backend/domain/format';
 import { post } from '../api';
 
 export interface GitHubBillingStripHandle {
