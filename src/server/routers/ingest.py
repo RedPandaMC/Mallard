@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -19,6 +20,9 @@ router = APIRouter(prefix="/api/v1", tags=["ingest"])
 
 # 64 KB body size limit (enforced by middleware in main.py, validated here as a safety belt)
 _MAX_BODY_BYTES = 64 * 1024
+
+# CN header values become InfluxDB tag values; restrict to the same safe character set as labels.
+_CERT_CN_RE = re.compile(r"^[\w._@-]{1,64}$")
 
 
 def _extract_bearer(auth_header: str) -> str:
@@ -52,6 +56,9 @@ async def ingest(
 
     # mTLS: cert CN forwarded by nginx ingress; ingress has already verified the cert
     cert_cn = request.headers.get("SSL_CLIENT_S_DN_CN", "").strip()
+    if cert_cn and not _CERT_CN_RE.match(cert_cn):
+        logger.warning("Rejected SSL_CLIENT_S_DN_CN with invalid format: %r", cert_cn)
+        cert_cn = ""
 
     if cert_cn:
         source = cert_cn

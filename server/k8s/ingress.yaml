@@ -18,10 +18,10 @@ metadata:
 spec:
   tls:
     - hosts:
-        - mallard.example.com
+        - mallard.example.com   # Replace with your actual domain
       secretName: mallard-tls
   rules:
-    - host: mallard.example.com
+    - host: mallard.example.com   # Replace with your actual domain
       http:
         paths:
           - path: /health

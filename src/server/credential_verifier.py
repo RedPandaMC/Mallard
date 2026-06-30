@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
+import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -11,8 +13,15 @@ from typing import TYPE_CHECKING
 
 import httpx
 
+from .auth import _lookup_label
+
 if TYPE_CHECKING:
     from .config import Settings
+
+logger = logging.getLogger(__name__)
+
+# Labels become InfluxDB tag values; restrict to safe characters and reasonable length.
+_LABEL_RE = re.compile(r"^[\w._@-]{1,64}$")
 
 
 # ── Value objects ─────────────────────────────────────────────────────────────
@@ -31,13 +40,20 @@ class CredentialStore:
 
     @staticmethod
     def parse_labeled(raw: str) -> dict[str, str]:
-        """'label:secret,...' → {sha256(secret): label}. Bare values get label 'unknown'."""
+        """'label:secret,...' → {sha256(secret): label}. Bare values get label 'unknown'.
+
+        Labels that contain characters outside [A-Za-z0-9._@-] or exceed 64 characters
+        are normalised to 'unknown' to keep InfluxDB tags clean.
+        """
         result: dict[str, str] = {}
         for entry in (e.strip() for e in raw.split(",") if e.strip()):
             label, _, key = entry.partition(":")
             if not key:
                 label, key = "unknown", label
-            result[hashlib.sha256(key.encode()).hexdigest()] = label.strip()
+            label = label.strip()
+            if not _LABEL_RE.match(label):
+                label = "unknown"
+            result[hashlib.sha256(key.encode()).hexdigest()] = label
         return result
 
 
@@ -61,12 +77,12 @@ class StaticCredentialVerifier(CredentialVerifier):
 
     async def verify_api_key(self, key: str) -> VerifiedIdentity | None:
         h = hashlib.sha256(key.encode()).hexdigest()
-        label = self._settings.hashed_api_keys.get(h)
+        label = _lookup_label(h, self._settings.hashed_api_keys)
         return VerifiedIdentity(label) if label is not None else None
 
     async def verify_mqtt_credential(self, password: str) -> VerifiedIdentity | None:
         h = hashlib.sha256(password.encode()).hexdigest()
-        label = self._settings.hashed_mqtt_credentials.get(h)
+        label = _lookup_label(h, self._settings.hashed_mqtt_credentials)
         return VerifiedIdentity(label) if label is not None else None
 
 
@@ -87,19 +103,26 @@ class RemoteCredentialVerifier(CredentialVerifier, ABC):
         async with self._lock:
             now = time.monotonic()
             if self._store is None or (now - self._store.fetched_at) > self._ttl:
-                self._store = await self._fetch_store()
-        return self._store
+                try:
+                    self._store = await self._fetch_store()
+                except Exception as exc:
+                    if self._store is not None:
+                        # Keep serving from stale cache while the secret manager recovers.
+                        logger.warning("credential fetch failed, using stale cache: %s", exc)
+                    else:
+                        raise  # no cache to fall back to — caller gets a 503
+        return self._store  # type: ignore[return-value]  # guarded: either set or raised above
 
     async def verify_api_key(self, key: str) -> VerifiedIdentity | None:
         store = await self._get_store()
         h = hashlib.sha256(key.encode()).hexdigest()
-        label = store.api_keys.get(h)
+        label = _lookup_label(h, store.api_keys)
         return VerifiedIdentity(label) if label is not None else None
 
     async def verify_mqtt_credential(self, password: str) -> VerifiedIdentity | None:
         store = await self._get_store()
         h = hashlib.sha256(password.encode()).hexdigest()
-        label = store.mqtt_credentials.get(h)
+        label = _lookup_label(h, store.mqtt_credentials)
         return VerifiedIdentity(label) if label is not None else None
 
 
@@ -120,7 +143,10 @@ class InfisicalCredentialVerifier(RemoteCredentialVerifier):
                 headers={"Authorization": f"Bearer {s.secret_manager_token}"},
             )
         r.raise_for_status()
-        kv = {item["secretKey"]: item["secretValue"] for item in r.json()["secrets"]}
+        try:
+            kv = {item["secretKey"]: item["secretValue"] for item in r.json()["secrets"]}
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"Unexpected Infisical response shape: {exc}") from exc
         return CredentialStore(
             api_keys=CredentialStore.parse_labeled(kv.get("API_KEYS", "")),
             mqtt_credentials=CredentialStore.parse_labeled(kv.get("MQTT_CREDENTIALS", "")),
@@ -139,7 +165,10 @@ class OpenBaoCredentialVerifier(RemoteCredentialVerifier):
         async with httpx.AsyncClient(verify=s.secret_manager_ca_cert_path or True, timeout=10.0) as c:
             r = await c.get(f"{s.secret_manager_url}/v1/{s.openbao_secret_path}", headers=headers)
         r.raise_for_status()
-        data = r.json()["data"]["data"]
+        try:
+            data = r.json()["data"]["data"]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"Unexpected OpenBao response shape: {exc}") from exc
         return CredentialStore(
             api_keys=CredentialStore.parse_labeled(data.get("api_keys", "")),
             mqtt_credentials=CredentialStore.parse_labeled(data.get("mqtt_credentials", "")),

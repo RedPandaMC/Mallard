@@ -122,6 +122,43 @@ class TestIngestAuthentication:
         )
         assert response.status_code == 401
 
+    def test_invalid_cert_cn_format_falls_back_to_api_key(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """CN with invalid characters is rejected; valid API key still grants access."""
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={
+                "SSL_CLIENT_S_DN_CN": "bad cn with spaces!",
+                "X-API-Key": "test-key-valid",
+            },
+        )
+        assert response.status_code == 202
+
+    def test_invalid_cert_cn_without_api_key_returns_401(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """CN with invalid characters + no API key → rejected."""
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={"SSL_CLIENT_S_DN_CN": "bad cn with spaces!"},
+        )
+        assert response.status_code == 401
+
+    def test_cert_cn_too_long_falls_back_to_api_key(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """CN exceeding 64 characters is treated as invalid."""
+        long_cn = "a" * 65
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={"SSL_CLIENT_S_DN_CN": long_cn, "X-API-Key": "test-key-valid"},
+        )
+        assert response.status_code == 202
+
 
 class TestIngestValidation:
     def test_malformed_json_returns_422(self, client: TestClient) -> None:

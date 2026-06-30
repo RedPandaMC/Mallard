@@ -20,3 +20,15 @@ def _constant_time_match(candidate_hash: str, stored_hashes: Iterable[str]) -> b
             matched = True
             # Do NOT break — continue iterating to avoid timing leaks about set size
     return matched
+
+
+def _lookup_label(candidate_hash: str, stored: dict[str, str]) -> str | None:
+    """Constant-time lookup in a hash→label dict. Returns the label or None if not found.
+
+    Iterates the full dict without early exit to avoid leaking the store size via timing.
+    """
+    matched_label: str | None = None
+    for stored_hash, label in stored.items():
+        if hmac.compare_digest(candidate_hash, stored_hash):
+            matched_label = label
+    return matched_label

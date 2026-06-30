@@ -33,10 +33,20 @@ export class AuthProvider {
         headers['Authorization'] = `Bearer ${cfg.webhook.bearerToken}`;
       }
 
+      const certOpts =
+        cfg.webhook.auth === 'certificate'
+          ? {
+              ...opt('certFile', cert.file || undefined),
+              ...opt('keyFile', cert.keyFile || undefined),
+              ...opt('caFile', cert.caFile || undefined),
+            }
+          : {};
+
       return (
         createWebhookExporter({
           url,
           ...opt('headers', Object.keys(headers).length > 0 ? headers : undefined),
+          ...certOpts,
         }) ?? new NullMetricExporter()
       );
     }

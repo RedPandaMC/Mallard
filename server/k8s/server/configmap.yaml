@@ -9,5 +9,5 @@ data:
   INFLUX_BUCKET: "metrics"
   LOG_LEVEL: "INFO"
   RATE_LIMIT: "60/minute"
-  MQTT_ENABLED: "true"
+  MQTT_ENABLED: "false"
   MQTT_PORT: "8083"

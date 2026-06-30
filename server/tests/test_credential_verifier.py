@@ -63,6 +63,29 @@ class TestCredentialStoreParseLabled:
         assert result[h_bare] == "unknown"
         assert result[h_labeled] == "labeled"
 
+    def test_invalid_label_characters_replaced_with_unknown(self) -> None:
+        from server.credential_verifier import CredentialStore
+
+        result = CredentialStore.parse_labeled("label with spaces:mykey")
+        h = hashlib.sha256(b"mykey").hexdigest()
+        assert result[h] == "unknown"
+
+    def test_label_exceeding_64_chars_replaced_with_unknown(self) -> None:
+        from server.credential_verifier import CredentialStore
+
+        long_label = "a" * 65
+        result = CredentialStore.parse_labeled(f"{long_label}:mykey")
+        h = hashlib.sha256(b"mykey").hexdigest()
+        assert result[h] == "unknown"
+
+    def test_label_exactly_64_chars_is_valid(self) -> None:
+        from server.credential_verifier import CredentialStore
+
+        label = "a" * 64
+        result = CredentialStore.parse_labeled(f"{label}:mykey")
+        h = hashlib.sha256(b"mykey").hexdigest()
+        assert result[h] == label
+
 
 # ── StaticCredentialVerifier ──────────────────────────────────────────────────
 
@@ -214,6 +237,75 @@ class TestRemoteCredentialVerifierCaching:
             result = await verifier.verify_mqtt_credential("mqtt-pass")
         assert result == VerifiedIdentity(label="sensor-1")
 
+    async def test_first_fetch_failure_propagates_to_caller(self) -> None:
+        """No cache yet → exception from _fetch_store propagates."""
+        verifier = self._make_infisical_verifier()
+
+        with patch.object(
+            verifier, "_fetch_store", new=AsyncMock(side_effect=RuntimeError("infisical down"))
+        ):
+            with pytest.raises(RuntimeError, match="infisical down"):
+                await verifier._get_store()
+
+    async def test_first_fetch_failure_verify_api_key_raises(self) -> None:
+        """No cache yet → verify_api_key raises rather than returning None."""
+        verifier = self._make_infisical_verifier()
+
+        with patch.object(
+            verifier, "_fetch_store", new=AsyncMock(side_effect=RuntimeError("network error"))
+        ):
+            with pytest.raises(RuntimeError):
+                await verifier.verify_api_key("any-key")
+
+    async def test_subsequent_fetch_failure_returns_stale_cache(self) -> None:
+        """After a successful fetch, a later failure keeps serving the old store."""
+        verifier = self._make_infisical_verifier(ttl=0)
+        initial_store = self._mock_store(api_key="valid-key", label="team-a")
+
+        with patch.object(verifier, "_fetch_store", new=AsyncMock(return_value=initial_store)):
+            await verifier._get_store()
+
+        # Force TTL expiry by backdating fetched_at
+        from server.credential_verifier import CredentialStore
+
+        verifier._store = CredentialStore(
+            api_keys=initial_store.api_keys,
+            mqtt_credentials={},
+            fetched_at=time.monotonic() - 100,
+        )
+
+        with patch.object(
+            verifier, "_fetch_store", new=AsyncMock(side_effect=RuntimeError("still down"))
+        ):
+            result = await verifier._get_store()
+
+        # Stale store is returned — caller is not interrupted
+        assert result is not None
+        assert result.api_keys == initial_store.api_keys
+
+    async def test_subsequent_fetch_failure_verify_still_works(self) -> None:
+        """verify_api_key succeeds against stale cache when refresh fails."""
+        from server.credential_verifier import CredentialStore, VerifiedIdentity
+
+        verifier = self._make_infisical_verifier(ttl=0)
+        initial_store = self._mock_store(api_key="good-key", label="my-team")
+
+        with patch.object(verifier, "_fetch_store", new=AsyncMock(return_value=initial_store)):
+            await verifier._get_store()
+
+        verifier._store = CredentialStore(
+            api_keys=initial_store.api_keys,
+            mqtt_credentials={},
+            fetched_at=time.monotonic() - 100,
+        )
+
+        with patch.object(
+            verifier, "_fetch_store", new=AsyncMock(side_effect=RuntimeError("transient"))
+        ):
+            result = await verifier.verify_api_key("good-key")
+
+        assert result == VerifiedIdentity(label="my-team")
+
 
 # ── InfisicalCredentialVerifier._fetch_store ──────────────────────────────────
 
@@ -274,6 +366,23 @@ class TestInfisicalFetchStore:
 
         assert store.api_keys == {}
         assert store.mqtt_credentials == {}
+
+    async def test_malformed_json_raises_value_error(self) -> None:
+        from server.credential_verifier import InfisicalCredentialVerifier
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json = MagicMock(return_value={"unexpected": "shape"})
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("server.credential_verifier.httpx.AsyncClient", return_value=mock_client):
+            verifier = InfisicalCredentialVerifier(self._make_settings())
+            with pytest.raises(ValueError, match="Unexpected Infisical response shape"):
+                await verifier._fetch_store()
 
     async def test_http_error_raises(self) -> None:
         from server.credential_verifier import InfisicalCredentialVerifier

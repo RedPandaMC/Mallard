@@ -39,6 +39,16 @@ kubectl wait --namespace cert-manager \
 
 ## Applying the ClusterIssuers
 
+::: warning Before you apply
+The ClusterIssuer files contain `admin@example.com` as a placeholder. **Replace it with your real email address** before applying — Let's Encrypt uses this to send expiry notifications and will reject the application otherwise.
+
+```bash
+# Replace the placeholder with your actual email
+sed -i "s/admin@example.com/you@example.com/" server/k8s/cert-manager/cluster-issuer-prod.yaml
+sed -i "s/admin@example.com/you@example.com/" server/k8s/cert-manager/cluster-issuer-staging.yaml
+```
+:::
+
 ```bash
 kubectl apply -f server/k8s/cert-manager/
 ```

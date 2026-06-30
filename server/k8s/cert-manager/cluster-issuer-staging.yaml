@@ -1,3 +1,6 @@
+# BEFORE APPLYING: replace admin@example.com with your real email address.
+# Let's Encrypt uses this to notify you about certificate expiry.
+# Quick one-liner: sed -i "s/admin@example.com/${ACME_EMAIL}/" cluster-issuer-staging.yaml
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
@@ -5,7 +8,7 @@ metadata:
 spec:
   acme:
     server: https://acme-staging-v02.api.letsencrypt.org/directory
-    email: ${ACME_EMAIL}
+    email: admin@example.com   # Replace with your real email before applying
     privateKeySecretRef:
       name: letsencrypt-staging-key
     solvers:

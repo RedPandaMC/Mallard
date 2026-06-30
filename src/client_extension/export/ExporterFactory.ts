@@ -19,6 +19,9 @@ export interface WebhookExporterConfig {
   secret?: string;
   headers?: Record<string, string>;
   retries?: number;
+  certFile?: string;
+  keyFile?: string;
+  caFile?: string;
 }
 
 /** Creates a MetricExporter backed by MQTT. Returns null when brokerUrl is absent. */
@@ -45,6 +48,9 @@ export function createWebhookExporter(cfg: Partial<WebhookExporterConfig>): Metr
     ...(cfg.secret ? { secret: cfg.secret } : {}),
     ...(cfg.headers ? { headers: cfg.headers } : {}),
     ...(cfg.retries !== undefined ? { retries: cfg.retries } : {}),
+    ...(cfg.certFile ? { certFile: cfg.certFile } : {}),
+    ...(cfg.keyFile ? { keyFile: cfg.keyFile } : {}),
+    ...(cfg.caFile ? { caFile: cfg.caFile } : {}),
   });
   return new MetricExporter(protocol, new MetricPayloadSerializer());
 }

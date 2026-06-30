@@ -8,10 +8,15 @@
  *     supplied `secret`. Receivers can verify authenticity without exposing
  *     credentials in the URL.
  *   - Configurable auth header (e.g. `Authorization: Bearer ...`).
+ *   - mTLS client certificates: when certFile/keyFile/caFile are supplied,
+ *     requests are sent via Node.js https.request (which supports TLS client
+ *     certs) instead of the global fetch().
  *   - Retry with exponential backoff on 5xx / network error (p-retry).
  *   - 10-second per-request timeout.
  */
 import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as https from 'https';
 import * as vscode from 'vscode';
 import pRetry, { AbortError } from 'p-retry';
 import type { RetryContext } from 'p-retry';
@@ -25,6 +30,9 @@ export interface WebhookProtocolOptions {
   secret?: string;
   headers?: Record<string, string>;
   retries?: number;
+  certFile?: string;
+  keyFile?: string;
+  caFile?: string;
 }
 
 export class WebhookProtocol implements MetricProtocol {
@@ -52,7 +60,7 @@ export class WebhookProtocol implements MetricProtocol {
   }
 
   private async post(body: string): Promise<void> {
-    const { url, secret, headers = {}, retries = 3 } = this.opts;
+    const { url, secret, headers = {}, retries = 3, certFile, keyFile, caFile } = this.opts;
 
     const extraHeaders: Record<string, string> = { ...headers, 'Content-Type': 'application/json' };
 
@@ -61,21 +69,20 @@ export class WebhookProtocol implements MetricProtocol {
       extraHeaders['X-Mallard-Signature-256'] = `sha256=${sig}`;
     }
 
+    const hasCert = !!(certFile || keyFile || caFile);
+
     await pRetry(
       async () => {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: extraHeaders,
-          body,
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        });
-        if (res.status >= 500) {
-          // p-retry treats thrown errors as retryable.
-          throw new Error(`HTTP ${res.status} from webhook endpoint`);
+        const status = hasCert
+          ? await this._postWithClientCert(url, body, extraHeaders, { certFile, keyFile, caFile })
+          : await this._postWithFetch(url, body, extraHeaders);
+
+        if (status >= 500) {
+          throw new Error(`HTTP ${status} from webhook endpoint`);
         }
-        if (!res.ok) {
+        if (status >= 400) {
           // 4xx = client error; abort immediately (no retry).
-          throw new AbortError(`HTTP ${res.status} from webhook endpoint`);
+          throw new AbortError(`HTTP ${status} from webhook endpoint`);
         }
       },
       {
@@ -87,6 +94,58 @@ export class WebhookProtocol implements MetricProtocol {
         },
       },
     );
+  }
+
+  private async _postWithFetch(
+    url: string,
+    body: string,
+    headers: Record<string, string>,
+  ): Promise<number> {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    return res.status;
+  }
+
+  private _postWithClientCert(
+    url: string,
+    body: string,
+    headers: Record<string, string>,
+    certOpts: { certFile?: string; keyFile?: string; caFile?: string },
+  ): Promise<number> {
+    const agentOpts: https.AgentOptions = {};
+    if (certOpts.certFile) agentOpts.cert = fs.readFileSync(certOpts.certFile);
+    if (certOpts.keyFile) agentOpts.key = fs.readFileSync(certOpts.keyFile);
+    if (certOpts.caFile) agentOpts.ca = fs.readFileSync(certOpts.caFile);
+
+    const agent = new https.Agent(agentOpts);
+    const parsedUrl = new URL(url);
+    const bodyBuffer = Buffer.from(body, 'utf8');
+
+    return new Promise<number>((resolve, reject) => {
+      const req = https.request(
+        {
+          hostname: parsedUrl.hostname,
+          port: parsedUrl.port || 443,
+          path: parsedUrl.pathname + parsedUrl.search,
+          method: 'POST',
+          headers: { ...headers, 'Content-Length': bodyBuffer.byteLength },
+          agent,
+          timeout: REQUEST_TIMEOUT_MS,
+        },
+        (res) => {
+          res.resume(); // drain response body to free the socket
+          resolve(res.statusCode ?? 0);
+        },
+      );
+      req.on('error', reject);
+      req.on('timeout', () => req.destroy(new Error('Request timeout')));
+      req.write(bodyBuffer);
+      req.end();
+    });
   }
 
   dispose(): void {
