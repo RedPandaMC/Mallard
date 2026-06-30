@@ -2,8 +2,6 @@
 
 Every metric payload written to InfluxDB carries a `source` tag that identifies who sent it. This lets Grafana dashboards break down spend by team member, machine, CI pipeline, or any other identity you define — without a separate configuration step per dashboard.
 
----
-
 ## How identities are assigned
 
 The `source` tag is determined by the auth method:
@@ -16,8 +14,6 @@ The `source` tag is determined by the auth method:
 | mTLS client certificate | The Common Name (CN) field of the certificate |
 | Infisical / OpenBao | Same label format, fetched live from the secret store |
 | Unlabelled key (bare secret) | `"unknown"` |
-
----
 
 ## Named credentials
 
@@ -32,8 +28,6 @@ MQTT_CREDENTIALS=alice:mqtt-pass1,ci-pipeline:mqtt-pass2
 Labels are arbitrary strings — use usernames, machine names, team names, or whatever fits your naming convention. They appear verbatim as the `source` tag in InfluxDB.
 
 When a credential has no label (just a bare secret with no `:` separator), the server defaults to `"unknown"`. All `"unknown"` data points are aggregated together, which makes it hard to distinguish sources — prefer always using labels.
-
----
 
 ## Querying by source in Flux
 
@@ -52,8 +46,6 @@ from(bucket: "metrics")
   |> sum()
 ```
 
----
-
 ## mTLS identities
 
 When the extension authenticates with a TLS client certificate, the server reads the certificate's Common Name from the `SSL_CLIENT_S_DN_CN` header (forwarded by the nginx ingress) and uses it as `source`. No entry in `API_KEYS` is needed.
@@ -62,15 +54,11 @@ This approach has a useful property: you issue one certificate per team member (
 
 See [cert-manager — client certificates](/guide/cert-manager#client-certificates) for how to issue and distribute certificates.
 
----
-
 ## Per-team Grafana dashboards
 
 The pre-built Grafana dashboards include a `source` variable that drives all panels. Select a source from the dropdown to filter the entire dashboard to one identity.
 
 To add a new source to the dropdown, just add a new labelled credential — Grafana queries InfluxDB for the distinct list of `source` values dynamically, so no dashboard edit is needed.
-
----
 
 ## Source priority
 

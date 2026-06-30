@@ -35,8 +35,6 @@ This is not an officially supported configuration by GitHub/Microsoft, but it wo
 
 If you sync your local VS Code log directory to the remote (e.g. via `sshfs`, `rclone`, or a cloud drive), set `mallard.copilotLogPath` to the mount path. Mallard will then read from the synced copy.
 
----
-
 ## No logs found after install {#no-logs-found}
 
 Run **Mallard: Show Detected Log Path** from the Command Palette. If Mallard reports no files found:
@@ -44,8 +42,6 @@ Run **Mallard: Show Detected Log Path** from the Command Palette. If Mallard rep
 1. **Use Copilot first.** Copilot only writes OTel log files when it makes API calls. Open a file, trigger a completion or chat, then click **Refresh** in the Mallard dashboard.
 2. **Check the path.** The detected path should be inside VS Code's log directory (e.g. `~/.vscode-server/data/logs` on Linux). If it points somewhere unexpected, set `mallard.copilotLogPath` to override it.
 3. **Snap / Flatpak installs.** VS Code installed via Snap or Flatpak uses a sandboxed log path. Mallard includes the standard Snap and Flatpak paths in its search list, but if your install is non-standard, override with `mallard.copilotLogPath`.
-
----
 
 ## Data cleared after uninstall {#data-cleared}
 

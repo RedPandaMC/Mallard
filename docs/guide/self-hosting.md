@@ -19,25 +19,20 @@ Mallard ships an optional ingest server that receives metric payloads from one o
 
 Source: `server/` in this repo.
 
----
-
 ## How it works
 
-```
-VS Code extension
-  │
-  │  POST /api/v1/ingest  (webhook)
-  │    or  MQTT over WSS
-  ▼
-Caddy / nginx-ingress
-  │  TLS termination, API key check
-  ▼
-FastAPI server  ──────────────────────────────▶  InfluxDB v2
-  │  parse & validate payload                     (time-series store)
-  │  write_api → line protocol                        │
-  │                                                    │
-  └──────────────────────────────────────────────▶ Grafana
-                                               pre-built dashboards
+```mermaid
+flowchart LR
+    ext[VS Code extension]
+    proxy[Caddy / nginx-ingress]
+    api[FastAPI server]
+    db[(InfluxDB v2)]
+    graf[Grafana]
+
+    ext -->|webhook or MQTT/WSS| proxy
+    proxy -->|TLS termination + auth| api
+    api -->|line protocol| db
+    db --> graf
 ```
 
 The server is a single stateless FastAPI process. It accepts either:
@@ -45,8 +40,6 @@ The server is a single stateless FastAPI process. It accepts either:
 - **MQTT** — a message published to `mallard/metrics` over a WebSocket-wrapped MQTT connection (`wss://your-server/mqtt`). The embedded amqtt broker runs inside the same process.
 
 InfluxDB stores every snapshot as a measurement named `mallard_metrics`. Grafana reads from InfluxDB via Flux queries and ships four pre-built dashboards: overview, per-model breakdown, team comparison, and velocity trends.
-
----
 
 ## Quick start (Docker Compose)
 
@@ -93,8 +86,6 @@ ACME_EMAIL=ops@your-org.com
 
 Caddy detects a real hostname and obtains a Let's Encrypt certificate automatically. The API then becomes `https://mallard.your-org.com/api/v1/ingest`.
 
----
-
 ## Connecting the extension
 
 Once the server is running, configure VS Code:
@@ -132,8 +123,6 @@ Run **Mallard: Set MQTT Export Password** from the Command Palette to store the 
 
 See [Settings reference](/reference/settings) for the full list of extension settings and the payload schema.
 
----
-
 ## Named credentials and the `source` tag
 
 Every API key and MQTT credential can carry a **label**. The label is written as the `source` tag on every InfluxDB data point, which lets you filter Grafana dashboards by team, machine, or person.
@@ -156,8 +145,6 @@ from(bucket: "metrics")
   |> filter(fn: (r) => r["source"] == "alice")
 ```
 
----
-
 ## MQTT configuration
 
 Enable the embedded MQTT broker in `.env`:
@@ -170,8 +157,6 @@ MQTT_CREDENTIALS=alice:my-password,bob:other-password
 The broker listens on WebSocket at `/mqtt`. Extension clients connect via `wss://your-server/mqtt`.
 
 > **Note:** MQTT credentials are separate from API keys — set both `API_KEYS` and `MQTT_CREDENTIALS` if you use both transports.
-
----
 
 ## Kubernetes
 
@@ -229,8 +214,6 @@ helm install reloader stakater/reloader --namespace reloader --create-namespace
 
 The server Deployment carries the `reloader.stakater.com/auto: "true"` annotation. When you update the `mallard-server-secrets` Secret (e.g. rotate an API key), Reloader triggers a zero-downtime rolling restart automatically.
 
----
-
 ## Dynamic credentials (optional)
 
 Instead of storing credentials in a Kubernetes Secret or `.env` file, you can pull them from a self-hosted secret manager. The server fetches credentials on first request and caches them for 30 seconds, so revocation propagates within one cache interval.
@@ -243,8 +226,6 @@ Two secret managers are supported:
 | OpenBao | HashiCorp Vault fork (community-maintained) | `docker-compose.openbao.yml` overlay | `server/k8s/openbao/` kustomize overlay |
 
 See the [Secret Management guide](/guide/secret-management) for detailed setup steps for both providers.
-
----
 
 ## mTLS — client certificate auth (optional)
 

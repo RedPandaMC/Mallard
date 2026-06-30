@@ -71,6 +71,10 @@ in VS Code's SecretStorage. Secrets are never written to settings files and are
 not synced across machines by Settings Sync. Leave the input blank to clear a
 previously saved password.
 
+## Mallard: Simulate Restriction State
+
+ID `mallard.simulateRestriction`. Evaluates all restriction rules against the current snapshot and writes the result — which rule (if any) would be active, its scope, and grace period — as JSON to the "Mallard Restriction" output channel. Nothing is disabled and no notification fires. Useful for checking a new `restrict` rule before it can actually disable Copilot.
+
 ## Mallard: Prepare for Uninstall
 
 ID `mallard.prepareUninstall`. Clears all Mallard data before you uninstall the

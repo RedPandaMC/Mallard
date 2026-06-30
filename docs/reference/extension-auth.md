@@ -1,17 +1,15 @@
-# Extension Auth Contract
+# Authentication Reference
 
-This document is the specification for the VS Code extension. It defines every authentication method the server supports, what the extension must send, and how settings should be structured. Extension changes should match this contract exactly.
+The self-hosted Mallard server supports four authentication methods. The method you choose controls what the extension sends and what `source` label is written to InfluxDB.
 
 ## Supported auth methods
 
-| Method | Transport | What extension sends | Server validates against | Status |
-|---|---|---|---|---|
-| API key | HTTP webhook | `X-API-Key: <key>` header | `API_KEYS` / live secret store | **current** |
-| MQTT password | MQTT/WSS | CONNECT password field | `MQTT_CREDENTIALS` / live secret store | **current** |
-| Bearer token | HTTP webhook | `Authorization: Bearer <token>` | same hash store as API key | **current** |
-| mTLS certificate | HTTP + MQTT | Client TLS certificate | CA cert issued by `mallard-ca` | **current** |
-
----
+| Method | Transport | What the extension sends | Server validates against |
+|---|---|---|---|
+| API key | HTTP webhook | `X-API-Key: <key>` header | `API_KEYS` / live secret store |
+| MQTT password | MQTT/WSS | CONNECT password field | `MQTT_CREDENTIALS` / live secret store |
+| Bearer token | HTTP webhook | `Authorization: Bearer <token>` | same hash store as API key |
+| mTLS certificate | HTTP + MQTT | Client TLS certificate | CA cert issued by `mallard-ca` |
 
 ## API key (current)
 
@@ -25,8 +23,6 @@ X-API-Key: <api-key>
 
 The key is looked up in the server's credential store. The label associated with the key becomes the `source` tag in InfluxDB. Example store entry: `team-alpha:key-abc123` → `source=team-alpha`.
 
----
-
 ## Bearer token (current)
 
 **Extension setting:** `mallard.webhook.bearerToken`
@@ -39,15 +35,11 @@ Authorization: Bearer <token>
 
 The token value is treated identically to an API key — it goes through the same hash lookup. This allows the extension to use a token obtained from an IdP (Infisical machine token, OpenBao token, OAuth access token) directly.
 
----
-
 ## MQTT password (current)
 
 **Extension settings:** `mallard.mqtt.username`, `mallard.mqtt.password`
 
 Sent as the MQTT CONNECT `password` field over `wss://<host>/mqtt`. The `username` field is accepted but the server only validates the password. Credential format: `label:password` — same structure as API key.
-
----
 
 ## mTLS client certificate (current)
 
@@ -74,8 +66,6 @@ kubectl get secret mallard-client-team-alpha-tls -n mallard \
 kubectl get secret mallard-client-team-alpha-tls -n mallard \
   -o jsonpath='{.data.tls\.key}' | base64 -d > team-alpha.key
 ```
-
----
 
 ## Extension settings (full schema)
 
@@ -108,8 +98,6 @@ kubectl get secret mallard-client-team-alpha-tls -n mallard \
 }
 ```
 
----
-
 ## Auth precedence on the server (HTTP)
 
 1. `SSL_CLIENT_S_DN_CN` header (set by TLS terminator when client cert is present) → `source = cert CN`
@@ -118,8 +106,6 @@ kubectl get secret mallard-client-team-alpha-tls -n mallard \
 4. None of the above → `401 Unauthorized`
 
 The extension should send exactly one credential per request. Sending both a cert and an API key is valid (the cert takes precedence), but is not necessary.
-
----
 
 ## Backward compatibility
 

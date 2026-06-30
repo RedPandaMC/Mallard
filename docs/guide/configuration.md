@@ -63,8 +63,7 @@ Rules live in the `rules` array. Each rule fires a VS Code notification and opti
 | `message` | yes | Notification text. Supports <code v-pre>{{ field.path }}</code> placeholders. |
 | `when` | yes | Condition that must be true for the rule to fire. |
 | `active` | no | Gate — rule is skipped unless this condition is true. |
-| `cooldown` | no | Min time between firings: `"30m"`, `"4h"`, `"1d"`. Default `1h`. |
-| `notify` | no | `true` (default) shows a VS Code notification popup when the rule fires; `false` suppresses it (useful when you only want the restriction behaviour). |
+| `cooldown` | no | Min time between firings: `"30m"`, `"4h"`, `"1d"`, `"1w"`. Default `1h`. |
 | `restrict` | no | Copilot restriction block (see below). |
 
 ### Condition operators
@@ -88,16 +87,23 @@ Rules live in the `rules` array. Each rule fires a VS Code notification and opti
 | `budget.percentOfBudget` | number | MTD cost as fraction of budget (0–1+). |
 | `budget.percentOfIncluded` | number | Credits as fraction of included allowance. |
 | `budget.projectedOverage` | number \| null | Projected overage in USD. |
-| `budget.pace` | string | `"on-track"`, `"at-risk"`, `"over"`, or `"no-budget"`. |
+| `budget.pace` | string | `"no-budget"`, `"under"`, `"on-track"`, `"warning"`, or `"over"`. |
 | `forecast.projectedCredits` / `forecast.projectedCost` | number | Month-end projection. |
 | `forecast.low` / `forecast.high` | number | Projection confidence bounds. |
+| `forecast.basis` | string | Method used: `"linear"`, `"seasonal"`, or `"insufficient-data"`. |
 | `velocity.creditsPerHour` | number | Recent spending rate. |
+| `velocity.windowMinutes` | number | Window size used to compute the rate. |
 | `topModel.id` / `topModel.credits` | string \| null, number | Top model today. |
+| `topSurface.id` / `topSurface.credits` | string \| null, number | Top surface today. |
 | `topRepo.id` / `topRepo.credits` | string \| null, number | Top repo today. |
 | `model.<key>.credits` | number | Credits for a specific model, e.g. `model.gpt-4o.credits`. |
 | `surface.<key>.credits` | number | Credits for a specific surface, e.g. `surface.chat.credits`. |
-| `billing.netAmount` / `billing.quotaPercentRemaining` | number | GitHub billing (requires sign-in). |
-| `now.weekday` / `now.hour` / `now.minute` / `now.ts` | number | Current time values. |
+| `repo.<key>.credits` | number | Credits for a specific repo, e.g. `repo.my-app.credits`. |
+| `billing.netAmount` / `billing.grossAmount` | number | GitHub billing net and gross charge (requires sign-in). |
+| `billing.quotaPercentRemaining` | number | Remaining plan quota as a percentage (requires sign-in). |
+| `billing.unlimited` | boolean | Whether the account has an unlimited Copilot plan (requires sign-in). |
+| `now.weekday` / `now.hour` / `now.minute` / `now.ts` | number | Current time values (`weekday` is 0=Sun–6=Sat). |
+| `now.iso` | string | Current time as an ISO 8601 string. |
 | `signedIn` | boolean | Whether signed in to GitHub. |
 | `currentBranch` / `currentBranchCredits` | string \| null, number | Active branch name and credits consumed on it. |
 | `branchBudgets.<branch>` | number | Credit cap for the named branch, as set in the `branchBudgets` config key. Compare against `currentBranchCredits`. |
@@ -137,7 +143,7 @@ Group rules so you can toggle a whole set at once:
 
 ### Copilot restrictions
 
-Restrictions show popups to interrupt your workflow when a rule fires. No extensions are ever disabled. Popups fire only when at least one rule has a `restrict` block.
+Restrictions interrupt your workflow when a rule fires.
 
 ```json
 {
@@ -151,13 +157,13 @@ Restrictions show popups to interrupt your workflow when a rule fires. No extens
 
 | Field | Values | Description |
 | --- | --- | --- |
-| `mode` | `"soft"` \| `"hard"` | `soft` shows a dismissable warning with Dismiss / Snooze options. `hard` shows a persistent error popup with no buttons — it re-fires on every snapshot refresh while the rule condition is still true. |
-| `scope` | `"copilot"` \| `"copilot+lab"` \| `"custom"` | Informational scope tag (no extensions are disabled). |
-| `graceMinutes` | 0–1440 | Minutes before the popup fires after the condition becomes true. |
+| `mode` | `"soft"` \| `"hard"` | `soft` shows a dismissable warning notification. `hard` disables the extensions in `scope` and shows a persistent error notification — it re-fires on every snapshot refresh while the condition is true. |
+| `scope` | `"copilot"` \| `"copilot+lab"` \| `"custom"` | Extensions disabled in `hard` mode. `"copilot"` disables `github.copilot` and `github.copilot-chat`; `"copilot+lab"` also includes Labs and Nightly builds; `"custom"` uses the `mallard.copilotExtensions` VS Code setting (empty list by default). Has no effect in `soft` mode. |
+| `graceMinutes` | 0–1440 | Minutes to wait after the condition becomes true before the restriction activates. |
 
-**Soft restriction** — the warning popup offers **Dismiss** (closes once) and **Snooze 15m** / **Snooze 1h** (suppresses for that duration).
+**Soft restriction** — shows a VS Code warning notification with **Dismiss** (closes once) and **Snooze** options. Does not disable any extensions.
 
-**Hard restriction** — the error popup has no buttons. The user can close it with ×, but it re-appears on the next snapshot refresh (`mallard.refreshIntervalMinutes`) as long as the rule condition remains true. This is intentionally persistent and disruptive.
+**Hard restriction** — disables the Copilot extensions listed in `scope` and shows an error notification. Re-fires on every snapshot refresh while the condition remains true.
 
 ## Dashboard layout
 
@@ -171,6 +177,9 @@ Run **Mallard: Prepare for Uninstall** before removing the extension to wipe all
 
 | Setting | Default | Description |
 | --- | --- | --- |
+| `mallard.currency` | `"USD"` | Display currency for cost amounts (e.g. `EUR`, `GBP`). Exchange rates are fetched daily. |
 | `mallard.copilotLogPath` | `""` | Override the log directory (blank = auto-detect). |
 | `mallard.pricingManifestUrl` | `""` | Override the pricing manifest URL. |
 | `mallard.palette` | `"swiss"` | `swiss` = fixed duotone; `theme` = VS Code theme colour. |
+| `mallard.refreshIntervalMinutes` | `10` | Snapshot refresh frequency in minutes (1–60). |
+| `mallard.dataRetentionDays` | `90` | Days of raw events to keep before daily rollup (30–365). |
