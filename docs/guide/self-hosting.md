@@ -37,7 +37,7 @@ flowchart LR
 
 The server is a single stateless FastAPI process. It accepts either:
 - **Webhook** — a `POST` to `/api/v1/ingest` with an `X-API-Key` header (or `Authorization: Bearer` for token-based auth, or a TLS client certificate for mTLS).
-- **MQTT** — a message published to `mallard/metrics` over a WebSocket-wrapped MQTT connection (`wss://your-server/mqtt`). The embedded amqtt broker runs inside the same process.
+- **MQTT** — a message published over a WebSocket-wrapped MQTT connection (`wss://your-server/mqtt`). The embedded amqtt broker accepts any topic — it doesn't filter by topic name, only by the authenticated client.
 
 InfluxDB stores every snapshot as a measurement named `mallard_metrics`. Grafana reads from InfluxDB via Flux queries and ships four pre-built dashboards: overview, per-model breakdown, team comparison, and velocity trends.
 
@@ -125,25 +125,11 @@ See [Settings reference](/reference/settings) for the full list of extension set
 
 ## Named credentials and the `source` tag
 
-Every API key and MQTT credential can carry a **label**. The label is written as the `source` tag on every InfluxDB data point, which lets you filter Grafana dashboards by team, machine, or person.
-
-Format: `label:secret` (comma-separated for multiple):
-
-```bash
-# .env
-API_KEYS=alice:key-abc123,bob:key-def456,ci-pipeline:key-ghi789
-MQTT_CREDENTIALS=alice:mqtt-pass1,ci-pipeline:mqtt-pass2
-```
-
-If you don't provide a label (bare key, no colon), the source tag is `"unknown"`.
-
-Querying by source in Flux:
-
-```flux
-from(bucket: "metrics")
-  |> range(start: -7d)
-  |> filter(fn: (r) => r["source"] == "alice")
-```
+Every API key and MQTT credential can carry a **label** (`label:secret`), written as the
+`source` tag on every InfluxDB data point — this is what lets you filter Grafana
+dashboards by team, machine, or person. See the
+[Auth & Identity Reference](/reference/extension-auth#named-credentials-and-the-source-tag)
+for the credential format, Flux query examples, and per-source Grafana filtering.
 
 ## MQTT configuration
 
@@ -229,21 +215,9 @@ See the [Secret Management guide](/guide/secret-management) for detailed setup s
 
 ## mTLS — client certificate auth (optional)
 
-Instead of API keys or passwords, the extension can authenticate with a TLS client certificate. The certificate's Common Name becomes the `source` tag in InfluxDB — no separate credential entry needed.
-
-Requires:
-- cert-manager with the `mallard-ca` ClusterIssuer (see [cert-manager guide](/guide/cert-manager))
-- The nginx mTLS annotations already in `server/k8s/ingress.yaml`
-
-Configure the extension:
-
-```json
-"mallard.server.url": "https://mallard.your-org.com",
-"mallard.export.transport": "webhook",
-"mallard.webhook.auth": "certificate",
-"mallard.shared.certificate.file": "/home/alice/.certs/alice.crt",
-"mallard.shared.certificate.keyFile": "/home/alice/.certs/alice.key",
-"mallard.shared.certificate.caFile": "/home/alice/.certs/mallard-ca.crt"
-```
-
-See [cert-manager guide — client certs](/guide/cert-manager#client-certificates) for how to issue and distribute client certificates per team member.
+Instead of API keys or passwords, the extension can authenticate with a TLS client
+certificate — the certificate's Common Name becomes the `source` tag in InfluxDB, no
+separate credential entry needed. Requires cert-manager with the `mallard-ca`
+ClusterIssuer and the nginx mTLS annotations already in `server/k8s/ingress.yaml`. See
+[cert-manager guide — client certificates](/guide/cert-manager#client-certificates) for
+issuing certificates and the extension config to use them.

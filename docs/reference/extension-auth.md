@@ -1,6 +1,6 @@
-# Authentication Reference
+# Authentication & Identity Reference
 
-The self-hosted Mallard server supports four authentication methods. The method you choose controls what the extension sends and what `source` label is written to InfluxDB.
+The self-hosted Mallard server supports four authentication methods. The method you choose controls what the extension sends and what `source` label is written to InfluxDB — the tag that lets Grafana dashboards break down spend by team member, machine, or CI pipeline without a separate configuration step per dashboard.
 
 ## Supported auth methods
 
@@ -67,36 +67,57 @@ kubectl get secret mallard-client-team-alpha-tls -n mallard \
   -o jsonpath='{.data.tls\.key}' | base64 -d > team-alpha.key
 ```
 
-## Extension settings (full schema)
+See the [Settings Reference](/reference/settings#webhook-auth) for the full list of
+`mallard.webhook.*`, `mallard.mqtt.*`, and `mallard.shared.certificate.*` settings.
 
-```jsonc
-{
-  // ── Server ──────────────────────────────────────────────────────────────────
-  "mallard.server.url": "https://your-server",
+## Named credentials and the `source` tag
 
-  // ── Transport ────────────────────────────────────────────────────────────────
-  "mallard.export.transport": "webhook",  // "webhook" | "mqtt"
+Every API key, MQTT password, and certificate maps to a `source` tag written on each
+InfluxDB data point:
 
-  // ── Webhook auth ─────────────────────────────────────────────────────────────
-  "mallard.webhook.auth": "apiKey",       // "apiKey" | "bearer" | "certificate"
-  "mallard.webhook.apiKey": "",           // used when auth = "apiKey"
-  "mallard.webhook.bearerToken": "",      // used when auth = "bearer"
-                                          // auth = "certificate" → uses shared cert below
+| Auth method | Source of the `source` tag |
+| --- | --- |
+| API key (static) | The label in `API_KEYS=label:key` |
+| MQTT password (static) | The label in `MQTT_CREDENTIALS=label:password` |
+| Bearer token | Treated as an API key — the label from the credential store |
+| mTLS client certificate | The Common Name (CN) field of the certificate |
+| Infisical / OpenBao | Same label format, fetched live from the secret store |
+| Unlabelled key (bare secret) | `"unknown"` |
 
-  // ── MQTT ─────────────────────────────────────────────────────────────────────
-  "mallard.mqtt.url": "",                 // override if different from server.url + /mqtt
-  "mallard.mqtt.auth": "password",        // "password" | "certificate"
-  "mallard.mqtt.username": "",            // used when auth = "password" (informational)
-  "mallard.mqtt.password": "",            // used when auth = "password"
-                                          // auth = "certificate" → uses shared cert below
+Format: `label:secret`, comma-separated for multiple identities:
 
-  // ── Shared certificate ────────────────────────────────────────────────────────
-  // Used by any transport/auth that sets auth = "certificate"
-  "mallard.shared.certificate.file": "",    // path to PEM client certificate
-  "mallard.shared.certificate.keyFile": "", // path to PEM private key
-  "mallard.shared.certificate.caFile": ""   // CA bundle to verify the server's TLS cert
-}
+```bash
+# .env (Docker Compose)
+API_KEYS=alice:key-abc123,bob:key-def456,ci-pipeline:key-ghi789
+MQTT_CREDENTIALS=alice:mqtt-pass1,ci-pipeline:mqtt-pass2
 ```
+
+Labels are arbitrary strings — usernames, machine names, team names, whatever fits your
+naming convention.
+
+## Querying by source in Flux
+
+```flux
+// Total credits used by Alice in the last 7 days
+from(bucket: "metrics")
+  |> range(start: -7d)
+  |> filter(fn: (r) => r["_measurement"] == "mallard_metrics" and r["source"] == "alice")
+  |> sum()
+
+// Compare spend across all team members in a single query
+from(bucket: "metrics")
+  |> range(start: -30d)
+  |> filter(fn: (r) => r["_measurement"] == "mallard_metrics")
+  |> group(columns: ["source"])
+  |> sum()
+```
+
+## Per-team Grafana dashboards
+
+The pre-built Grafana dashboards include a `source` variable that drives all panels.
+Select a source from the dropdown to filter the entire dashboard to one identity. To add
+a new source, add a new labelled credential — Grafana queries InfluxDB for the distinct
+list of `source` values dynamically, so no dashboard edit is needed.
 
 ## Auth precedence on the server (HTTP)
 
