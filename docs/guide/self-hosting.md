@@ -1,17 +1,18 @@
 # Self-hosted Server
 
-::: warning Security disclaimer — do your own research! 🦆
-I've put genuine effort into hardening this setup: constant-time credential comparison,
-non-root containers, rate limiting, mTLS, network policies, secret manager integration,
-input validation — the works. But I am **not a security professional**, and a
-self-review is not a penetration test.
+::: warning Security notice
+This configuration has been designed with security in mind — constant-time credential
+comparison, non-root containers, rate limiting, mTLS, network policies, and secret
+manager integration are all included. That said, this project is maintained by a
+developer, not a security engineer, and no independent audit has been performed.
 
-The CI pipeline runs Trivy, Kubescape, and Docker Scout on every push, but automated
-scanners only catch what they know about. Before you expose this server to the internet
-with real credentials, please review the K8s manifests, Caddyfile, and auth config
-yourself — or have someone you trust look them over.
+Automated scanning (Trivy, Kubescape, Docker Scout) runs on every CI push, but
+tooling is not a substitute for human review. Before deploying to a production
+environment with real credentials, please read through the manifests and auth
+configuration yourself, or have a qualified person do so.
 
-**DYOR. Not financial security advice.** 🦆
+*The author takes no responsibility for security incidents arising from use of this
+software. Please conduct your own due diligence.*
 :::
 
 Mallard ships an optional ingest server that receives metric payloads from one or more extension instances, stores them in InfluxDB v2, and visualises them in Grafana. The extension works fine without it — self-hosting is for teams that want a centralised dashboard or want to keep data under their own control.
