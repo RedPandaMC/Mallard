@@ -27,6 +27,11 @@ services:
       retries: 10
     cap_add:
       - IPC_LOCK
+    # Must share a network with `server` (see the `server` service override
+    # below) so it can resolve the `openbao` hostname — without this it lands
+    # on Compose's separate auto-created default network instead.
+    networks:
+      - internal
 
   openbao-init:
     image: quay.io/openbao/openbao:2.5.5
@@ -39,16 +44,26 @@ services:
       API_KEYS: ${API_KEYS:-}
       MQTT_CREDENTIALS: ${MQTT_CREDENTIALS:-}
       INFLUX_TOKEN: ${INFLUX_TOKEN:-}
+    # No `bao secrets enable -path=secret kv-v2` step: -dev mode already
+    # auto-mounts a kv-v2 backend at secret/, so enabling it again fails with
+    # "path is already in use at secret/".
+    #
+    # The whole `bao kv put ...` invocation must stay on a single line here.
+    # An earlier draft spread its api_keys=/mqtt_credentials=/influx_token=
+    # arguments across more-indented continuation lines, which YAML's folded
+    # block scalar (`>`) does NOT join to the command with a space — it keeps
+    # each as a literal newline-separated line. Each one silently became its
+    # own no-op shell assignment statement instead of an argument to `bao kv
+    # put`, so the secret was written with zero fields even though the
+    # container still printed "OpenBao seeded successfully" and exited 0.
     entrypoint: >
       sh -c "
-        bao secrets enable -path=secret kv-v2 &&
-        bao kv put secret/mallard/server
-          api_keys=\"$${API_KEYS}\"
-          mqtt_credentials=\"$${MQTT_CREDENTIALS}\"
-          influx_token=\"$${INFLUX_TOKEN}\" &&
+        bao kv put secret/mallard/server api_keys=\"$${API_KEYS}\" mqtt_credentials=\"$${MQTT_CREDENTIALS}\" influx_token=\"$${INFLUX_TOKEN}\" &&
         echo 'OpenBao seeded successfully'
       "
     restart: "no"
+    networks:
+      - internal
 
   server:
     environment:
