@@ -206,7 +206,9 @@ class TestMakeClient:
             influx_token="mytoken",
             influx_org="myorg",
             influx_bucket="mybucket",
-            api_keys="k1",
+            secret_manager_type="openbao",
+            secret_manager_url="http://sm.example",
+            secret_manager_token="sm-token",
         )
 
         with patch("server.influx.InfluxDBClient") as MockClient:

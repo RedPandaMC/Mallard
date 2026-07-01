@@ -580,12 +580,6 @@ class TestCreateVerifierFactory:
         s.secret_manager_type = sm_type
         return s
 
-    def test_empty_type_returns_static(self) -> None:
-        from server.credential_verifier import StaticCredentialVerifier, create_verifier
-
-        result = create_verifier(self._make_settings(""))
-        assert isinstance(result, StaticCredentialVerifier)
-
     def test_infisical_type_returns_infisical(self) -> None:
         from server.credential_verifier import InfisicalCredentialVerifier, create_verifier
 

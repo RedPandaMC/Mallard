@@ -14,11 +14,9 @@ spec:
             - secretRef:
                 name: mallard-server-secrets
             - secretRef:
-                name: mallard-infisical-secrets
+                name: mallard-openbao-secrets
           env:
             - name: SECRET_MANAGER_TYPE
-              value: "infisical"
+              value: "openbao"
             - name: SECRET_MANAGER_URL
-              value: "http://infisical.infisical.svc.cluster.local/api"
-            - name: INFISICAL_ENV_SLUG
-              value: "prod"
+              value: "http://openbao.openbao.svc.cluster.local:8200"

@@ -4,7 +4,7 @@ A self-hosted ingest server for the Mallard VS Code extension. It receives metri
 
 ## Quick starts
 
-See the [Self-hosted server guide](https://redpandamc.github.io/Mallard/guide/self-hosting) on the docs site for Docker Compose and Kubernetes quickstarts.
+A secret manager is required — there is no supported static-credentials-only deployment. Pick Infisical or OpenBao first, then follow the Docker Compose or Kubernetes quickstart for that choice on the [Self-hosted server guide](https://redpandamc.github.io/Mallard/guide/self-hosting) on the docs site.
 
 ## Architecture
 
@@ -31,11 +31,9 @@ All settings are environment variables. In Docker Compose, set them in `.env`. I
 | `INFLUX_TOKEN` | yes | none | InfluxDB API token with write access to the bucket |
 | `INFLUX_ORG` | no | `mallard` | InfluxDB organisation |
 | `INFLUX_BUCKET` | no | `metrics` | InfluxDB bucket |
-| `API_KEYS` | yes* | none | `label:key` pairs, comma-separated (e.g. `team-alpha:abc123`) |
+| `API_KEYS` | no | `""` | `label:key` pairs, comma-separated. Only meaningful for OpenBao's seed step or for constructing a `StaticCredentialVerifier` directly in tests — the running server always reads credentials from the configured secret manager. |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG\|INFO\|WARNING\|ERROR\|CRITICAL` |
 | `RATE_LIMIT` | no | `60/minute` | Per-key rate limit (slowapi format) |
-
-*Not required when using a secret manager (`SECRET_MANAGER_TYPE` ≠ `""`).
 
 ### MQTT
 
@@ -49,14 +47,16 @@ All settings are environment variables. In Docker Compose, set them in `.env`. I
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `SECRET_MANAGER_TYPE` | no | `""` | `""` (static env) \| `"infisical"` \| `"openbao"` |
-| `SECRET_MANAGER_URL` | no | none | Base URL of the secret manager instance |
-| `SECRET_MANAGER_TOKEN` | no | none | Auth token for the secret manager |
+| `SECRET_MANAGER_TYPE` | **yes** | none | `"infisical"` \| `"openbao"` — the server refuses to start without one |
+| `SECRET_MANAGER_URL` | **yes** | none | Base URL of the secret manager instance |
+| `SECRET_MANAGER_TOKEN` | **yes** | none | Auth token for the secret manager |
 | `SECRET_MANAGER_CA_CERT_PATH` | no | none | Path to CA cert for TLS verification |
-| `INFISICAL_PROJECT_ID` | no | none | Infisical project UUID |
+| `INFISICAL_PROJECT_ID` | **yes, if Infisical** | none | Infisical project UUID |
 | `INFISICAL_ENV_SLUG` | no | `prod` | Infisical environment slug |
 | `OPENBAO_SECRET_PATH` | no | `secret/data/mallard/server` | KV path in OpenBao |
 | `OPENBAO_NAMESPACE` | no | `""` | OpenBao namespace (leave empty for community edition) |
+
+Missing any of the required fields above fails `Settings()` validation at startup with a clear error, rather than failing obscurely on the first ingest request.
 
 ---
 
@@ -103,14 +103,14 @@ cert-manager automates TLS. See `server/k8s/cert-manager/README.md` for issuer s
 
 ## Secret management
 
-Two self-hosted secret managers are supported as optional overlays:
+Pick one of the two self-hosted secret managers below; there is no supported way to run the server without one.
 
 | Manager | K8s | Docker Compose |
 |---|---|---|
 | Infisical | `kubectl apply -k server/k8s/infisical/`, see `server/k8s/infisical/README.md` | `docker compose -f docker-compose.yml -f docker-compose.infisical.yml up -d` |
 | OpenBao | `kubectl apply -k server/k8s/openbao/`, see `server/k8s/openbao/install.md` | `docker compose -f docker-compose.yml -f docker-compose.openbao.yml up -d` |
 
-When a secret manager is active, `API_KEYS` and `MQTT_CREDENTIALS` env vars are ignored; credentials are fetched from the manager with a 30-second TTL cache. Rotation requires no restart.
+Credentials are fetched from the manager with a 30-second TTL cache; rotation requires no restart. See the Secret Management guide on the docs site for a pros/cons and licensing comparison between the two.
 
 ---
 
