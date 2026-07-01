@@ -53,8 +53,12 @@ services:
   # ── Mallard FastAPI ingest server ───────────────────────────────────────────
   server:
     build:
-      context: ..
-      dockerfile: Dockerfile
+      # Repo root: the Dockerfile's COPY instructions (src/server/*.py,
+      # src/server/routers/, pyproject.toml) are written relative to repo
+      # root, matching how server.yml's build-push job builds this same
+      # image (`context: .` from a repo-root checkout, `file: src/server/Dockerfile`).
+      context: ../../..
+      dockerfile: src/server/Dockerfile
     restart: unless-stopped
     environment:
       INFLUX_URL: http://influxdb:8086
