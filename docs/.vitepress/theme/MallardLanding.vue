@@ -14,7 +14,7 @@ const stack = [
   ['FastAPI', 'single stateless process, webhook + MQTT ingest'],
   ['InfluxDB v2', 'time-series storage, line protocol write'],
   ['Grafana', '4 pre-built dashboards: overview, model, team, velocity'],
-  ['cert-manager', 'HTTPS auto-renewal + mTLS client certificate issuance'],
+  ['Caddy / cert-manager', 'automatic HTTPS: Caddy for Docker Compose, cert-manager for Kubernetes'],
   ['Infisical / OpenBao', 'live credential rotation without container restarts'],
 ];
 </script>
@@ -69,8 +69,10 @@ const stack = [
       <div class="ml-server-head"><span>Self-hosted server</span><span class="ml-num">Optional</span></div>
       <div class="ml-server-body">
         <div class="ml-server-l">
-          <p class="ml-server-desc">Deploy the ingest stack to a $5 VPS or your Kubernetes cluster. Every team member's spend, model mix, and velocity in a shared Grafana dashboard, filtered by the <code>source</code> tag that labels each credential.</p>
+          <p class="ml-server-desc">Run <code>docker compose up</code> on a $5 VPS to get going in minutes, or deploy the same stack to Kubernetes when you need to scale out. Every team member's spend, model mix, and velocity in a shared Grafana dashboard, filtered by the <code>source</code> tag that labels each credential.</p>
           <div class="ml-server-transports">
+            <span class="ml-pill">Docker Compose</span>
+            <span class="ml-pill">Kubernetes</span>
             <span class="ml-pill">Webhook</span>
             <span class="ml-pill">MQTT / WSS</span>
             <span class="ml-pill">mTLS</span>
