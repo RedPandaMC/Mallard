@@ -34,7 +34,7 @@ kubectl wait --namespace cert-manager \
 ## Applying the ClusterIssuers
 
 ::: warning Before you apply
-The ClusterIssuer files contain `admin@example.com` as a placeholder. **Replace it with your real email address** before applying — Let's Encrypt uses this to send expiry notifications and will reject the application otherwise.
+The ClusterIssuer files contain `admin@example.com` as a placeholder. **Replace it with your real email address** before applying. Let's Encrypt uses this to send expiry notifications and will reject the application otherwise.
 
 ```bash
 # Replace the placeholder with your actual email
@@ -51,8 +51,8 @@ This creates four ClusterIssuers and the reusable client certificate template:
 
 | Resource | Purpose |
 |---|---|
-| `letsencrypt-staging` | ACME staging (no rate limits — use this first to verify your setup) |
-| `letsencrypt-prod` | ACME production (trusted by browsers — used by `ingress.yaml`) |
+| `letsencrypt-staging` | ACME staging (no rate limits, use this first to verify your setup) |
+| `letsencrypt-prod` | ACME production (trusted by browsers, used by `ingress.yaml`) |
 | `selfsigned` | Self-signed (for air-gapped clusters or local dev) |
 | `mallard-ca` | Internal CA for issuing mTLS client certificates |
 | `client-cert-template.yaml` | Example Certificate resource for one team member |
@@ -67,10 +67,10 @@ cert-manager.io/cluster-issuer: letsencrypt-prod   # change to staging or selfsi
 
 **When to use each issuer:**
 
-- `letsencrypt-staging` — use this first. Certificates are not trusted by browsers but there are no rate limits. Verify that ACME DNS/HTTP challenge works before switching to prod.
-- `letsencrypt-prod` — for production. Rate limited (5 failed validations per hostname per hour). Requires your domain to be publicly reachable via HTTP.
-- `selfsigned` — for air-gapped clusters or local development where you control all clients. Clients must trust the cert manually.
-- `mallard-ca` — only for issuing mTLS client certificates (see below). Do not use this for the ingress.
+- `letsencrypt-staging`: use this first. Certificates are not trusted by browsers but there are no rate limits. Verify that ACME DNS/HTTP challenge works before switching to prod.
+- `letsencrypt-prod`: for production. Rate limited (5 failed validations per hostname per hour). Requires your domain to be publicly reachable via HTTP.
+- `selfsigned`: for air-gapped clusters or local development where you control all clients. Clients must trust the cert manually.
+- `mallard-ca`: only for issuing mTLS client certificates (see below). Do not use this for the ingress.
 
 ## Checking certificate status
 
@@ -90,7 +90,7 @@ Common failure causes:
 
 ## mTLS client certificates {#client-certificates}
 
-mTLS lets the VS Code extension authenticate with a certificate instead of an API key or password. The certificate's **Common Name (CN)** becomes the `source` tag on every InfluxDB data point — no separate credential entry is needed in `API_KEYS`.
+mTLS lets the VS Code extension authenticate with a certificate instead of an API key or password. The certificate's **Common Name (CN)** becomes the `source` tag on every InfluxDB data point, so no separate credential entry is needed in `API_KEYS`.
 
 The nginx ingress is already annotated in `server/k8s/ingress.yaml` to:
 1. Accept (but not require) a client certificate.
@@ -191,4 +191,4 @@ cert-manager is Kubernetes-only. For Docker Compose, Caddy handles HTTPS automat
 
 - **Public domain**: set `SERVER_DOMAIN` and `ACME_EMAIL` in `.env`. Caddy uses the ACME HTTP-01 challenge.
 - **Local dev**: Caddy issues a self-signed cert. Browsers will warn; you can trust it manually or add it to your system trust store.
-- **mTLS on Docker Compose**: supported via the `client_auth` block in the Caddyfile — see `server/docker/Caddyfile` for configuration details.
+- **mTLS on Docker Compose**: supported via the `client_auth` block in the Caddyfile. See `server/docker/Caddyfile` for configuration details.

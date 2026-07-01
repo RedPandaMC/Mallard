@@ -70,7 +70,7 @@ Each publish sends a single JSON object, built by `buildMetricPayload` and publi
 | `model_dist` | `Record<string, number>` | Fraction of credits attributable to each model (sums to ≤1). |
 | `surface_dist` | `Record<string, number>` | Fraction of credits attributable to each surface (sums to ≤1). |
 | `cost_dist` | `Record<string, number>` | Fraction of cost attributable to each cost category (sums to ≤1). |
-| `input_cost_ratio` | `number` | Deprecated — input/(input+output) cost ratio only. Use `cost_dist['input']` instead. |
+| `input_cost_ratio` | `number` | Deprecated: input/(input+output) cost ratio only. Use `cost_dist['input']` instead. |
 | `credits_velocity_per_hour` | `number` | Credits used today divided by hours elapsed since midnight. |
 | `mtd_budget_pct` | `number` | Month-to-date credits used as a fraction of the monthly budget (0 when no budget is set). |
 | `repo_count` | `number` | Number of distinct repositories observed (count only, no names). |
@@ -86,7 +86,7 @@ Each publish sends a single JSON object, built by `buildMetricPayload` and publi
 | `source_connector` | `string` | Primary data source (`"copilot"`, `"claude-code"`, `"mixed"`, or `"none"`). |
 
 > [!WARNING]
-> This payload does not match the self-hosted server's `IngestPayload` schema (no `instance_id`, no `today_credits`/`mtd_credits`/etc., and `ts` is a string here vs. an int there). Sending it to a stock Mallard server currently fails validation — see [issue tracker](https://github.com/RedPandaMC/Mallard/issues) before relying on this in production.
+> This payload does not match the self-hosted server's `IngestPayload` schema (no `instance_id`, no `today_credits`/`mtd_credits`/etc., and `ts` is a string here vs. an int there). Sending it to a stock Mallard server currently fails validation. See [issue tracker](https://github.com/RedPandaMC/Mallard/issues) before relying on this in production.
 
 ### Webhook example (API key)
 

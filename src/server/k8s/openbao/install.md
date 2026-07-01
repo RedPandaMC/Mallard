@@ -73,7 +73,7 @@ bao kv put secret/mallard/server \
 
 The server's `OpenBaoCredentialVerifier` re-fetches the store within 30 seconds (configurable via `SECRET_MANAGER_TTL`).  No pod restart needed.
 
-To immediately revoke a token, use `bao token revoke <token>` — the next request will fail auth.
+To immediately revoke a token, use `bao token revoke <token>`. The next request will fail auth.
 
 ## Environment variables
 

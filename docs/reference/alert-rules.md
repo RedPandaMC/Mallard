@@ -10,9 +10,9 @@ Every field, operator, and context path available in a `config.json` rule.
 | `severity` | yes | `"info"`, `"warning"`, or `"critical"`. |
 | `message` | yes | Notification text. Supports <code v-pre>{{ field.path }}</code> placeholders. |
 | `when` | yes | Condition that must be true for the rule to fire. |
-| `active` | no | Gate — rule is skipped unless this condition is true. |
+| `active` | no | Gate: rule is skipped unless this condition is true. |
 | `cooldown` | no | Min time between firings: `"30m"`, `"4h"`, `"1d"`, `"1w"`. Default `1h`. |
-| `restrict` | no | Copilot restriction block — see [Restriction fields](#restriction-fields). |
+| `restrict` | no | Copilot restriction block. See [Restriction fields](#restriction-fields). |
 
 ## Condition operators
 
@@ -20,7 +20,7 @@ Every field, operator, and context path available in a `config.json` rule.
 | --- | --- |
 | `>` `>=` `<` `<=` `==` `!=` | `{ ">": [{ "var": "today.credits" }, 100] }` |
 | `and` / `or` / `not` | `{ "and": [cond, cond] }` · `{ "not": cond }` |
-| `var` | `{ "var": "today.credits" }` — dot-path into the live context |
+| `var` | `{ "var": "today.credits" }`: dot-path into the live context |
 | literal | `true` (always fire) · `false` (never fire) |
 
 ## Context fields
@@ -62,6 +62,6 @@ Every field, operator, and context path available in a `config.json` rule.
 
 | Field | Values | Description |
 | --- | --- | --- |
-| `mode` | `"soft"` \| `"hard"` | `soft` shows a dismissable warning notification. `hard` disables the extensions in `scope` and shows a persistent error notification — it re-fires on every snapshot refresh while the condition is true. |
+| `mode` | `"soft"` \| `"hard"` | `soft` shows a dismissable warning notification. `hard` disables the extensions in `scope` and shows a persistent error notification; it re-fires on every snapshot refresh while the condition is true. |
 | `scope` | `"copilot"` \| `"copilot+lab"` \| `"custom"` | Extensions disabled in `hard` mode. `"copilot"` disables `github.copilot` and `github.copilot-chat`; `"copilot+lab"` also includes Labs and Nightly builds; `"custom"` uses the `mallard.copilotExtensions` VS Code setting (empty list by default). Has no effect in `soft` mode. |
 | `graceMinutes` | 0–1440 | Minutes to wait after the condition becomes true before the restriction activates. |

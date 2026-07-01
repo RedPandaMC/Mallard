@@ -36,7 +36,7 @@ Rules live in the `rules` array. Each rule fires a VS Code notification and opti
   "rules": [{
     "id": "velocity-warning",
     "severity": "warning",
-    "message": "High velocity ({{velocity.creditsPerHour}} cr/h) — not on weekends.",
+    "message": "High velocity ({{velocity.creditsPerHour}} cr/h), not on weekends.",
     "when": {
       "and": [
         { ">":  [{ "var": "velocity.creditsPerHour" }, 40] },
@@ -102,9 +102,9 @@ Restrictions interrupt your workflow when a rule fires.
 }
 ```
 
-**Soft restriction** — shows a VS Code warning notification with **Dismiss** (closes once) and **Snooze** options. Does not disable any extensions.
+**Soft restriction**: shows a VS Code warning notification with **Dismiss** (closes once) and **Snooze** options. Does not disable any extensions.
 
-**Hard restriction** — disables the Copilot extensions listed in `scope` and shows an error notification. Re-fires on every snapshot refresh while the condition remains true.
+**Hard restriction**: disables the Copilot extensions listed in `scope` and shows an error notification. Re-fires on every snapshot refresh while the condition remains true.
 
 ## Dashboard layout
 

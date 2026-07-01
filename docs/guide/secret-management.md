@@ -9,7 +9,7 @@ Dynamic secret managers solve both problems. The server fetches live credentials
 - Adding a key → visible within 30 seconds, no restart.
 - Revoking a key → rejected within 30 seconds, no restart.
 
-Two self-hosted providers are supported: **Infisical** and **OpenBao**. Both are open-source and run entirely on your infrastructure — no vendor cloud required.
+Two self-hosted providers are supported: **Infisical** and **OpenBao**. Both are open-source and run entirely on your infrastructure, with no vendor cloud required.
 
 ## Choosing a secret manager
 
@@ -26,8 +26,8 @@ Two self-hosted providers are supported: **Infisical** and **OpenBao**. Both are
 When `SECRET_MANAGER_TYPE` is set, the server instantiates either `InfisicalCredentialVerifier` or `OpenBaoCredentialVerifier`. Both share the same caching layer:
 
 1. On the first inbound request after startup (or after the 30-second TTL expires), the verifier fetches the secret store.
-2. The fetched store is kept in memory for 30 seconds. All requests within that window read from the cache — no network round-trip.
-3. After 30 seconds, the next request triggers a background refresh. If the refresh fails (provider unreachable), the old cache is retained and an error is logged — the server keeps serving.
+2. The fetched store is kept in memory for 30 seconds. All requests within that window read from the cache, with no network round-trip.
+3. After 30 seconds, the next request triggers a background refresh. If the refresh fails (provider unreachable), the old cache is retained and an error is logged; the server keeps serving.
 
 The credential format expected from the secret manager is identical to the static `.env` format:
 
@@ -44,7 +44,7 @@ MQTT_CREDENTIALS=label:password,...
 
 ```bash
 cd server/docker
-# Copy and edit .env — also set the Infisical bootstrap variables below
+# Copy and edit .env, also set the Infisical bootstrap variables below
 cp .env.example .env
 
 docker compose -f docker-compose.yml -f docker-compose.infisical.yml up -d
@@ -56,7 +56,7 @@ docker compose -f docker-compose.yml -f docker-compose.infisical.yml up -d
 SECRET_MANAGER_TYPE=infisical
 SECRET_MANAGER_URL=http://infisical:8080
 
-# Machine identity token — create in the Infisical UI under
+# Machine identity token: create in the Infisical UI under
 # Project > Machine Identities > Universal Auth
 SECRET_MANAGER_TOKEN=your-machine-token
 
@@ -128,7 +128,7 @@ kubectl logs -n mallard deploy/mallard-server | grep "credential store refreshed
 
 ### Docker Compose
 
-The `docker-compose.openbao.yml` overlay starts OpenBao in dev mode (in-memory, no persistence — for production use a real OpenBao/Vault cluster) and an `openbao-init` one-shot container that seeds secrets from your `.env`.
+The `docker-compose.openbao.yml` overlay starts OpenBao in dev mode (in-memory, no persistence; for production use a real OpenBao/Vault cluster) and an `openbao-init` one-shot container that seeds secrets from your `.env`.
 
 ```bash
 cd server/docker
@@ -141,7 +141,7 @@ docker compose -f docker-compose.yml -f docker-compose.openbao.yml up -d
 SECRET_MANAGER_TYPE=openbao
 SECRET_MANAGER_URL=http://openbao:8200
 
-# Root token (dev mode — change for production)
+# Root token (dev mode; change for production)
 SECRET_MANAGER_TOKEN=root
 
 # Optional: KV path to read credentials from
@@ -160,7 +160,7 @@ bao kv get secret/mallard/server
 
 # Add or rotate a key
 bao kv patch secret/mallard/server api_keys="alice:new-key,bob:key-def456"
-# The server picks up the change within 30 seconds — no restart needed
+# The server picks up the change within 30 seconds, no restart needed
 ```
 
 ### Kubernetes

@@ -37,7 +37,7 @@ Alternative to `X-API-Key`. Send as:
 Authorization: Bearer <token>
 ```
 
-The token value is treated identically to an API key — it goes through the same hash lookup. This allows the extension to use a token obtained from an IdP (Infisical machine token, OpenBao token, OAuth access token) directly.
+The token value is treated identically to an API key: it goes through the same hash lookup. This allows the extension to use a token obtained from an IdP (Infisical machine token, OpenBao token, OAuth access token) directly.
 
 ---
 
@@ -45,7 +45,7 @@ The token value is treated identically to an API key — it goes through the sam
 
 **Extension settings:** `mallard.mqtt.username`, `mallard.mqtt.password`
 
-Sent as the MQTT CONNECT `password` field over `wss://<host>/mqtt`. The `username` field is accepted but the server only validates the password. Credential format: `label:password` — same structure as API key.
+Sent as the MQTT CONNECT `password` field over `wss://<host>/mqtt`. The `username` field is accepted but the server only validates the password. Credential format: `label:password`, same structure as API key.
 
 ---
 
@@ -55,7 +55,7 @@ Sent as the MQTT CONNECT `password` field over `wss://<host>/mqtt`. The `usernam
 
 The extension presents a client certificate when establishing the TLS connection. The certificate must be issued by the server operator using the `mallard-ca` ClusterIssuer (see [cert-manager.md](cert-manager.md)).
 
-The CN (Common Name) field of the certificate becomes the `source` tag — no separate API key is needed.
+The CN (Common Name) field of the certificate becomes the `source` tag; no separate API key is needed.
 
 **Server side:**
 - nginx Ingress: `auth-tls-*` annotations forward `SSL_CLIENT_S_DN_CN` as a request header.

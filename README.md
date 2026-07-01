@@ -86,7 +86,7 @@ See [Settings reference](docs/reference/settings.md) for the full schema and exa
 | `Mallard: Show Detected Log Path` | Show where Mallard is looking for Copilot logs. |
 | `Mallard: Sign In to GitHub` | Connect GitHub billing for the authoritative usage charge. |
 | `Mallard: Export Monthly Report` | Save a standalone HTML report of the current snapshot. |
-| `Mallard: Simulate Restriction` | Dry-run restriction evaluation — shows which rules would fire. |
+| `Mallard: Simulate Restriction` | Dry-run restriction evaluation: shows which rules would fire. |
 
 ## Alert rules quick-start
 
@@ -101,14 +101,14 @@ bundled schema wires up autocompletion automatically.
     {
       "id": "daily-high",
       "severity": "warning",
-      "message": "{{today.credits}} credits used today — slow down.",
+      "message": "{{today.credits}} credits used today, slow down.",
       "when": { ">": [{ "var": "today.credits" }, 100] },
       "cooldown": "2h"
     },
     {
       "id": "budget-exhausted",
       "severity": "critical",
-      "message": "Monthly budget exhausted — Copilot disabled.",
+      "message": "Monthly budget exhausted. Copilot disabled.",
       "when": { ">=": [{ "var": "budget.percentOfBudget" }, 1] },
       "restrict": {
         "mode": "hard",
