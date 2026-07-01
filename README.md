@@ -3,7 +3,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="media/brand/readme-banner-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="media/brand/readme-banner-light.png">
-  <img src="media/brand/readme-banner-light.png" alt="Mallard — GitHub Copilot cost tracker for VS Code" width="480" style="max-width:100%" />
+  <img src="media/brand/readme-banner-light.png" alt="Mallard, a GitHub Copilot cost tracker for VS Code" width="480" style="max-width:100%" />
 </picture>
 
 **Know exactly what GitHub Copilot is costing you.**
@@ -14,15 +14,13 @@
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/RedPandaMC.mallard)](https://marketplace.visualstudio.com/items?itemName=RedPandaMC.mallard)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-`COPILOT SPEND PLUGIN` · local-first, no sign-in
-
 </div>
 
 ---
 
-Mallard is a VS Code extension that turns GitHub Copilot's local usage logs into a live cost dashboard — today's spend, month-to-date, and a projected month-end total, broken down by model, surface, cost type, and repository. There's nothing to sign into and nothing to configure: install it, use Copilot, and watch the numbers update in real time. Connect GitHub billing later if you want the authoritative charge alongside Mallard's estimate.
+Mallard is a VS Code extension that turns GitHub Copilot's local usage logs into a live cost dashboard: today's spend, month-to-date, and a projected month-end total, broken down by model, surface, cost type, and repository. There's nothing to sign into and nothing to configure. Install it, use Copilot, and watch the numbers update in real time. Connect GitHub billing later if you want the authoritative charge alongside Mallard's estimate.
 
-Under the hood it's a DuckDB-backed dashboard with branch-aware spend tracking, programmable budget alerts, and optional Copilot restriction when a budget runs out — all running locally, with no telemetry and no external accounts required.
+Under the hood it's a DuckDB-backed dashboard with branch-aware spend tracking, programmable budget alerts, and optional Copilot restriction when a budget runs out, all running locally, with no telemetry and no external accounts required.
 
 ## Quick start
 
@@ -44,11 +42,11 @@ and set `mallard.copilotLogPath` if needed.
 
 The [documentation site](https://redpandamc.github.io/Mallard/) has the full picture:
 
-- [Features](https://redpandamc.github.io/Mallard/guide/features) — everything Mallard tracks and alerts on
-- [Getting started](https://redpandamc.github.io/Mallard/guide/getting-started) — installation and first-run walkthrough
-- [Configuration](https://redpandamc.github.io/Mallard/guide/configuration) — budgets, alert rules, and restriction modes
-- [Self-hosting](https://redpandamc.github.io/Mallard/guide/self-hosting) — the optional BYO server for cross-machine reporting
-- [Troubleshooting](https://redpandamc.github.io/Mallard/guide/troubleshooting) — fixes for common setup issues
+- [Features](https://redpandamc.github.io/Mallard/guide/features): everything Mallard tracks and alerts on
+- [Getting started](https://redpandamc.github.io/Mallard/guide/getting-started): installation and first-run walkthrough
+- [Configuration](https://redpandamc.github.io/Mallard/guide/configuration): budgets, alert rules, and restriction modes
+- [Self-hosting](https://redpandamc.github.io/Mallard/guide/self-hosting): the optional BYO server for cross-machine reporting
+- [Troubleshooting](https://redpandamc.github.io/Mallard/guide/troubleshooting): fixes for common setup issues
 - [Settings](https://redpandamc.github.io/Mallard/reference/settings), [Commands](https://redpandamc.github.io/Mallard/reference/commands), and [Alert rules](https://redpandamc.github.io/Mallard/reference/alert-rules) reference
 
 ## Development
