@@ -39,6 +39,16 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # influxdb's official entrypoint starts as root to initialize/own a fresh
+    # data volume before running influxd; cap_drop: ALL removes even root's
+    # ability to do that (mkdir/chown fail with "Permission denied" on first
+    # boot against a brand-new named volume) unless these are added back.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
     deploy:
       resources:
         limits:

@@ -6,6 +6,11 @@ services:
       - "8200:8200"
     environment:
       BAO_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+      # Without this, `bao status` (used by the healthcheck below) falls back
+      # to its default of https://127.0.0.1:8200 — but -dev mode serves plain
+      # HTTP (tls: "disabled"), so the healthcheck would fail even once the
+      # server is actually up and unsealed.
+      BAO_ADDR: "http://127.0.0.1:8200"
     healthcheck:
       # No `|| true`: dev-mode OpenBao exits 0 from `bao status` once it's up
       # and auto-unsealed, non-zero while still starting. The old `|| true`
