@@ -10,9 +10,9 @@
 
 [![CI](https://github.com/RedPandaMC/Mallard/actions/workflows/ci.yml/badge.svg)](https://github.com/RedPandaMC/Mallard/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/RedPandaMC/Mallard/branch/main/graph/badge.svg)](https://codecov.io/gh/RedPandaMC/Mallard)
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/RedPandaMC.mallard)](https://marketplace.visualstudio.com/items?itemName=RedPandaMC.mallard)
-[![Installs](https://img.shields.io/visual-studio-marketplace/i/RedPandaMC.mallard)](https://marketplace.visualstudio.com/items?itemName=RedPandaMC.mallard)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+[Available on the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=RedPandaMC.mallard)
 
 </div>
 
