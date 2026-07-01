@@ -129,7 +129,8 @@ class TestNormalizePayloadDispatch:
         never a hard failure."""
         metric = normalize_payload({"schema_version": 2, "today_credits": "oops-a-string"})
         assert metric.schema_version == 2
-        assert metric.today_credits is None  # uncoercible, dropped rather than guessed
+        assert metric.today_credits is None  # uncoercible, not guessed
+        assert metric.extra["today_credits"] == "oops-a-string"  # but not lost either
 
 
 class TestNormalizeUnknown:
@@ -142,18 +143,28 @@ class TestNormalizeUnknown:
         metric = normalize_unknown({"schema_version": 7, "mtd_credits": "not-a-number"})
         assert metric.mtd_credits is None
 
+    def test_uncoercible_known_field_is_preserved_in_extra(self) -> None:
+        """A known field name shouldn't disqualify its value from the same
+        preservation an actually-unknown field gets — losing it silently
+        would defeat the point of a tolerant reader."""
+        metric = normalize_unknown({"schema_version": 7, "mtd_credits": "not-a-number"})
+        assert metric.extra["mtd_credits"] == "not-a-number"
+
     def test_coerces_int_from_whole_float(self) -> None:
         metric = normalize_unknown({"schema_version": 7, "repo_count": 3.0})
         assert metric.repo_count == 3
+        assert "repo_count" not in metric.extra  # coerced successfully, not duplicated
 
     def test_rejects_non_integer_float_for_int_field(self) -> None:
         metric = normalize_unknown({"schema_version": 7, "repo_count": 3.5})
         assert metric.repo_count is None
+        assert metric.extra["repo_count"] == 3.5
 
     def test_bool_not_coerced_to_number(self) -> None:
         """bool is a subclass of int in Python — must not silently become 1/0."""
         metric = normalize_unknown({"schema_version": 7, "repo_count": True})
         assert metric.repo_count is None
+        assert metric.extra["repo_count"] is True
 
     def test_ts_falls_back_to_now_when_absent(self) -> None:
         metric = normalize_unknown({"schema_version": 7})
@@ -162,6 +173,20 @@ class TestNormalizeUnknown:
     def test_active_models_wrong_type_becomes_empty_list(self) -> None:
         metric = normalize_unknown({"schema_version": 7, "active_models": "not-a-list"})
         assert metric.active_models == []
+        assert metric.extra["active_models"] == "not-a-list"
+
+    def test_missing_field_is_not_added_to_extra(self) -> None:
+        """Absent and uncoercible are different: nothing to preserve when
+        the client never sent the field at all."""
+        metric = normalize_unknown({"schema_version": 7})
+        assert "mtd_credits" not in metric.extra
+
+    def test_empty_active_models_list_is_not_treated_as_a_failure(self) -> None:
+        """A genuinely empty list is a valid value, not a coercion failure —
+        it must not get duplicated into extra."""
+        metric = normalize_unknown({"schema_version": 7, "active_models": []})
+        assert metric.active_models == []
+        assert "active_models" not in metric.extra
 
 
 def test_known_schema_versions_sorted() -> None:

@@ -186,32 +186,53 @@ def normalize_unknown(raw: dict[str, Any]) -> NormalizedMetric:
     anything it can't confidently coerce is dropped from the typed fields
     but kept in `extra`, and never raises."""
     version = raw.get("schema_version")
-    active_models = raw.get("active_models")
+    extra = _extra_fields(raw, _BEST_EFFORT_KNOWN_FIELDS)
+
+    def coerce(name: str, coercer: Callable[[Any], Any]) -> Any:
+        """Coerce a known field by its raw key name. If the field was
+        present but didn't survive coercion, keep the original value in
+        `extra` instead of losing it outright — a name being "known"
+        shouldn't disqualify its value from the same preservation an
+        actually-unknown field gets."""
+        value = raw.get(name)
+        coerced = coercer(value)
+        if coerced is None and value is not None:
+            extra[name] = value
+        return coerced
+
+    active_models_raw = raw.get("active_models")
+    if isinstance(active_models_raw, list):
+        active_models = active_models_raw
+    else:
+        active_models = []
+        if active_models_raw is not None:
+            extra["active_models"] = active_models_raw
+
     return NormalizedMetric(
         schema_version=version if isinstance(version, int) else -1,
-        instance_id=_coerce_str(raw.get("instance_id")),
+        instance_id=coerce("instance_id", _coerce_str),
         ts_ms=_coerce_ts_ms(raw),
-        connector=_coerce_str(raw.get("source_connector")),
-        credits_velocity_per_hour=_coerce_float(raw.get("credits_velocity_per_hour")),
-        mtd_budget_pct=_coerce_float(raw.get("mtd_budget_pct")),
-        mtd_credits=_coerce_float(raw.get("mtd_credits")),
-        mtd_cost_usd=_coerce_float(raw.get("mtd_cost_usd")),
-        today_credits=_coerce_float(raw.get("today_credits")),
-        today_cost_usd=_coerce_float(raw.get("today_cost_usd")),
-        active_models=active_models if isinstance(active_models, list) else [],
-        top_model=_coerce_str(raw.get("top_model")),
-        repo_count=_coerce_int(raw.get("repo_count")),
-        peak_usage_hour=_coerce_int(raw.get("peak_usage_hour")),
-        daily_credit_variance=_coerce_float(raw.get("daily_credit_variance")),
-        model_count=_coerce_int(raw.get("model_count")),
-        surface_concentration=_coerce_float(raw.get("surface_concentration")),
-        estimated_event_ratio=_coerce_float(raw.get("estimated_event_ratio")),
-        forecast_basis=_coerce_str(raw.get("forecast_basis")),
-        budget_trend=_coerce_int(raw.get("budget_trend")),
-        token_per_credit=_coerce_float(raw.get("token_per_credit")),
-        forecast_low=_coerce_float(raw.get("forecast_low")),
-        forecast_high=_coerce_float(raw.get("forecast_high")),
-        extra=_extra_fields(raw, _BEST_EFFORT_KNOWN_FIELDS),
+        connector=coerce("source_connector", _coerce_str),
+        credits_velocity_per_hour=coerce("credits_velocity_per_hour", _coerce_float),
+        mtd_budget_pct=coerce("mtd_budget_pct", _coerce_float),
+        mtd_credits=coerce("mtd_credits", _coerce_float),
+        mtd_cost_usd=coerce("mtd_cost_usd", _coerce_float),
+        today_credits=coerce("today_credits", _coerce_float),
+        today_cost_usd=coerce("today_cost_usd", _coerce_float),
+        active_models=active_models,
+        top_model=coerce("top_model", _coerce_str),
+        repo_count=coerce("repo_count", _coerce_int),
+        peak_usage_hour=coerce("peak_usage_hour", _coerce_int),
+        daily_credit_variance=coerce("daily_credit_variance", _coerce_float),
+        model_count=coerce("model_count", _coerce_int),
+        surface_concentration=coerce("surface_concentration", _coerce_float),
+        estimated_event_ratio=coerce("estimated_event_ratio", _coerce_float),
+        forecast_basis=coerce("forecast_basis", _coerce_str),
+        budget_trend=coerce("budget_trend", _coerce_int),
+        token_per_credit=coerce("token_per_credit", _coerce_float),
+        forecast_low=coerce("forecast_low", _coerce_float),
+        forecast_high=coerce("forecast_high", _coerce_float),
+        extra=extra,
     )
 
 
