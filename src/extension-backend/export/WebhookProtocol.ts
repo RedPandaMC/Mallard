@@ -20,7 +20,7 @@ import * as https from 'https';
 import * as vscode from 'vscode';
 import pRetry, { AbortError } from 'p-retry';
 import type { RetryContext } from 'p-retry';
-import type { MetricProtocol } from './MetricExporter';
+import type { MetricProtocol, SendResult } from './MetricExporter';
 import { defaultLogger, Logger } from '../util/logger';
 
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -51,12 +51,17 @@ export class WebhookProtocol implements MetricProtocol {
     this.opts = opts;
   }
 
-  send(_topic: string, payload: Record<string, unknown>): void {
-    if (!this.active || !this.opts.url) return;
+  async send(_topic: string, payload: Record<string, unknown>): Promise<SendResult> {
+    if (!this.active || !this.opts.url) return { ok: false, retryable: false };
     const body = JSON.stringify(payload);
-    void this.post(body).catch((err: unknown) => {
+    try {
+      await this.post(body);
+      return { ok: true };
+    } catch (err) {
+      const retryable = !(err instanceof AbortError);
       this.logger.error('webhook', 'export failed:', (err as Error).message);
-    });
+      return { ok: false, retryable };
+    }
   }
 
   private async post(body: string): Promise<void> {

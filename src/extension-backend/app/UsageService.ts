@@ -285,7 +285,9 @@ export class UsageService implements vscode.Disposable {
     this.recordSample(now, next);
     this.fireAlerts(next, userConfig, now);
     this._onDidChange.fire(next);
-    this.exporter.export(next);
+    // intentionally not awaited — see ExportQueue; export() persists a durable
+    // retry queue on failure, so a slow/unreachable endpoint never blocks the UI.
+    void this.exporter.export(next);
   }
 
   /** Filtered path: all aggregations pushed to DuckDB; no raw event transfer. */
@@ -396,7 +398,9 @@ export class UsageService implements vscode.Disposable {
     this.recordSample(now, next);
     this.fireAlerts(next, userConfig, now);
     this._onDidChange.fire(next);
-    this.exporter.export(next);
+    // intentionally not awaited — see ExportQueue; export() persists a durable
+    // retry queue on failure, so a slow/unreachable endpoint never blocks the UI.
+    void this.exporter.export(next);
   }
 
   private recordSample(now: number, s: UsageSnapshot): void {

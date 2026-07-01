@@ -3,8 +3,12 @@
  *
  * MetricExporter.ts imports `vscode` (for MqttProtocol), so we cannot import
  * that file in the node unit-test runner. Instead:
- *   - The MetricExporter orchestrator is trivial (two lines); we test the DI
- *     contract with a local re-implementation using fakes.
+ *   - The MetricExporter orchestrator (flush-then-send against a queue) is
+ *     mirrored by a local re-implementation using a fake protocol — keep the
+ *     two in sync if the real algorithm changes.
+ *   - ExportQueue itself has no vscode/mqtt import, so it's used for real
+ *     here (against a temp dir) rather than faked a third time, so a bug fix
+ *     to the queue benefits both this suite and exportQueue.test.ts.
  *   - MetricPayloadSerializer lives in payload.ts which has only a type-only import
  *     of MetricSerializer, so it is safe to import here.
  *
@@ -12,37 +16,99 @@
  * by the integration test suite.
  */
 import { strict as assert } from 'assert';
+import { promises as fs } from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { MetricPayloadSerializer } from '../../src/extension-backend/export/payload';
 import { buildSnapshot } from '../../src/extension-backend/domain/snapshot';
 import { makeEvent } from './helpers';
-import type { MetricProtocol, MetricSerializer } from '../../src/extension-backend/export/MetricExporter';
+import { ExportQueue } from '../../src/extension-backend/export/ExportQueue';
+import type { MetricProtocol, MetricSerializer, SendResult } from '../../src/extension-backend/export/MetricExporter';
 
-// ── Minimal local re-implementation of MetricExporter (vscode-free) ──────────
+async function makeTmpDir(): Promise<string> {
+  return fs.mkdtemp(path.join(os.tmpdir(), 'mallard-metricexporter-test-'));
+}
+
+// ── Minimal local re-implementation of MetricExporter (vscode/mqtt-free) ─────
+// Mirrors MetricExporter.ts's flush-then-send algorithm.
 
 class MetricExporterStub {
+  private flushing = false;
+  private disposed = false;
   private protocol: MetricProtocol;
   private serializer: MetricSerializer;
-  constructor(protocol: MetricProtocol, serializer: MetricSerializer) {
+  private queue: ExportQueue | undefined;
+
+  constructor(protocol: MetricProtocol, serializer: MetricSerializer, queue?: ExportQueue) {
     this.protocol = protocol;
     this.serializer = serializer;
+    this.queue = queue;
   }
-  export(snapshot: Parameters<MetricSerializer['serialize']>[0]): void {
-    this.protocol.send(this.serializer.topic, this.serializer.serialize(snapshot));
+
+  async export(snapshot: Parameters<MetricSerializer['serialize']>[0]): Promise<void> {
+    if (this.flushing || this.disposed) return;
+    this.flushing = true;
+    try {
+      const stillDown = this.queue ? await this.flushQueue() : false;
+      if (this.disposed) return;
+
+      const topic = this.serializer.topic;
+      const payload = this.serializer.serialize(snapshot);
+
+      if (stillDown) {
+        this.queue?.enqueue(topic, payload);
+        return;
+      }
+
+      const result = await this.protocol.send(topic, payload);
+      if (this.disposed) return;
+      if (!result.ok && result.retryable) {
+        this.queue?.enqueue(topic, payload);
+      }
+    } finally {
+      this.flushing = false;
+    }
   }
-  dispose(): void { this.protocol.dispose(); }
+
+  private async flushQueue(): Promise<boolean> {
+    if (!this.queue) return false;
+    for (const entry of this.queue.peekAll()) {
+      const result = await this.protocol.send(entry.topic, entry.payload);
+      if (this.disposed) return true;
+      if (result.ok) {
+        this.queue.dequeue(entry.id);
+        continue;
+      }
+      if (result.retryable) return true;
+      this.queue.dequeue(entry.id);
+    }
+    return false;
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.protocol.dispose();
+  }
 }
 
 // ── Fakes ─────────────────────────────────────────────────────────────────────
 
 interface Call { topic: string; payload: Record<string, unknown> }
 
-function fakeProtocol(): MetricProtocol & { calls: Call[]; disposed: boolean } {
+/** Scripted results are consumed in order; once exhausted, further sends succeed. */
+function fakeProtocol(results: SendResult[] = []): MetricProtocol & { calls: Call[]; disposed: boolean } {
   const calls: Call[] = [];
   let disposed = false;
+  let i = 0;
   return {
     calls,
     get disposed() { return disposed; },
-    send(topic, payload) { calls.push({ topic, payload }); },
+    async send(topic, payload) {
+      calls.push({ topic, payload });
+      const result = i < results.length ? results[i]! : { ok: true as const };
+      i++;
+      return result;
+    },
     dispose() { disposed = true; },
   };
 }
@@ -79,23 +145,23 @@ function makeSnapshot() {
 // ── MetricExporter DI contract ────────────────────────────────────────────────
 
 describe('MetricExporter (DI orchestrator)', () => {
-  it('export() calls protocol.send with the serializer topic and payload', () => {
+  it('export() calls protocol.send with the serializer topic and payload', async () => {
     const protocol = fakeProtocol();
     const serializer = fakeSerializer('my/topic');
     const exporter = new MetricExporterStub(protocol, serializer);
 
-    exporter.export(makeSnapshot());
+    await exporter.export(makeSnapshot());
 
     assert.equal(protocol.calls.length, 1);
     assert.equal(protocol.calls[0]!.topic, 'my/topic');
     assert.ok('ts' in protocol.calls[0]!.payload);
   });
 
-  it('export() invokes serializer.serialize', () => {
+  it('export() invokes serializer.serialize', async () => {
     const protocol = fakeProtocol();
     const serializer = fakeSerializer();
     const exporter = new MetricExporterStub(protocol, serializer);
-    exporter.export(makeSnapshot());
+    await exporter.export(makeSnapshot());
     assert.equal(serializer.serializeCalled, true);
   });
 
@@ -106,13 +172,97 @@ describe('MetricExporter (DI orchestrator)', () => {
     assert.equal(protocol.disposed, true);
   });
 
-  it('multiple exports accumulate in protocol calls', () => {
+  it('multiple exports accumulate in protocol calls', async () => {
     const protocol = fakeProtocol();
     const exporter = new MetricExporterStub(protocol, fakeSerializer());
     const snap = makeSnapshot();
-    exporter.export(snap);
-    exporter.export(snap);
+    await exporter.export(snap);
+    await exporter.export(snap);
     assert.equal(protocol.calls.length, 2);
+  });
+});
+
+// ── MetricExporter + ExportQueue integration ─────────────────────────────────
+
+describe('MetricExporter (offline queue + retry)', () => {
+  it('a retryable failure enqueues the payload', async () => {
+    const dir = await makeTmpDir();
+    const queue = new ExportQueue(dir);
+    const protocol = fakeProtocol([{ ok: false, retryable: true }]);
+    const exporter = new MetricExporterStub(protocol, fakeSerializer(), queue);
+
+    await exporter.export(makeSnapshot());
+
+    assert.equal(queue.peekAll().length, 1);
+    await fs.rm(dir, { recursive: true });
+  });
+
+  it('a fatal (non-retryable) failure does not enqueue', async () => {
+    const dir = await makeTmpDir();
+    const queue = new ExportQueue(dir);
+    const protocol = fakeProtocol([{ ok: false, retryable: false }]);
+    const exporter = new MetricExporterStub(protocol, fakeSerializer(), queue);
+
+    await exporter.export(makeSnapshot());
+
+    assert.equal(queue.peekAll().length, 0);
+    await fs.rm(dir, { recursive: true });
+  });
+
+  it('flushes queued entries oldest-first before sending the new payload', async () => {
+    const dir = await makeTmpDir();
+    const queue = new ExportQueue(dir);
+    queue.enqueue('t', { n: 1 });
+    queue.enqueue('t', { n: 2 });
+    const protocol = fakeProtocol(); // everything succeeds
+    const exporter = new MetricExporterStub(protocol, fakeSerializer(), queue);
+
+    await exporter.export(makeSnapshot());
+
+    // two queued entries flushed, then the new payload sent — three sends total.
+    assert.equal(protocol.calls.length, 3);
+    assert.deepEqual(protocol.calls[0]!.payload, { n: 1 });
+    assert.deepEqual(protocol.calls[1]!.payload, { n: 2 });
+    assert.equal(queue.peekAll().length, 0);
+    await fs.rm(dir, { recursive: true });
+  });
+
+  it('stops flushing at the first still-retryable entry and skips the new send', async () => {
+    const dir = await makeTmpDir();
+    const queue = new ExportQueue(dir);
+    queue.enqueue('t', { n: 1 });
+    queue.enqueue('t', { n: 2 });
+    // First flush attempt fails (still down); would-be later calls aren't reached.
+    const protocol = fakeProtocol([{ ok: false, retryable: true }]);
+    const exporter = new MetricExporterStub(protocol, fakeSerializer(), queue);
+
+    await exporter.export(makeSnapshot());
+
+    // Only the first queued entry was attempted — the new payload was never sent,
+    // just enqueued directly behind the still-queued backlog, in order.
+    assert.equal(protocol.calls.length, 1);
+    const remaining = queue.peekAll();
+    assert.equal(remaining.length, 3, 'both original entries plus the new payload are queued');
+    assert.deepEqual(remaining[0]!.payload, { n: 1 });
+    assert.deepEqual(remaining[1]!.payload, { n: 2 });
+    assert.ok('ts' in remaining[2]!.payload, 'third entry is the new payload, appended last');
+    await fs.rm(dir, { recursive: true });
+  });
+
+  it('drops a fatal entry during flush and continues to the next one', async () => {
+    const dir = await makeTmpDir();
+    const queue = new ExportQueue(dir);
+    queue.enqueue('t', { n: 1 });
+    queue.enqueue('t', { n: 2 });
+    const protocol = fakeProtocol([{ ok: false, retryable: false }, { ok: true }]);
+    const exporter = new MetricExporterStub(protocol, fakeSerializer(), queue);
+
+    await exporter.export(makeSnapshot());
+
+    // entry 1 dropped (fatal), entry 2 flushed, then the new payload sent.
+    assert.equal(protocol.calls.length, 3);
+    assert.equal(queue.peekAll().length, 0);
+    await fs.rm(dir, { recursive: true });
   });
 });
 

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { MallardConfig } from '../config';
 import { createMetricExporter, createWebhookExporter } from './ExporterFactory';
 import { NullMetricExporter, type MetricExporter } from './MetricExporter';
+import { ExportQueue } from './ExportQueue';
 import { opt } from '../util/lang';
 
 /**
@@ -20,6 +21,7 @@ export class AuthProvider {
 
     if (!transport) return new NullMetricExporter();
 
+    const queue = new ExportQueue(context.globalStorageUri.fsPath);
     const cert = cfg.shared.certificate;
 
     if (transport === 'webhook') {
@@ -43,11 +45,14 @@ export class AuthProvider {
           : {};
 
       return (
-        createWebhookExporter({
-          url,
-          ...opt('headers', Object.keys(headers).length > 0 ? headers : undefined),
-          ...certOpts,
-        }) ?? new NullMetricExporter()
+        createWebhookExporter(
+          {
+            url,
+            ...opt('headers', Object.keys(headers).length > 0 ? headers : undefined),
+            ...certOpts,
+          },
+          queue,
+        ) ?? new NullMetricExporter()
       );
     }
 
@@ -59,15 +64,18 @@ export class AuthProvider {
       const workspaceFolders = vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath);
 
       return (
-        createMetricExporter({
-          brokerUrl,
-          ...opt('username', cfg.mqtt.username || undefined),
-          ...opt('password', password || undefined),
-          ...opt('certPath', cert.file || undefined),
-          ...opt('keyPath', cert.keyFile || undefined),
-          ...opt('caPath', cert.caFile || undefined),
-          ...(workspaceFolders?.length ? { workspaceFolders } : {}),
-        }) ?? new NullMetricExporter()
+        createMetricExporter(
+          {
+            brokerUrl,
+            ...opt('username', cfg.mqtt.username || undefined),
+            ...opt('password', password || undefined),
+            ...opt('certPath', cert.file || undefined),
+            ...opt('keyPath', cert.keyFile || undefined),
+            ...opt('caPath', cert.caFile || undefined),
+            ...(workspaceFolders?.length ? { workspaceFolders } : {}),
+          },
+          queue,
+        ) ?? new NullMetricExporter()
       );
     }
 
