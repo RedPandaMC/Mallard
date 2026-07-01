@@ -8,8 +8,11 @@ updates:
     schedule:
       interval: "weekly"
 
-  # Extension (TypeScript/Bun) dependencies.
-  - package-ecosystem: "npm"
+  # Extension (TypeScript/Bun) dependencies. Uses the "bun" ecosystem (not
+  # "npm") so Dependabot updates bun.lock directly — CI runs
+  # `bun install --frozen-lockfile`, and an npm-ecosystem PR only touches
+  # package-lock.json (unused), leaving bun.lock stale and every PR failing.
+  - package-ecosystem: "bun"
     directory: "/"
     schedule:
       interval: "weekly"
