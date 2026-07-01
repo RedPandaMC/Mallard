@@ -63,9 +63,13 @@ jobs:
             up -d --build server
 
       - name: Wait for the server to become healthy
+        # 127.0.0.1, not localhost: ubuntu-latest runners resolve localhost to
+        # ::1 (IPv6) first, but Docker's port publish only binds IPv4 — curl
+        # against localhost fails to connect even though the port is open and
+        # the container's own internal healthcheck is passing.
         run: |
           for i in $(seq 1 60); do
-            if curl -sf http://localhost:8080/health > /dev/null; then
+            if curl -sf http://127.0.0.1:8080/health > /dev/null; then
               echo "server is healthy"
               exit 0
             fi
@@ -77,7 +81,7 @@ jobs:
       - name: POST a real payload with the seeded API key (expect 202)
         run: |
           status=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
-            -X POST http://localhost:8080/api/v1/ingest \
+            -X POST http://127.0.0.1:8080/api/v1/ingest \
             -H "Content-Type: application/json" \
             -H "X-API-Key: e2e-test-key" \
             -d '{
@@ -103,7 +107,7 @@ jobs:
         # not accidentally bypassed by this test's own setup.
         run: |
           status=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
-            -X POST http://localhost:8080/api/v1/ingest \
+            -X POST http://127.0.0.1:8080/api/v1/ingest \
             -H "Content-Type: application/json" \
             -H "X-API-Key: not-the-real-key" \
             -d '{"instance_id": "e2e-instance", "schema_version": 2, "ts": 1700000000000,
