@@ -96,6 +96,12 @@
         "icon": "$(trash)"
       },
       {
+        "command": "mallard.disableExtension",
+        "title": "Disable This Extension",
+        "category": "Mallard",
+        "icon": "$(circle-slash)"
+      },
+      {
         "command": "mallard.setMqttPassword",
         "title": "Set MQTT Export Password",
         "category": "Mallard",

@@ -179,9 +179,13 @@ class OpenBaoCredentialVerifier(RemoteCredentialVerifier):
 
 
 def create_verifier(settings: "Settings") -> CredentialVerifier:
-    """Return the appropriate verifier implementation for the configured secret manager."""
+    """Return the verifier implementation for the configured secret manager.
+
+    `StaticCredentialVerifier` is not reachable here — `Settings.secret_manager_type`
+    only accepts "infisical" or "openbao", so a real deployment always resolves to
+    one of the two remote verifiers below. The static verifier remains available
+    for tests that construct it directly.
+    """
     if settings.secret_manager_type == "infisical":
         return InfisicalCredentialVerifier(settings)
-    if settings.secret_manager_type == "openbao":
-        return OpenBaoCredentialVerifier(settings)
-    return StaticCredentialVerifier(settings)
+    return OpenBaoCredentialVerifier(settings)

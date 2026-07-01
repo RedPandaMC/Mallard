@@ -6,13 +6,11 @@
   <img src="media/brand/readme-banner-light.png" alt="Mallard, a GitHub Copilot cost tracker for VS Code" width="480" style="max-width:100%" />
 </picture>
 
-**Know exactly what GitHub Copilot is costing you.**
+**Know exactly what GitHub Copilot and Claude Code are costing you.**
 
 [![CI](https://github.com/RedPandaMC/Mallard/actions/workflows/ci.yml/badge.svg)](https://github.com/RedPandaMC/Mallard/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/RedPandaMC/Mallard/branch/main/graph/badge.svg)](https://codecov.io/gh/RedPandaMC/Mallard)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-
-[Available on the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=RedPandaMC.mallard)
 
 </div>
 
@@ -30,7 +28,7 @@ Under the hood it's a DuckDB-backed dashboard with branch-aware spend tracking, 
    code --install-extension RedPandaMC.mallard
    ```
 
-2. Use Copilot normally. Mallard starts collecting right away.
+2. Use Copilot and/or Claude Code normally. Mallard starts collecting right away.
 
 3. Open the dashboard from the Mallard icon in the activity bar, or run
    "Mallard: Open Dashboard" from the Command Palette.

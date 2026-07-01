@@ -11,10 +11,9 @@ from typing import TYPE_CHECKING
 from amqtt.broker import Broker
 from amqtt.plugins.base import BaseAuthPlugin, BasePlugin
 from amqtt.session import Session
-from pydantic import ValidationError
 
 from .influx import write_payload
-from .schemas import IngestPayload
+from .normalize import InvalidIngestPayload, normalize_payload
 
 if TYPE_CHECKING:
     from influxdb_client.client.write_api import WriteApi
@@ -73,16 +72,18 @@ def _handle_message(
 ) -> None:
     try:
         data = json.loads(message.data)
-        payload = IngestPayload.model_validate(data)
+        if not isinstance(data, dict):
+            raise InvalidIngestPayload("MQTT payload must be a JSON object")
+        metric = normalize_payload(data)
         write_payload(
             write_api=write_api,
             bucket=settings.influx_bucket,
             org=settings.influx_org,
-            payload=payload,
+            metric=metric,
             source=source,
         )
-        logger.debug("MQTT: ingested instance=%s source=%s", payload.instance_id, source)
-    except (json.JSONDecodeError, ValidationError) as exc:
+        logger.debug("MQTT: ingested instance=%s source=%s", metric.instance_id, source)
+    except (json.JSONDecodeError, UnicodeDecodeError, InvalidIngestPayload) as exc:
         logger.warning("MQTT: rejected message: %s", exc)
     except Exception as exc:
         logger.error("MQTT: write failed: %s", exc)

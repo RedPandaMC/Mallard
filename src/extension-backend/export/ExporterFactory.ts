@@ -1,6 +1,7 @@
-import { MetricExporter, MetricProtocol, MqttProtocol } from './MetricExporter';
+import { MetricExporter, MetricProtocol, MqttProtocol, SendResult } from './MetricExporter';
 import { MetricPayloadSerializer } from './payload';
 import { WebhookProtocol } from './WebhookProtocol';
+import type { ExportQueue } from './ExportQueue';
 
 export interface MqttExporterConfig {
   brokerUrl: string;
@@ -25,7 +26,10 @@ export interface WebhookExporterConfig {
 }
 
 /** Creates a MetricExporter backed by MQTT. Returns null when brokerUrl is absent. */
-export function createMetricExporter(cfg: Partial<MqttExporterConfig>): MetricExporter | null {
+export function createMetricExporter(
+  cfg: Partial<MqttExporterConfig>,
+  queue?: ExportQueue,
+): MetricExporter | null {
   if (!cfg.brokerUrl) return null;
   const protocol = new MqttProtocol({
     brokerUrl: cfg.brokerUrl,
@@ -37,11 +41,14 @@ export function createMetricExporter(cfg: Partial<MqttExporterConfig>): MetricEx
     ...(cfg.caPath ? { caPath: cfg.caPath } : {}),
     ...(cfg.workspaceFolders ? { workspaceFolders: cfg.workspaceFolders } : {}),
   });
-  return new MetricExporter(protocol, new MetricPayloadSerializer());
+  return new MetricExporter(protocol, new MetricPayloadSerializer(), queue);
 }
 
 /** Creates a MetricExporter backed by HTTP webhook. Returns null when url is absent. */
-export function createWebhookExporter(cfg: Partial<WebhookExporterConfig>): MetricExporter | null {
+export function createWebhookExporter(
+  cfg: Partial<WebhookExporterConfig>,
+  queue?: ExportQueue,
+): MetricExporter | null {
   if (!cfg.url) return null;
   const protocol = new WebhookProtocol({
     url: cfg.url,
@@ -52,17 +59,23 @@ export function createWebhookExporter(cfg: Partial<WebhookExporterConfig>): Metr
     ...(cfg.keyFile ? { keyFile: cfg.keyFile } : {}),
     ...(cfg.caFile ? { caFile: cfg.caFile } : {}),
   });
-  return new MetricExporter(protocol, new MetricPayloadSerializer());
+  return new MetricExporter(protocol, new MetricPayloadSerializer(), queue);
 }
 
 /**
  * FanoutProtocol: sends to multiple transports simultaneously.
- * Use when both MQTT and webhook are configured.
+ * Use when both MQTT and webhook are configured. Not currently constructed
+ * anywhere in production (AuthProvider only ever picks one transport); kept
+ * simple rather than tracking per-protocol partial success, since there's no
+ * live caller to justify the extra complexity.
  */
 export class FanoutProtocol implements MetricProtocol {
   constructor(private readonly protocols: MetricProtocol[]) {}
-  send(topic: string, payload: Record<string, unknown>): void {
-    for (const p of this.protocols) p.send(topic, payload);
+  async send(topic: string, payload: Record<string, unknown>): Promise<SendResult> {
+    const results = await Promise.all(this.protocols.map((p) => p.send(topic, payload)));
+    if (results.every((r) => r.ok)) return { ok: true };
+    const anyFatal = results.some((r) => !r.ok && !r.retryable);
+    return { ok: false, retryable: !anyFatal };
   }
   dispose(): void {
     for (const p of this.protocols) p.dispose();

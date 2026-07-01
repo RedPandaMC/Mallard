@@ -41,9 +41,18 @@ The server is a single stateless FastAPI process. It accepts either:
 
 InfluxDB stores every snapshot as a measurement named `mallard_metrics`. Grafana reads from InfluxDB via Flux queries and ships four pre-built dashboards: overview, per-model breakdown, team comparison, and velocity trends.
 
-## Quick start (Docker Compose)
+## Secret manager: pick one first
 
-The fastest path to a running server: everything in one `compose up`.
+The server requires a secret manager — there is no supported static-credentials-only deployment. Choose Infisical or OpenBao before following the quick start below; the Secret Management guide has a full pros/cons and licensing comparison to help you decide.
+
+| Manager | Docker Compose | Kubernetes |
+|---|---|---|
+| Infisical | `docker-compose.infisical.yml` overlay | `server/k8s/infisical/` kustomize overlay |
+| OpenBao | `docker-compose.openbao.yml` overlay | `server/k8s/openbao/` kustomize overlay |
+
+Either way, the server fetches credentials live and caches them for 30 seconds, so revocation or rotation propagates within one cache interval — no pod restart or container recreate needed.
+
+## Quick start (Docker Compose)
 
 ```bash
 git clone https://github.com/RedPandaMC/Mallard.git
@@ -51,24 +60,27 @@ cd Mallard/server/docker
 cp .env.example .env
 ```
 
-Open `.env` and set three required values:
+Open `.env` and fill in the base values plus **one** secret manager block (OpenBao or Infisical — comment out the one you're not using):
 
 ```bash
 # A random token for InfluxDB, generate with: openssl rand -hex 32
 INFLUX_TOKEN=change-me
 
-# One or more API keys, comma-separated.
-# Format: label:key  (the label appears as the "source" tag in InfluxDB)
-API_KEYS=my-machine:change-me-too
-
 # Grafana admin password
 GF_SECURITY_ADMIN_PASSWORD=changeme
+
+# OpenBao block: the initial credential values it seeds on first boot.
+# Format: label:key  (the label appears as the "source" tag in InfluxDB)
+OPENBAO_DEV_ROOT_TOKEN=change-me-too
+API_KEYS=my-machine:change-me-too
 ```
 
-Then start the stack:
+Then start the stack with the matching overlay:
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.openbao.yml up -d
+# or:
+docker compose -f docker-compose.yml -f docker-compose.infisical.yml up -d
 ```
 
 | Service | Local URL |
@@ -76,6 +88,8 @@ docker compose up -d
 | Ingest API | `http://localhost/api/v1/ingest` |
 | Grafana | `http://localhost/grafana` |
 | InfluxDB UI | `http://localhost:8086` |
+| OpenBao UI (OpenBao overlay only) | `http://localhost:8200` |
+| Infisical UI (Infisical overlay only) | `http://localhost:8888` |
 
 For a **real domain** with automatic HTTPS, set two more variables:
 
@@ -129,16 +143,13 @@ dashboards by team, machine, or person.
 
 ## MQTT configuration
 
-Enable the embedded MQTT broker in `.env`:
+Enable the embedded MQTT broker:
 
 ```bash
 MQTT_ENABLED=true
-MQTT_CREDENTIALS=alice:my-password,bob:other-password
 ```
 
-The broker listens on WebSocket at `/mqtt`. Extension clients connect via `wss://your-server/mqtt`.
-
-> **Note:** MQTT credentials are separate from API keys. Set both `API_KEYS` and `MQTT_CREDENTIALS` if you use both transports.
+The broker listens on WebSocket at `/mqtt`. Extension clients connect via `wss://your-server/mqtt`. MQTT credentials are separate from API keys; set both if you use both transports. With the OpenBao overlay, add `MQTT_CREDENTIALS=alice:my-password,bob:other-password` to `.env` alongside `API_KEYS` for the seed step. With Infisical, add an `MQTT_CREDENTIALS` secret in the Infisical UI the same way you add `API_KEYS`.
 
 ## Kubernetes
 
@@ -160,25 +171,33 @@ Then apply the ClusterIssuers (ACME + self-signed CA):
 kubectl apply -f server/k8s/cert-manager/
 ```
 
-### 2. Create the namespace and secrets
+### 2. Create the namespace and base secrets
 
 ```bash
 kubectl apply -f server/k8s/namespace.yaml
 cp server/k8s/secrets.yaml.example server/k8s/secrets.yaml
-# Edit secrets.yaml, set INFLUX_TOKEN, API_KEYS, MQTT_CREDENTIALS, GF_ADMIN_PASSWORD
+# Edit secrets.yaml, set INFLUX_TOKEN and GF_ADMIN_PASSWORD.
+# API_KEYS in this file is dev/test-only — real credentials come from the
+# secret manager Secret in step 3, not from here.
 kubectl apply -f server/k8s/secrets.yaml
 ```
 
 > Keep `secrets.yaml` out of version control. It is listed in `.gitignore`.
 
-### 3. Apply manifests
+### 3. Set up your chosen secret manager
+
+Follow `server/k8s/openbao/install.md` or `server/k8s/infisical/README.md` for the manager you picked. Each ends with applying a Secret (`mallard-openbao-secrets` or `mallard-infisical-secrets`) holding the token the server uses to poll that manager.
+
+### 4. Apply manifests
 
 ```bash
 kubectl apply -f server/k8s/influxdb/
-kubectl apply -f server/k8s/server/
+kubectl apply -k server/k8s/openbao/    # or: kubectl apply -k server/k8s/infisical/
 kubectl apply -f server/k8s/grafana/
 kubectl apply -f server/k8s/ingress.yaml
 ```
+
+Apply the server via the secret manager overlay (`kubectl apply -k ...`), not `kubectl apply -f server/k8s/server/` directly — the overlay patches in the `SECRET_MANAGER_TYPE`/`SECRET_MANAGER_URL` environment the server requires to start at all.
 
 The ingress watches for a cert from the `letsencrypt-prod` ClusterIssuer and populates the TLS secret automatically once cert-manager issues it (usually within 60 seconds).
 
@@ -192,18 +211,7 @@ The server Deployment ships with `replicas: 2` (HPA min=2, max=10), a PodDisrupt
 helm install reloader stakater/reloader --namespace reloader --create-namespace
 ```
 
-The server Deployment carries the `reloader.stakater.com/auto: "true"` annotation. When you update the `mallard-server-secrets` Secret (e.g. rotate an API key), Reloader triggers a zero-downtime rolling restart automatically.
-
-## Dynamic credentials (optional)
-
-Instead of storing credentials in a Kubernetes Secret or `.env` file, you can pull them from a self-hosted secret manager. The server fetches credentials on first request and caches them for 30 seconds, so revocation propagates within one cache interval.
-
-Two secret managers are supported:
-
-| Manager | Purpose | Docker Compose | Kubernetes |
-|---|---|---|---|
-| Infisical | Full-featured secret management platform | `docker-compose.infisical.yml` overlay | `server/k8s/infisical/` kustomize overlay |
-| OpenBao | HashiCorp Vault fork (community-maintained) | `docker-compose.openbao.yml` overlay | `server/k8s/openbao/` kustomize overlay |
+The server Deployment carries the `reloader.stakater.com/auto: "true"` annotation, so updating `mallard-server-secrets` or the `mallard-server-config` ConfigMap triggers a zero-downtime rolling restart automatically. Rotating the actual API keys or MQTT passwords in Infisical/OpenBao itself needs no restart at all — the server picks them up on its next 30-second poll. Only rotating the secret manager's own access token (`mallard-openbao-secrets` / `mallard-infisical-secrets`) needs the pod to pick up new env vars, which Reloader also handles.
 
 ## mTLS: client certificate auth (optional)
 

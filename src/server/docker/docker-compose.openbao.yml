@@ -1,21 +1,40 @@
+# Pinned to 2.5.5 (the version actually observed running in this stack's own
+# CI logs — was previously :latest) rather than tracking upstream unattended.
+# Bump deliberately; check quay.io/openbao/openbao's tag list for the current
+# release before doing so.
 services:
   openbao:
-    image: quay.io/openbao/openbao:latest
+    image: quay.io/openbao/openbao:2.5.5
     command: server -dev -dev-root-token-id=${OPENBAO_DEV_ROOT_TOKEN:-dev-root-token}
     ports:
       - "8200:8200"
     environment:
       BAO_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+      # Without this, `bao status` (used by the healthcheck below) falls back
+      # to its default of https://127.0.0.1:8200 — but -dev mode serves plain
+      # HTTP (tls: "disabled"), so the healthcheck would fail even once the
+      # server is actually up and unsealed.
+      BAO_ADDR: "http://127.0.0.1:8200"
     healthcheck:
-      test: ["CMD-SHELL", "bao status || true"]
+      # No `|| true`: dev-mode OpenBao exits 0 from `bao status` once it's up
+      # and auto-unsealed, non-zero while still starting. The old `|| true`
+      # always exited 0 regardless of actual status, so this healthcheck could
+      # never report unhealthy — openbao-init could start against a
+      # not-yet-ready OpenBao.
+      test: ["CMD", "bao", "status"]
       interval: 5s
       timeout: 3s
       retries: 10
     cap_add:
       - IPC_LOCK
+    # Must share a network with `server` (see the `server` service override
+    # below) so it can resolve the `openbao` hostname — without this it lands
+    # on Compose's separate auto-created default network instead.
+    networks:
+      - internal
 
   openbao-init:
-    image: quay.io/openbao/openbao:latest
+    image: quay.io/openbao/openbao:2.5.5
     depends_on:
       openbao:
         condition: service_healthy
@@ -25,16 +44,26 @@ services:
       API_KEYS: ${API_KEYS:-}
       MQTT_CREDENTIALS: ${MQTT_CREDENTIALS:-}
       INFLUX_TOKEN: ${INFLUX_TOKEN:-}
+    # No `bao secrets enable -path=secret kv-v2` step: -dev mode already
+    # auto-mounts a kv-v2 backend at secret/, so enabling it again fails with
+    # "path is already in use at secret/".
+    #
+    # The whole `bao kv put ...` invocation must stay on a single line here.
+    # An earlier draft spread its api_keys=/mqtt_credentials=/influx_token=
+    # arguments across more-indented continuation lines, which YAML's folded
+    # block scalar (`>`) does NOT join to the command with a space — it keeps
+    # each as a literal newline-separated line. Each one silently became its
+    # own no-op shell assignment statement instead of an argument to `bao kv
+    # put`, so the secret was written with zero fields even though the
+    # container still printed "OpenBao seeded successfully" and exited 0.
     entrypoint: >
       sh -c "
-        bao secrets enable -path=secret kv-v2 &&
-        bao kv put secret/mallard/server
-          api_keys=\"$${API_KEYS}\"
-          mqtt_credentials=\"$${MQTT_CREDENTIALS}\"
-          influx_token=\"$${INFLUX_TOKEN}\" &&
+        bao kv put secret/mallard/server api_keys=\"$${API_KEYS}\" mqtt_credentials=\"$${MQTT_CREDENTIALS}\" influx_token=\"$${INFLUX_TOKEN}\" &&
         echo 'OpenBao seeded successfully'
       "
     restart: "no"
+    networks:
+      - internal
 
   server:
     environment:

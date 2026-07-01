@@ -35,9 +35,10 @@ Cleared data cannot be recovered.
 
 ## Mallard: Show Detected Log Path
 
-ID `mallard.showLogPath`. Lists the log directories Mallard is watching and how
-many files it found. Useful when the dashboard shows the empty state. If the path
-is wrong, set `mallard.copilotLogPath`.
+ID `mallard.showLogPath`. Lists the log directories Mallard is watching (Copilot
+and Claude Code) and how many files it found. Useful when the dashboard shows
+the empty state. If Copilot's path is wrong, set `mallard.copilotLogPath`;
+Claude Code's log directory is auto-detected and has no override setting.
 
 ## Mallard: Export Monthly Report
 
@@ -51,10 +52,13 @@ contains no external requests.
 ## Mallard: Sign In to GitHub
 
 ID `mallard.signIn`. Starts a GitHub session so Mallard can fetch authoritative
-billing data. If you are already signed in to GitHub in VS Code this usually
-succeeds without a prompt. Once connected, the dashboard shows a connected status
-with the actual charge reported by GitHub, which aggregates usage across every
-machine you use.
+Copilot billing data. If you are already signed in to GitHub in VS Code this
+usually succeeds without a prompt. Once connected, the dashboard shows a
+connected status with the actual Copilot charge reported by GitHub, which
+aggregates usage across every machine you use. This is Copilot-specific:
+GitHub exposes a user-scoped billing API that Anthropic doesn't, so there's no
+equivalent sign-in for an authoritative Claude Code charge; its usage stays
+log-based (estimated).
 
 ## Mallard: Export Usage Data
 
@@ -73,7 +77,11 @@ previously saved password.
 
 ## Mallard: Simulate Restriction State
 
-ID `mallard.simulateRestriction`. Evaluates all restriction rules against the current snapshot and writes the result (which rule, if any, would be active, its scope, and grace period) as JSON to the "Mallard Restriction" output channel. Nothing is disabled and no notification fires. Useful for checking a new `restrict` rule before it can actually disable Copilot.
+ID `mallard.simulateRestriction`. Evaluates all restriction rules against the current snapshot and writes the result (which rule, if any, would be active) as JSON to the "Mallard Restriction" output channel. No popup shows and nothing is disabled. Useful for checking a new `restrict` rule before enabling it.
+
+## Mallard: Disable This Extension
+
+ID `mallard.disableExtension`. Opens the Extensions view filtered to Mallard so you can disable it yourself in one click. Also reachable from the **Disable Mallard...** button on a restriction popup. This is a manual step, not an automatic disable; local data is kept so re-enabling picks up where you left off.
 
 ## Mallard: Prepare for Uninstall
 

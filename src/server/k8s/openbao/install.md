@@ -2,6 +2,8 @@
 
 OpenBao (an open-source Vault fork) provides dynamic credential management with short-lived tokens and AppRole auth.
 
+The server talks to OpenBao directly — the same `OpenBaoCredentialVerifier` live-fetch code path Docker Compose uses, just pointed at an in-cluster OpenBao instead of a container on the same network. No agent sidecar or injector webhook is needed.
+
 ## Install OpenBao (self-hosted, HA + Raft)
 
 ```bash
@@ -29,7 +31,7 @@ export BAO_TOKEN=<root-token-from-init-output>
 export BAO_ADDR=http://openbao.openbao.svc.cluster.local:8200
 ```
 
-## Configure AppRole and seed secrets
+## Configure AppRole, seed secrets, and get a client token
 
 ```bash
 # Run from inside the cluster (or with kubectl port-forward openbao 8200:8200)
@@ -43,14 +45,12 @@ bao kv put secret/mallard/server \
   influx_token="your-influx-token"
 ```
 
-## Install the OpenBao Agent Injector
-
-The agent injector runs as a MutatingWebhook and injects a sidecar that writes secrets to `/vault/secrets/config`.
+`approle-setup.sh` prints a client token at the end. Store it in the `mallard-openbao-secrets` Secret (see `secrets.yaml.example`):
 
 ```bash
-helm upgrade openbao openbao/openbao \
-  --namespace openbao \
-  --set "injector.enabled=true"
+kubectl create secret generic mallard-openbao-secrets \
+  --from-literal=SECRET_MANAGER_TOKEN=<client-token-from-script> \
+  -n mallard
 ```
 
 ## Apply the overlay
@@ -59,7 +59,7 @@ helm upgrade openbao openbao/openbao \
 kubectl apply -k server/k8s/openbao/
 ```
 
-This patches the `mallard-server` Deployment with agent-inject annotations.  On pod startup, the agent sidecar authenticates to OpenBao using the mounted AppRole credentials, fetches `secret/mallard/server`, and writes the rendered template to `/vault/secrets/config`.  The server container sources that file at startup.
+This patches the `mallard-server` Deployment to read `SECRET_MANAGER_TOKEN` from `mallard-openbao-secrets` and sets `SECRET_MANAGER_TYPE=openbao` / `SECRET_MANAGER_URL` directly.
 
 ## Credential rotation
 
@@ -71,17 +71,19 @@ bao kv put secret/mallard/server \
   mqtt_credentials="alice:new-pass,..."
 ```
 
-The server's `OpenBaoCredentialVerifier` re-fetches the store within 30 seconds (configurable via `SECRET_MANAGER_TTL`).  No pod restart needed.
+The server's `OpenBaoCredentialVerifier` re-fetches the store within 30 seconds. No pod restart needed.
 
 To immediately revoke a token, use `bao token revoke <token>`. The next request will fail auth.
 
+The client token itself expires after `token_max_ttl` (2160h / 90 days by default, set in `approle-setup.sh`) regardless of use — re-run the script and update the Secret before then.
+
 ## Environment variables
 
-| Variable | Description |
-|---|---|
-| `SECRET_MANAGER_TYPE` | Set to `openbao` |
-| `SECRET_MANAGER_URL` | OpenBao address (e.g. `http://openbao.openbao.svc.cluster.local:8200`) |
-| `SECRET_MANAGER_TOKEN` | AppRole token (obtained after login) |
-| `SECRET_MANAGER_CA_CERT_PATH` | Path to CA cert for TLS verification (optional) |
-| `OPENBAO_SECRET_PATH` | KV path (default: `secret/data/mallard/server`) |
-| `OPENBAO_NAMESPACE` | Namespace header (leave empty for community edition) |
+| Variable | Set by | Description |
+|---|---|---|
+| `SECRET_MANAGER_TYPE` | `patch-server-env.yaml` | `openbao` |
+| `SECRET_MANAGER_URL` | `patch-server-env.yaml` | OpenBao address (e.g. `http://openbao.openbao.svc.cluster.local:8200`) |
+| `SECRET_MANAGER_TOKEN` | `mallard-openbao-secrets` Secret | Client token from `approle-setup.sh` |
+| `SECRET_MANAGER_CA_CERT_PATH` | not set by default | Path to CA cert for TLS verification (optional) |
+| `OPENBAO_SECRET_PATH` | server default | KV path (default: `secret/data/mallard/server`) |
+| `OPENBAO_NAMESPACE` | not set by default | Namespace header (leave empty for community edition) |

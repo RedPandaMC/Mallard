@@ -88,23 +88,23 @@ Group rules so you can toggle a whole set at once:
 }
 ```
 
-### Copilot restrictions
+### Restriction popups
 
-Restrictions interrupt your workflow when a rule fires.
+A rule with a `restrict` block shows a popup when it fires, instead of (or alongside) a plain notification.
 
 ```json
 {
-  "id": "hard-stop",
+  "id": "budget-exhausted",
   "severity": "critical",
   "message": "Budget exhausted.",
   "when": { ">=": [{ "var": "budget.percentOfBudget" }, 1] },
-  "restrict": { "mode": "hard", "scope": "copilot", "graceMinutes": 10 }
+  "restrict": {}
 }
 ```
 
-**Soft restriction**: shows a VS Code warning notification with **Dismiss** (closes once) and **Snooze** options. Does not disable any extensions.
+The popup offers **Dismiss**, **Snooze 15m**, **Snooze 1h**, and **Disable Mallard...**. Mallard never disables any extension automatically; **Disable Mallard...** opens the Extensions view filtered to Mallard so you can turn it off yourself in one click. Snoozing sets a temporary override; the popup won't reappear until the override expires.
 
-**Hard restriction**: disables the Copilot extensions listed in `scope` and shows an error notification. Re-fires on every snapshot refresh while the condition remains true.
+Set `"restrict": { "reEnableWhen": <condition> }` to have the popup clear itself automatically once that condition becomes true (for example, once spend drops back under budget), instead of waiting for the next snooze to expire.
 
 ## Dashboard layout
 

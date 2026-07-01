@@ -27,6 +27,9 @@ def _make_test_client() -> TestClient:
     os.environ.setdefault("INFLUX_BUCKET", "metrics")
     os.environ.setdefault("API_KEYS", "test-key-valid")
     os.environ.setdefault("RATE_LIMIT", "100000/minute")
+    os.environ.setdefault("SECRET_MANAGER_TYPE", "openbao")
+    os.environ.setdefault("SECRET_MANAGER_URL", "http://secret-manager-test:8200")
+    os.environ.setdefault("SECRET_MANAGER_TOKEN", "test-sm-token")
 
     import server.config as config_module
 

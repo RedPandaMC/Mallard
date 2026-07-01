@@ -6,7 +6,7 @@ import hashlib
 from functools import cached_property
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,8 +30,10 @@ class Settings(BaseSettings):
     influx_org: str = Field("mallard", description="InfluxDB organisation")
     influx_bucket: str = Field("metrics", description="InfluxDB bucket")
 
-    # Auth — comma-separated plain-text keys in label:secret or bare format
-    api_keys: str = Field(..., description="Comma-separated API keys (label:key or bare key)")
+    # Auth — comma-separated plain-text keys in label:secret or bare format. Only meaningful for
+    # StaticCredentialVerifier, which production deployments no longer select (see
+    # secret_manager_type below); kept so it can still be constructed directly in tests.
+    api_keys: str = Field("", description="Comma-separated API keys (label:key or bare key), static-mode only")
 
     # Server
     server_host: str = Field("0.0.0.0", description="Bind address")  # nosec B104 — intentional for containerised deployment
@@ -52,9 +54,14 @@ class Settings(BaseSettings):
         "", description="Comma-separated MQTT passwords in label:secret or bare format"
     )
 
-    # Secret manager (optional — enables remote credential refresh)
-    secret_manager_type: Literal["", "infisical", "openbao"] = Field(
-        "", description="Secret manager backend; empty = use static env vars"
+    # Secret manager (required — every deployment must pick one; there is no
+    # supported static/env-var-only production path)
+    secret_manager_type: Literal["infisical", "openbao"] = Field(
+        ...,
+        description=(
+            "Secret manager backend. Static env-var credentials are not a supported "
+            "production configuration; every deployment must pick Infisical or OpenBao."
+        ),
     )
     secret_manager_url: str = Field("", description="Secret manager API base URL")
     secret_manager_token: str = Field("", description="Auth token for the secret manager")
@@ -79,12 +86,16 @@ class Settings(BaseSettings):
             raise ValueError("INFLUX_URL must not be empty")
         return v.strip()
 
-    @field_validator("api_keys")
-    @classmethod
-    def _api_keys_not_empty(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("API_KEYS must contain at least one key")
-        return v
+    @model_validator(mode="after")
+    def _secret_manager_configured(self) -> "Settings":
+        """Fail fast at startup rather than at the first ingest request."""
+        if not self.secret_manager_url.strip():
+            raise ValueError("SECRET_MANAGER_URL must be set")
+        if not self.secret_manager_token.strip():
+            raise ValueError("SECRET_MANAGER_TOKEN must be set")
+        if self.secret_manager_type == "infisical" and not self.infisical_project_id.strip():
+            raise ValueError("INFISICAL_PROJECT_ID must be set when SECRET_MANAGER_TYPE=infisical")
+        return self
 
     @cached_property
     def hashed_api_keys(self) -> dict[str, str]:

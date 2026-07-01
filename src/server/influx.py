@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING
 
@@ -9,7 +10,7 @@ from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 
 from .config import Settings
-from .schemas import IngestPayload
+from .normalize import NormalizedMetric
 
 if TYPE_CHECKING:
     from influxdb_client.client.write_api import WriteApi
@@ -17,6 +18,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MEASUREMENT = "mallard_metrics"
+
+# Fields carried straight through from NormalizedMetric when present (None is
+# omitted rather than written as 0/empty, so a field a given schema version
+# never supplied is absent from the point instead of misleadingly zero).
+_FLOAT_FIELDS = (
+    "credits_velocity_per_hour", "mtd_budget_pct", "mtd_credits", "mtd_cost_usd",
+    "today_credits", "today_cost_usd", "daily_credit_variance",
+    "surface_concentration", "estimated_event_ratio", "token_per_credit",
+    "forecast_low", "forecast_high",
+)
+_INT_FIELDS = ("repo_count", "peak_usage_hour", "model_count", "budget_trend")
 
 
 def make_client(settings: Settings) -> InfluxDBClient:
@@ -32,35 +44,54 @@ def write_payload(
     write_api: "WriteApi",
     bucket: str,
     org: str,
-    payload: IngestPayload,
+    metric: NormalizedMetric,
     source: str = "unknown",
 ) -> None:
-    """Convert *payload* to an InfluxDB Point and write it synchronously."""
+    """Convert a normalized metric to an InfluxDB Point and write it synchronously.
+
+    `connector` becomes its own tag so a single instance running multiple
+    connectors (e.g. Copilot and Claude Code) can be split apart in Grafana.
+    Anything the current server doesn't have a typed field for lands in
+    `extra_json`, so a future server version can read it back instead of it
+    having been discarded on ingest.
+    """
     point = (
         Point(_MEASUREMENT)
-        .tag("instance_id", payload.instance_id)
-        .tag("schema_version", str(payload.schema_version))
+        .tag("instance_id", metric.instance_id or "unknown")
+        .tag("schema_version", str(metric.schema_version))
         .tag("source", source)
-        .field("credits_velocity_per_hour", payload.credits_velocity_per_hour)
-        .field("mtd_budget_pct", payload.mtd_budget_pct)
-        .field("mtd_credits", payload.mtd_credits)
-        .field("mtd_cost_usd", payload.mtd_cost_usd)
-        .field("today_credits", payload.today_credits)
-        .field("today_cost_usd", payload.today_cost_usd)
-        .field("top_model", payload.top_model or "")
-        .field("active_models_count", len(payload.active_models))
-        .time(payload.ts, WritePrecision.MS)
+        .tag("connector", metric.connector or "unknown")
+        .field("top_model", metric.top_model or "")
+        .field("active_models_count", len(metric.active_models))
     )
 
+    for name in _FLOAT_FIELDS:
+        value = getattr(metric, name)
+        if value is not None:
+            point = point.field(name, float(value))
+
+    for name in _INT_FIELDS:
+        value = getattr(metric, name)
+        if value is not None:
+            point = point.field(name, int(value))
+
+    if metric.forecast_basis is not None:
+        point = point.field("forecast_basis", metric.forecast_basis)
+
     # Store individual active models as separate fields for querying
-    for i, model in enumerate(payload.active_models):
+    for i, model in enumerate(metric.active_models):
         point = point.field(f"active_model_{i}", model)
+
+    if metric.extra:
+        point = point.field("extra_json", json.dumps(metric.extra, default=str))
+
+    point = point.time(metric.ts_ms, WritePrecision.MS)
 
     logger.debug(
         "Writing InfluxDB point: measurement=%s instance=%s ts=%d",
         _MEASUREMENT,
-        payload.instance_id,
-        payload.ts,
+        metric.instance_id,
+        metric.ts_ms,
     )
     write_api.write(bucket=bucket, org=org, record=point)
 

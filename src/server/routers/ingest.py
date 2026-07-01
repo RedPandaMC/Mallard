@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import Annotated
@@ -12,7 +13,7 @@ from fastapi.responses import JSONResponse
 from ..credential_verifier import CredentialVerifier
 from ..deps import get_verifier
 from ..influx import write_payload
-from ..schemas import IngestPayload
+from ..normalize import InvalidIngestPayload, normalize_payload
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +34,18 @@ def _extract_bearer(auth_header: str) -> str:
 
 @router.post("/ingest", status_code=status.HTTP_202_ACCEPTED)
 async def ingest(
-    payload: IngestPayload,
     request: Request,
     verifier: Annotated[CredentialVerifier, Depends(get_verifier)],
 ) -> JSONResponse:
     """
-    Accepts a Mallard metric payload, validates it, and writes one InfluxDB point.
+    Accepts a Mallard metric payload and writes one InfluxDB point.
     Rate-limited to RATE_LIMIT per unique API key (enforced via slowapi middleware).
+
+    Tolerant of schema drift: any well-formed JSON body naming a
+    `schema_version` is accepted, even one this server doesn't recognize yet
+    (see normalize.py) — an extension can be upgraded ahead of its server
+    without every export failing. Only a body that isn't valid JSON, or
+    doesn't carry a `schema_version` at all, is rejected outright.
 
     Auth precedence:
       1. mTLS client cert — CN forwarded as SSL_CLIENT_S_DN_CN by nginx ingress.
@@ -53,6 +59,25 @@ async def ingest(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             content={"detail": "Request body exceeds 64 KB limit"},
         )
+
+    body = await request.body()
+    try:
+        raw = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Body is not valid JSON",
+        ) from exc
+    if not isinstance(raw, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Body must be a JSON object",
+        )
+
+    try:
+        metric = normalize_payload(raw)
+    except InvalidIngestPayload as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     # mTLS: cert CN forwarded by nginx ingress; ingress has already verified the cert
     cert_cn = request.headers.get("SSL_CLIENT_S_DN_CN", "").strip()
@@ -88,7 +113,7 @@ async def ingest(
             write_api=write_api,
             bucket=settings.influx_bucket,
             org=settings.influx_org,
-            payload=payload,
+            metric=metric,
             source=source,
         )
     except Exception as exc:
@@ -100,8 +125,8 @@ async def ingest(
 
     logger.info(
         "Ingested payload: instance=%s schema_v=%d source=%s",
-        payload.instance_id,
-        payload.schema_version,
+        metric.instance_id,
+        metric.schema_version,
         source,
     )
 

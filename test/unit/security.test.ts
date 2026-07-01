@@ -18,7 +18,7 @@ import type { JsonCondition } from '../../src/extension-backend/domain/types';
 
 const VALID_TYPES = [
   'ready', 'refresh', 'setFilter', 'setConfig', 'setLayout',
-  'openConfig', 'command', 'restrictSnooze', 'restrictNow', 'restrictPermanent',
+  'openConfig', 'command', 'restrictSnooze',
 ];
 
 describe('security — isHostBoundMsg', () => {

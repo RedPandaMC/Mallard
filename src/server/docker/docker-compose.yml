@@ -1,5 +1,8 @@
-# Mallard BYO Server — Docker Compose
-# Usage: cp .env.example .env && docker compose up -d
+# Mallard BYO Server — Docker Compose base stack (InfluxDB, server, Grafana, Caddy).
+# Not runnable on its own: the server requires a secret manager. Pick one and
+# run this file together with its overlay:
+#   docker compose -f docker-compose.yml -f docker-compose.openbao.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.infisical.yml up -d
 # Access Grafana at https://localhost:3000 (admin / see .env GF_SECURITY_ADMIN_PASSWORD)
 
 version: "3.9"
@@ -36,6 +39,16 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # influxdb's official entrypoint starts as root to initialize/own a fresh
+    # data volume before running influxd; cap_drop: ALL removes even root's
+    # ability to do that (mkdir/chown fail with "Permission denied" on first
+    # boot against a brand-new named volume) unless these are added back.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
     deploy:
       resources:
         limits:
@@ -50,15 +63,23 @@ services:
   # ── Mallard FastAPI ingest server ───────────────────────────────────────────
   server:
     build:
-      context: ..
-      dockerfile: Dockerfile
+      # Repo root: the Dockerfile's COPY instructions (src/server/*.py,
+      # src/server/routers/, pyproject.toml) are written relative to repo
+      # root, matching how server.yml's build-push job builds this same
+      # image (`context: .` from a repo-root checkout, `file: src/server/Dockerfile`).
+      context: ../../..
+      dockerfile: src/server/Dockerfile
     restart: unless-stopped
     environment:
       INFLUX_URL: http://influxdb:8086
       INFLUX_TOKEN: ${INFLUX_TOKEN:?required}
       INFLUX_ORG: ${INFLUX_ORG:-mallard}
       INFLUX_BUCKET: ${INFLUX_BUCKET:-metrics}
-      API_KEYS: ${API_KEYS:?required}
+      # Credentials come from the secret manager overlay (openbao/infisical), not
+      # from here. API_KEYS/MQTT_CREDENTIALS only matter if you're constructing a
+      # StaticCredentialVerifier directly in a test; the server itself no longer
+      # accepts a static-only configuration.
+      API_KEYS: ${API_KEYS:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       RATE_LIMIT: ${RATE_LIMIT:-60/minute}
       # Embedded MQTT broker (WebSocket on port 8083, proxied by Caddy at /mqtt)

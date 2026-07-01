@@ -3,8 +3,27 @@ name: Extension CI
 on:
   push:
     branches: [main]
+    paths: &extension-paths
+      - "src/extension-backend/**"
+      - "src/extension-frontend/**"
+      - "test/**"
+      - "schemas/**"
+      - "media/**"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig*.json"
+      - "esbuild.mjs"
+      - "eslint.config.mjs"
+      - ".vscode-test.mjs"
+      - ".github/workflows/ci.yml"
+      - ".github/actions/setup-toolchain/**"
+      - ".github/codeql/**"
   pull_request:
     branches: [main]
+    paths: *extension-paths
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -13,20 +32,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.11
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - uses: ./.github/actions/setup-toolchain
 
       - name: Audit Node dependencies (bun audit)
         run: bun audit --level high --production
@@ -44,7 +52,7 @@ jobs:
         run: bun run test:coverage
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
         with:
           files: coverage/lcov.info
           fail_ci_if_error: false
@@ -57,7 +65,7 @@ jobs:
         run: bun run compile-tests
 
       - name: Cache VS Code binary
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.vscode-test
           key: vscode-test-${{ runner.os }}-stable-${{ hashFiles('.vscode-test.mjs') }}
@@ -76,27 +84,42 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.11
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - uses: ./.github/actions/setup-toolchain
 
       - name: Package .vsix
         run: bun run vsce:package
 
       - name: Upload .vsix artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mallard-vsix
           path: "*.vsix"
           retention-days: 90
+
+  # CodeQL only understands javascript-typescript (see .github/codeql/codeql-config.yml),
+  # i.e. this extension's own source — it lives here, not in security.yml, so its
+  # trigger scope matches what it actually scans instead of security.yml's
+  # server/IaC-focused paths (a direct push to main touching only extension files
+  # would never have triggered it there, since that workflow's push trigger is
+  # scoped to src/server/**).
+  codeql:
+    name: CodeQL (TypeScript)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: github/codeql-action/init@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3
+        with:
+          languages: javascript-typescript
+          config-file: .github/codeql/codeql-config.yml
+
+      - uses: github/codeql-action/autobuild@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3
+
+      - uses: github/codeql-action/analyze@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3
+        with:
+          category: codeql-typescript

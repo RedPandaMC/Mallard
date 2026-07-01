@@ -14,4 +14,11 @@ spec:
             - secretRef:
                 name: mallard-server-secrets
             - secretRef:
-                name: mallard-app-secrets
+                name: mallard-infisical-secrets
+          env:
+            - name: SECRET_MANAGER_TYPE
+              value: "infisical"
+            - name: SECRET_MANAGER_URL
+              value: "http://infisical.infisical.svc.cluster.local/api"
+            - name: INFISICAL_ENV_SLUG
+              value: "prod"

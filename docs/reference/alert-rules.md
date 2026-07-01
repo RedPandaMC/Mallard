@@ -12,6 +12,7 @@ Every field, operator, and context path available in a `config.json` rule.
 | `when` | yes | Condition that must be true for the rule to fire. |
 | `active` | no | Gate: rule is skipped unless this condition is true. |
 | `cooldown` | no | Min time between firings: `"30m"`, `"4h"`, `"1d"`, `"1w"`. Default `1h`. |
+| `notify` | no | Whether a fired rule shows a notification toast. Default `true`. Set to `false` to run a rule silently, for example one that only sets a `restrict` state. Ignored for rules with a `restrict` block, since those already show their own popup. |
 | `restrict` | no | Copilot restriction block. See [Restriction fields](#restriction-fields). |
 
 ## Condition operators
@@ -60,8 +61,8 @@ Every field, operator, and context path available in a `config.json` rule.
 
 ## Restriction fields {#restriction-fields}
 
+A rule's `restrict` block shows a popup with **Dismiss**, **Snooze 15m**, **Snooze 1h**, and **Disable Mallard...** when the rule fires. Mallard never disables any extension automatically; **Disable Mallard...** opens the Extensions view so you can do it yourself in one click.
+
 | Field | Values | Description |
 | --- | --- | --- |
-| `mode` | `"soft"` \| `"hard"` | `soft` shows a dismissable warning notification. `hard` disables the extensions in `scope` and shows a persistent error notification; it re-fires on every snapshot refresh while the condition is true. |
-| `scope` | `"copilot"` \| `"copilot+lab"` \| `"custom"` | Extensions disabled in `hard` mode. `"copilot"` disables `github.copilot` and `github.copilot-chat`; `"copilot+lab"` also includes Labs and Nightly builds; `"custom"` uses the `mallard.copilotExtensions` VS Code setting (empty list by default). Has no effect in `soft` mode. |
-| `graceMinutes` | 0–1440 | Minutes to wait after the condition becomes true before the restriction activates. |
+| `reEnableWhen` | condition | Optional. When this condition becomes true, the restriction clears itself automatically instead of waiting for a snooze to expire. |

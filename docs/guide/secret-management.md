@@ -1,35 +1,51 @@
 # Secret Management
 
-By default, Mallard's server reads credentials from environment variables (`API_KEYS`, `MQTT_CREDENTIALS`, `INFLUX_TOKEN`). This works well for a single machine, but has two limitations:
+Mallard's server requires a live secret manager. There is no supported way to run it on static `.env`/Kubernetes-Secret credentials alone: `Settings.secret_manager_type` only accepts `"infisical"` or `"openbao"`, and the server refuses to start without one fully configured.
 
-1. **Rotation requires a restart.** Updating `.env` or a Kubernetes Secret only takes effect when the container is replaced.
-2. **Revocation isn't instant.** There is no way to invalidate a specific key without restarting or swapping out the secret store.
-
-Dynamic secret managers solve both problems. The server fetches live credentials on each request (with a 30-second in-memory cache) so that:
+The server fetches live credentials from whichever manager you pick, with a 30-second in-memory cache, so that:
 - Adding a key → visible within 30 seconds, no restart.
 - Revoking a key → rejected within 30 seconds, no restart.
 
-Two self-hosted providers are supported: **Infisical** and **OpenBao**. Both are open-source and run entirely on your infrastructure, with no vendor cloud required.
+Two self-hosted providers are supported: **Infisical** and **OpenBao**. Both are open-source and run entirely on your infrastructure, with no vendor cloud required. Pick one before you deploy.
 
-## Choosing a secret manager
+## Infisical vs. OpenBao
 
 | | Infisical | OpenBao |
 |---|---|---|
-| **What it is** | Purpose-built secret management platform | Community fork of HashiCorp Vault |
-| **UI** | Full web UI with project/environment structure | Vault-style web UI |
-| **Secret format** | Key-value pairs in a project+environment | KV v2 engine at a configurable path |
-| **Auth method** | Machine identity with Universal Auth | AppRole (role-id + secret-id) |
-| **When to pick it** | You want a polished UI and team-level access controls | You already run Vault / want Vault compatibility |
+| **What it is** | Purpose-built secrets, certificates, and access-management platform | Community fork of HashiCorp Vault |
+| **UI** | Full web UI: projects, environments, audit log, RBAC | Vault-style web UI, more ops-tool than product |
+| **Secret format** | Key-value pairs in a project + environment | KV v2 engine at a configurable path |
+| **Auth (used by Mallard)** | Machine/service token, sent as a Bearer token | A Vault client token, sent as `X-Vault-Token` |
+| **Ecosystem / maturity** | Newer project, growing fast, more integrations out of the box | Direct continuation of Vault's much larger, longer-established ecosystem |
+| **Governance** | Company-backed (Infisical, Inc.) | Community-run under the Linux Foundation / OpenSSF |
+| **Self-hosting complexity** | Needs Postgres + Redis alongside it | Single binary; dev mode needs nothing else, HA needs Raft storage |
+| **Best fit** | You want a polished UI, team-level access controls, and don't mind running a small Postgres+Redis stack | You already run Vault, want Vault API compatibility, or want the leaner single-binary footprint |
+
+### Licensing
+
+This matters more than it looks, since one of the two has a boundary you can hit without noticing.
+
+- **Infisical**: the self-hosted core (everything outside `backend/src/ee/`) is [MIT-licensed](https://github.com/Infisical/infisical/blob/main/LICENSE). Dynamic secrets, SCIM, LDAP, approval workflows, KMIP, and HSM support live behind a separate **Infisical Enterprise License**, which requires a paid license key (it phones home to Infisical's license server, or takes an offline key for air-gapped setups) to unlock at runtime. Mallard only needs the MIT-licensed core (static key-value secrets), so this boundary doesn't affect a typical Mallard deployment, but it's worth knowing about before you reach for a feature that turns out to be gated.
+- **OpenBao**: single-licensed under [MPL-2.0](https://github.com/openbao/openbao/blob/main/LICENSE), governed by the Linux Foundation and the Open Source Security Foundation (OpenSSF). There is no separate enterprise tier or license key gating any feature.
+
+### Logos
+
+Add both projects' logos here once you've pulled them from each project's own current brand assets, following their stated usage terms rather than assuming:
+
+- OpenBao publishes an explicit brand/logo policy at [openbao.org/community/policies/brand](https://openbao.org/community/policies/brand/) — follow its stated format and attribution requirements exactly.
+- Locate Infisical's equivalent brand/press-kit page before use and follow the same standard.
+
+Place the files under `docs/public/brand/` (e.g. `infisical-logo.svg`, `openbao-logo.svg`) and reference them with standard markdown image syntax. Re-check both policies at the time you actually add the images — brand guidelines and licenses can change.
 
 ## How the server uses secret managers
 
-When `SECRET_MANAGER_TYPE` is set, the server instantiates either `InfisicalCredentialVerifier` or `OpenBaoCredentialVerifier`. Both share the same caching layer:
+The server instantiates either `InfisicalCredentialVerifier` or `OpenBaoCredentialVerifier` based on `SECRET_MANAGER_TYPE`. Both share the same caching layer:
 
 1. On the first inbound request after startup (or after the 30-second TTL expires), the verifier fetches the secret store.
 2. The fetched store is kept in memory for 30 seconds. All requests within that window read from the cache, with no network round-trip.
 3. After 30 seconds, the next request triggers a background refresh. If the refresh fails (provider unreachable), the old cache is retained and an error is logged; the server keeps serving.
 
-The credential format expected from the secret manager is identical to the static `.env` format:
+The credential format expected from the secret manager is the same `label:secret` format used everywhere else in Mallard:
 
 ```
 API_KEYS=label:key,...
@@ -44,34 +60,15 @@ MQTT_CREDENTIALS=label:password,...
 
 ```bash
 cd server/docker
-# Copy and edit .env, also set the Infisical bootstrap variables below
 cp .env.example .env
+# Edit .env: fill in the Infisical block, leave the OpenBao block commented out
 
 docker compose -f docker-compose.yml -f docker-compose.infisical.yml up -d
 ```
 
-**Required `.env` additions:**
-
-```bash
-SECRET_MANAGER_TYPE=infisical
-SECRET_MANAGER_URL=http://infisical:8080
-
-# Machine identity token: create in the Infisical UI under
-# Project > Machine Identities > Universal Auth
-SECRET_MANAGER_TOKEN=your-machine-token
-
-INFISICAL_PROJECT_ID=your-project-id
-INFISICAL_ENV_SLUG=prod          # or "staging", "dev"
-
-# Infisical itself needs a postgres database and redis:
-INFISICAL_DB_CONNECTION_STRING=postgres://infisical:password@infisical-db:5432/infisical
-INFISICAL_AUTH_SECRET=$(openssl rand -hex 16)
-INFISICAL_ENCRYPTION_KEY=$(openssl rand -hex 16)
-```
-
 **Setting up the secrets in Infisical:**
 
-1. Open the Infisical UI at `http://localhost:8888` (first boot takes ~30 s to initialise).
+1. Open the Infisical UI at `http://localhost:8888` (first boot takes ~30s to initialise).
 2. Create a project named `mallard`.
 3. Add secrets to the `prod` environment:
 
@@ -80,47 +77,32 @@ INFISICAL_ENCRYPTION_KEY=$(openssl rand -hex 16)
    | `API_KEYS` | `alice:key-abc123,bob:key-def456` |
    | `MQTT_CREDENTIALS` | `alice:mqtt-pass1` |
 
-4. Create a Machine Identity with Universal Auth. Copy the client ID and secret.
-5. Generate a machine token and paste it into `SECRET_MANAGER_TOKEN`.
+4. Under Machine Identities, create a service/machine token scoped to read access on this project. Paste it into `INFISICAL_MACHINE_TOKEN` in `.env`.
 
 ### Kubernetes
 
-The K8s overlay uses the Infisical Secrets Operator, which syncs secrets from Infisical into a Kubernetes Secret that the server reads as environment variables.
-
-**Install the operator:**
+The server talks to Infisical directly, the same live-fetch code path as Docker Compose, pointed at an in-cluster Infisical instance. No Infisical Secrets Operator or extra webhook is installed.
 
 ```bash
 helm repo add infisical-helm-charts https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/
-helm install infisical-operator infisical-helm-charts/secrets-operator \
-  --namespace infisical-operator --create-namespace
+helm install infisical infisical-helm-charts/infisical \
+  --namespace infisical --create-namespace \
+  --set postgresql.enabled=true \
+  --set redis.enabled=true
 ```
 
-**Bootstrap credentials secret** (create once, contains the Machine Identity credentials):
+Create a project and a machine/service token in the Infisical UI as above, then:
 
 ```bash
-kubectl create secret generic infisical-universal-auth-credentials \
-  --namespace mallard \
-  --from-literal=clientId=YOUR_CLIENT_ID \
-  --from-literal=clientSecret=YOUR_CLIENT_SECRET
-```
+kubectl create secret generic mallard-infisical-secrets \
+  --from-literal=SECRET_MANAGER_TOKEN=<machine-token> \
+  --from-literal=INFISICAL_PROJECT_ID=<project-id> \
+  -n mallard
 
-**Apply the overlay:**
-
-```bash
 kubectl apply -k server/k8s/infisical/
 ```
 
-The overlay creates an `InfisicalSecret` resource that tells the operator to watch your Infisical project and sync `API_KEYS`, `MQTT_CREDENTIALS`, and `INFLUX_TOKEN` into the `mallard-app-secrets` Kubernetes Secret. The server Deployment mounts that Secret as environment variables via `envFrom`.
-
-**Verifying it works:**
-
-```bash
-# After a few seconds, the managed secret should be populated:
-kubectl get secret mallard-app-secrets -n mallard -o yaml
-
-# The server pod should reflect the new credentials within one sync interval (default 60s):
-kubectl logs -n mallard deploy/mallard-server | grep "credential store refreshed"
-```
+The overlay sets `SECRET_MANAGER_TYPE=infisical` and `SECRET_MANAGER_URL` on the server Deployment and wires in the Secret above. See `server/k8s/infisical/README.md` for the full walkthrough.
 
 ## OpenBao
 
@@ -132,27 +114,13 @@ The `docker-compose.openbao.yml` overlay starts OpenBao in dev mode (in-memory, 
 
 ```bash
 cd server/docker
+cp .env.example .env
+# Edit .env: fill in the OpenBao block, leave the Infisical block commented out
+
 docker compose -f docker-compose.yml -f docker-compose.openbao.yml up -d
 ```
 
-**Required `.env` additions:**
-
-```bash
-SECRET_MANAGER_TYPE=openbao
-SECRET_MANAGER_URL=http://openbao:8200
-
-# Root token (dev mode; change for production)
-SECRET_MANAGER_TOKEN=root
-
-# Optional: KV path to read credentials from
-# Default is "secret/data/mallard/server"
-# OPENBAO_SECRET_PATH=secret/data/mallard/server
-
-# Optional: Vault namespace (Enterprise/HCP only; leave blank for community)
-# OPENBAO_NAMESPACE=
-```
-
-The `openbao-init` container enables KV v2 and writes a secret at `secret/data/mallard/server` using the values from `API_KEYS` and `MQTT_CREDENTIALS` in your `.env`. After startup, manage secrets through the OpenBao UI at `http://localhost:8201` or with the `bao` CLI:
+The `openbao-init` container enables KV v2 and writes a secret at `secret/data/mallard/server` using the values from `API_KEYS` and `MQTT_CREDENTIALS` in your `.env`. After startup, manage secrets through the OpenBao UI at `http://localhost:8200` or with the `bao` CLI:
 
 ```bash
 # List current credentials
@@ -165,9 +133,7 @@ bao kv patch secret/mallard/server api_keys="alice:new-key,bob:key-def456"
 
 ### Kubernetes
 
-The K8s overlay uses the Vault Agent Injector (compatible with OpenBao) to write credentials to a file at `/vault/secrets/config` inside the server container. The server reads environment variables from that file on each credential refresh.
-
-**Install OpenBao (HA with Raft):**
+The server talks to OpenBao directly, the same live-fetch code path as Docker Compose, pointed at an in-cluster OpenBao instance. No Vault Agent Injector or sidecar is installed.
 
 ```bash
 helm repo add openbao https://openbao.github.io/openbao-helm
@@ -177,69 +143,48 @@ helm install openbao openbao/openbao \
   --set server.ha.raft.enabled=true
 ```
 
-**Initialise and unseal** (first time only):
+Initialise, unseal, then set up AppRole and get a client token with the provided script:
 
 ```bash
-kubectl exec -n openbao openbao-0 -- bao operator init -key-shares=1 -key-threshold=1
-# Save the unseal key and root token from the output!
-kubectl exec -n openbao openbao-0 -- bao operator unseal <UNSEAL_KEY>
-```
+kubectl exec -n openbao openbao-0 -- bao operator init -key-shares=5 -key-threshold=3
+kubectl exec -n openbao openbao-0 -- bao operator unseal <unseal-key>
 
-**Configure AppRole and seed secrets:**
-
-```bash
-# Port-forward to reach the API
-kubectl port-forward -n openbao svc/openbao 8200:8200 &
-
-export BAO_ADDR=http://localhost:8200
+export BAO_ADDR=http://openbao.openbao.svc.cluster.local:8200
 export BAO_TOKEN=<root-token>
+./server/k8s/openbao/approle-setup.sh
 
-# Enable KV v2
-bao secrets enable -path=secret kv-v2
-
-# Write credentials
 bao kv put secret/mallard/server \
   api_keys="alice:key-abc123,bob:key-def456" \
   mqtt_credentials="alice:mqtt-pass1"
-
-# Create policy
-bao policy write mallard server/k8s/openbao/policy-mallard.hcl
-
-# Enable AppRole and create the mallard role
-bao auth enable approle
-bao write auth/approle/role/mallard \
-  token_policies=mallard \
-  token_ttl=1h \
-  secret_id_ttl=0
-
-# Get role-id and secret-id
-bao read auth/approle/role/mallard/role-id
-bao write -f auth/approle/role/mallard/secret-id
 ```
 
-**Apply the overlay:**
+`approle-setup.sh` prints a client token at the end:
 
 ```bash
-# Populate the secret-id into a Kubernetes Secret first
-kubectl create secret generic openbao-approle-creds \
-  --namespace mallard \
-  --from-literal=role-id=<ROLE_ID> \
-  --from-literal=secret-id=<SECRET_ID>
+kubectl create secret generic mallard-openbao-secrets \
+  --from-literal=SECRET_MANAGER_TOKEN=<client-token> \
+  -n mallard
 
 kubectl apply -k server/k8s/openbao/
 ```
 
-The kustomize overlay patches the server Deployment with Vault Agent Injector annotations. The agent sidecar authenticates via AppRole and writes credentials to `/vault/secrets/config`.
+The overlay sets `SECRET_MANAGER_TYPE=openbao` and `SECRET_MANAGER_URL` on the server Deployment and wires in the Secret above. See `server/k8s/openbao/install.md` for the full walkthrough, including client token expiry and renewal.
 
 ## Credential rotation
 
-Regardless of which provider you use, the rotation flow is the same:
+Regardless of which provider you use, rotating an actual API key or MQTT password is the same:
 
 1. Update the secret in Infisical or OpenBao.
 2. Wait up to 30 seconds for the server's cache to expire.
 3. The next inbound request fetches the new credential store.
 4. Old keys are rejected; new keys are accepted.
 
-No server restart required.
+No server restart required. Rotating the secret manager's own access token (`SECRET_MANAGER_TOKEN`) is different: that's a Secret/`.env` value the server reads once at startup and caches for the process lifetime, so it needs a restart. On Kubernetes, Stakater Reloader handles this automatically when you update the `mallard-infisical-secrets` / `mallard-openbao-secrets` Secret.
 
-For **static credentials** (no secret manager), rotation on Kubernetes is handled by Stakater Reloader: update the `mallard-server-secrets` Secret and Reloader triggers a zero-downtime rolling restart.
+## Operational visibility
+
+Neither Infisical's nor OpenBao's own UI knows anything about Mallard's ingest traffic. For that, use what the stack already ships instead of a separate tool:
+
+- `GET /health` reports `min_known_schema_version`/`max_known_schema_version` so you can spot extension version skew across a fleet at a glance.
+- The Grafana dashboards break down ingest volume by the `connector` and `schema_version` InfluxDB tags, so you can see per-connector traffic and version skew visually without leaving the dashboard you already have open.
+- Credential status and edits stay in Infisical's or OpenBao's own UI — that's what they're for, and duplicating it in a third tool would just be another thing to keep in sync.

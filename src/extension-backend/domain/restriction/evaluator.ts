@@ -1,12 +1,12 @@
 /* c8 ignore next */
 /**
  * Pure restriction evaluation: given the rule set and a context object,
- * decides whether any rule's `restrict` block wants to restrict, and whether
- * a different rule's `reEnableWhen` should clear the restriction.
+ * decides whether any rule's `restrict` block wants to show the restriction
+ * popup, and whether a different rule's `reEnableWhen` should clear it.
  *
- * The most-restrictive active rule wins (a hard rule beats a soft rule beats
- * nothing). User overrides are honoured: if `userOverrideUntil` is in the
- * future, no rule will re-fire while it lasts.
+ * The first matching rule (declaration order in config.json) wins. User
+ * overrides are honoured: if `userOverrideUntil` is in the future, no rule
+ * will re-fire while it lasts.
  */
 import { AlertRule } from '../types';
 import { evalCondition, evalRule } from '../expr/jsonCondition';
@@ -15,13 +15,6 @@ export interface RestrictionDesired {
   active: AlertRule | null;
   matching: AlertRule[];
   canClear: AlertRule[];
-}
-
-const HARD_RANK = 2;
-const SOFT_RANK = 1;
-
-function rank(mode: 'soft' | 'hard' | undefined): number {
-  return mode === 'hard' ? HARD_RANK : mode === 'soft' ? SOFT_RANK : 0;
 }
 
 /* c8 ignore next */
@@ -42,10 +35,6 @@ export function evaluateRestrictionState(
     if (r.restrict.reEnableWhen) canClear.push(r);
   }
 
-  let active: AlertRule | null = null;
-  for (const r of matching) {
-    if (rank(r.restrict?.mode) > rank(active?.restrict?.mode)) active = r;
-  }
   void now;
-  return { active, matching, canClear };
+  return { active: matching[0] ?? null, matching, canClear };
 }
