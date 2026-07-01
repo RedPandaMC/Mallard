@@ -127,3 +127,5 @@ The extension should send exactly one credential per request. Sending both a cer
 ## Backward compatibility
 
 Clients using the old single-valued `API_KEYS=key1,key2` format (no labels) still work. The server assigns `source=unknown` to bare keys. Upgrade to labeled format to get per-team InfluxDB tagging.
+
+This covers authentication only. The ingest payload body is versioned separately via a `schema_version` field, and the server accepts old, current, and unrecognized future versions of it in degraded mode rather than rejecting them; see `normalize.py` and the metrics schema reference for that contract.

@@ -61,32 +61,7 @@ Used by any transport when `auth = certificate`.
 
 ### Payload schema
 
-Each publish sends a single JSON object, built by `buildMetricPayload` and published to the `mallard/v2/metrics` topic:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `schema_version` | `1` | Payload schema version. |
-| `ts` | `string` | ISO 8601 timestamp of the snapshot. |
-| `model_dist` | `Record<string, number>` | Fraction of credits attributable to each model (sums to ≤1). |
-| `surface_dist` | `Record<string, number>` | Fraction of credits attributable to each surface (sums to ≤1). |
-| `cost_dist` | `Record<string, number>` | Fraction of cost attributable to each cost category (sums to ≤1). |
-| `input_cost_ratio` | `number` | Deprecated: input/(input+output) cost ratio only. Use `cost_dist['input']` instead. |
-| `credits_velocity_per_hour` | `number` | Credits used today divided by hours elapsed since midnight. |
-| `mtd_budget_pct` | `number` | Month-to-date credits used as a fraction of the monthly budget (0 when no budget is set). |
-| `repo_count` | `number` | Number of distinct repositories observed (count only, no names). |
-| `peak_usage_hour` | `number` | Most active hour of the current day (0–23). |
-| `daily_credit_variance` | `number` | Standard deviation of daily credits over the last 7 days. |
-| `model_count` | `number` | Number of distinct models seen in the snapshot window. |
-| `surface_concentration` | `number` | Gini coefficient of surface distribution (0 = balanced, 1 = concentrated on one surface). |
-| `estimated_event_ratio` | `number` | Fraction of events with estimated (vs. GitHub-billing-authoritative) cost. |
-| `forecast_basis` | `"linear" \| "seasonal" \| "insufficient-data"` | Forecaster used for the month-end projection. |
-| `budget_trend` | `-1 \| 0 \| 1` | Spend trajectory vs. last week: accelerating, flat, or decelerating. |
-| `token_per_credit` | `number` | Total tokens divided by total credits. |
-| `forecast_low` / `forecast_high` | `number` | Confidence bounds for month-end projected credits. |
-| `source_connector` | `string` | Primary data source (`"copilot"`, `"claude-code"`, `"mixed"`, or `"none"`). |
-
-> [!WARNING]
-> This payload does not match the self-hosted server's `IngestPayload` schema (no `instance_id`, no `today_credits`/`mtd_credits`/etc., and `ts` is a string here vs. an int there). Sending it to a stock Mallard server currently fails validation. See [issue tracker](https://github.com/RedPandaMC/Mallard/issues) before relying on this in production.
+Each publish sends a single JSON object, built by `buildMetricPayload` and published to the `mallard/v2/metrics` topic. The extension currently sends `schema_version: 2`. The Metrics Schema reference page has the full field table, version history, and how the server handles a schema version it doesn't recognize yet.
 
 ### Webhook example (API key)
 
