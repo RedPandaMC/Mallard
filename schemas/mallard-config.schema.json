@@ -256,25 +256,8 @@
           },
           "restrict": {
             "type": "object",
-            "required": ["mode", "scope"],
-            "description": "Optional Copilot restriction to apply when this rule fires.",
+            "description": "Shows a restriction popup (Dismiss, Snooze, Disable Mallard) when this rule fires. Never disables any extension automatically.",
             "properties": {
-              "mode": {
-                "type": "string",
-                "enum": ["soft", "hard"],
-                "description": "soft: show a warning banner only. hard: disable Copilot extensions."
-              },
-              "scope": {
-                "type": "string",
-                "enum": ["copilot", "copilot+lab", "custom"],
-                "description": "Which extensions are affected by a hard restriction."
-              },
-              "graceMinutes": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1440,
-                "description": "Grace period (minutes) before a hard restriction takes effect."
-              },
               "reEnableWhen": {
                 "$ref": "#/$defs/JsonCondition",
                 "description": "Condition that, when true, automatically clears this restriction."

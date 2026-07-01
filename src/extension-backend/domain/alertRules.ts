@@ -9,14 +9,7 @@ import { evalCondition, evalRule, evalSimpleCondition, JsonConditionSchema, reso
 import { buildRuleContext, EvalBuildInput } from './expr/context';
 
 const RestrictSchema = z.object({
-  mode: z.enum(['soft', 'hard']),
-  scope: z.enum(['copilot', 'copilot+lab', 'custom']),
   reEnableWhen: JsonConditionSchema.optional(),
-  graceMinutes: z
-    .number()
-    .min(0)
-    .max(60 * 24)
-    .optional(),
 });
 
 const SimpleConditionSchema = z.object({
@@ -120,13 +113,8 @@ export function parseAlertRules(input: unknown): ParseAlertRulesResult {
     ...(r.restrict !== undefined
       ? {
           restrict: {
-            mode: r.restrict.mode,
-            scope: r.restrict.scope,
             ...(r.restrict.reEnableWhen !== undefined
               ? { reEnableWhen: r.restrict.reEnableWhen }
-              : {}),
-            ...(r.restrict.graceMinutes !== undefined
-              ? { graceMinutes: r.restrict.graceMinutes }
               : {}),
           },
         }
@@ -268,6 +256,15 @@ export function evaluateAlertRules(input: EvaluateInput): AlertFireResult[] {
     const result = evaluateRule(rule, ctx, input.fired, now);
     return result ? [result] : [];
   });
+}
+
+/**
+ * Whether a fired rule should surface a plain notification toast. Rules with a
+ * `restrict` block get their own popup (Dismiss/Snooze/Disable) from the
+ * restriction engine instead, so they're excluded here to avoid a duplicate.
+ */
+export function shouldNotify(rule: AlertRule): boolean {
+  return rule.notify !== false && !rule.restrict;
 }
 
 export type { JsonCondition };

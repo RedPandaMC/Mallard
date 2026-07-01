@@ -85,10 +85,6 @@ export interface AlertConfig {
   velocityCreditsPerHour: number;
 }
 
-export type RestrictionMode = 'soft' | 'hard';
-
-export type RestrictionScope = 'copilot' | 'copilot+lab' | 'custom';
-
 // ── JSON condition types ─────────────────────────────────────────────────────
 
 /** A value that can appear on either side of a comparison operator. */
@@ -117,10 +113,7 @@ export type JsonCondition =
   | { 'var': string };
 
 export interface RuleRestrict {
-  mode: RestrictionMode;
-  scope: RestrictionScope;
   reEnableWhen?: JsonCondition;
-  graceMinutes?: number;
 }
 
 /**
@@ -268,22 +261,18 @@ export const SEED_USER_CONFIG: Partial<UserConfig> = {
 export interface RestrictionState {
   version: 1;
   active: boolean;
-  scope: string;
   ruleId: string;
   reasonMessage: string;
   firedAt: number;
-  graceExpiresAt: number | null;
   userOverrideUntil: number | null;
 }
 
 export const DEFAULT_RESTRICTION_STATE: RestrictionState = {
   version: 1,
   active: false,
-  scope: '',
   ruleId: '',
   reasonMessage: '',
   firedAt: 0,
-  graceExpiresAt: null,
   userOverrideUntil: null,
 };
 

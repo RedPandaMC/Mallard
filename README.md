@@ -34,7 +34,7 @@ Mallard reads the OpenTelemetry logs Copilot writes to VS Code's log directory a
 - **DuckDB-backed.** Full event detail for 90 days; older events roll up to daily rows automatically.
 - **Branch-aware.** Tags every event to the active git branch and repo, with per-branch credit caps.
 - **Programmable alerts.** JSONLogic condition language with cooldowns, group toggles, and message templates; validated by a bundled JSON Schema.
-- **Copilot restriction.** Rules can show soft (dismissable/snoozeable) or hard (persistent, re-fires every refresh) popups when a budget is exhausted.
+- **Restriction popups.** Rules can show a Dismiss/Snooze popup when a budget is exhausted, with a one-click path to disable Mallard itself if you'd rather turn it off than keep dismissing it.
 - **Metric streaming.** Push a metric payload to an MQTT broker or HTTP webhook after each snapshot.
 - **Printable export.** Self-contained HTML report, PDF-ready in any browser.
 - **GitHub billing reconciliation.** Opt-in: authoritative charge across all your machines.
@@ -108,12 +108,9 @@ bundled schema wires up autocompletion automatically.
     {
       "id": "budget-exhausted",
       "severity": "critical",
-      "message": "Monthly budget exhausted. Copilot disabled.",
+      "message": "Monthly budget exhausted.",
       "when": { ">=": [{ "var": "budget.percentOfBudget" }, 1] },
       "restrict": {
-        "mode": "hard",
-        "scope": "copilot",
-        "graceMinutes": 10,
         "reEnableWhen": { "<": [{ "var": "budget.percentOfBudget" }, 0.9] }
       }
     }

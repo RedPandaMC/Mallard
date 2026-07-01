@@ -43,7 +43,9 @@ The token value is treated identically to an API key: it goes through the same h
 
 ## MQTT password (current)
 
-**Extension settings:** `mallard.mqtt.username`, `mallard.mqtt.password`
+**Extension setting:** `mallard.mqtt.username`
+
+The password is not a config.json field. It is set via the `Mallard: Set MQTT Export Password` command and stored in VS Code `SecretStorage`, never written to disk in plain settings.
 
 Sent as the MQTT CONNECT `password` field over `wss://<host>/mqtt`. The `username` field is accepted but the server only validates the password. Credential format: `label:password`, same structure as API key.
 
@@ -97,7 +99,8 @@ kubectl get secret mallard-client-team-alpha-tls -n mallard \
   "mallard.mqtt.url": "",                 // override if different from server.url + /mqtt
   "mallard.mqtt.auth": "password",        // "password" | "certificate"
   "mallard.mqtt.username": "",            // used when auth = "password" (informational)
-  "mallard.mqtt.password": "",            // used when auth = "password"
+                                          // password is set via the "Mallard: Set MQTT Export
+                                          // Password" command and stored in SecretStorage, not here
                                           // auth = "certificate" → uses shared cert below
 
   // ── Shared certificate ────────────────────────────────────────────────────────

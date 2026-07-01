@@ -72,29 +72,12 @@ export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vsc
       case 'command':
         if (raw.id === 'openDashboard') void vscode.commands.executeCommand('mallard.openDashboard');
         else if (raw.id === 'signIn') void usage.signInGitHub();
+        else if (raw.id === 'disableExtension') {
+          void vscode.commands.executeCommand('mallard.disableExtension');
+        }
         break;
       case 'restrictSnooze':
         await restriction.snooze(raw.minutes);
-        break;
-      case 'restrictNow':
-        await restriction.snooze(0);
-        // Re-apply by clearing the grace window: a fresh reconcile will be
-        // a no-op since the rule is already active; trigger one manually.
-        {
-          const s = usage.current;
-          const cfg = userConfig.get();
-          await restriction.reconcile({
-            snapshot: s ?? null,
-            rules: cfg.rules ?? [],
-            ...(cfg.vars !== undefined ? { vars: cfg.vars } : {}),
-            ...(cfg.groups !== undefined ? { groups: cfg.groups } : {}),
-            signedIn: s?.authStatus === 'signed-in',
-          });
-        }
-        break;
-      case 'restrictPermanent':
-        // Set the user override to a far-future timestamp.
-        await restriction.snooze(60 * 24 * 365 * 10);
         break;
     }
   };

@@ -75,11 +75,11 @@ Add a `restrict` block to any rule to show a popup when the condition fires. No 
   "severity": "critical",
   "message": "Monthly budget exhausted.",
   "when": { ">=": [{ "var": "budget.percentOfBudget" }, 1] },
-  "restrict": { "mode": "hard", "scope": "copilot", "graceMinutes": 10 }
+  "restrict": {}
 }
 ```
 
-`soft` shows a dismissable warning notification with Dismiss and Snooze options; no extensions are disabled. `hard` disables the Copilot extensions in `scope` (for `"copilot"`: `github.copilot` and `github.copilot-chat`) and shows a persistent error notification that re-fires on every snapshot refresh while the condition is true.
+The popup shows Dismiss, Snooze 15m, Snooze 1h, and Disable Mallard... buttons. Disable Mallard... opens the Extensions view so you can turn Mallard off yourself; it is a manual step, never an automatic one.
 
 Run **Mallard: Simulate Restriction State** from the Command Palette for a dry run. It reports what would happen without disabling anything.
 

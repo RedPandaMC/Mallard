@@ -5,8 +5,9 @@ describe('isHostBoundMsg', () => {
   it('accepts "ready"', () => assert.equal(isHostBoundMsg({ type: 'ready' }), true));
   it('accepts "refresh"', () => assert.equal(isHostBoundMsg({ type: 'refresh' }), true));
   it('accepts "openConfig"', () => assert.equal(isHostBoundMsg({ type: 'openConfig' }), true));
-  it('accepts "restrictNow"', () => assert.equal(isHostBoundMsg({ type: 'restrictNow' }), true));
-  it('accepts "restrictPermanent"', () => assert.equal(isHostBoundMsg({ type: 'restrictPermanent' }), true));
+  it('accepts "command" with id "disableExtension"', () => {
+    assert.equal(isHostBoundMsg({ type: 'command', id: 'disableExtension' }), true);
+  });
 
   it('accepts "setFilter" with object value', () => {
     assert.equal(isHostBoundMsg({ type: 'setFilter', value: {} }), true);

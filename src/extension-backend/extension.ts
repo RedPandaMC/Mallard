@@ -77,14 +77,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const rule = cfg.rules?.find((r) => r.id === state.ruleId);
       if (!rule?.restrict) return;
       const msg = state.reasonMessage || 'Copilot usage limit reached.';
-      if (rule.restrict.mode === 'soft') {
-        const choice = await vscode.window.showWarningMessage(
-          `Mallard · ${msg}`, 'Dismiss', 'Snooze 15m', 'Snooze 1h',
-        );
-        if (choice === 'Snooze 15m') await restriction.snooze(15);
-        if (choice === 'Snooze 1h') await restriction.snooze(60);
-      } else {
-        void vscode.window.showErrorMessage(`Mallard · ${msg}`);
+      const choice = await vscode.window.showWarningMessage(
+        `Mallard · ${msg}`, 'Dismiss', 'Snooze 15m', 'Snooze 1h', 'Disable Mallard…',
+      );
+      if (choice === 'Snooze 15m') await restriction.snooze(15);
+      if (choice === 'Snooze 1h') await restriction.snooze(60);
+      if (choice === 'Disable Mallard…') {
+        await vscode.commands.executeCommand('mallard.disableExtension');
       }
     }),
   );
@@ -295,6 +294,18 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     void vscode.window.showInformationMessage(
       'All Mallard data cleared. You can now uninstall via the Extensions view.',
     );
+  });
+
+  reg('mallard.disableExtension', async () => {
+    const ok = await vscode.window.showWarningMessage(
+      'Disable Mallard? It stops running until you re-enable it from the Extensions view. ' +
+        'Your local data is kept.',
+      { modal: true },
+      'Continue',
+    );
+    if (ok !== 'Continue') return;
+    await vscode.commands.executeCommand('workbench.extensions.search', '@id:RedPandaMC.mallard');
+    void vscode.window.showInformationMessage('Mallard: Click "Disable" next to Mallard above.');
   });
 
   reg('mallard.setMqttPassword', async () => {

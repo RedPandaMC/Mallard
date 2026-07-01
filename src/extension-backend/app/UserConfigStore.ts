@@ -52,10 +52,7 @@ const ConfigSchema = z
           notify: z.boolean().optional(),
           restrict: z
             .object({
-              mode: z.enum(['soft', 'hard']),
-              scope: z.enum(['copilot', 'copilot+lab', 'custom']),
               reEnableWhen: JsonConditionSchema.optional(),
-              graceMinutes: z.number().optional(),
             })
             .optional(),
         }),
