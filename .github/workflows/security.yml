@@ -79,7 +79,7 @@ jobs:
           skip-files: "src/server/k8s/infisical/patch-server-envfrom.yaml,src/server/k8s/openbao/patch-server-env.yaml,src/server/k8s/secrets.yaml.example,src/server/k8s/infisical/secrets.yaml.example,src/server/k8s/openbao/secrets.yaml.example"
 
       - name: Upload Trivy IaC SARIF
-        uses: github/codeql-action/upload-sarif@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         if: always()
         with:
           sarif_file: trivy-iac.sarif
@@ -116,7 +116,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload Kubescape SARIF
-        uses: github/codeql-action/upload-sarif@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         if: always() && hashFiles('results.sarif') != '' && github.event_name != 'pull_request'
         with:
           sarif_file: results.sarif
@@ -153,7 +153,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload Trivy image SARIF
-        uses: github/codeql-action/upload-sarif@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         if: always()
         with:
           sarif_file: trivy-image.sarif
@@ -196,7 +196,7 @@ jobs:
           sarif-file: scout.sarif
 
       - name: Upload Docker Scout SARIF
-        uses: github/codeql-action/upload-sarif@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         if: always()
         with:
           sarif_file: scout.sarif
