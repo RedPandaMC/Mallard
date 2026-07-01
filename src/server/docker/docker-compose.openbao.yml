@@ -1,6 +1,10 @@
+# Pinned to 2.5.5 (the version actually observed running in this stack's own
+# CI logs — was previously :latest) rather than tracking upstream unattended.
+# Bump deliberately; check quay.io/openbao/openbao's tag list for the current
+# release before doing so.
 services:
   openbao:
-    image: quay.io/openbao/openbao:latest
+    image: quay.io/openbao/openbao:2.5.5
     command: server -dev -dev-root-token-id=${OPENBAO_DEV_ROOT_TOKEN:-dev-root-token}
     ports:
       - "8200:8200"
@@ -25,7 +29,7 @@ services:
       - IPC_LOCK
 
   openbao-init:
-    image: quay.io/openbao/openbao:latest
+    image: quay.io/openbao/openbao:2.5.5
     depends_on:
       openbao:
         condition: service_healthy

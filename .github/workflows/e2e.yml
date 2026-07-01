@@ -1,4 +1,4 @@
-name: E2E
+name: Server E2E
 
 # Live end-to-end test: boots the real Docker Compose stack (InfluxDB, the
 # server built from this PR's own code, and OpenBao) and posts a real ingest
@@ -27,6 +27,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   openbao-e2e:
     name: OpenBao live e2e
@@ -36,7 +39,7 @@ jobs:
         working-directory: src/server/docker
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Write CI-only .env
         run: |
