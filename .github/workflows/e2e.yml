@@ -25,6 +25,15 @@ name: Server E2E
 # since the exact same endpoint always succeeded via Docker's own internal
 # HEALTHCHECK (which also hits localhost:8080, just from inside the
 # container). Exec avoids host-port publishing entirely.
+#
+# The check scripts are piped into the container over stdin (`python3 -`)
+# rather than `docker compose cp`'d in first: the base compose file sets
+# `read_only: true` on the server service, and `docker compose cp` refuses to
+# write into any container with a read-only rootfs, even though the specific
+# target path (/tmp) is a writable tmpfs mount — Docker's copy-to-container
+# check looks at the whole container config, not the individual mount point.
+# Piping via stdin never touches the container's filesystem, so it sidesteps
+# the restriction entirely.
 
 on:
   pull_request:
@@ -73,19 +82,10 @@ jobs:
         # openbao-init) — grafana/caddy aren't exercised by this test.
         run: docker compose up -d --build server
 
-      - name: Copy HTTP check scripts into the container
-        # Real files (src/server/docker/e2e-checks/) rather than inline
-        # `python3 -c "..."` — copied into the container and exec'd from
-        # there, since it avoids relying on the host-published port (see
-        # workflow-level comment above).
-        run: |
-          docker compose cp e2e-checks/health_check.py server:/tmp/health_check.py
-          docker compose cp e2e-checks/post_check.py server:/tmp/post_check.py
-
       - name: Wait for the server to become healthy
         run: |
           for i in $(seq 1 60); do
-            if docker compose exec -T server python3 /tmp/health_check.py; then
+            if docker compose exec -T server python3 - < e2e-checks/health_check.py; then
               echo "server is healthy"
               exit 0
             fi
@@ -96,7 +96,7 @@ jobs:
 
       - name: POST a real payload with the seeded API key (expect 202)
         run: |
-          result=$(docker compose exec -T server python3 /tmp/post_check.py e2e-test-key)
+          result=$(docker compose exec -T server python3 - e2e-test-key < e2e-checks/post_check.py)
           status=$(echo "$result" | head -n1)
           echo "$result" | tail -n +2
           if [ "$status" != "202" ]; then
@@ -108,7 +108,7 @@ jobs:
         # Proves the credential-verifier path is actually being exercised,
         # not accidentally bypassed by this test's own setup.
         run: |
-          result=$(docker compose exec -T server python3 /tmp/post_check.py not-the-real-key)
+          result=$(docker compose exec -T server python3 - not-the-real-key < e2e-checks/post_check.py)
           status=$(echo "$result" | head -n1)
           echo "$result" | tail -n +2
           if [ "$status" != "401" ]; then
