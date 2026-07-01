@@ -15,7 +15,7 @@ WORKDIR /app
 
 RUN groupadd -r -g 1000 mallard && useradd -r -u 1000 -g mallard mallard
 
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY src/server/*.py ./server/
 COPY src/server/routers/ ./server/routers/
