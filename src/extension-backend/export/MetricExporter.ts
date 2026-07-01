@@ -18,6 +18,7 @@ import * as fs from 'fs';
 import * as vscode from 'vscode';
 import type { UsageSnapshot } from '../domain/types';
 import { defaultLogger, Logger } from '../util/logger';
+import { hashMachineId } from '../util/machineId';
 
 // ── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -103,11 +104,7 @@ export class MqttProtocol implements MetricProtocol {
       return;
     }
 
-    const machineHash = crypto
-      .createHash('sha256')
-      .update(vscode.env.machineId)
-      .digest('hex')
-      .slice(0, 12);
+    const machineHash = hashMachineId().slice(0, 12);
 
     if (opts.workspaceFolders && opts.workspaceFolders.length > 0) {
       const wsHash = crypto

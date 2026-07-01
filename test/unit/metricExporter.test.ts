@@ -128,8 +128,10 @@ describe('MetricPayloadSerializer', () => {
   it('serialize returns an object with all expected metric keys', () => {
     const payload = serializer.serialize(makeSnapshot());
     const EXPECTED_KEYS = [
-      'schema_version',
-      'ts', 'model_dist', 'surface_dist', 'cost_dist', 'input_cost_ratio',
+      'schema_version', 'instance_id',
+      'ts', 'mtd_credits', 'mtd_cost_usd', 'today_credits', 'today_cost_usd',
+      'active_models', 'top_model',
+      'model_dist', 'surface_dist', 'cost_dist', 'input_cost_ratio',
       'credits_velocity_per_hour', 'mtd_budget_pct', 'repo_count',
       'peak_usage_hour', 'daily_credit_variance', 'model_count',
       'surface_concentration', 'estimated_event_ratio', 'forecast_basis',
@@ -147,9 +149,9 @@ describe('MetricPayloadSerializer', () => {
     assert.notEqual(payload, null);
   });
 
-  it('schema_version is 1', () => {
+  it('schema_version is 2', () => {
     const payload = serializer.serialize(makeSnapshot());
-    assert.equal(payload['schema_version'], 1);
+    assert.equal(payload['schema_version'], 2);
   });
 
   it('cost_dist is a record of string→number', () => {

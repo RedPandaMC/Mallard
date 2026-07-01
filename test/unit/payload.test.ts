@@ -24,8 +24,10 @@ describe('buildMetricPayload', () => {
     const s = buildSnapshot([makeEvent({ ts: Date.now() - 1000, modelId: 'gpt-4o' })], opts());
     const p = buildMetricPayload(s);
     const EXPECTED = [
-      'schema_version',
-      'ts', 'model_dist', 'surface_dist', 'cost_dist', 'input_cost_ratio',
+      'schema_version', 'instance_id',
+      'ts', 'mtd_credits', 'mtd_cost_usd', 'today_credits', 'today_cost_usd',
+      'active_models', 'top_model',
+      'model_dist', 'surface_dist', 'cost_dist', 'input_cost_ratio',
       'credits_velocity_per_hour', 'mtd_budget_pct', 'repo_count',
       'peak_usage_hour', 'daily_credit_variance', 'model_count',
       'surface_concentration', 'estimated_event_ratio', 'forecast_basis',
@@ -37,9 +39,45 @@ describe('buildMetricPayload', () => {
     }
   });
 
-  it('schema_version is always 1', () => {
+  it('schema_version is always 2', () => {
     const s = buildSnapshot([makeEvent({ ts: Date.now() - 1000 })], opts());
-    assert.equal(buildMetricPayload(s).schema_version, 1);
+    assert.equal(buildMetricPayload(s).schema_version, 2);
+  });
+
+  it('instance_id is a stable 64-char hex hash', () => {
+    const s = buildSnapshot([makeEvent({ ts: Date.now() - 1000 })], opts());
+    const p1 = buildMetricPayload(s);
+    const p2 = buildMetricPayload(s);
+    assert.match(p1.instance_id, /^[0-9a-f]{64}$/);
+    assert.equal(p1.instance_id, p2.instance_id);
+  });
+
+  it('top_model is null when there are no events', () => {
+    const s = buildSnapshot([], opts());
+    assert.equal(buildMetricPayload(s).top_model, null);
+  });
+
+  it('top_model and active_models reflect the snapshot', () => {
+    const now = Date.now();
+    const events = [
+      makeEvent({ ts: now - 1000, modelId: 'gpt-4o', credits: 3 }),
+      makeEvent({ ts: now - 2000, modelId: 'claude-3.5-sonnet', credits: 1 }),
+    ];
+    const s = buildSnapshot(events, opts({ now }));
+    const p = buildMetricPayload(s);
+    assert.equal(p.top_model, 'gpt-4o');
+    assert.ok(p.active_models.includes('gpt-4o'));
+    assert.ok(p.active_models.includes('claude-3.5-sonnet'));
+  });
+
+  it('mtd_credits/today_credits mirror the snapshot budget and today totals', () => {
+    const now = Date.now();
+    const s = buildSnapshot([makeEvent({ ts: now - 1000, credits: 5, cost: 0.2 })], opts({ now }));
+    const p = buildMetricPayload(s);
+    assert.equal(p.mtd_credits, s.budget.usedCredits);
+    assert.equal(p.mtd_cost_usd, s.budget.usedCost);
+    assert.equal(p.today_credits, s.today.credits);
+    assert.equal(p.today_cost_usd, s.today.cost);
   });
 
   it('cost_dist fractions sum to ≤1', () => {
@@ -70,10 +108,11 @@ describe('buildMetricPayload', () => {
     assert.equal(buildMetricPayload(s).source_connector, 'claude-code');
   });
 
-  it('ts is an ISO string', () => {
+  it('ts is a unix epoch milliseconds number matching generatedAt', () => {
     const s = buildSnapshot([makeEvent({ ts: Date.now() - 1000 })], opts());
     const p = buildMetricPayload(s);
-    assert.ok(!isNaN(Date.parse(p.ts)), 'ts should parse as a valid date');
+    assert.equal(typeof p.ts, 'number');
+    assert.equal(p.ts, s.generatedAt);
   });
 
   it('model_dist fractions sum to ≤1', () => {

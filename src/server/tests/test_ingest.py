@@ -161,33 +161,59 @@ class TestIngestAuthentication:
 
 
 class TestIngestValidation:
-    def test_malformed_json_returns_422(self, client: TestClient) -> None:
+    """The ingest endpoint is a tolerant reader: a well-formed payload that
+    names a schema_version is accepted even with fields missing, wrongly
+    typed, or unrecognized — see normalize.py. Only a body that isn't valid
+    JSON, or has no schema_version at all, is rejected outright."""
+
+    def test_malformed_json_returns_400(self, client: TestClient) -> None:
         response = client.post(
             "/api/v1/ingest",
             content=b"not valid json {{{",
             headers={"X-API-Key": "test-key-valid", "Content-Type": "application/json"},
         )
-        assert response.status_code == 422
+        assert response.status_code == 400
 
-    def test_missing_required_field_returns_422(self, client: TestClient, valid_payload: dict) -> None:
+    def test_missing_schema_version_returns_400(self, client: TestClient, valid_payload: dict) -> None:
+        del valid_payload["schema_version"]
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={"X-API-Key": "test-key-valid"},
+        )
+        assert response.status_code == 400
+
+    def test_json_array_body_returns_400(self, client: TestClient) -> None:
+        response = client.post(
+            "/api/v1/ingest",
+            json=[1, 2, 3],
+            headers={"X-API-Key": "test-key-valid"},
+        )
+        assert response.status_code == 400
+
+    def test_missing_instance_id_still_accepted_in_degraded_mode(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
         del valid_payload["instance_id"]
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
             headers={"X-API-Key": "test-key-valid"},
         )
-        assert response.status_code == 422
+        assert response.status_code == 202
 
-    def test_missing_ts_field_returns_422(self, client: TestClient, valid_payload: dict) -> None:
+    def test_missing_ts_field_still_accepted_in_degraded_mode(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
         del valid_payload["ts"]
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
             headers={"X-API-Key": "test-key-valid"},
         )
-        assert response.status_code == 422
+        assert response.status_code == 202
 
-    def test_wrong_type_for_numeric_field_returns_422(
+    def test_wrong_type_for_numeric_field_still_accepted_in_degraded_mode(
         self, client: TestClient, valid_payload: dict
     ) -> None:
         valid_payload["mtd_cost_usd"] = "not-a-number"
@@ -196,16 +222,66 @@ class TestIngestValidation:
             json=valid_payload,
             headers={"X-API-Key": "test-key-valid"},
         )
-        assert response.status_code == 422
+        assert response.status_code == 202
 
-    def test_active_models_must_be_list(self, client: TestClient, valid_payload: dict) -> None:
+    def test_active_models_wrong_type_still_accepted_in_degraded_mode(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
         valid_payload["active_models"] = "claude-sonnet"
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
             headers={"X-API-Key": "test-key-valid"},
         )
-        assert response.status_code == 422
+        assert response.status_code == 202
+
+    def test_unknown_schema_version_accepted_in_degraded_mode(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """A client newer than this server (schema_version the server has
+        never seen) must not fail — it's ingested best-effort instead."""
+        valid_payload["schema_version"] = 99
+        valid_payload["a_field_this_server_has_never_heard_of"] = "future data"
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={"X-API-Key": "test-key-valid"},
+        )
+        assert response.status_code == 202
+
+    def test_v1_shaped_payload_from_an_unupgraded_extension_is_accepted(
+        self, client: TestClient
+    ) -> None:
+        """A server upgraded ahead of the extension must still accept the
+        older extension's real v1 payload shape (issue #27)."""
+        v1_payload = {
+            "schema_version": 1,
+            "ts": "2026-01-01T00:00:00.000Z",
+            "model_dist": {"gpt-4o": 1.0},
+            "surface_dist": {"chat": 1.0},
+            "cost_dist": {"input": 0.6, "output": 0.4},
+            "input_cost_ratio": 0.6,
+            "credits_velocity_per_hour": 1.5,
+            "mtd_budget_pct": 42.0,
+            "repo_count": 2,
+            "peak_usage_hour": 14,
+            "daily_credit_variance": 3.2,
+            "model_count": 1,
+            "surface_concentration": 0.0,
+            "estimated_event_ratio": 1.0,
+            "forecast_basis": "linear",
+            "budget_trend": 0,
+            "token_per_credit": 120.0,
+            "forecast_low": 100.0,
+            "forecast_high": 200.0,
+            "source_connector": "local",
+        }
+        response = client.post(
+            "/api/v1/ingest",
+            json=v1_payload,
+            headers={"X-API-Key": "test-key-valid"},
+        )
+        assert response.status_code == 202
 
     def test_oversized_body_returns_413(self, client: TestClient) -> None:
         # Build a payload larger than 64 KB
@@ -221,13 +297,13 @@ class TestIngestValidation:
         )
         assert response.status_code == 413
 
-    def test_empty_body_returns_422(self, client: TestClient) -> None:
+    def test_empty_body_returns_400(self, client: TestClient) -> None:
         response = client.post(
             "/api/v1/ingest",
             content=b"",
             headers={"X-API-Key": "test-key-valid", "Content-Type": "application/json"},
         )
-        assert response.status_code == 422
+        assert response.status_code == 400
 
 
 class TestIngestRouteDirectly:
@@ -238,10 +314,9 @@ class TestIngestRouteDirectly:
     with a mock request bypasses the middleware and exercises the fallback check.
     """
 
-    async def test_belt_and_suspenders_413(self, valid_payload: dict) -> None:
+    async def test_belt_and_suspenders_413(self) -> None:
         from server.credential_verifier import StaticCredentialVerifier
         from server.routers.ingest import ingest
-        from server.schemas import IngestPayload
 
         mock_request = MagicMock()
         mock_request.headers.get = MagicMock(return_value=str(64 * 1024 + 1))
@@ -251,8 +326,9 @@ class TestIngestRouteDirectly:
         mock_settings.hashed_mqtt_credentials = {}
         verifier = StaticCredentialVerifier(mock_settings)
 
+        # The 413 check runs before the body is ever read, so request.body()
+        # is never awaited here.
         result = await ingest(
-            payload=IngestPayload(**valid_payload),
             request=mock_request,
             verifier=verifier,
         )
