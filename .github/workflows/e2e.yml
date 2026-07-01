@@ -1,0 +1,130 @@
+name: E2E
+
+# Live end-to-end test: boots the real Docker Compose stack (InfluxDB, the
+# server built from this PR's own code, and OpenBao) and posts a real ingest
+# payload through it. Unlike server.yml's mocked unit tests, this exercises
+# the actual credential-fetch path — the exact class of bug (OpenBao's
+# agent-injector file never sourced, Infisical's Operator auth mismatch) that
+# shipped undetected because every mocked test bypasses create_verifier.
+#
+# Infisical e2e is out of scope for now: unlike OpenBao's one-shot
+# openbao-init seed container, there's no non-interactive way to bootstrap an
+# Infisical project + machine token today.
+#
+# Scoped narrowly on pull_request (only paths that can affect credential
+# wiring) plus unconditionally on push to main, as a safety net — mirrors
+# security.yml's narrow path-based scoping and server.yml's build-push job's
+# main-only precedent.
+
+on:
+  pull_request:
+    paths:
+      - "src/server/docker/**"
+      - "src/server/credential_verifier.py"
+      - "src/server/deps.py"
+      - "src/server/config.py"
+      - ".github/workflows/e2e.yml"
+  push:
+    branches: [main]
+
+jobs:
+  openbao-e2e:
+    name: OpenBao live e2e
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/server/docker
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write CI-only .env
+        run: |
+          cat > .env <<'EOF'
+          INFLUX_ADMIN_USER=admin
+          INFLUX_ADMIN_PASSWORD=ci-admin-password
+          INFLUX_TOKEN=ci-influx-token
+          INFLUX_ORG=mallard
+          INFLUX_BUCKET=metrics
+          GF_SECURITY_ADMIN_PASSWORD=ci-grafana-password
+          SERVER_DOMAIN=localhost
+          OPENBAO_DEV_ROOT_TOKEN=ci-dev-root-token
+          API_KEYS=e2e-team:e2e-test-key
+          MQTT_CREDENTIALS=
+          EOF
+
+      - name: Start the stack
+        # Only `server` and its transitive dependencies (influxdb, openbao,
+        # openbao-init) — grafana/caddy aren't exercised by this test and the
+        # ci-e2e overlay bypasses Caddy's TLS termination entirely.
+        run: |
+          docker compose \
+            -f docker-compose.yml -f docker-compose.openbao.yml -f docker-compose.ci-e2e.yml \
+            up -d --build server
+
+      - name: Wait for the server to become healthy
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/health > /dev/null; then
+              echo "server is healthy"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::server never became healthy within the time budget"
+          exit 1
+
+      - name: POST a real payload with the seeded API key (expect 202)
+        run: |
+          status=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
+            -X POST http://localhost:8080/api/v1/ingest \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: e2e-test-key" \
+            -d '{
+              "instance_id": "e2e-instance",
+              "schema_version": 2,
+              "ts": 1700000000000,
+              "mtd_credits": 42.5,
+              "mtd_cost_usd": 1.5,
+              "today_credits": 3.5,
+              "today_cost_usd": 0.2,
+              "active_models": ["claude-sonnet-4-5"],
+              "top_model": "claude-sonnet-4-5"
+            }')
+          cat /tmp/resp.json
+          echo ""
+          if [ "$status" != "202" ]; then
+            echo "::error::expected 202 from a validly-authenticated payload, got $status"
+            exit 1
+          fi
+
+      - name: POST with a wrong API key (expect 401 — negative control)
+        # Proves the credential-verifier path is actually being exercised,
+        # not accidentally bypassed by this test's own setup.
+        run: |
+          status=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
+            -X POST http://localhost:8080/api/v1/ingest \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: not-the-real-key" \
+            -d '{"instance_id": "e2e-instance", "schema_version": 2, "ts": 1700000000000,
+                 "mtd_credits": 1, "mtd_cost_usd": 1, "today_credits": 1, "today_cost_usd": 1}')
+          cat /tmp/resp.json
+          echo ""
+          if [ "$status" != "401" ]; then
+            echo "::error::expected 401 for a wrong API key, got $status — credential verification may be bypassed"
+            exit 1
+          fi
+
+      - name: Dump compose logs on failure
+        if: failure()
+        run: |
+          docker compose \
+            -f docker-compose.yml -f docker-compose.openbao.yml -f docker-compose.ci-e2e.yml \
+            logs
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.yml -f docker-compose.openbao.yml -f docker-compose.ci-e2e.yml \
+            down -v

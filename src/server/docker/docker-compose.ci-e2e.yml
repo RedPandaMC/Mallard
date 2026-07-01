@@ -1,0 +1,11 @@
+# CI-only overlay for the openbao-e2e GitHub Actions job (.github/workflows/e2e.yml).
+#
+# Publishes the server's ingest port directly to the host so the workflow can
+# POST to it over plain HTTP without handling Caddy's self-signed dev
+# certificate. Testing Caddy/TLS termination isn't this job's purpose — the
+# credential-manager wiring is. Never use this overlay outside CI: every real
+# deployment path goes through Caddy's TLS termination, and this bypasses it.
+services:
+  server:
+    ports:
+      - "8080:8080"
