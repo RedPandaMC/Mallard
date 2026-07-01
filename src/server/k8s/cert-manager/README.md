@@ -19,8 +19,8 @@ This creates four ClusterIssuers:
 
 | Issuer | Use case |
 |---|---|
-| `letsencrypt-staging` | CI / testing — no rate limits |
-| `letsencrypt-prod` | Production — matches `ingress.yaml` annotation |
+| `letsencrypt-staging` | CI / testing, no rate limits |
+| `letsencrypt-prod` | Production, matches `ingress.yaml` annotation |
 | `selfsigned` | Air-gapped / dev clusters |
 | `mallard-ca` | Internal CA for mTLS client certificates |
 

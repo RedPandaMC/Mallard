@@ -5,7 +5,7 @@
 - VS Code 1.95 or later
 - [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) installed and active
 
-Mallard requires no sign-in or API token — it reads OTel log files Copilot writes to VS Code's own log directory.
+Mallard requires no sign-in or API token: it reads OTel log files Copilot writes to VS Code's own log directory.
 
 ## Installation
 
@@ -19,7 +19,7 @@ code --install-extension RedPandaMC.mallard
 
 ## First run
 
-Click the Mallard icon in the activity bar. If the dashboard shows an empty state, use Copilot for a minute then click **Refresh**. Run **Mallard: Show Detected Log Path** to confirm Mallard found the right directory — if not, set `mallard.copilotLogPath` to override it.
+Click the Mallard icon in the activity bar. If the dashboard shows an empty state, use Copilot for a minute then click **Refresh**. Run **Mallard: Show Detected Log Path** to confirm Mallard found the right directory. If not, set `mallard.copilotLogPath` to override it.
 
 ## What Mallard tracks
 
@@ -34,5 +34,5 @@ Run **Mallard: Sign In to GitHub** (or use the dashboard button) to pull the aut
 VS Code does not delete extension storage on uninstall, so run this one command first:
 
 1. Open the Command Palette and run **Mallard: Prepare for Uninstall**.
-2. Confirm the modal — this deletes all events, settings, cached pricing, and secrets.
+2. Confirm the modal. This deletes all events, settings, cached pricing, and secrets.
 3. Uninstall Mallard from the Extensions view as usual.

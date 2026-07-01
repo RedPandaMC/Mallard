@@ -1,6 +1,6 @@
 # Authentication & Identity Reference
 
-The self-hosted Mallard server supports four authentication methods. The method you choose controls what the extension sends and what `source` label is written to InfluxDB — the tag that lets Grafana dashboards break down spend by team member, machine, or CI pipeline without a separate configuration step per dashboard.
+The self-hosted Mallard server supports four authentication methods. The method you choose controls what the extension sends and what `source` label is written to InfluxDB: the tag that lets Grafana dashboards break down spend by team member, machine, or CI pipeline without a separate configuration step per dashboard.
 
 ## Supported auth methods
 
@@ -33,13 +33,13 @@ Alternative to `X-API-Key`. Send as:
 Authorization: Bearer <token>
 ```
 
-The token value is treated identically to an API key — it goes through the same hash lookup. This allows the extension to use a token obtained from an IdP (Infisical machine token, OpenBao token, OAuth access token) directly.
+The token value is treated identically to an API key: it goes through the same hash lookup. This allows the extension to use a token obtained from an IdP (Infisical machine token, OpenBao token, OAuth access token) directly.
 
 ## MQTT password (current)
 
 **Extension settings:** `mallard.mqtt.username`, `mallard.mqtt.password`
 
-Sent as the MQTT CONNECT `password` field over `wss://<host>/mqtt`. The `username` field is accepted but the server only validates the password. Credential format: `label:password` — same structure as API key.
+Sent as the MQTT CONNECT `password` field over `wss://<host>/mqtt`. The `username` field is accepted but the server only validates the password. Credential format: `label:password`, same structure as API key.
 
 ## mTLS client certificate (current)
 
@@ -47,7 +47,7 @@ Sent as the MQTT CONNECT `password` field over `wss://<host>/mqtt`. The `usernam
 
 The extension presents a client certificate when establishing the TLS connection. The certificate must be issued by the server operator using the `mallard-ca` ClusterIssuer.
 
-The CN (Common Name) field of the certificate becomes the `source` tag — no separate API key is needed.
+The CN (Common Name) field of the certificate becomes the `source` tag; no separate API key is needed.
 
 **Server side:**
 - nginx Ingress: `auth-tls-*` annotations forward `SSL_CLIENT_S_DN_CN` as a request header.
@@ -76,7 +76,7 @@ InfluxDB data point:
 | --- | --- |
 | API key (static) | The label in `API_KEYS=label:key` |
 | MQTT password (static) | The label in `MQTT_CREDENTIALS=label:password` |
-| Bearer token | Treated as an API key — the label from the credential store |
+| Bearer token | Treated as an API key: the label from the credential store |
 | mTLS client certificate | The Common Name (CN) field of the certificate |
 | Infisical / OpenBao | Same label format, fetched live from the secret store |
 | Unlabelled key (bare secret) | `"unknown"` |
@@ -89,7 +89,7 @@ API_KEYS=alice:key-abc123,bob:key-def456,ci-pipeline:key-ghi789
 MQTT_CREDENTIALS=alice:mqtt-pass1,ci-pipeline:mqtt-pass2
 ```
 
-Labels are arbitrary strings — usernames, machine names, team names, whatever fits your
+Labels are arbitrary strings: usernames, machine names, team names, whatever fits your
 naming convention.
 
 ## Querying by source in Flux
@@ -113,7 +113,7 @@ from(bucket: "metrics")
 
 The pre-built Grafana dashboards include a `source` variable that drives all panels.
 Select a source from the dropdown to filter the entire dashboard to one identity. To add
-a new source, add a new labelled credential — Grafana queries InfluxDB for the distinct
+a new source, add a new labelled credential. Grafana queries InfluxDB for the distinct
 list of `source` values dynamically, so no dashboard edit is needed.
 
 ## Auth precedence on the server (HTTP)

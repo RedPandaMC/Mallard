@@ -1,17 +1,17 @@
 # Features
 
-Mallard is a local-first Copilot spend tracker. No sign-in is needed for anything except GitHub billing reconciliation — all other features run entirely offline.
+Mallard is a local-first Copilot spend tracker. No sign-in is needed for anything except GitHub billing reconciliation; all other features run entirely offline.
 
 ## Dashboard
 
 Open from the activity bar icon or **Mallard: Open Dashboard**. The dashboard shows:
 
-- **KPI cards** — today, month-to-date, projected month-end, and top model
-- **Spend gauge** — credits used against your included allowance, with severity colouring at 80% and 100% of budget
-- **30-day bar chart** — daily spend with a projected-pace line and previous-period comparison bars
-- **Model breakdown** — top models by credits
-- **Sankey flow chart** — credits from each model to each surface (chat, inline, agent, edit)
-- **Cost-type chart** — input vs output token spend
+- **KPI cards**: today, month-to-date, projected month-end, and top model
+- **Spend gauge**: credits used against your included allowance, with severity colouring at 80% and 100% of budget
+- **30-day bar chart**: daily spend with a projected-pace line and previous-period comparison bars
+- **Model breakdown**: top models by credits
+- **Sankey flow chart**: credits from each model to each surface (chat, inline, agent, edit)
+- **Cost-type chart**: input vs output token spend
 
 A pop-out button opens the same view as a full editor tab.
 
@@ -41,7 +41,7 @@ Write precise conditions using a JSONLogic-inspired language. Rules can fire VS 
   "rules": [{
     "id": "daily-high",
     "severity": "warning",
-    "message": "{{today.credits}} credits used today — slow down.",
+    "message": "{{today.credits}} credits used today, slow down.",
     "when": { ">": [{ "var": "today.credits" }, 100] },
     "cooldown": "2h"
   }]
@@ -67,7 +67,7 @@ Group rules to toggle a whole set at once from the dashboard without deleting th
 
 ## Copilot restriction
 
-Add a `restrict` block to any rule to show a popup when the condition fires. No extensions are disabled — the popup creates friction.
+Add a `restrict` block to any rule to show a popup when the condition fires. No extensions are disabled; the popup creates friction.
 
 ```json
 {
@@ -79,9 +79,9 @@ Add a `restrict` block to any rule to show a popup when the condition fires. No 
 }
 ```
 
-`soft` shows a dismissable warning notification with Dismiss and Snooze options — no extensions are disabled. `hard` disables the Copilot extensions in `scope` (for `"copilot"`: `github.copilot` and `github.copilot-chat`) and shows a persistent error notification that re-fires on every snapshot refresh while the condition is true.
+`soft` shows a dismissable warning notification with Dismiss and Snooze options; no extensions are disabled. `hard` disables the Copilot extensions in `scope` (for `"copilot"`: `github.copilot` and `github.copilot-chat`) and shows a persistent error notification that re-fires on every snapshot refresh while the condition is true.
 
-Run **Mallard: Simulate Restriction State** from the Command Palette for a dry run — it reports what would happen without disabling anything.
+Run **Mallard: Simulate Restriction State** from the Command Palette for a dry run. It reports what would happen without disabling anything.
 
 ## Branch-aware tracking
 
@@ -99,7 +99,7 @@ When multiple repos are open, Mallard attributes usage to the active workspace. 
 
 ## GitHub billing reconciliation
 
-Run **Mallard: Sign In to GitHub** to pull the authoritative charge from GitHub's billing API — spend across all your machines, not just the current one. Sign-in is optional; all other features work without it.
+Run **Mallard: Sign In to GitHub** to pull the authoritative charge from GitHub's billing API: spend across all your machines, not just the current one. Sign-in is optional; all other features work without it.
 
 ## Metric streaming
 
@@ -109,7 +109,7 @@ After each snapshot Mallard can publish a JSON usage vector to a self-hosted ser
 
 **Mallard: Export Monthly Report** saves a standalone, printable HTML file. No external requests; prints to PDF from any browser.
 
-**Mallard: Export Usage Data** exports the raw event log as CSV or JSON — one row per event with timestamp, model, surface, source, credits, cost, tokens, repo, and branch.
+**Mallard: Export Usage Data** exports the raw event log as CSV or JSON, one row per event with timestamp, model, surface, source, credits, cost, tokens, repo, and branch.
 
 ## Automatic pricing
 

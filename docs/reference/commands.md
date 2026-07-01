@@ -59,7 +59,7 @@ machine you use.
 ## Mallard: Export Usage Data
 
 ID `mallard.exportData`. Exports the raw event log to a file. A save dialog lets
-you choose CSV or JSON format — the format is inferred from the file extension
+you choose CSV or JSON format: the format is inferred from the file extension
 you type (`.csv` or `.json`). The output contains one row per event with all
 stored fields (timestamp, model, surface, source, credits, cost, tokens, repo,
 branch).
@@ -73,7 +73,7 @@ previously saved password.
 
 ## Mallard: Simulate Restriction State
 
-ID `mallard.simulateRestriction`. Evaluates all restriction rules against the current snapshot and writes the result — which rule (if any) would be active, its scope, and grace period — as JSON to the "Mallard Restriction" output channel. Nothing is disabled and no notification fires. Useful for checking a new `restrict` rule before it can actually disable Copilot.
+ID `mallard.simulateRestriction`. Evaluates all restriction rules against the current snapshot and writes the result (which rule, if any, would be active, its scope, and grace period) as JSON to the "Mallard Restriction" output channel. Nothing is disabled and no notification fires. Useful for checking a new `restrict` rule before it can actually disable Copilot.
 
 ## Mallard: Prepare for Uninstall
 

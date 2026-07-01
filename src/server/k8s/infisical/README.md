@@ -52,6 +52,6 @@ Use `label:value` format so each identity gets a `source` tag in InfluxDB:
 ## Credential rotation
 
 Revoke or update credentials directly in the Infisical UI.  The server's
-`RemoteCredentialVerifier` re-fetches the store on its TTL cycle (30 s by default)
-— no pod restart needed.  Set `SECRET_MANAGER_TYPE=infisical` in the Deployment's
+`RemoteCredentialVerifier` re-fetches the store on its TTL cycle (30 s by default),
+no pod restart needed.  Set `SECRET_MANAGER_TYPE=infisical` in the Deployment's
 environment to activate the Infisical verifier path.
