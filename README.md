@@ -68,4 +68,4 @@ Press F5 to launch an Extension Development Host.
 
 ## License
 
-MIT, Jurrean De Nys
+MIT
