@@ -24,6 +24,7 @@ require.cache['__vscode_stub__'] = {
   paths: [],
   exports: {
     extensions: { getExtension: () => undefined },
+    env: { machineId: 'test-machine-id' },
     workspace: {
       workspaceFolders: undefined,
       getWorkspaceFolder: () => undefined,

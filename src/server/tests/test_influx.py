@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, call, patch
+import json
+from unittest.mock import MagicMock
 
 import pytest
 
-from server.schemas import IngestPayload
+from server.normalize import NormalizedMetric
 
 
 @pytest.fixture()
-def sample_payload() -> IngestPayload:
-    return IngestPayload(
-        instance_id="inst-abc",
+def sample_metric() -> NormalizedMetric:
+    return NormalizedMetric(
         schema_version=2,
-        ts=1_700_000_000_000,
+        instance_id="inst-abc",
+        ts_ms=1_700_000_000_000,
+        connector="copilot",
         credits_velocity_per_hour=2.5,
         mtd_budget_pct=55.0,
         mtd_credits=200.0,
@@ -27,28 +29,28 @@ def sample_payload() -> IngestPayload:
 
 
 class TestWritePayload:
-    def test_write_called_once(self, sample_payload: IngestPayload) -> None:
+    def test_write_called_once(self, sample_metric: NormalizedMetric) -> None:
         from server.influx import write_payload
 
         mock_api = MagicMock()
-        write_payload(mock_api, bucket="metrics", org="mallard", payload=sample_payload)
+        write_payload(mock_api, bucket="metrics", org="mallard", metric=sample_metric)
         assert mock_api.write.call_count == 1
 
-    def test_write_receives_correct_bucket_and_org(self, sample_payload: IngestPayload) -> None:
+    def test_write_receives_correct_bucket_and_org(self, sample_metric: NormalizedMetric) -> None:
         from server.influx import write_payload
 
         mock_api = MagicMock()
-        write_payload(mock_api, bucket="my-bucket", org="my-org", payload=sample_payload)
+        write_payload(mock_api, bucket="my-bucket", org="my-org", metric=sample_metric)
 
         _, kwargs = mock_api.write.call_args
         assert kwargs["bucket"] == "my-bucket"
         assert kwargs["org"] == "my-org"
 
-    def test_point_measurement_name(self, sample_payload: IngestPayload) -> None:
+    def test_point_measurement_name(self, sample_metric: NormalizedMetric) -> None:
         """The InfluxDB Point should use the 'mallard_metrics' measurement."""
         from influxdb_client import Point
 
-        from server.influx import write_payload, _MEASUREMENT
+        from server.influx import _MEASUREMENT, write_payload
 
         captured_points: list[Point] = []
 
@@ -58,13 +60,13 @@ class TestWritePayload:
         mock_api = MagicMock()
         mock_api.write.side_effect = capture_write
 
-        write_payload(mock_api, bucket="metrics", org="mallard", payload=sample_payload)
+        write_payload(mock_api, bucket="metrics", org="mallard", metric=sample_metric)
 
         assert len(captured_points) == 1
         # Point._name is the measurement name
         assert captured_points[0]._name == _MEASUREMENT
 
-    def test_point_contains_instance_id_tag(self, sample_payload: IngestPayload) -> None:
+    def test_point_contains_instance_id_and_connector_tags(self, sample_metric: NormalizedMetric) -> None:
         from server.influx import write_payload
 
         captured: list = []
@@ -75,12 +77,27 @@ class TestWritePayload:
         mock_api = MagicMock()
         mock_api.write.side_effect = capture
 
-        write_payload(mock_api, bucket="metrics", org="mallard", payload=sample_payload)
+        write_payload(mock_api, bucket="metrics", org="mallard", metric=sample_metric)
 
         point = captured[0]
         assert point._tags.get("instance_id") == "inst-abc"
+        assert point._tags.get("connector") == "copilot"
 
-    def test_point_contains_numeric_fields(self, sample_payload: IngestPayload) -> None:
+    def test_missing_instance_id_and_connector_tagged_unknown(self) -> None:
+        from server.influx import write_payload
+
+        metric = NormalizedMetric(schema_version=1, instance_id=None, ts_ms=1_700_000_000_000, connector=None)
+        captured: list = []
+        mock_api = MagicMock()
+        mock_api.write.side_effect = lambda **kw: captured.append(kw["record"])
+
+        write_payload(mock_api, bucket="metrics", org="mallard", metric=metric)
+
+        point = captured[0]
+        assert point._tags.get("instance_id") == "unknown"
+        assert point._tags.get("connector") == "unknown"
+
+    def test_point_contains_numeric_fields(self, sample_metric: NormalizedMetric) -> None:
         from server.influx import write_payload
 
         captured: list = []
@@ -91,21 +108,69 @@ class TestWritePayload:
         mock_api = MagicMock()
         mock_api.write.side_effect = capture
 
-        write_payload(mock_api, bucket="metrics", org="mallard", payload=sample_payload)
+        write_payload(mock_api, bucket="metrics", org="mallard", metric=sample_metric)
 
         point = captured[0]
         assert point._fields["mtd_cost_usd"] == 7.00
         assert point._fields["today_credits"] == 20.0
         assert point._fields["credits_velocity_per_hour"] == 2.5
 
+    def test_none_fields_are_omitted_not_zeroed(self) -> None:
+        """A field a given schema version never supplied should be absent
+        from the point, not silently written as 0."""
+        from server.influx import write_payload
+
+        metric = NormalizedMetric(schema_version=1, instance_id=None, ts_ms=1_700_000_000_000, connector="claude-code")
+        captured: list = []
+        mock_api = MagicMock()
+        mock_api.write.side_effect = lambda **kw: captured.append(kw["record"])
+
+        write_payload(mock_api, bucket="metrics", org="mallard", metric=metric)
+
+        point = captured[0]
+        assert "mtd_cost_usd" not in point._fields
+        assert "today_credits" not in point._fields
+
+    def test_extra_fields_stored_as_json(self) -> None:
+        from server.influx import write_payload
+
+        metric = NormalizedMetric(
+            schema_version=3,
+            instance_id="inst-future",
+            ts_ms=1_700_000_000_000,
+            connector="copilot",
+            extra={"some_new_field": 42, "model_dist": {"gpt-4o": 0.6}},
+        )
+        captured: list = []
+        mock_api = MagicMock()
+        mock_api.write.side_effect = lambda **kw: captured.append(kw["record"])
+
+        write_payload(mock_api, bucket="metrics", org="mallard", metric=metric)
+
+        point = captured[0]
+        stored = json.loads(point._fields["extra_json"])
+        assert stored["some_new_field"] == 42
+        assert stored["model_dist"] == {"gpt-4o": 0.6}
+
+    def test_no_extra_json_field_when_extra_is_empty(self, sample_metric: NormalizedMetric) -> None:
+        from server.influx import write_payload
+
+        captured: list = []
+        mock_api = MagicMock()
+        mock_api.write.side_effect = lambda **kw: captured.append(kw["record"])
+
+        write_payload(mock_api, bucket="metrics", org="mallard", metric=sample_metric)
+
+        assert "extra_json" not in captured[0]._fields
+
     def test_null_top_model_stored_as_empty_string(self) -> None:
         from server.influx import write_payload
-        from server.schemas import IngestPayload
 
-        payload = IngestPayload(
-            instance_id="inst-xyz",
+        metric = NormalizedMetric(
             schema_version=2,
-            ts=1_700_000_000_000,
+            instance_id="inst-xyz",
+            ts_ms=1_700_000_000_000,
+            connector="copilot",
             credits_velocity_per_hour=0.0,
             mtd_budget_pct=0.0,
             mtd_credits=0.0,
@@ -124,7 +189,7 @@ class TestWritePayload:
         mock_api = MagicMock()
         mock_api.write.side_effect = capture
 
-        write_payload(mock_api, bucket="metrics", org="mallard", payload=payload)
+        write_payload(mock_api, bucket="metrics", org="mallard", metric=metric)
 
         point = captured[0]
         assert point._fields["top_model"] == ""
@@ -141,7 +206,9 @@ class TestMakeClient:
             influx_token="mytoken",
             influx_org="myorg",
             influx_bucket="mybucket",
-            api_keys="k1",
+            secret_manager_type="openbao",
+            secret_manager_url="http://sm.example",
+            secret_manager_token="sm-token",
         )
 
         with patch("server.influx.InfluxDBClient") as MockClient:

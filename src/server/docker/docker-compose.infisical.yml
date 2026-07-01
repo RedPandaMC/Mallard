@@ -20,6 +20,12 @@ services:
       - infisical-redis-data:/data
 
   infisical:
+    # TODO: pin to a specific version once confirmed available — Infisical's
+    # Docker Hub versioned "-postgres" variant tags appear to have stopped
+    # being published somewhere after v0.146.0-postgres, while the project's
+    # GitHub releases are at v0.161.10+; a stale versioned pin could mean
+    # running long-outdated, unpatched code, which is worse than :latest here
+    # until that's verified against the current tag list.
     image: infisical/infisical:latest-postgres
     depends_on:
       infisical-db:

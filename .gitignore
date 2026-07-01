@@ -1,6 +1,7 @@
 node_modules/
 dist/
 out/
+docs/.vitepress/cache/
 *.vsix
 .vscode-test/
 *.log
@@ -11,3 +12,4 @@ coverage/
 __pycache__/
 *.pyc
 *.pyo
+.venv/

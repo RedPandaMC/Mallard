@@ -1,0 +1,125 @@
+name: Server E2E
+
+# Live end-to-end test: boots the real Docker Compose stack (InfluxDB, the
+# server built from this PR's own code, and OpenBao) and posts a real ingest
+# payload through it. Unlike server.yml's mocked unit tests, this exercises
+# the actual credential-fetch path — the exact class of bug (OpenBao's
+# agent-injector file never sourced, Infisical's Operator auth mismatch) that
+# shipped undetected because every mocked test bypasses create_verifier.
+#
+# Infisical e2e is out of scope for now: unlike OpenBao's one-shot
+# openbao-init seed container, there's no non-interactive way to bootstrap an
+# Infisical project + machine token today.
+#
+# Scoped narrowly on pull_request (only paths that can affect credential
+# wiring) plus unconditionally on push to main, as a safety net — mirrors
+# security.yml's narrow path-based scoping and server.yml's build-push job's
+# main-only precedent.
+#
+# HTTP checks run via `docker compose exec` into the server container itself
+# (using httpx, already a pyproject dependency) rather than against a
+# host-published port. An earlier version published port 8080 to the runner
+# host and curled it directly, but that consistently failed to connect on
+# ubuntu-latest runners even after ruling out IPv6/localhost resolution —
+# almost certainly a hairpin-NAT/docker-proxy quirk on this runner image,
+# since the exact same endpoint always succeeded via Docker's own internal
+# HEALTHCHECK (which also hits localhost:8080, just from inside the
+# container). Exec avoids host-port publishing entirely.
+#
+# The check scripts are piped into the container over stdin (`python3 -`)
+# rather than `docker compose cp`'d in first: the base compose file sets
+# `read_only: true` on the server service, and `docker compose cp` refuses to
+# write into any container with a read-only rootfs, even though the specific
+# target path (/tmp) is a writable tmpfs mount — Docker's copy-to-container
+# check looks at the whole container config, not the individual mount point.
+# Piping via stdin never touches the container's filesystem, so it sidesteps
+# the restriction entirely.
+
+on:
+  pull_request:
+    paths:
+      - "src/server/docker/**"
+      - "src/server/credential_verifier.py"
+      - "src/server/deps.py"
+      - "src/server/config.py"
+      - ".github/workflows/e2e.yml"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  openbao-e2e:
+    name: OpenBao live e2e
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/server/docker
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.openbao.yml
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Write CI-only .env
+        run: |
+          cat > .env <<'EOF'
+          INFLUX_ADMIN_USER=admin
+          INFLUX_ADMIN_PASSWORD=ci-admin-password
+          INFLUX_TOKEN=ci-influx-token
+          INFLUX_ORG=mallard
+          INFLUX_BUCKET=metrics
+          GF_SECURITY_ADMIN_PASSWORD=ci-grafana-password
+          SERVER_DOMAIN=localhost
+          OPENBAO_DEV_ROOT_TOKEN=ci-dev-root-token
+          API_KEYS=e2e-team:e2e-test-key
+          MQTT_CREDENTIALS=
+          EOF
+
+      - name: Start the stack
+        # Only `server` and its transitive dependencies (influxdb, openbao,
+        # openbao-init) — grafana/caddy aren't exercised by this test.
+        run: docker compose up -d --build server
+
+      - name: Wait for the server to become healthy
+        run: |
+          for i in $(seq 1 60); do
+            if docker compose exec -T server python3 - < e2e-checks/health_check.py; then
+              echo "server is healthy"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::server never became healthy within the time budget"
+          exit 1
+
+      - name: POST a real payload with the seeded API key (expect 202)
+        run: |
+          result=$(docker compose exec -T server python3 - e2e-test-key < e2e-checks/post_check.py)
+          status=$(echo "$result" | head -n1)
+          echo "$result" | tail -n +2
+          if [ "$status" != "202" ]; then
+            echo "::error::expected 202 from a validly-authenticated payload, got $status"
+            exit 1
+          fi
+
+      - name: POST with a wrong API key (expect 401 — negative control)
+        # Proves the credential-verifier path is actually being exercised,
+        # not accidentally bypassed by this test's own setup.
+        run: |
+          result=$(docker compose exec -T server python3 - not-the-real-key < e2e-checks/post_check.py)
+          status=$(echo "$result" | head -n1)
+          echo "$result" | tail -n +2
+          if [ "$status" != "401" ]; then
+            echo "::error::expected 401 for a wrong API key, got $status — credential verification may be bypassed"
+            exit 1
+          fi
+
+      - name: Dump compose logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

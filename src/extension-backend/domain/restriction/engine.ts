@@ -1,6 +1,7 @@
 /**
- * Restriction engine — owns the on-disk state, idempotently applies
- * disable/enable commands, and exposes a small surface for the host and UI.
+ * Restriction engine — owns the on-disk popup state and exposes a small
+ * surface for the host and UI. Never disables any extension; it only tracks
+ * whether the restriction popup (Dismiss/Snooze/Disable Mallard) should show.
  */
 import * as vscode from 'vscode';
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
@@ -15,7 +16,6 @@ interface RestrictionSimulateReport {
   state: RestrictionState;
   desired: ReturnType<typeof evaluateRestrictionState>;
   rules: AlertRule[];
-  customExtensions: string[];
 }
 
 export class RestrictionEngine {
@@ -35,11 +35,9 @@ export class RestrictionEngine {
     return { ...this.state };
   }
 
-  isHardActive(now = Date.now()): boolean {
+  isRestricted(now = Date.now()): boolean {
     if (this.state.userOverrideUntil && this.state.userOverrideUntil > now) return false;
-    if (!this.state.active) return false;
-    if (this.state.graceExpiresAt && this.state.graceExpiresAt > now) return false;
-    return true;
+    return this.state.active;
   }
 
   /** Wipe the restriction state. */
@@ -86,49 +84,24 @@ export class RestrictionEngine {
       return this.state;
     }
 
-    if (desired.active.restrict?.mode === 'soft') {
-      if (!state.active || state.scope !== (desired.active.restrict.scope as string)) {
-        this.state = {
-          version: 1,
-          active: true,
-          scope: desired.active.restrict.scope,
-          ruleId: desired.active.id,
-          reasonMessage: desired.active.message,
-          firedAt: now,
-          graceExpiresAt: null,
-          userOverrideUntil: null,
-        };
-        this.writeToDisk();
-        this._onDidChange.fire(this.getState());
-      }
-      return this.state;
-    }
-
-    // hard restriction
-    const graceMin = desired.active.restrict?.graceMinutes ?? 0;
-    if (!state.active) {
-      const graceExpiresAt = graceMin > 0 ? now + graceMin * 60_000 : null;
+    if (!state.active || state.ruleId !== desired.active.id) {
       this.state = {
         version: 1,
         active: true,
-        scope: desired.active.restrict!.scope,
         ruleId: desired.active.id,
         reasonMessage: desired.active.message,
         firedAt: now,
-        graceExpiresAt,
         userOverrideUntil: null,
       };
       this.writeToDisk();
       this._onDidChange.fire(this.getState());
-    } else {
-      // still restricted; refresh metadata
-      this.state.scope = desired.active.restrict!.scope;
-      this.state.ruleId = desired.active.id;
+    } else if (this.state.reasonMessage !== desired.active.message) {
+      // still restricted by the same rule; refresh the message in case it changed
       this.state.reasonMessage = desired.active.message;
+      this.writeToDisk();
+      this._onDidChange.fire(this.getState());
     }
 
-    this.writeToDisk();
-    this._onDidChange.fire(this.getState());
     return this.state;
   }
 
@@ -142,17 +115,11 @@ export class RestrictionEngine {
       state: this.getState(),
       desired,
       rules: input.rules,
-      customExtensions: this.customExtensions(),
     };
   }
 
   dispose(): void {
     this._onDidChange.dispose();
-  }
-
-  private customExtensions(): string[] {
-    const raw = vscode.workspace.getConfiguration('mallard').get<unknown>('copilotExtensions');
-    return Array.isArray(raw) ? (raw as string[]) : [];
   }
 
   private readFromDisk(): RestrictionState {

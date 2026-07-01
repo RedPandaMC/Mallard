@@ -1,6 +1,10 @@
 # Features
 
-Mallard is a local-first Copilot spend tracker. No sign-in is needed for anything except GitHub billing reconciliation; all other features run entirely offline.
+Mallard is a local-first spend tracker for GitHub Copilot and Claude Code. No sign-in is needed for anything except GitHub billing reconciliation; all other features run entirely offline.
+
+## Data sources
+
+Mallard reads whichever local usage logs are present: Copilot's OTel logs and Claude Code's JSONL session logs. Both are tracked automatically and simultaneously if both tools are installed and used; each event is tagged with its source connector, so the dashboard, alert rules, and exports can all break spend down by tool as well as by model, surface, and repo.
 
 ## Dashboard
 
@@ -11,7 +15,7 @@ Open from the activity bar icon or **Mallard: Open Dashboard**. The dashboard sh
 - **30-day bar chart**: daily spend with a projected-pace line and previous-period comparison bars
 - **Model breakdown**: top models by credits
 - **Sankey flow chart**: credits from each model to each surface (chat, inline, agent, edit)
-- **Cost-type chart**: input vs output token spend
+- **Cost-type chart**: input vs output token spend (plus cache and thinking categories for Claude Code sessions)
 
 A pop-out button opens the same view as a full editor tab.
 
@@ -65,7 +69,7 @@ Group rules to toggle a whole set at once from the dashboard without deleting th
 }
 ```
 
-## Copilot restriction
+## Restriction popups
 
 Add a `restrict` block to any rule to show a popup when the condition fires. No extensions are disabled; the popup creates friction.
 
@@ -75,11 +79,11 @@ Add a `restrict` block to any rule to show a popup when the condition fires. No 
   "severity": "critical",
   "message": "Monthly budget exhausted.",
   "when": { ">=": [{ "var": "budget.percentOfBudget" }, 1] },
-  "restrict": { "mode": "hard", "scope": "copilot", "graceMinutes": 10 }
+  "restrict": {}
 }
 ```
 
-`soft` shows a dismissable warning notification with Dismiss and Snooze options; no extensions are disabled. `hard` disables the Copilot extensions in `scope` (for `"copilot"`: `github.copilot` and `github.copilot-chat`) and shows a persistent error notification that re-fires on every snapshot refresh while the condition is true.
+The popup shows Dismiss, Snooze 15m, Snooze 1h, and Disable Mallard... buttons. Disable Mallard... opens the Extensions view so you can turn Mallard off yourself; it is a manual step, never an automatic one.
 
 Run **Mallard: Simulate Restriction State** from the Command Palette for a dry run. It reports what would happen without disabling anything.
 
@@ -99,7 +103,9 @@ When multiple repos are open, Mallard attributes usage to the active workspace. 
 
 ## GitHub billing reconciliation
 
-Run **Mallard: Sign In to GitHub** to pull the authoritative charge from GitHub's billing API: spend across all your machines, not just the current one. Sign-in is optional; all other features work without it.
+Run **Mallard: Sign In to GitHub** to pull the authoritative Copilot charge from GitHub's billing API: spend across all your machines, not just the current one. Sign-in is optional; all other features work without it.
+
+This is Copilot-specific and stays that way: GitHub exposes a user-scoped billing API an individual can authenticate against with their own account. Anthropic's usage/cost API is organization-admin-scoped, not something an individual Claude Code user can call the way they call GitHub's. Claude Code spend is always local-log-based (estimated), the same way Copilot spend is before you sign in.
 
 ## Metric streaming
 

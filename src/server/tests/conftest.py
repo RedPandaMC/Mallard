@@ -16,10 +16,17 @@ _DEFAULT_ENV = {
     "INFLUX_TOKEN": "testtoken",
     "INFLUX_ORG": "mallard",
     "INFLUX_BUCKET": "metrics",
-    # Bare keys (no label) — label will be "unknown"; labeled keys also supported
+    # Bare keys (no label) — label will be "unknown"; labeled keys also supported.
+    # Only used to build a StaticCredentialVerifier directly in the `client` fixture
+    # below; production Settings can no longer select the static backend at all.
     "API_KEYS": "test-key-valid,second-key",
     "LOG_LEVEL": "DEBUG",
     "RATE_LIMIT": "1000/minute",  # effectively unlimited during tests
+    # A secret manager is mandatory to construct Settings at all now, even though
+    # these tests bypass it by constructing StaticCredentialVerifier directly.
+    "SECRET_MANAGER_TYPE": "openbao",
+    "SECRET_MANAGER_URL": "http://secret-manager-test:8200",
+    "SECRET_MANAGER_TOKEN": "test-sm-token",
 }
 
 VALID_API_KEY = "test-key-valid"
@@ -57,6 +64,8 @@ def client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> Te
     """
     _patch_env_and_settings(monkeypatch)
 
+    from server.credential_verifier import StaticCredentialVerifier
+
     with (
         patch("server.influx.make_client", return_value=mock_influx_client),
         patch(
@@ -68,20 +77,25 @@ def client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> Te
 
         import server.main as main_module
 
-        importlib.reload(main_module)  # pick up fresh settings
+        importlib.reload(main_module)  # pick up fresh settings; also rebinds create_verifier
         app = main_module.create_app()
 
-        # Manually set app.state because lifespan doesn't run in TestClient by default
-        from server.config import get_settings
-        from server.credential_verifier import StaticCredentialVerifier
-
-        settings = get_settings()
-        app.state.settings = settings
-        app.state.influx_client = mock_influx_client
-        app.state.write_api = mock_influx_client.write_api()
-        app.state.verifier = StaticCredentialVerifier(settings)
-
-        with TestClient(app, raise_server_exceptions=False) as tc:
+        # `with TestClient(...) as tc` runs the real lifespan, which calls the real
+        # create_verifier(settings). Settings.secret_manager_type is now always a
+        # live backend (openbao/infisical), so without this patch lifespan would
+        # build a real remote verifier that makes actual network calls to the fake
+        # SECRET_MANAGER_URL above. Patched after the reload so it isn't rebound
+        # back to the real function by the `from .credential_verifier import
+        # create_verifier` line executing again. Tests want the fast, no-network
+        # static verifier instead, keyed off the same API_KEYS/MQTT_CREDENTIALS env vars.
+        with (
+            patch.object(
+                main_module,
+                "create_verifier",
+                side_effect=lambda settings: StaticCredentialVerifier(settings),
+            ),
+            TestClient(app, raise_server_exceptions=False) as tc,
+        ):
             yield tc
 
 

@@ -5,6 +5,7 @@
  */
 import * as vscode from 'vscode';
 import { evaluateAlerts, SnapshotSample } from '../domain/alerts';
+import { evaluateAlertRules, shouldNotify } from '../domain/alertRules';
 import { computeBudget } from '../domain/budget';
 import { buildChartData } from '../domain/chartData';
 import { forecastMonth } from '../domain/forecast';
@@ -284,7 +285,9 @@ export class UsageService implements vscode.Disposable {
     this.recordSample(now, next);
     this.fireAlerts(next, userConfig, now);
     this._onDidChange.fire(next);
-    this.exporter.export(next);
+    // intentionally not awaited — see ExportQueue; export() persists a durable
+    // retry queue on failure, so a slow/unreachable endpoint never blocks the UI.
+    void this.exporter.export(next);
   }
 
   /** Filtered path: all aggregations pushed to DuckDB; no raw event transfer. */
@@ -395,7 +398,9 @@ export class UsageService implements vscode.Disposable {
     this.recordSample(now, next);
     this.fireAlerts(next, userConfig, now);
     this._onDidChange.fire(next);
-    this.exporter.export(next);
+    // intentionally not awaited — see ExportQueue; export() persists a durable
+    // retry queue on failure, so a slow/unreachable endpoint never blocks the UI.
+    void this.exporter.export(next);
   }
 
   private recordSample(now: number, s: UsageSnapshot): void {
@@ -409,6 +414,21 @@ export class UsageService implements vscode.Disposable {
     for (const a of alerts) {
       void this.host.showWarningMessage(a.message);
       this.alertFired.set(a.key, now);
+    }
+
+    const ruleResults = evaluateAlertRules({
+      snapshot: s,
+      history: this.history,
+      rules: uc.rules ?? [],
+      ...opt('groups', uc.groups),
+      ...opt('vars', uc.vars),
+      ...opt('branchBudgets', uc.branchBudgets),
+      signedIn: s.authStatus === 'signed-in',
+      fired: this.alertFired,
+      now,
+    });
+    for (const r of ruleResults) {
+      if (shouldNotify(r.rule)) void this.host.showWarningMessage(r.message);
     }
   }
 

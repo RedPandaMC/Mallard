@@ -11,7 +11,7 @@ import {
   UserConfig,
 } from '../domain/types';
 
-export type CommandId = 'openDashboard' | 'signIn';
+export type CommandId = 'openDashboard' | 'signIn' | 'disableExtension';
 
 /** Active editor theme kind, mirrored to the webview so it can derive an
  *  accessible accent (the webview also sees VS Code's body theme class). */
@@ -32,11 +32,9 @@ export type HostBoundMsg =
   | { type: 'setLayout'; value: DashboardLayout }
   | { type: 'openConfig' }
   | { type: 'command'; id: CommandId }
-  | { type: 'restrictSnooze'; minutes: number }
-  | { type: 'restrictNow' }
-  | { type: 'restrictPermanent' };
+  | { type: 'restrictSnooze'; minutes: number };
 
-const COMMAND_IDS: CommandId[] = ['openDashboard', 'signIn'];
+const COMMAND_IDS: CommandId[] = ['openDashboard', 'signIn', 'disableExtension'];
 
 function isObject(m: unknown): m is Record<string, unknown> {
   return typeof m === 'object' && m !== null;
@@ -48,8 +46,6 @@ export function isHostBoundMsg(m: unknown): m is HostBoundMsg {
     case 'ready':
     case 'refresh':
     case 'openConfig':
-    case 'restrictNow':
-    case 'restrictPermanent':
       return true;
     case 'setFilter':
     case 'setConfig':

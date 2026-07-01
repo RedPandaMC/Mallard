@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # GitHub Actions — keeps the SHA pins in .github/workflows and
+  # .github/actions current. Dependabot updates the pinned SHA and refreshes
+  # the trailing version comment together.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Extension (TypeScript/Bun) dependencies.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Server (Python) dependencies declared in pyproject.toml.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Server container base image.
+  - package-ecosystem: "docker"
+    directory: "/src/server"
+    schedule:
+      interval: "weekly"
+
+  # Docker Compose service images (InfluxDB, Grafana, Caddy, OpenBao, Infisical, etc).
+  - package-ecosystem: "docker"
+    directory: "/src/server/docker"
+    schedule:
+      interval: "weekly"

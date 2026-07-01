@@ -9,7 +9,9 @@
  *
  * All fields are GDPR-safe: no repo names, branch names, or user identifiers
  * appear in the payload. Counts are used instead of lists; distributions are
- * normalized fractions.
+ * normalized fractions. `instance_id` is a one-way SHA-256 hash of VS Code's
+ * machineId — it lets a server tell two installs apart without identifying
+ * either one.
  *
  * Shape A (this file): per-snapshot aggregate metric payload.
  * Shape B (graph edges): model→surface relationships live in snapshot.sankeyLinks
@@ -17,16 +19,34 @@
  */
 import type { SourceKind, UsageSnapshot } from '../domain/types';
 import type { MetricSerializer } from './MetricExporter';
+import { hashMachineId } from '../util/machineId';
 
 export interface MetricPayload {
   /**
    * Payload schema version. Additive changes (new optional fields) keep the
    * same version. Breaking changes (removals, renames, type changes) increment
    * it so consumers can branch on the value without inspecting the topic string.
+   * See docs/reference/metrics-schema.md for the full version history — the
+   * server accepts older versions too, so an extension and server can be
+   * upgraded independently.
    */
-  schema_version: 1;
-  /** ISO timestamp of the snapshot. */
-  ts: string;
+  schema_version: 2;
+  /** One-way SHA-256 hash of VS Code's machineId. Stable per install, not reversible. */
+  instance_id: string;
+  /** Unix epoch milliseconds of the snapshot. */
+  ts: number;
+  /** Month-to-date credits used. */
+  mtd_credits: number;
+  /** Month-to-date cost in USD. */
+  mtd_cost_usd: number;
+  /** Credits used today. */
+  today_credits: number;
+  /** Cost today in USD. */
+  today_cost_usd: number;
+  /** All distinct model IDs seen in the current data (no other detail). */
+  active_models: string[];
+  /** The single most-used model by credits, or null if no data yet. */
+  top_model: string | null;
   /** Fraction of credits attributable to each model (sums to ≤1). */
   model_dist: Record<string, number>;
   /** Fraction of credits attributable to each surface (sums to ≤1). */
@@ -180,8 +200,15 @@ export function buildMetricPayload(s: UsageSnapshot): MetricPayload {
   else source_connector = 'mixed';
 
   return {
-    schema_version: 1,
-    ts: new Date(s.generatedAt).toISOString(),
+    schema_version: 2,
+    instance_id: hashMachineId(),
+    ts: s.generatedAt,
+    mtd_credits: s.budget.usedCredits,
+    mtd_cost_usd: s.budget.usedCost,
+    today_credits: s.today.credits,
+    today_cost_usd: s.today.cost,
+    active_models: s.allModels,
+    top_model: s.topModels[0]?.key ?? null,
     model_dist,
     surface_dist,
     cost_dist,

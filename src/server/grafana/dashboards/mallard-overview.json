@@ -103,6 +103,49 @@
       ],
       "title": "Top 10 Instances by Credits (7d)",
       "type": "barchart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "id": 11,
+      "title": "Ingest & version health",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "mallard-influx" },
+      "description": "Splits ingest volume by connector (e.g. copilot, claude-code). A single instance running multiple connectors shows up under each.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" } }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "id": 5,
+      "options": { "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] } },
+      "targets": [
+        {
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_metrics\" and r._field == \"active_models_count\")\n  |> group(columns: [\"connector\"])\n  |> count()\n  |> yield(name: \"by_connector\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Ingest by Connector (7d)",
+      "type": "piechart"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "mallard-influx" },
+      "description": "Splits ingest volume by payload schema_version. Useful for spotting extension version skew across a fleet — see GET /health for the range of versions this server understands.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" } }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "id": 6,
+      "options": { "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] } },
+      "targets": [
+        {
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_metrics\" and r._field == \"active_models_count\")\n  |> group(columns: [\"schema_version\"])\n  |> count()\n  |> yield(name: \"by_schema_version\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Ingest by Schema Version (7d)",
+      "type": "piechart"
     }
   ],
   "refresh": "5m",

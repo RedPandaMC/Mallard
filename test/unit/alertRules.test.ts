@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { parseAlertRules, evaluateAlertRules } from '../../src/extension-backend/domain/alertRules';
+import { parseAlertRules, evaluateAlertRules, shouldNotify } from '../../src/extension-backend/domain/alertRules';
 import { AlertRule, UsageSnapshot } from '../../src/extension-backend/domain/types';
 
 function snap(todayCredits = 0): UsageSnapshot {
@@ -44,7 +44,7 @@ describe('parseAlertRules', () => {
     assert.equal(result.doc.groups[0]?.id, 'g1');
   });
 
-  it('parses restrict.graceMinutes when present', () => {
+  it('parses an empty restrict block', () => {
     const result = parseAlertRules({
       version: 1,
       rules: [{
@@ -52,11 +52,12 @@ describe('parseAlertRules', () => {
         severity: 'warning',
         message: '',
         when: true,
-        restrict: { mode: 'hard', scope: 'copilot', graceMinutes: 30 },
+        restrict: {},
       }],
     });
     assert.equal(result.ok, true);
-    assert.equal(result.doc.rules[0]?.restrict?.graceMinutes, 30);
+    assert.ok(result.doc.rules[0]?.restrict);
+    assert.equal(result.doc.rules[0]?.restrict?.reEnableWhen, undefined);
   });
 
   it('does not throw on deeply malformed input', () => {
@@ -78,26 +79,13 @@ describe('parseAlertRules', () => {
     assert.equal(result.doc.rules[0]?.conditions?.[0]?.field, 'today.credits');
   });
 
-  it('parses restrict without graceMinutes (covers FALSE branch)', () => {
-    const result = parseAlertRules({
-      version: 1,
-      rules: [{
-        id: 'r1', severity: 'warning', message: '',
-        when: true,
-        restrict: { mode: 'soft', scope: 'copilot' },
-      }],
-    });
-    assert.equal(result.ok, true);
-    assert.equal(result.doc.rules[0]?.restrict?.graceMinutes, undefined);
-  });
-
   it('parses restrict with reEnableWhen', () => {
     const result = parseAlertRules({
       version: 1,
       rules: [{
         id: 'r1', severity: 'warning', message: '',
         when: true,
-        restrict: { mode: 'hard', scope: 'copilot', reEnableWhen: { '<': [{ var: 'today.credits' }, 10] } },
+        restrict: { reEnableWhen: { '<': [{ var: 'today.credits' }, 10] } },
       }],
     });
     assert.equal(result.ok, true);
@@ -406,5 +394,42 @@ describe('alertRules — edge cases', () => {
     const out = evaluateAlertRules({ snapshot: snap(0), rules, fired: new Map(), now });
     assert.equal(out.length, 1);
     assert.equal(out[0]!.message, 'first');
+  });
+});
+
+describe('shouldNotify', () => {
+  const now = Date.now();
+
+  it('is true when notify is omitted', () => {
+    const rule: AlertRule = { id: 'r', severity: 'warning', message: 'm', when: true };
+    assert.equal(shouldNotify(rule), true);
+  });
+
+  it('is true when notify is explicitly true', () => {
+    const rule: AlertRule = { id: 'r', severity: 'warning', message: 'm', when: true, notify: true };
+    assert.equal(shouldNotify(rule), true);
+  });
+
+  it('is false when notify is explicitly false', () => {
+    const rule: AlertRule = { id: 'r', severity: 'warning', message: 'm', when: true, notify: false };
+    assert.equal(shouldNotify(rule), false);
+  });
+
+  it('is false for a rule with a restrict block, regardless of notify', () => {
+    const rule: AlertRule = {
+      id: 'r', severity: 'warning', message: 'm', when: true, notify: true,
+      restrict: {},
+    };
+    assert.equal(shouldNotify(rule), false);
+  });
+
+  it('cooldown bookkeeping happens regardless of notify — a notify:false rule still occupies its cooldown key', () => {
+    const fired = new Map<string, number>();
+    const rules: AlertRule[] = [{ id: 'r', severity: 'warning', message: 'm', when: true, notify: false, cooldown: '1h' }];
+    const first = evaluateAlertRules({ snapshot: snap(0), rules, fired, now });
+    assert.equal(first.length, 1);
+    assert.equal(shouldNotify(first[0]!.rule), false);
+    const second = evaluateAlertRules({ snapshot: snap(0), rules, fired, now: now + 60_000 });
+    assert.equal(second.length, 0, 'cooldown still applies even though the rule never notified');
   });
 });

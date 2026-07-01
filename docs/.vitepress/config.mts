@@ -55,6 +55,7 @@ export default defineConfig({
           { text: 'Settings',         link: '/reference/settings' },
           { text: 'Alert Rules',      link: '/reference/alert-rules' },
           { text: 'Auth & Identity',  link: '/reference/extension-auth' },
+          { text: 'Metrics Schema',   link: '/reference/metrics-schema' },
         ],
       },
       { text: 'Changelog', link: '/changelog' },
