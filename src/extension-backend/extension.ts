@@ -223,10 +223,11 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     const detail =
       tried.length > 0 ? `\n\nSearched:\n${tried.map((p) => '  ' + p).join('\n')}` : '';
     const pick = await vscode.window.showInformationMessage(
-      'Mallard: No Copilot log files detected. Make sure Copilot is installed and has been used. ' +
-        'You can override the path via the mallard.copilotLogPath setting.' +
+      'Mallard: No Copilot or Claude Code log files detected. Make sure one of them is installed ' +
+        'and has been used. Copilot\'s log directory can be overridden via the mallard.copilotLogPath ' +
+        'setting.' +
         detail,
-      'Pick log folder…',
+      'Pick Copilot log folder…',
     );
     if (pick) {
       const uri = await vscode.window.showOpenDialog({

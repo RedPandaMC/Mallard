@@ -6,7 +6,7 @@
   <img src="media/brand/readme-banner-light.png" alt="Mallard" width="480" style="max-width:100%" />
 </picture>
 
-**Know exactly what GitHub Copilot is costing you.**
+**Know exactly what GitHub Copilot and Claude Code are costing you.**
 
 [![CI](https://github.com/RedPandaMC/Mallard/actions/workflows/ci.yml/badge.svg)](https://github.com/RedPandaMC/Mallard/actions/workflows/ci.yml)
 [![Docs](https://github.com/RedPandaMC/Mallard/actions/workflows/docs.yml/badge.svg)](https://github.com/RedPandaMC/Mallard/actions/workflows/docs.yml)
@@ -22,22 +22,23 @@
 [![Bun](https://img.shields.io/badge/Bun-runtime-F9F1E1?logo=bun&logoColor=black)](https://bun.sh/)
 [![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 
-`COPILOT SPEND PLUGIN` · local-first, no sign-in
+`AI CODING SPEND PLUGIN` · local-first, no sign-in
 
 </div>
 
 ---
 
-Mallard reads the OpenTelemetry logs Copilot writes to VS Code's log directory and builds a live cost breakdown: today, month-to-date, and a projected month-end total, split by model, surface, cost type, and repository. No sign-in required. Connect GitHub billing if you want the authoritative charge.
+Mallard reads the local usage logs GitHub Copilot and Claude Code already write to disk and builds a live cost breakdown: today, month-to-date, and a projected month-end total, split by model, surface, cost type, and repository. No sign-in required. Connect GitHub billing if you want the authoritative Copilot charge.
 
-- **No sign-in required.** Reads OTel logs Copilot already writes to disk.
+- **No sign-in required.** Reads local logs Copilot and Claude Code already write to disk.
+- **Both Copilot and Claude Code.** Track either or both at once; each is tagged as its own source throughout the dashboard.
 - **DuckDB-backed.** Full event detail for 90 days; older events roll up to daily rows automatically.
 - **Branch-aware.** Tags every event to the active git branch and repo, with per-branch credit caps.
 - **Programmable alerts.** JSONLogic condition language with cooldowns, group toggles, and message templates; validated by a bundled JSON Schema.
 - **Restriction popups.** Rules can show a Dismiss/Snooze popup when a budget is exhausted, with a one-click path to disable Mallard itself if you'd rather turn it off than keep dismissing it.
 - **Metric streaming.** Push a metric payload to an MQTT broker or HTTP webhook after each snapshot.
 - **Printable export.** Self-contained HTML report, PDF-ready in any browser.
-- **GitHub billing reconciliation.** Opt-in: authoritative charge across all your machines.
+- **GitHub billing reconciliation.** Opt-in: authoritative Copilot charge across all your machines. Copilot-specific: GitHub exposes a user-scoped billing API that Anthropic doesn't, so Claude Code usage stays log-based (estimated, not authoritative) — see [Features](docs/guide/features.md) for why.
 
 ## Quick start
 
@@ -47,7 +48,7 @@ Mallard reads the OpenTelemetry logs Copilot writes to VS Code's log directory a
    code --install-extension RedPandaMC.mallard
    ```
 
-2. Use Copilot normally. Mallard starts collecting right away.
+2. Use Copilot and/or Claude Code normally. Mallard starts collecting right away.
 
 3. Open the dashboard from the Mallard icon in the activity bar, or run
    "Mallard: Open Dashboard" from the Command Palette.
@@ -57,13 +58,14 @@ and set `mallard.copilotLogPath` if needed.
 
 ## How it works
 
-Copilot writes JSON-lines OTel logs with the model name, input/output token counts,
-surface, and a timestamp. Mallard watches those files, stores events in a local DuckDB
-database, and computes a render-ready snapshot for the dashboard.
+Copilot writes JSON-lines OTel logs and Claude Code writes JSONL session logs, each with
+the model name, input/output token counts, surface, and a timestamp. Mallard watches
+whichever of these are present, stores events in a local DuckDB database, and computes a
+render-ready snapshot for the dashboard.
 
-Token counts are estimates. Connect GitHub billing for the authoritative charge. Costs
-are split into input and output; richer categories such as tool and reasoning are not
-available in the local logs.
+Token counts are estimates. Connect GitHub billing for the authoritative Copilot charge.
+Costs are split into input and output (Claude Code sessions also get cache and thinking
+categories); richer categories are not available from Copilot's local logs.
 
 ## Settings
 
@@ -83,8 +85,8 @@ See [Settings reference](docs/reference/settings.md) for the full schema and exa
 | `Mallard: Open Dashboard` | Open the dashboard in the sidebar or pop-out tab. |
 | `Mallard: Refresh Now` | Force a log re-scan and snapshot rebuild. |
 | `Mallard: Clear All Data` | Wipe all events, config, layout, and the pricing cache. |
-| `Mallard: Show Detected Log Path` | Show where Mallard is looking for Copilot logs. |
-| `Mallard: Sign In to GitHub` | Connect GitHub billing for the authoritative usage charge. |
+| `Mallard: Show Detected Log Path` | Show where Mallard is looking for Copilot and Claude Code logs. |
+| `Mallard: Sign In to GitHub` | Connect GitHub billing for the authoritative Copilot usage charge. |
 | `Mallard: Export Monthly Report` | Save a standalone HTML report of the current snapshot. |
 | `Mallard: Simulate Restriction` | Dry-run restriction evaluation: shows which rules would fire. |
 
