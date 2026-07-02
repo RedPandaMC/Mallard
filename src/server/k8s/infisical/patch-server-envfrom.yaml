@@ -18,7 +18,10 @@ spec:
           env:
             - name: SECRET_MANAGER_TYPE
               value: "infisical"
+            # Base URL only — the verifier appends /api/v3/... itself. (The
+            # server also strips a trailing /api defensively; see
+            # Settings.secret_manager_base_url.)
             - name: SECRET_MANAGER_URL
-              value: "http://infisical.infisical.svc.cluster.local/api"
+              value: "http://infisical.infisical.svc.cluster.local"
             - name: INFISICAL_ENV_SLUG
               value: "prod"

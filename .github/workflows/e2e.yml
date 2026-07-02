@@ -74,7 +74,8 @@ jobs:
           SERVER_DOMAIN=localhost
           OPENBAO_DEV_ROOT_TOKEN=ci-dev-root-token
           API_KEYS=e2e-team:e2e-test-key
-          MQTT_CREDENTIALS=
+          MQTT_PASSWORD=
+          CERT_LABELS=
           EOF
 
       - name: Start the stack

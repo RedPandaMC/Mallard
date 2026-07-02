@@ -1,0 +1,29 @@
+---
+# Datasource provisioning — the k8s twin of grafana/provisioning/datasources/
+# used by docker-compose. Without this, the k8s Grafana starts with no
+# datasource and the InfluxDB connection has to be clicked together by hand.
+# ${INFLUX_TOKEN} is expanded by Grafana from the environment (grafana-secrets).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning-datasources
+  namespace: mallard
+data:
+  influxdb.yaml: |
+    apiVersion: 1
+
+    datasources:
+      - name: InfluxDB
+        uid: mallard-influx
+        type: influxdb
+        access: proxy
+        url: http://influxdb:8086
+        isDefault: true
+        jsonData:
+          version: Flux
+          organization: mallard
+          defaultBucket: metrics
+          tlsSkipVerify: false
+        secureJsonData:
+          token: ${INFLUX_TOKEN}
+        editable: true

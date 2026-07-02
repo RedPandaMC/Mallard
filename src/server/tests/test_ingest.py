@@ -511,6 +511,57 @@ class TestChunkedBodyCap:
         assert response.status_code == 202
 
 
+class TestExtractCertCn:
+    """Proxies differ in what they forward: a bare CN, or the full subject DN
+    (nginx $ssl_client_s_dn, Caddy {tls_client_subject})."""
+
+    def test_bare_cn_passes_through(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("machine-01") == "machine-01"
+
+    def test_comma_dn_extracts_cn(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("CN=machine-01,O=team,C=NL") == "machine-01"
+
+    def test_slash_dn_extracts_cn(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("/C=NL/O=team/CN=machine-01") == "machine-01"
+
+    def test_lowercase_cn_attribute(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("cn=machine-01,o=team") == "machine-01"
+
+    def test_empty_returns_empty(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("") == ""
+        assert _extract_cert_cn("   ") == ""
+
+    def test_dn_without_cn_rejected(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("O=team,C=NL") == ""
+
+    def test_cn_with_unsafe_chars_rejected(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("CN=bad cn with spaces,O=x") == ""
+
+    def test_full_dn_via_route_maps_to_label(self, client: TestClient, valid_payload: dict) -> None:
+        with patch("server.routers.ingest.write_payload") as write_mock:
+            response = client.post(
+                "/api/v1/ingest",
+                json=valid_payload,
+                headers={"SSL_CLIENT_S_DN_CN": "CN=machine-01,O=acme"},
+            )
+        assert response.status_code == 202
+        assert write_mock.call_args.kwargs["source"] == "team-cert"
+
+
 class TestExtractBearer:
     def test_valid_bearer_header(self) -> None:
         from server.routers.ingest import _extract_bearer

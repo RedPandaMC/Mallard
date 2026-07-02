@@ -1,0 +1,12 @@
+# Base for the secret-manager overlays (k8s/infisical/, k8s/openbao/), both of
+# which reference `../server` as a resource. Without this file, kustomize
+# cannot resolve the base and `kubectl apply -k` fails for either overlay.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - serviceaccount.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml

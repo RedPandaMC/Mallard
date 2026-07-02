@@ -5,7 +5,6 @@
 #   docker compose -f docker-compose.yml -f docker-compose.infisical.yml up -d
 # Access Grafana at https://localhost:3000 (admin / see .env GF_SECURITY_ADMIN_PASSWORD)
 
-version: "3.9"
 
 networks:
   # Backend services communicate here; no outbound internet access
@@ -76,16 +75,17 @@ services:
       INFLUX_ORG: ${INFLUX_ORG:-mallard}
       INFLUX_BUCKET: ${INFLUX_BUCKET:-metrics}
       # Credentials come from the secret manager overlay (openbao/infisical), not
-      # from here. API_KEYS/MQTT_CREDENTIALS only matter if you're constructing a
+      # from here. API_KEYS/MQTT_PASSWORD only matter if you're constructing a
       # StaticCredentialVerifier directly in a test; the server itself no longer
       # accepts a static-only configuration.
       API_KEYS: ${API_KEYS:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       RATE_LIMIT: ${RATE_LIMIT:-60/minute}
-      # Embedded MQTT broker (WebSocket on port 8083, proxied by Caddy at /mqtt)
+      # Embedded MQTT broker (WebSocket on port 8083, proxied by Caddy at /mqtt).
+      # One shared password; everything ingested over MQTT is tagged source='mqtt'.
       MQTT_ENABLED: ${MQTT_ENABLED:-false}
       MQTT_PORT: ${MQTT_PORT:-8083}
-      MQTT_CREDENTIALS: ${MQTT_CREDENTIALS:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
     depends_on:
       influxdb:
         condition: service_healthy

@@ -29,6 +29,31 @@ _MAX_BODY_BYTES = 64 * 1024
 # CN header values become InfluxDB tag values; restrict to the same safe character set as labels.
 _CERT_CN_RE = re.compile(r"^[\w._@-]{1,64}$")
 
+# CN component inside a full subject DN ("CN=machine-01,O=team" or "/O=team/CN=machine-01")
+_DN_CN_RE = re.compile(r"(?:^|[,/])\s*CN=([^,/+]+)", re.IGNORECASE)
+
+
+def _extract_cert_cn(header_value: str) -> str:
+    """Normalise the forwarded client-cert identity header to a bare CN.
+
+    Proxies differ: nginx's standard $ssl_client_s_dn and Caddy's
+    {tls_client_subject} forward the *full* subject DN, while a bespoke
+    setup may forward just the CN. Accept both; return "" when no valid
+    CN can be extracted.
+    """
+    value = header_value.strip()
+    if not value:
+        return ""
+    if _CERT_CN_RE.match(value):
+        return value
+    m = _DN_CN_RE.search(value)
+    if m:
+        cn = m.group(1).strip()
+        if _CERT_CN_RE.match(cn):
+            return cn
+    logger.warning("Rejected SSL_CLIENT_S_DN_CN with no extractable CN: %r", value)
+    return ""
+
 
 def _extract_bearer(auth_header: str) -> str:
     """Extract token from 'Bearer <token>'; return empty string if not a Bearer header."""
@@ -65,10 +90,7 @@ async def _resolve_source(request: Request, verifier: CredentialVerifier) -> str
     Raises 401 for missing/invalid credentials and 503 when the credential
     store is unreachable (remote secret manager down with no warm cache).
     """
-    cert_cn = request.headers.get("SSL_CLIENT_S_DN_CN", "").strip()
-    if cert_cn and not _CERT_CN_RE.match(cert_cn):
-        logger.warning("Rejected SSL_CLIENT_S_DN_CN with invalid format: %r", cert_cn)
-        cert_cn = ""
+    cert_cn = _extract_cert_cn(request.headers.get("SSL_CLIENT_S_DN_CN", ""))
 
     try:
         if cert_cn:

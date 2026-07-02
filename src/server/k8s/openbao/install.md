@@ -39,9 +39,13 @@ chmod +x server/k8s/openbao/approle-setup.sh
 ./server/k8s/openbao/approle-setup.sh
 
 # Seed Mallard secrets
+#   api_keys      "label:secret" pairs — the label becomes the InfluxDB source tag
+#   mqtt_password single shared broker password (all MQTT ingest is source='mqtt')
+#   cert_labels   optional "label:cn" pairs mapping mTLS cert CNs to source labels
 bao kv put secret/mallard/server \
   api_keys="team-alpha:key-abc123,team-beta:key-def456" \
-  mqtt_credentials="alice:mqtt-pass1,ci-pipeline:mqtt-pass2" \
+  mqtt_password="shared-broker-password" \
+  cert_labels="ci:build-agent-01" \
   influx_token="your-influx-token"
 ```
 
@@ -68,7 +72,7 @@ Update credentials in OpenBao:
 ```bash
 bao kv put secret/mallard/server \
   api_keys="team-alpha:new-key,..." \
-  mqtt_credentials="alice:new-pass,..."
+  mqtt_password="new-broker-password"
 ```
 
 The server's `OpenBaoCredentialVerifier` re-fetches the store within 30 seconds. No pod restart needed.
