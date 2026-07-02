@@ -198,6 +198,37 @@ h1.title {
   background: var(--ml-panel2);
 }
 
+/* --- mermaid diagrams: literal text/background colors -------------------
+   vitepress-plugin-mermaid forces mermaid's own "dark" theme whenever the
+   .dark class is set (hardcoded in their Mermaid.vue, not configurable),
+   so brand colors are applied here instead of via mermaid.initialize. */
+.vp-doc .mermaid svg .node rect,
+.vp-doc .mermaid svg .node circle,
+.vp-doc .mermaid svg .node ellipse,
+.vp-doc .mermaid svg .node polygon,
+.vp-doc .mermaid svg .node path,
+.vp-doc .mermaid svg .cluster rect {
+  fill: var(--vp-c-bg) !important;
+  stroke: var(--vp-c-text-1) !important;
+}
+.vp-doc .mermaid svg .nodeLabel,
+.vp-doc .mermaid svg .edgeLabel,
+.vp-doc .mermaid svg .edgeLabel p,
+.vp-doc .mermaid svg .cluster-label,
+.vp-doc .mermaid svg .label text,
+.vp-doc .mermaid svg .label span {
+  color: var(--vp-c-text-1) !important;
+  fill: var(--vp-c-text-1) !important;
+  background-color: var(--vp-c-bg) !important;
+}
+.vp-doc .mermaid svg .edgePath .path,
+.vp-doc .mermaid svg .flowchart-link,
+.vp-doc .mermaid svg .marker,
+.vp-doc .mermaid svg .arrowheadPath {
+  stroke: var(--vp-c-text-1) !important;
+  fill: var(--vp-c-text-1) !important;
+}
+
 /* --- mobile: hide VPLocalNav so only the sticky top navbar shows ---------- */
 /* VPLocalNav is the secondary page-title bar that VitePress renders below
    the main nav on small screens, causing a visual "double navbar" effect. */

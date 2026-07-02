@@ -28,15 +28,6 @@ This matters more than it looks, since one of the two has a boundary you can hit
 - **Infisical**: the self-hosted core (everything outside `backend/src/ee/`) is [MIT-licensed](https://github.com/Infisical/infisical/blob/main/LICENSE). Dynamic secrets, SCIM, LDAP, approval workflows, KMIP, and HSM support live behind a separate **Infisical Enterprise License**, which requires a paid license key (it phones home to Infisical's license server, or takes an offline key for air-gapped setups) to unlock at runtime. Mallard only needs the MIT-licensed core (static key-value secrets), so this boundary doesn't affect a typical Mallard deployment, but it's worth knowing about before you reach for a feature that turns out to be gated.
 - **OpenBao**: single-licensed under [MPL-2.0](https://github.com/openbao/openbao/blob/main/LICENSE), governed by the Linux Foundation and the Open Source Security Foundation (OpenSSF). There is no separate enterprise tier or license key gating any feature.
 
-### Logos
-
-Add both projects' logos here once you've pulled them from each project's own current brand assets, following their stated usage terms rather than assuming:
-
-- OpenBao publishes an explicit brand/logo policy at [openbao.org/community/policies/brand](https://openbao.org/community/policies/brand/) — follow its stated format and attribution requirements exactly.
-- Locate Infisical's equivalent brand/press-kit page before use and follow the same standard.
-
-Place the files under `docs/public/brand/` (e.g. `infisical-logo.svg`, `openbao-logo.svg`) and reference them with standard markdown image syntax. Re-check both policies at the time you actually add the images — brand guidelines and licenses can change.
-
 ## How the server uses secret managers
 
 The server instantiates either `InfisicalCredentialVerifier` or `OpenBaoCredentialVerifier` based on `SECRET_MANAGER_TYPE`. Both share the same caching layer:
