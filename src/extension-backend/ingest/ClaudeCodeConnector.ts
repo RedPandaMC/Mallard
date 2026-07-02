@@ -79,7 +79,8 @@ export class ClaudeCodeConnector extends BaseFileConnector {
     const cacheCreation = num(usage['cache_creation_input_tokens']);
     const cacheRead     = num(usage['cache_read_input_tokens']);
     const thinking      = num(usage['thinking_tokens'] ?? usage['output_thinking_tokens']);
-    const ts            = parseTimestamp({ ...row, ...msg }, ctx.now);
+    const ts            = parseTimestamp({ ...row, ...msg });
+    if (ts === undefined) return null;
 
     const { credits, cost } = priceRequest(model, {
       pricePerCredit: ctx.pricePerCredit,

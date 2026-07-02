@@ -52,7 +52,14 @@ export class CopilotConnector extends BaseFileConnector {
 
     /* c8 ignore start */
     this.logPaths = dirs;
-    const globs = dirs.map((d) => path.join(d, '**'));
+    // Only copilot-named files (mirrors locate.isCopilotLogFilename): a bare
+    // `**` glob sweeps every extension's logs, and one structurally-non-JSON
+    // file (e.g. Mypy.log) aborts DuckDB's whole read_ndjson run —
+    // ignore_errors only skips malformed records, not unparseable files.
+    const globs = dirs.flatMap((d) => [
+      path.join(d, '**', '*copilot*'),
+      path.join(d, '**', '*Copilot*'),
+    ]);
     return { globs, allowedRoots: dirs, searchedDirs: dirs };
     /* c8 ignore stop */
   }
@@ -64,7 +71,8 @@ export class CopilotConnector extends BaseFileConnector {
 
     const prompt     = num(pick(attrs, ['gen_ai.usage.input_tokens',  'gen_ai.usage.prompt_tokens',     'input_tokens']));
     const completion = num(pick(attrs, ['gen_ai.usage.output_tokens', 'gen_ai.usage.completion_tokens', 'output_tokens']));
-    const ts         = parseTimestamp(row, ctx.now);
+    const ts         = parseTimestamp(row) ?? parseTimestamp(attrs);
+    if (ts === undefined) return null;
 
     const { credits, cost } = priceRequest(String(model), {
       pricePerCredit: ctx.pricePerCredit,

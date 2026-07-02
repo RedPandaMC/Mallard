@@ -38,8 +38,21 @@ class Settings(BaseSettings):
     # MQTT (optional — embedded broker started when mqtt_enabled = true)
     mqtt_enabled: bool = Field(False, description="Start the embedded MQTT broker on mqtt_port")
     mqtt_port: int = Field(8083, description="WebSocket MQTT port (internal; proxied by Caddy/Ingress)")
-    mqtt_credentials: str = Field(
-        "", description="Comma-separated MQTT passwords in label:secret or bare format"
+    mqtt_password: str = Field(
+        "",
+        description=(
+            "Single shared password for the embedded MQTT broker. All MQTT ingest is "
+            "tagged source='mqtt'; per-credential labels exist only for API keys "
+            "(and cert CNs via CERT_LABELS). Static-mode only — production deployments "
+            "store MQTT_PASSWORD in the secret manager."
+        ),
+    )
+
+    # mTLS cert labels — 'label:cn' pairs mapping a client-cert CommonName to a
+    # source label; CNs without an entry fall back to the CN itself as the source.
+    cert_labels: str = Field(
+        "",
+        description="Comma-separated 'label:cn' pairs for mTLS clients, static-mode only",
     )
 
     # Secret manager (required — every deployment must pick one; there is no

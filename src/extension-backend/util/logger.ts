@@ -1,11 +1,15 @@
 /* c8 ignore next */
 export interface Logger {
+  debug(tag: string, msg: string, ...args: unknown[]): void;
   info(tag: string, msg: string, ...args: unknown[]): void;
   warn(tag: string, msg: string, ...args: unknown[]): void;
   error(tag: string, msg: string, ...args: unknown[]): void;
 }
 
 export class ConsoleLogger implements Logger {
+  debug(tag: string, msg: string, ...args: unknown[]): void {
+    console.debug(`[mallard:${tag}]`, msg, ...args);
+  }
   info(tag: string, msg: string, ...args: unknown[]): void {
     console.log(`[mallard:${tag}]`, msg, ...args);
   }

@@ -39,6 +39,8 @@ export abstract class BaseFileConnector implements LogConnector {
   private watchers: Array<{ close(): void }> = [];
   private debounceTimer?: ReturnType<typeof setTimeout>;
   private currentGlobs: string[] = [];
+  private ingestRunning = false;
+  private rerunQueued = false;
 
   constructor(
     protected readonly pricing: PricingService,
@@ -61,11 +63,33 @@ export abstract class BaseFileConnector implements LogConnector {
     this.watchDirs(allowedRoots);
   }
 
+  /**
+   * Run one ingest pass, coalescing concurrent triggers: while a pass is in
+   * flight (initial start, watcher debounce, and interval refresh can all
+   * overlap), later triggers queue exactly one re-run instead of racing the
+   * shared watermark.
+   */
   protected async runIngest(globs: string[]): Promise<void> {
+    if (this.ingestRunning) {
+      this.rerunQueued = true;
+      return;
+    }
+    this.ingestRunning = true;
+    try {
+      do {
+        this.rerunQueued = false;
+        await this.ingestOnce(globs);
+      } while (this.rerunQueued);
+    } finally {
+      this.ingestRunning = false;
+    }
+  }
+
+  private async ingestOnce(globs: string[]): Promise<void> {
     const sinceMs = await this.loadWatermark();
     const ctx = await this.buildContext(globs);
     try {
-      const inserted = await this.fileReader.ingestGlob(
+      const { inserted, maxEventTs } = await this.fileReader.ingestGlob(
         globs,
         this.mapRow.bind(this) as RowMapper,
         ctx,
@@ -73,7 +97,11 @@ export abstract class BaseFileConnector implements LogConnector {
       );
       if (inserted > 0) {
         this.eventsSeenEver = true;
-        await this.saveWatermark(Date.now());
+        // Advance the watermark to the newest *event* timestamp, not the wall
+        // clock: log lines flushed late with older embedded timestamps would
+        // otherwise be skipped forever. Re-reads of already-seen rows are
+        // idempotent (INSERT OR IGNORE on deterministic ids).
+        if (maxEventTs !== null) await this.saveWatermark(maxEventTs);
       }
       this.status = this.eventsSeenEver ? 'ok' : 'empty';
     } catch (err) {
@@ -103,10 +131,20 @@ export abstract class BaseFileConnector implements LogConnector {
   private watchDirs(roots: string[]): void {
     const dirs = new Set(roots);
     for (const dir of dirs) {
+      // Recursive: session files live in nested subdirectories (Claude Code
+      // writes projects/<workspace>/<session>.jsonl, Copilot logs are per-window
+      // trees) and non-recursive fs.watch on the root misses writes inside them.
       try {
-        this.watchers.push(this.fsWatcher.watch(dir, () => this.scheduleReparse()));
-      } catch {
+        this.watchers.push(this.fsWatcher.watch(dir, () => this.scheduleReparse(), true));
+        continue;
+      } catch (err) {
+        this.logger.debug(this.id, `recursive fs.watch failed for ${dir}, retrying flat`, err);
+      }
+      try {
+        this.watchers.push(this.fsWatcher.watch(dir, () => this.scheduleReparse(), false));
+      } catch (err) {
         // fs.watch unavailable — fall back to UsageService interval polling.
+        this.logger.debug(this.id, `fs.watch unavailable for ${dir}; relying on interval polling`, err);
       }
     }
   }

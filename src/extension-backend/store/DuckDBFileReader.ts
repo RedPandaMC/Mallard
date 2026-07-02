@@ -7,6 +7,13 @@ import { defaultLogger, Logger } from '../util/logger';
 
 export type RowMapper = (row: Record<string, unknown>, ctx: ParseContext) => UsageEvent | null;
 
+export interface IngestResult {
+  /** Rows actually inserted (after id dedup). */
+  inserted: number;
+  /** Highest event timestamp seen in this run (epoch ms), or null when no rows mapped. */
+  maxEventTs: number | null;
+}
+
 /**
  * Ingests NDJSON/log files via DuckDB's built-in C++ `read_ndjson` reader.
  *
@@ -43,10 +50,10 @@ export class DuckDBFileReader {
     mapRow: RowMapper,
     ctx: ParseContext,
     sinceMs?: number,
-  ): Promise<number> {
+  ): Promise<IngestResult> {
     const task = () => this._ingestGlob(globs, mapRow, ctx, sinceMs);
     this.queue = this.queue.then(task, task);
-    return this.queue as Promise<number>;
+    return this.queue as Promise<IngestResult>;
   }
 
   private async _ingestGlob(
@@ -54,9 +61,9 @@ export class DuckDBFileReader {
     mapRow: RowMapper,
     ctx: ParseContext,
     sinceMs?: number,
-  ): Promise<number> {
+  ): Promise<IngestResult> {
     const globArray = Array.isArray(globs) ? globs : [globs];
-    if (globArray.length === 0) return 0;
+    if (globArray.length === 0) return { inserted: 0, maxEventTs: null };
 
     const globList = globArray.map((g) => `'${g.replace(/'/g, "''")}'`).join(', ');
     const tsFilter =
@@ -72,11 +79,14 @@ export class DuckDBFileReader {
       rows = result.getRowObjects() as Record<string, unknown>[];
     } catch (err) {
       this.logger.warn('duckdb', `ingest failed for [${globArray.join(', ')}]: ${String(err)}`);
-      return 0;
+      return { inserted: 0, maxEventTs: null };
     }
 
     const events = rows.map((r) => mapRow(r, ctx)).filter((e): e is UsageEvent => e !== null);
-    return events.length > 0 ? this.writer.insert(events) : 0;
+    if (events.length === 0) return { inserted: 0, maxEventTs: null };
+    const inserted = await this.writer.insert(events);
+    const maxEventTs = events.reduce((max, e) => Math.max(max, e.ts), Number.NEGATIVE_INFINITY);
+    return { inserted, maxEventTs };
   }
 
   /**

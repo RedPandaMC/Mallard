@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { GitHubBillingConfig } from '../domain/types';
 import type { IAuthProvider } from './IBillingProvider';
+import { defaultLogger, Logger } from '../util/logger';
 
 export class GitHubSession implements IAuthProvider {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
@@ -9,7 +10,7 @@ export class GitHubSession implements IAuthProvider {
 
   private billingConfig: GitHubBillingConfig | undefined;
 
-  constructor() {
+  constructor(private readonly logger: Logger = defaultLogger) {
     this._sub = vscode.authentication.onDidChangeSessions((e) => {
       if (e.provider.id === 'github') this._onDidChange.fire();
     });
@@ -76,7 +77,10 @@ export class GitHubSession implements IAuthProvider {
         createIfNone,
         silent: !createIfNone,
       });
-    } catch {
+    } catch (err) {
+      // Expected when the user dismisses the sign-in dialog; anything else is
+      // still worth a trace instead of vanishing.
+      this.logger.debug('github', 'getSession failed or was dismissed', err);
       return undefined;
     }
   }

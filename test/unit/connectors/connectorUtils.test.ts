@@ -120,36 +120,31 @@ describe('connectorUtils', () => {
   // ── parseTimestamp ───────────────────────────────────────────────────────────
 
   describe('parseTimestamp()', () => {
-    const fallback = 1_700_000_000_000;
-
     it('parses ISO string from timestamp key', () => {
-      const ts = parseTimestamp({ timestamp: '2024-01-15T12:00:00.000Z' }, fallback);
+      const ts = parseTimestamp({ timestamp: '2024-01-15T12:00:00.000Z' });
       assert.equal(ts, Date.parse('2024-01-15T12:00:00.000Z'));
     });
 
     it('parses ISO string from time key', () => {
-      const ts = parseTimestamp({ time: '2024-06-01T00:00:00Z' }, fallback);
+      const ts = parseTimestamp({ time: '2024-06-01T00:00:00Z' });
       assert.equal(ts, Date.parse('2024-06-01T00:00:00Z'));
     });
 
     it('uses numeric value directly', () => {
-      assert.equal(parseTimestamp({ timestamp: 1_234_567_890 }, fallback), 1_234_567_890);
+      assert.equal(parseTimestamp({ timestamp: 1_234_567_890 }), 1_234_567_890);
     });
 
     it('prefers timestamp over time', () => {
-      const ts = parseTimestamp(
-        { timestamp: '2024-01-01T00:00:00Z', time: '2024-06-01T00:00:00Z' },
-        fallback,
-      );
+      const ts = parseTimestamp({ timestamp: '2024-01-01T00:00:00Z', time: '2024-06-01T00:00:00Z' });
       assert.equal(ts, Date.parse('2024-01-01T00:00:00Z'));
     });
 
-    it('returns fallback for missing keys', () => {
-      assert.equal(parseTimestamp({}, fallback), fallback);
+    it('returns undefined for missing keys (callers must skip the row)', () => {
+      assert.equal(parseTimestamp({}), undefined);
     });
 
-    it('returns fallback for invalid string', () => {
-      assert.equal(parseTimestamp({ timestamp: 'not-a-date' }, fallback), fallback);
+    it('returns undefined for invalid string', () => {
+      assert.equal(parseTimestamp({ timestamp: 'not-a-date' }), undefined);
     });
   });
 

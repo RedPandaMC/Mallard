@@ -28,14 +28,29 @@ describe('DuckDBFileReader — ingestGlob', () => {
   it('returns 0 immediately for empty globs array', async () => {
     const reader = makeReader([]);
     const result = await reader.ingestGlob([], () => null, baseCtx);
-    assert.equal(result, 0);
+    assert.deepEqual(result, { inserted: 0, maxEventTs: null });
   });
 
   it('accepts a single string glob (not an array)', async () => {
-    const event = makeEvent();
+    const event = makeEvent({ ts: 1_700_000_111_222 });
     const reader = makeReader([{ modelId: 'gpt-4o' }]);
     const result = await reader.ingestGlob('/tmp/*.jsonl', () => event, baseCtx);
-    assert.equal(result, 1);
+    assert.equal(result.inserted, 1);
+    assert.equal(result.maxEventTs, 1_700_000_111_222);
+  });
+
+  it('reports the max event timestamp across mapped rows', async () => {
+    const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+    const reader = makeReader(rows);
+    let i = 0;
+    const tss = [1_700_000_000_300, 1_700_000_000_100, 1_700_000_000_200];
+    const result = await reader.ingestGlob(
+      ['/tmp/*.jsonl'],
+      () => makeEvent({ id: `e${i}`, ts: tss[i++]! }),
+      baseCtx,
+    );
+    assert.equal(result.inserted, 3);
+    assert.equal(result.maxEventTs, 1_700_000_000_300);
   });
 
   it('includes WHERE clause when sinceMs is provided', async () => {
@@ -67,14 +82,14 @@ describe('DuckDBFileReader — ingestGlob', () => {
     const mockConn = { runAndReadAll: async () => ({ getRowObjects: () => rows }) };
     const reader = new DuckDBFileReader(mockConn as never, mockWriter as never);
     const result = await reader.ingestGlob(['/tmp/*.jsonl'], () => event, baseCtx);
-    assert.equal(result, 2);
+    assert.equal(result.inserted, 2);
     assert.equal(insertedEvents.length, 2);
   });
 
   it('filters out null results from mapRow and returns 0 when all rows are null', async () => {
     const reader = makeReader([{ modelId: 'unknown' }]);
     const result = await reader.ingestGlob(['/tmp/*.jsonl'], () => null, baseCtx);
-    assert.equal(result, 0);
+    assert.deepEqual(result, { inserted: 0, maxEventTs: null });
   });
 
   it('returns 0 when DuckDB throws', async () => {
@@ -83,7 +98,7 @@ describe('DuckDBFileReader — ingestGlob', () => {
     };
     const reader = new DuckDBFileReader(mockConn as never, { insert: async () => 0 } as never);
     const result = await reader.ingestGlob(['/tmp/*.jsonl'], () => null, baseCtx);
-    assert.equal(result, 0);
+    assert.deepEqual(result, { inserted: 0, maxEventTs: null });
   });
 
   it('escapes single quotes in glob paths', async () => {
@@ -119,7 +134,7 @@ describe('DuckDBFileReader — ingestGlob', () => {
       () => event,
       baseCtx,
     );
-    assert.equal(result, 3);
+    assert.equal(result.inserted, 3);
   });
 });
 

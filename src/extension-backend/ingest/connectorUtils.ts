@@ -39,14 +39,19 @@ export function fileKeyOf(filePath: string): string {
   return (hash >>> 0).toString(36);
 }
 
-/** Parse an event timestamp from a raw row, falling back to `fallback` (epoch ms). */
-export function parseTimestamp(row: AnyRecord, fallback: number): number {
+/**
+ * Parse an event timestamp from a raw row, or undefined when the row has no
+ * parseable timestamp. Callers should skip such rows: falling back to "now"
+ * would mis-bucket the event into the current period and, because the id is
+ * derived from ts, re-insert the same row with a fresh id on every ingest run.
+ */
+export function parseTimestamp(row: AnyRecord): number | undefined {
   const raw = row['timestamp'] ?? row['time'];
   const ts =
     typeof raw === 'string' ? Date.parse(raw) :
     typeof raw === 'number' ? raw :
     NaN;
-  return Number.isNaN(ts) ? fallback : ts;
+  return Number.isNaN(ts) ? undefined : ts;
 }
 
 /**

@@ -107,24 +107,22 @@ describe('CopilotConnector.mapRow()', () => {
     assert.equal(result.ts, new Date(ts).getTime());
   });
 
-  it('falls back to ctx.now for NaN timestamp', () => {
+  it('skips rows with an unparseable timestamp (would mis-bucket into "now")', () => {
     const connector = makeConnector();
     const result = connector.mapRow(
       { timestamp: 'not-a-date', attributes: baseAttrs },
       makeCtx(),
     );
-    assert.ok(result);
-    assert.equal(result.ts, now);
+    assert.equal(result, null);
   });
 
-  it('falls back to ctx.now when timestamp is an object', () => {
+  it('skips rows whose timestamp is an object', () => {
     const connector = makeConnector();
     const result = connector.mapRow(
       { timestamp: { value: 1 }, attributes: baseAttrs },
       makeCtx(),
     );
-    assert.ok(result);
-    assert.equal(result.ts, now);
+    assert.equal(result, null);
   });
 
   it('uses numeric timestamp directly', () => {
