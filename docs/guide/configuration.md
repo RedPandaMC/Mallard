@@ -3,7 +3,7 @@
 Mallard works out of the box. Budget and alert settings live in a JSON config file in Mallard's storage directory:
 
 ```
-~/.config/Code/User/globalStorage/jurreandenys.mallard/mallard/config.json
+~/.config/Code/User/globalStorage/RedPandaMC.mallard/mallard/config.json
 ```
 
 Click **Edit alert rules** in the dashboard to open it with inline validation, hover docs, and autocompletion.
