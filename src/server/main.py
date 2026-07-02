@@ -117,7 +117,7 @@ if __name__ == "__main__":  # pragma: no cover
 
     s = get_settings()
     uvicorn.run(
-        "src.main:app",
+        "server.main:app",
         host=s.server_host,
         port=s.server_port,
         log_level=s.log_level.lower(),

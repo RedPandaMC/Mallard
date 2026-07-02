@@ -2,23 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 from functools import cached_property
 from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-def _parse_labeled(raw: str) -> dict[str, str]:
-    """'label:secret,...' → {sha256(secret): label}. Bare values get label 'unknown'."""
-    result: dict[str, str] = {}
-    for entry in (e.strip() for e in raw.split(",") if e.strip()):
-        label, _, key = entry.partition(":")
-        if not key:
-            label, key = "unknown", label
-        result[hashlib.sha256(key.encode()).hexdigest()] = label.strip()
-    return result
 
 
 class Settings(BaseSettings):
@@ -100,14 +88,20 @@ class Settings(BaseSettings):
     @cached_property
     def hashed_api_keys(self) -> dict[str, str]:
         """SHA-256 hash → label map for configured API keys (computed once)."""
-        return _parse_labeled(self.api_keys)
+        # Local import: credential_verifier imports Settings for typing, so a
+        # module-level import here would be circular.
+        from .credential_verifier import CredentialStore
+
+        return CredentialStore.parse_labeled(self.api_keys)
 
     @cached_property
     def hashed_mqtt_credentials(self) -> dict[str, str]:
         """SHA-256 hash → label map for configured MQTT passwords (computed once)."""
+        from .credential_verifier import CredentialStore
+
         if not self.mqtt_credentials.strip():
             return {}
-        return _parse_labeled(self.mqtt_credentials)
+        return CredentialStore.parse_labeled(self.mqtt_credentials)
 
 
 _settings: Settings | None = None

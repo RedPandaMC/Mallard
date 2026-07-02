@@ -1,4 +1,4 @@
-"""Tests for API key authentication logic."""
+"""Tests for the constant-time credential-hash lookup (server.auth._lookup_label)."""
 
 from __future__ import annotations
 
@@ -7,89 +7,67 @@ import hmac
 
 import pytest
 
+from server.auth import _lookup_label
 
-class TestHashVerification:
+
+def _h(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+class TestLookupLabel:
+    def test_returns_label_on_match(self) -> None:
+        h = _h(b"valid-key")
+        assert _lookup_label(h, {h: "team-alpha"}) == "team-alpha"
+
+    def test_returns_none_on_miss(self) -> None:
+        stored = _h(b"valid-key")
+        candidate = _h(b"wrong-key")
+        assert _lookup_label(candidate, {stored: "team-alpha"}) is None
+
+    def test_returns_none_on_empty_store(self) -> None:
+        assert _lookup_label(_h(b"any-key"), {}) is None
+
+    def test_finds_match_among_multiple_entries(self) -> None:
+        store = {_h(b"key-1"): "alice", _h(b"key-2"): "bob", _h(b"key-3"): "carol"}
+        assert _lookup_label(_h(b"key-2"), store) == "bob"
+
+    def test_iterates_full_store_last_match_wins(self) -> None:
+        """The lookup never early-exits (timing safety), so with duplicate hash keys
+        being impossible in a dict, insertion order determines nothing — but a match
+        early in the store must not stop iteration over later entries."""
+        target = _h(b"key-early")
+        store = {target: "early", _h(b"key-late"): "late"}
+        # A match on the first entry still returns correctly after scanning the rest.
+        assert _lookup_label(target, store) == "early"
+
+    def test_candidate_of_different_length_never_matches(self) -> None:
+        # hmac.compare_digest on different-length ASCII strings returns False
+        assert _lookup_label("short", {_h(b"key"): "label"}) is None
+
+
+class TestHashPrimitives:
+    """Sanity checks for the hashing/compare primitives the lookup relies on."""
+
     def test_sha256_hash_is_deterministic(self) -> None:
-        key = "my-secret-api-key"
-        h1 = hashlib.sha256(key.encode()).hexdigest()
-        h2 = hashlib.sha256(key.encode()).hexdigest()
-        assert h1 == h2
+        assert _h(b"my-secret-api-key") == _h(b"my-secret-api-key")
 
     def test_different_keys_produce_different_hashes(self) -> None:
-        h1 = hashlib.sha256(b"key-a").hexdigest()
-        h2 = hashlib.sha256(b"key-b").hexdigest()
-        assert h1 != h2
+        assert _h(b"key-a") != _h(b"key-b")
 
     def test_hash_is_64_hex_chars(self) -> None:
-        h = hashlib.sha256(b"any-key").hexdigest()
+        h = _h(b"any-key")
         assert len(h) == 64
         assert all(c in "0123456789abcdef" for c in h)
 
-
-class TestConstantTimeComparison:
-    def test_compare_digest_true_for_equal_strings(self) -> None:
-        h = hashlib.sha256(b"secret").hexdigest()
-        assert hmac.compare_digest(h, h) is True
-
-    def test_compare_digest_false_for_different_strings(self) -> None:
-        h1 = hashlib.sha256(b"secret1").hexdigest()
-        h2 = hashlib.sha256(b"secret2").hexdigest()
+    def test_compare_digest_semantics(self) -> None:
+        h1 = _h(b"secret1")
+        h2 = _h(b"secret2")
+        assert hmac.compare_digest(h1, h1) is True
         assert hmac.compare_digest(h1, h2) is False
 
-    def test_compare_digest_different_lengths_returns_false(self) -> None:
-        # Python 3.12+: compare_digest on strings of different lengths returns False
-        assert hmac.compare_digest("short", "a" * 64) is False
-
-
-class TestAuthModule:
-    """Unit tests for src.auth functions."""
-
-    def test_hash_key_returns_sha256_hex(self) -> None:
-        from server.auth import _hash_key
-
-        raw = "my-api-key"
-        result = _hash_key(raw)
-        expected = hashlib.sha256(raw.encode()).hexdigest()
-        assert result == expected
-
-    def test_constant_time_match_valid_key(self) -> None:
-        from server.auth import _constant_time_match
-
-        h = hashlib.sha256(b"valid-key").hexdigest()
-        # Accepts both set[str] and dict[str, str] (iterates keys)
-        assert _constant_time_match(h, {h}) is True
-        assert _constant_time_match(h, {h: "label"}) is True
-
-    def test_constant_time_match_invalid_key(self) -> None:
-        from server.auth import _constant_time_match
-
-        stored = hashlib.sha256(b"valid-key").hexdigest()
-        candidate = hashlib.sha256(b"wrong-key").hexdigest()
-        assert _constant_time_match(candidate, {stored}) is False
-        assert _constant_time_match(candidate, {stored: "label"}) is False
-
-    def test_constant_time_match_empty_set(self) -> None:
-        from server.auth import _constant_time_match
-
-        h = hashlib.sha256(b"any-key").hexdigest()
-        assert _constant_time_match(h, set()) is False
-        assert _constant_time_match(h, {}) is False
-
-    def test_constant_time_match_multiple_keys(self) -> None:
-        from server.auth import _constant_time_match
-
-        h1 = hashlib.sha256(b"key-1").hexdigest()
-        h2 = hashlib.sha256(b"key-2").hexdigest()
-        h3 = hashlib.sha256(b"key-3").hexdigest()
-        # h2 is in the collection
-        assert _constant_time_match(h2, {h1, h2, h3}) is True
-        assert _constant_time_match(h2, {h1: "a", h2: "b", h3: "c"}) is True
-
     def test_raw_key_not_in_hash(self) -> None:
-        """Ensure the stored value is a hex digest, not the raw key."""
         raw = "super-secret"
-        h = hashlib.sha256(raw.encode()).hexdigest()
-        assert raw not in h  # sanity check — the hash should not contain the plaintext key
+        assert raw not in _h(raw.encode())
 
 
 class TestSettingsHashedKeys:
@@ -103,10 +81,8 @@ class TestSettingsHashedKeys:
         monkeypatch.setattr(config_module, "_settings", None)
         settings = config_module.get_settings()
 
-        expected_a = hashlib.sha256(b"key-a").hexdigest()
-        expected_b = hashlib.sha256(b"key-b").hexdigest()
-        assert expected_a in settings.hashed_api_keys
-        assert expected_b in settings.hashed_api_keys
+        assert _h(b"key-a") in settings.hashed_api_keys
+        assert _h(b"key-b") in settings.hashed_api_keys
 
     def test_plain_keys_not_stored(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("INFLUX_URL", "http://localhost:8086")

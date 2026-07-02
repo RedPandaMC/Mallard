@@ -174,8 +174,11 @@ function rowToEvent(row: Record<string, unknown>): UsageEvent | null {
 // ── Filter helpers ─────────────────────────────────────────────────────────────
 
 function dateToId(ms: number): number {
+  // Local date parts, not UTC: fact_daily_usage.date_id is written via DuckDB
+  // strftime on a TIMESTAMPTZ, which renders in the session (= system) timezone.
+  // Using UTC here made range filters miss rows on machines east of UTC.
   const d = new Date(ms);
-  return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
 }
 
 function buildFilterSQL(filter?: RecordFilter): { clause: string; params: unknown[] } {

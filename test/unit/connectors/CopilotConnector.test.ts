@@ -1,4 +1,5 @@
 import { strict as assert } from 'assert';
+import * as os from 'os';
 import { CopilotConnector } from '../../../src/extension-backend/ingest/CopilotConnector';
 import type { ParseContext } from '../../../src/extension-backend/ingest/otelParse';
 import type { PricingService } from '../../../src/extension-backend/pricing/PricingService';
@@ -51,13 +52,16 @@ describe('CopilotConnector — lifecycle', () => {
   });
 
   it('discover() returns globs when a log dir path override points to an existing dir', async () => {
-    const connector = makeConnectorWithLogPath('/tmp');
+    // Use the platform temp dir rather than '/tmp' so the override exists on
+    // Windows too; locate keeps the override path verbatim.
+    const tmp = os.tmpdir();
+    const connector = makeConnectorWithLogPath(tmp);
     const result = await (connector as unknown as {
       discover(): Promise<{ globs: string[]; allowedRoots: string[]; searchedDirs: string[] }>;
     }).discover();
-    assert.ok(result.globs.length > 0, 'globs should be non-empty when /tmp exists');
-    assert.ok(result.allowedRoots.includes('/tmp'));
-    assert.ok(result.searchedDirs.includes('/tmp'));
+    assert.ok(result.globs.length > 0, 'globs should be non-empty when the temp dir exists');
+    assert.ok(result.allowedRoots.includes(tmp));
+    assert.ok(result.searchedDirs.includes(tmp));
   });
 });
 

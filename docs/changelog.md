@@ -83,7 +83,10 @@
 - **SOLID/DRY/SoC refactor** (PR #17): `EventStore`, `IngestService`, and
   `UsageService` restructured to single-responsibility classes with explicit
   interfaces. Dependency injection throughout; no static state.
-- 100 % branch coverage restored and enforced in CI after the rewrite.
+- 100 % branch coverage over the unit-tested core (domain, store, ingest, export
+  logic) restored and enforced in CI after the rewrite. Host-integration layers
+  (`ui/`, `billing/`, activation wiring) are exercised by the VS Code integration
+  suite instead and excluded from the c8 gate.
 
 ---
 
@@ -110,7 +113,9 @@
 ### Changed
 
 - 100 % test coverage (statements / branches / functions / lines) achieved and
-  enforced in CI across all source files.
+  enforced in CI for the unit-testable core. Files that require a live VS Code
+  host (`ui/`, `billing/`, `extension.ts`, network transports) are covered by
+  the integration suite and excluded from the c8 threshold, not held to 100 %.
 
 ---
 

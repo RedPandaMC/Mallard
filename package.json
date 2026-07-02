@@ -283,7 +283,6 @@
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.3-r.3",
-    "chalk": "2.4.2",
     "echarts": "^6.1.0",
     "mqtt": "^5.15.1",
     "neverthrow": "^8.2.0",

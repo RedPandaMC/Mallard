@@ -23,8 +23,11 @@ async function touch(p: string): Promise<void> {
 
 describe('vscodeLogRoot', () => {
   it('walks up to the `logs` ancestor', () => {
+    // vscodeLogRoot walks the string with path.dirname, which preserves the
+    // input's separators — don't wrap the expectation in path.join (it would
+    // rewrite to backslashes on Windows).
     const got = vscodeLogRoot('/home/me/.vscode-server/data/logs/20260612T123456/exthost');
-    assert.equal(got, path.join('/home/me/.vscode-server/data/logs'));
+    assert.equal(got, '/home/me/.vscode-server/data/logs');
   });
 
   it('falls back to the direct parent when no `logs` ancestor exists', () => {

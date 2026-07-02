@@ -135,48 +135,60 @@ class TestSettingsValidators:
         assert s.api_keys == ""
 
 
-class TestParseLabeledFunction:
-    def test_bare_key_gets_unknown_label(self) -> None:
-        from server.config import _parse_labeled
+class TestParseLabeledDelegation:
+    """config.py delegates label parsing to CredentialStore.parse_labeled, so the
+    Settings path gets the same _LABEL_RE sanitisation as the remote verifiers.
+    The parse itself is unit-tested in test_credential_verifier.py."""
 
-        result = _parse_labeled("mykey")
+    def test_settings_path_sanitises_invalid_labels(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("INFLUX_URL", "http://localhost:8086")
+        monkeypatch.setenv("INFLUX_TOKEN", "tok")
+        monkeypatch.setenv("API_KEYS", "bad label!:mykey")
+        _set_sm_env(monkeypatch)
+
+        import server.config as config_module
+
+        monkeypatch.setattr(config_module, "_settings", None)
+        settings = config_module.get_settings()
+
         h = hashlib.sha256(b"mykey").hexdigest()
-        assert result == {h: "unknown"}
+        assert settings.hashed_api_keys[h] == "unknown"
 
-    def test_labeled_key_stores_label(self) -> None:
-        from server.config import _parse_labeled
+    def test_settings_path_sanitises_oversized_labels(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("INFLUX_URL", "http://localhost:8086")
+        monkeypatch.setenv("INFLUX_TOKEN", "tok")
+        monkeypatch.setenv("API_KEYS", f"{'x' * 65}:mykey")
+        _set_sm_env(monkeypatch)
 
-        result = _parse_labeled("team-alpha:mykey")
+        import server.config as config_module
+
+        monkeypatch.setattr(config_module, "_settings", None)
+        settings = config_module.get_settings()
+
         h = hashlib.sha256(b"mykey").hexdigest()
-        assert result == {h: "team-alpha"}
+        assert settings.hashed_api_keys[h] == "unknown"
 
-    def test_multiple_entries(self) -> None:
-        from server.config import _parse_labeled
+    def test_settings_path_matches_credential_store_parse(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from server.credential_verifier import CredentialStore
 
-        result = _parse_labeled("alice:pass1,bob:pass2")
-        h1 = hashlib.sha256(b"pass1").hexdigest()
-        h2 = hashlib.sha256(b"pass2").hexdigest()
-        assert result[h1] == "alice"
-        assert result[h2] == "bob"
+        raw = "team-alpha:key-a,bare-key,bad label!:key-b"
+        monkeypatch.setenv("INFLUX_URL", "http://localhost:8086")
+        monkeypatch.setenv("INFLUX_TOKEN", "tok")
+        monkeypatch.setenv("API_KEYS", raw)
+        _set_sm_env(monkeypatch)
 
-    def test_empty_string_returns_empty_dict(self) -> None:
-        from server.config import _parse_labeled
+        import server.config as config_module
 
-        assert _parse_labeled("") == {}
+        monkeypatch.setattr(config_module, "_settings", None)
+        settings = config_module.get_settings()
 
-    def test_whitespace_only_entries_skipped(self) -> None:
-        from server.config import _parse_labeled
-
-        assert _parse_labeled("  ,  ,  ") == {}
-
-    def test_mixed_bare_and_labeled(self) -> None:
-        from server.config import _parse_labeled
-
-        result = _parse_labeled("bare-key,team:secret")
-        h_bare = hashlib.sha256(b"bare-key").hexdigest()
-        h_labeled = hashlib.sha256(b"secret").hexdigest()
-        assert result[h_bare] == "unknown"
-        assert result[h_labeled] == "team"
+        assert settings.hashed_api_keys == CredentialStore.parse_labeled(raw)
 
 
 class TestHashedCredentials:
