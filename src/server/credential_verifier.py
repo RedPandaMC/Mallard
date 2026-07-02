@@ -1,9 +1,19 @@
-"""Credential verification hierarchy — static (env vars) or remote (Infisical / OpenBao)."""
+"""Credential verification hierarchy — static (env vars) or remote (Infisical / OpenBao).
+
+Label model ("tracking cookie" semantics, server-side only):
+- API keys (and Bearer tokens, which hit the same store) carry a `label:secret`
+  mapping so analytics can filter the Influx `source` tag by team/person.
+- mTLS client certs are labeled via an optional CERT_LABELS `label:cn` map;
+  a CN without an entry falls back to the CN itself as the source.
+- MQTT uses one shared broker password and everything it ingests is tagged
+  source='mqtt' — there is deliberately no per-client label store for MQTT.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 import logging
 import re
 import time
@@ -23,6 +33,13 @@ logger = logging.getLogger(__name__)
 # Labels become InfluxDB tag values; restrict to safe characters and reasonable length.
 _LABEL_RE = re.compile(r"^[\w._@-]{1,64}$")
 
+# Cert CommonNames share the same safe charset (mirrors _CERT_CN_RE in routers/ingest.py).
+_CN_RE = re.compile(r"^[\w._@-]{1,64}$")
+
+
+def _sha256(raw: str) -> str:
+    return hashlib.sha256(raw.encode()).hexdigest()
+
 
 # ── Value objects ─────────────────────────────────────────────────────────────
 
@@ -34,8 +51,9 @@ class VerifiedIdentity:
 
 @dataclass
 class CredentialStore:
-    api_keys: dict[str, str] = field(default_factory=dict)       # hash → label
-    mqtt_credentials: dict[str, str] = field(default_factory=dict)
+    api_keys: dict[str, str] = field(default_factory=dict)     # sha256(key) → label
+    cert_labels: dict[str, str] = field(default_factory=dict)  # cn → label
+    mqtt_password_hash: str | None = None                      # sha256 of the shared password
     fetched_at: float = field(default_factory=time.monotonic)
 
     @staticmethod
@@ -53,7 +71,21 @@ class CredentialStore:
             label = label.strip()
             if not _LABEL_RE.match(label):
                 label = "unknown"
-            result[hashlib.sha256(key.encode()).hexdigest()] = label
+            result[_sha256(key)] = label
+        return result
+
+    @staticmethod
+    def parse_cert_labels(raw: str) -> dict[str, str]:
+        """'label:cn,...' → {cn: label}. Entries with a missing/invalid label or CN
+        are skipped (a bad mapping must not silently relabel someone else's data)."""
+        result: dict[str, str] = {}
+        for entry in (e.strip() for e in raw.split(",") if e.strip()):
+            label, sep, cn = entry.partition(":")
+            label, cn = label.strip(), cn.strip()
+            if not sep or not _LABEL_RE.match(label) or not _CN_RE.match(cn):
+                logger.warning("Skipping malformed CERT_LABELS entry: %r", entry)
+                continue
+            result[cn] = label
         return result
 
 
@@ -65,7 +97,16 @@ class CredentialVerifier(ABC):
     async def verify_api_key(self, key: str) -> VerifiedIdentity | None: ...
 
     @abstractmethod
-    async def verify_mqtt_credential(self, password: str) -> VerifiedIdentity | None: ...
+    async def verify_mqtt_password(self, password: str) -> bool: ...
+
+    @abstractmethod
+    async def lookup_cert_label(self, cn: str) -> str | None: ...
+
+
+def _match_mqtt_password(candidate: str, stored_hash: str | None) -> bool:
+    if not stored_hash:
+        return False
+    return hmac.compare_digest(_sha256(candidate), stored_hash)
 
 
 # ── Static (env vars, no I/O) ─────────────────────────────────────────────────
@@ -76,14 +117,15 @@ class StaticCredentialVerifier(CredentialVerifier):
         self._settings = settings
 
     async def verify_api_key(self, key: str) -> VerifiedIdentity | None:
-        h = hashlib.sha256(key.encode()).hexdigest()
-        label = _lookup_label(h, self._settings.hashed_api_keys)
+        label = _lookup_label(_sha256(key), self._settings.hashed_api_keys)
         return VerifiedIdentity(label) if label is not None else None
 
-    async def verify_mqtt_credential(self, password: str) -> VerifiedIdentity | None:
-        h = hashlib.sha256(password.encode()).hexdigest()
-        label = _lookup_label(h, self._settings.hashed_mqtt_credentials)
-        return VerifiedIdentity(label) if label is not None else None
+    async def verify_mqtt_password(self, password: str) -> bool:
+        stored = self._settings.mqtt_password
+        return _match_mqtt_password(password, _sha256(stored) if stored else None)
+
+    async def lookup_cert_label(self, cn: str) -> str | None:
+        return self._settings.parsed_cert_labels.get(cn)
 
 
 # ── Remote base (shared TTL cache logic) ──────────────────────────────────────
@@ -115,15 +157,28 @@ class RemoteCredentialVerifier(CredentialVerifier, ABC):
 
     async def verify_api_key(self, key: str) -> VerifiedIdentity | None:
         store = await self._get_store()
-        h = hashlib.sha256(key.encode()).hexdigest()
-        label = _lookup_label(h, store.api_keys)
+        label = _lookup_label(_sha256(key), store.api_keys)
         return VerifiedIdentity(label) if label is not None else None
 
-    async def verify_mqtt_credential(self, password: str) -> VerifiedIdentity | None:
+    async def verify_mqtt_password(self, password: str) -> bool:
         store = await self._get_store()
-        h = hashlib.sha256(password.encode()).hexdigest()
-        label = _lookup_label(h, store.mqtt_credentials)
-        return VerifiedIdentity(label) if label is not None else None
+        return _match_mqtt_password(password, store.mqtt_password_hash)
+
+    async def lookup_cert_label(self, cn: str) -> str | None:
+        store = await self._get_store()
+        return store.cert_labels.get(cn)
+
+
+def _build_store(
+    api_keys_raw: str,
+    cert_labels_raw: str,
+    mqtt_password: str,
+) -> CredentialStore:
+    return CredentialStore(
+        api_keys=CredentialStore.parse_labeled(api_keys_raw),
+        cert_labels=CredentialStore.parse_cert_labels(cert_labels_raw),
+        mqtt_password_hash=_sha256(mqtt_password) if mqtt_password else None,
+    )
 
 
 # ── Infisical ─────────────────────────────────────────────────────────────────
@@ -135,7 +190,7 @@ class InfisicalCredentialVerifier(RemoteCredentialVerifier):
         ca = s.secret_manager_ca_cert_path or True
         async with httpx.AsyncClient(verify=ca, timeout=10.0) as c:
             r = await c.get(
-                f"{s.secret_manager_url}/api/v3/secrets/raw",
+                f"{s.secret_manager_base_url}/api/v3/secrets/raw",
                 params={
                     "workspaceId": s.infisical_project_id,
                     "environment": s.infisical_env_slug,
@@ -147,9 +202,10 @@ class InfisicalCredentialVerifier(RemoteCredentialVerifier):
             kv = {item["secretKey"]: item["secretValue"] for item in r.json()["secrets"]}
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError(f"Unexpected Infisical response shape: {exc}") from exc
-        return CredentialStore(
-            api_keys=CredentialStore.parse_labeled(kv.get("API_KEYS", "")),
-            mqtt_credentials=CredentialStore.parse_labeled(kv.get("MQTT_CREDENTIALS", "")),
+        return _build_store(
+            kv.get("API_KEYS", ""),
+            kv.get("CERT_LABELS", ""),
+            kv.get("MQTT_PASSWORD", ""),
         )
 
 
@@ -163,15 +219,16 @@ class OpenBaoCredentialVerifier(RemoteCredentialVerifier):
         if s.openbao_namespace:
             headers["X-Vault-Namespace"] = s.openbao_namespace
         async with httpx.AsyncClient(verify=s.secret_manager_ca_cert_path or True, timeout=10.0) as c:
-            r = await c.get(f"{s.secret_manager_url}/v1/{s.openbao_secret_path}", headers=headers)
+            r = await c.get(f"{s.secret_manager_base_url}/v1/{s.openbao_secret_path}", headers=headers)
         r.raise_for_status()
         try:
             data = r.json()["data"]["data"]
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError(f"Unexpected OpenBao response shape: {exc}") from exc
-        return CredentialStore(
-            api_keys=CredentialStore.parse_labeled(data.get("api_keys", "")),
-            mqtt_credentials=CredentialStore.parse_labeled(data.get("mqtt_credentials", "")),
+        return _build_store(
+            data.get("api_keys", ""),
+            data.get("cert_labels", ""),
+            data.get("mqtt_password", ""),
         )
 
 

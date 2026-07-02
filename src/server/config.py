@@ -108,13 +108,19 @@ class Settings(BaseSettings):
         return CredentialStore.parse_labeled(self.api_keys)
 
     @cached_property
-    def hashed_mqtt_credentials(self) -> dict[str, str]:
-        """SHA-256 hash → label map for configured MQTT passwords (computed once)."""
+    def parsed_cert_labels(self) -> dict[str, str]:
+        """CN → label map for mTLS clients (computed once), static-mode only."""
         from .credential_verifier import CredentialStore
 
-        if not self.mqtt_credentials.strip():
-            return {}
-        return CredentialStore.parse_labeled(self.mqtt_credentials)
+        return CredentialStore.parse_cert_labels(self.cert_labels)
+
+    @property
+    def secret_manager_base_url(self) -> str:
+        """secret_manager_url normalised for the verifiers: no trailing slash, and a
+        trailing '/api' stripped — the Infisical verifier appends '/api/v3/...' itself,
+        so a URL configured with '/api' would otherwise fetch '/api/api/v3/...'."""
+        base = self.secret_manager_url.rstrip("/")
+        return base[: -len("/api")] if base.endswith("/api") else base
 
 
 _settings: Settings | None = None

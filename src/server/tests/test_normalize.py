@@ -19,6 +19,20 @@ class TestNormalizeV1:
         metric = normalize_v1({"schema_version": 1, "ts": "2023-11-14T22:13:20+00:00"})
         assert metric.ts_ms == 1_700_000_000_000
 
+    def test_z_suffix_treated_as_utc(self) -> None:
+        metric = normalize_v1({"schema_version": 1, "ts": "2023-11-14T22:13:20Z"})
+        assert metric.ts_ms == 1_700_000_000_000
+
+    def test_naive_ts_treated_as_utc_not_server_local(self) -> None:
+        """A naive ISO string must not shift by the server host's UTC offset."""
+        metric = normalize_v1({"schema_version": 1, "ts": "2023-11-14T22:13:20"})
+        assert metric.ts_ms == 1_700_000_000_000
+
+    def test_explicit_offset_respected(self) -> None:
+        # 23:13:20 at +01:00 is the same instant as 22:13:20 UTC
+        metric = normalize_v1({"schema_version": 1, "ts": "2023-11-14T23:13:20+01:00"})
+        assert metric.ts_ms == 1_700_000_000_000
+
     def test_no_instance_id_in_v1(self) -> None:
         metric = normalize_v1({"schema_version": 1, "ts": "2023-11-14T22:13:20+00:00"})
         assert metric.instance_id is None

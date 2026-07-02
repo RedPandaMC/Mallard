@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 from pydantic import ValidationError
@@ -57,7 +57,13 @@ class NormalizedMetric:
 
 
 def _iso_to_epoch_ms(ts: str) -> int:
-    return int(datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp() * 1000)
+    """ISO-8601 → epoch ms. Naive timestamps (no offset, no 'Z') are treated as
+    UTC — interpreting them in the server's local timezone would silently shift
+    the point by the host's UTC offset."""
+    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return int(dt.timestamp() * 1000)
 
 
 def _extra_fields(raw: dict[str, Any], known: frozenset[str]) -> dict[str, Any]:

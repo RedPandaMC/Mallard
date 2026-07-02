@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from typing import Annotated
 
@@ -19,7 +20,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["ingest"])
 
-# 64 KB body size limit (enforced by middleware in main.py, validated here as a safety belt)
+# 64 KB body size limit. The middleware in main.py rejects a declared
+# Content-Length above this as a fast path; _read_body_capped() enforces it on
+# the actual bytes, which also covers chunked requests that carry no
+# Content-Length header at all.
 _MAX_BODY_BYTES = 64 * 1024
 
 # CN header values become InfluxDB tag values; restrict to the same safe character set as labels.
@@ -32,6 +36,73 @@ def _extract_bearer(auth_header: str) -> str:
     return auth_header[len(prefix):] if auth_header.startswith(prefix) else ""
 
 
+async def _read_body_capped(request: Request, limit: int = _MAX_BODY_BYTES) -> bytes | None:
+    """Read the request body, aborting as soon as it exceeds *limit*.
+
+    Returns None when the limit is exceeded. Unlike checking Content-Length,
+    this cannot be bypassed with Transfer-Encoding: chunked, and it stops
+    buffering the moment the cap is crossed instead of reading the whole
+    body into memory first.
+    """
+    chunks = bytearray()
+    async for chunk in request.stream():
+        chunks.extend(chunk)
+        if len(chunks) > limit:
+            return None
+    return bytes(chunks)
+
+
+async def _resolve_source(request: Request, verifier: CredentialVerifier) -> str:
+    """Authenticate the request and return the source label for tagging.
+
+    Auth precedence:
+      1. mTLS client cert — CN forwarded as SSL_CLIENT_S_DN_CN by the ingress,
+         which has already verified the cert. The CN maps through the optional
+         CERT_LABELS store; unmapped CNs use the CN itself as the source.
+      2. X-API-Key header.
+      3. Authorization: Bearer <token> (token treated as API key value).
+
+    Raises 401 for missing/invalid credentials and 503 when the credential
+    store is unreachable (remote secret manager down with no warm cache).
+    """
+    cert_cn = request.headers.get("SSL_CLIENT_S_DN_CN", "").strip()
+    if cert_cn and not _CERT_CN_RE.match(cert_cn):
+        logger.warning("Rejected SSL_CLIENT_S_DN_CN with invalid format: %r", cert_cn)
+        cert_cn = ""
+
+    try:
+        if cert_cn:
+            label = await verifier.lookup_cert_label(cert_cn)
+            return label if label is not None else cert_cn
+
+        api_key = request.headers.get("X-API-Key") or _extract_bearer(
+            request.headers.get("Authorization", "")
+        )
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing credentials",
+            )
+        identity = await verifier.verify_api_key(api_key)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        # Remote verifier with an empty cache and an unreachable secret manager
+        # re-raises; surface it as a deliberate 503 instead of an unhandled 500.
+        logger.error("Credential verification unavailable: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Credential verification unavailable",
+        ) from exc
+
+    if identity is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        )
+    return identity.label
+
+
 @router.post("/ingest", status_code=status.HTTP_202_ACCEPTED)
 async def ingest(
     request: Request,
@@ -39,20 +110,19 @@ async def ingest(
 ) -> JSONResponse:
     """
     Accepts a Mallard metric payload and writes one InfluxDB point.
-    Rate-limited to RATE_LIMIT per unique API key (enforced via slowapi middleware).
+
+    Rate limiting is two-layer: per client IP before auth (slowapi middleware)
+    and per verified credential label here (SlidingWindowLimiter), so one
+    team's flood cannot exhaust another's budget and junk credentials cannot
+    mint fresh buckets.
 
     Tolerant of schema drift: any well-formed JSON body naming a
     `schema_version` is accepted, even one this server doesn't recognize yet
     (see normalize.py) — an extension can be upgraded ahead of its server
     without every export failing. Only a body that isn't valid JSON, or
     doesn't carry a `schema_version` at all, is rejected outright.
-
-    Auth precedence:
-      1. mTLS client cert — CN forwarded as SSL_CLIENT_S_DN_CN by nginx ingress.
-      2. X-API-Key header.
-      3. Authorization: Bearer <token> (token treated as API key value).
     """
-    # Belt-and-suspenders body size check (middleware does the primary enforcement)
+    # Fast-path 413 for requests honest enough to declare their size
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > _MAX_BODY_BYTES:
         return JSONResponse(
@@ -60,7 +130,26 @@ async def ingest(
             content={"detail": "Request body exceeds 64 KB limit"},
         )
 
-    body = await request.body()
+    # Authenticate before reading or parsing a single body byte.
+    source = await _resolve_source(request, verifier)
+
+    limiter = getattr(request.app.state, "label_limiter", None)
+    if limiter is not None:
+        retry_after = limiter.check(source)
+        if retry_after is not None:
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={"detail": "Rate limit exceeded for this credential"},
+                headers={"Retry-After": str(max(1, math.ceil(retry_after)))},
+            )
+
+    body = await _read_body_capped(request)
+    if body is None:
+        return JSONResponse(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            content={"detail": "Request body exceeds 64 KB limit"},
+        )
+
     try:
         raw = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -78,32 +167,6 @@ async def ingest(
         metric = normalize_payload(raw)
     except InvalidIngestPayload as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-    # mTLS: cert CN forwarded by nginx ingress; ingress has already verified the cert
-    cert_cn = request.headers.get("SSL_CLIENT_S_DN_CN", "").strip()
-    if cert_cn and not _CERT_CN_RE.match(cert_cn):
-        logger.warning("Rejected SSL_CLIENT_S_DN_CN with invalid format: %r", cert_cn)
-        cert_cn = ""
-
-    if cert_cn:
-        source = cert_cn
-    else:
-        # Extract API key from X-API-Key header or Bearer token
-        api_key = request.headers.get("X-API-Key") or _extract_bearer(
-            request.headers.get("Authorization", "")
-        )
-        if not api_key:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing credentials",
-            )
-        identity = await verifier.verify_api_key(api_key)
-        if identity is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
-            )
-        source = identity.label
 
     write_api = request.app.state.write_api
     settings = request.app.state.settings

@@ -19,7 +19,11 @@ _DEFAULT_ENV = {
     # Bare keys (no label) — label will be "unknown"; labeled keys also supported.
     # Only used to build a StaticCredentialVerifier directly in the `client` fixture
     # below; production Settings can no longer select the static backend at all.
-    "API_KEYS": "test-key-valid,second-key",
+    # First key bare (label "unknown"); second labeled so per-credential tests
+    # can distinguish the two buckets.
+    "API_KEYS": "test-key-valid,team-b:second-key",
+    # mTLS CN → label mapping exercised by TestCertLabelMapping
+    "CERT_LABELS": "team-cert:machine-01",
     "LOG_LEVEL": "DEBUG",
     "RATE_LIMIT": "1000/minute",  # effectively unlimited during tests
     # A secret manager is mandatory to construct Settings at all now, even though
@@ -87,7 +91,7 @@ def client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> Te
         # SECRET_MANAGER_URL above. Patched after the reload so it isn't rebound
         # back to the real function by the `from .credential_verifier import
         # create_verifier` line executing again. Tests want the fast, no-network
-        # static verifier instead, keyed off the same API_KEYS/MQTT_CREDENTIALS env vars.
+        # static verifier instead, keyed off the same API_KEYS/MQTT_PASSWORD env vars.
         with (
             patch.object(
                 main_module,

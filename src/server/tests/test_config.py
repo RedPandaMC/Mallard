@@ -238,35 +238,53 @@ class TestHashedCredentials:
 
         assert "plain-text-key" not in settings.hashed_api_keys
 
-    def test_empty_mqtt_credentials_returns_empty_dict(
+    def test_mqtt_password_defaults_to_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("INFLUX_URL", "http://localhost:8086")
+        monkeypatch.setenv("INFLUX_TOKEN", "tok")
+        monkeypatch.setenv("API_KEYS", "k")
+        _set_sm_env(monkeypatch)
+
+        import server.config as config_module
+
+        monkeypatch.setattr(config_module, "_settings", None)
+        settings = config_module.get_settings()
+        assert settings.mqtt_password == ""
+
+    def test_cert_labels_parsed_and_sanitised(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("INFLUX_URL", "http://localhost:8086")
+        monkeypatch.setenv("INFLUX_TOKEN", "tok")
+        monkeypatch.setenv("API_KEYS", "k")
+        monkeypatch.setenv("CERT_LABELS", "team-a:machine-01,bad entry")
+        _set_sm_env(monkeypatch)
+
+        import server.config as config_module
+
+        monkeypatch.setattr(config_module, "_settings", None)
+        settings = config_module.get_settings()
+        assert settings.parsed_cert_labels == {"machine-01": "team-a"}
+
+    def test_secret_manager_base_url_strips_trailing_api(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """Regression: a SECRET_MANAGER_URL configured with a trailing /api made the
+        Infisical verifier fetch /api/api/v3/... — the property normalises it away."""
         monkeypatch.setenv("INFLUX_URL", "http://localhost:8086")
         monkeypatch.setenv("INFLUX_TOKEN", "tok")
-        monkeypatch.setenv("API_KEYS", "k")
-        monkeypatch.setenv("MQTT_CREDENTIALS", "")
         _set_sm_env(monkeypatch)
+        monkeypatch.setenv(
+            "SECRET_MANAGER_URL", "http://infisical.infisical.svc.cluster.local/api"
+        )
 
         import server.config as config_module
 
         monkeypatch.setattr(config_module, "_settings", None)
         settings = config_module.get_settings()
-        assert settings.hashed_mqtt_credentials == {}
-
-    def test_mqtt_credentials_labeled_format(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("INFLUX_URL", "http://localhost:8086")
-        monkeypatch.setenv("INFLUX_TOKEN", "tok")
-        monkeypatch.setenv("API_KEYS", "k")
-        monkeypatch.setenv("MQTT_CREDENTIALS", "sensor-1:mqtt-pass")
-        _set_sm_env(monkeypatch)
-
-        import server.config as config_module
-
+        assert settings.secret_manager_base_url == "http://infisical.infisical.svc.cluster.local"
+        # And a URL without the suffix is untouched (bar trailing-slash cleanup)
+        monkeypatch.setenv("SECRET_MANAGER_URL", "http://openbao:8200/")
         monkeypatch.setattr(config_module, "_settings", None)
         settings = config_module.get_settings()
-
-        h = hashlib.sha256(b"mqtt-pass").hexdigest()
-        assert settings.hashed_mqtt_credentials[h] == "sensor-1"
+        assert settings.secret_manager_base_url == "http://openbao:8200"
 
     def test_secret_manager_field_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("INFLUX_URL", "http://localhost:8086")
