@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import math
@@ -75,6 +77,24 @@ async def _read_body_capped(request: Request, limit: int = _MAX_BODY_BYTES) -> b
         if len(chunks) > limit:
             return None
     return bytes(chunks)
+
+
+def _verify_signature(body: bytes, header_value: str, secrets: list[str]) -> bool:
+    """Verify an X-Mallard-Signature-256 header ("sha256=<hex>") against the raw
+    body for *any* configured secret — accepting multiple secrets gives key
+    rotation a grace window (add the new secret, roll out clients, drop the old).
+    """
+    prefix = "sha256="
+    if not header_value.startswith(prefix):
+        return False
+    provided = header_value[len(prefix):].strip().lower()
+    matched = False
+    for secret in secrets:
+        expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        # No early exit: compare against every secret to keep timing flat.
+        if hmac.compare_digest(provided, expected):
+            matched = True
+    return matched
 
 
 async def _resolve_source(request: Request, verifier: CredentialVerifier) -> str:
@@ -171,6 +191,25 @@ async def ingest(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             content={"detail": "Request body exceeds 64 KB limit"},
         )
+
+    # Optional HMAC request signing: enforced only when the operator has
+    # configured WEBHOOK_HMAC_SECRETS (opt-in, backward compatible). The
+    # credential store is already warm here — _resolve_source above fetched it.
+    try:
+        hmac_secrets = await verifier.get_webhook_hmac_secrets()
+    except Exception as exc:
+        logger.error("Credential verification unavailable: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Credential verification unavailable",
+        ) from exc
+    if hmac_secrets:
+        signature = request.headers.get("X-Mallard-Signature-256", "")
+        if not _verify_signature(body, signature, hmac_secrets):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid signature",
+            )
 
     try:
         raw = json.loads(body)

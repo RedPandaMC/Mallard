@@ -16,6 +16,7 @@ const EXPECTED_COMMANDS = [
   'mallard.setMqttPassword',
   'mallard.setWebhookApiKey',
   'mallard.setWebhookBearerToken',
+  'mallard.setWebhookSigningSecret',
   'mallard.setGitHubPat',
   'mallard.simulateRestriction',
   'mallard.disableExtension',

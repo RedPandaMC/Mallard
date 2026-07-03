@@ -100,6 +100,15 @@ Replaces the deprecated plaintext `mallard.webhook.bearerToken` setting — an
 existing setting value is migrated automatically on startup. Leave blank to
 clear.
 
+## Mallard: Set Webhook Signing Secret
+
+ID `mallard.setWebhookSigningSecret`. Prompts for the HMAC signing secret and
+stores it in SecretStorage. When set, every webhook POST carries an
+`X-Mallard-Signature-256: sha256=<hex>` header — an HMAC-SHA256 of the exact
+request body — which the server verifies when its `WEBHOOK_HMAC_SECRETS` is
+configured. Optional defense-in-depth on top of the API key/bearer/mTLS auth;
+see the Authentication reference. Leave blank to clear.
+
 ## Mallard: Set GitHub Personal Access Token
 
 ID `mallard.setGitHubPat`. Prompts for a GitHub PAT (scopes: `read:user` for

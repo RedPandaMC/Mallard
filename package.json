@@ -126,6 +126,12 @@
         "icon": "$(key)"
       },
       {
+        "command": "mallard.setWebhookSigningSecret",
+        "title": "Set Webhook Signing Secret",
+        "category": "Mallard",
+        "icon": "$(key)"
+      },
+      {
         "command": "mallard.setGitHubPat",
         "title": "Set GitHub Personal Access Token",
         "category": "Mallard",

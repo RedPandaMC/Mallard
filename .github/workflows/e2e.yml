@@ -76,6 +76,7 @@ jobs:
           API_KEYS=e2e-team:e2e-test-key
           MQTT_PASSWORD=
           CERT_LABELS=
+          WEBHOOK_HMAC_SECRETS=
           EOF
 
       - name: Start the stack

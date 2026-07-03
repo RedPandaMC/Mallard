@@ -2,10 +2,121 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+
+from .conftest import HMAC_SECRETS
+
+
+def _sign(body: bytes, secret: str) -> str:
+    return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+
+class TestHmacSignature:
+    """X-Mallard-Signature-256 verification — opt-in via WEBHOOK_HMAC_SECRETS."""
+
+    def test_valid_signature_returns_202(self, hmac_client: TestClient, valid_payload: dict) -> None:
+        body = json.dumps(valid_payload).encode()
+        response = hmac_client.post(
+            "/api/v1/ingest",
+            content=body,
+            headers={
+                "X-API-Key": "test-key-valid",
+                "Content-Type": "application/json",
+                "X-Mallard-Signature-256": _sign(body, HMAC_SECRETS[1]),
+            },
+        )
+        assert response.status_code == 202
+
+    def test_rotation_old_secret_still_accepted(
+        self, hmac_client: TestClient, valid_payload: dict
+    ) -> None:
+        body = json.dumps(valid_payload).encode()
+        response = hmac_client.post(
+            "/api/v1/ingest",
+            content=body,
+            headers={
+                "X-API-Key": "test-key-valid",
+                "Content-Type": "application/json",
+                "X-Mallard-Signature-256": _sign(body, HMAC_SECRETS[0]),
+            },
+        )
+        assert response.status_code == 202
+
+    def test_bad_signature_returns_401(self, hmac_client: TestClient, valid_payload: dict) -> None:
+        body = json.dumps(valid_payload).encode()
+        response = hmac_client.post(
+            "/api/v1/ingest",
+            content=body,
+            headers={
+                "X-API-Key": "test-key-valid",
+                "Content-Type": "application/json",
+                "X-Mallard-Signature-256": _sign(body, "wrong-secret"),
+            },
+        )
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Invalid signature"
+
+    def test_missing_signature_returns_401_when_secrets_configured(
+        self, hmac_client: TestClient, valid_payload: dict
+    ) -> None:
+        response = hmac_client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={"X-API-Key": "test-key-valid"},
+        )
+        assert response.status_code == 401
+
+    def test_signature_over_different_body_rejected(
+        self, hmac_client: TestClient, valid_payload: dict
+    ) -> None:
+        other_body = json.dumps({**valid_payload, "mtd_credits": 999999}).encode()
+        body = json.dumps(valid_payload).encode()
+        response = hmac_client.post(
+            "/api/v1/ingest",
+            content=body,
+            headers={
+                "X-API-Key": "test-key-valid",
+                "Content-Type": "application/json",
+                "X-Mallard-Signature-256": _sign(other_body, HMAC_SECRETS[1]),
+            },
+        )
+        assert response.status_code == 401
+
+    def test_header_ignored_when_no_secrets_configured(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """Backward compatible: without WEBHOOK_HMAC_SECRETS the header is not checked."""
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={
+                "X-API-Key": "test-key-valid",
+                "X-Mallard-Signature-256": "sha256=deadbeef",
+            },
+        )
+        assert response.status_code == 202
+
+    def test_malformed_header_prefix_rejected(
+        self, hmac_client: TestClient, valid_payload: dict
+    ) -> None:
+        body = json.dumps(valid_payload).encode()
+        sig = _sign(body, HMAC_SECRETS[1]).removeprefix("sha256=")
+        response = hmac_client.post(
+            "/api/v1/ingest",
+            content=body,
+            headers={
+                "X-API-Key": "test-key-valid",
+                "Content-Type": "application/json",
+                "X-Mallard-Signature-256": sig,  # missing "sha256=" prefix
+            },
+        )
+        assert response.status_code == 401
 
 
 class TestIngestHappyPath:

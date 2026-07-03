@@ -54,6 +54,7 @@ class CredentialStore:
     api_keys: dict[str, str] = field(default_factory=dict)     # sha256(key) → label
     cert_labels: dict[str, str] = field(default_factory=dict)  # cn → label
     mqtt_password_hash: str | None = None                      # sha256 of the shared password
+    webhook_hmac_secrets: list[str] = field(default_factory=list)  # plain values (needed for HMAC)
     fetched_at: float = field(default_factory=time.monotonic)
 
     @staticmethod
@@ -73,6 +74,14 @@ class CredentialStore:
                 label = "unknown"
             result[_sha256(key)] = label
         return result
+
+    @staticmethod
+    def parse_secret_list(raw: str) -> list[str]:
+        """Comma-separated plain secrets → list. Used for the HMAC signing secrets,
+        which must stay available in plaintext (HMAC needs the key itself) and are
+        unlabeled — the signature authenticates the body, the API key identifies
+        the sender."""
+        return [s for s in (e.strip() for e in raw.split(",")) if s]
 
     @staticmethod
     def parse_cert_labels(raw: str) -> dict[str, str]:
@@ -102,6 +111,12 @@ class CredentialVerifier(ABC):
     @abstractmethod
     async def lookup_cert_label(self, cn: str) -> str | None: ...
 
+    @abstractmethod
+    async def get_webhook_hmac_secrets(self) -> list[str]:
+        """Signing secrets for X-Mallard-Signature-256 verification.
+        Empty list = signature checking disabled."""
+        ...
+
 
 def _match_mqtt_password(candidate: str, stored_hash: str | None) -> bool:
     if not stored_hash:
@@ -126,6 +141,9 @@ class StaticCredentialVerifier(CredentialVerifier):
 
     async def lookup_cert_label(self, cn: str) -> str | None:
         return self._settings.parsed_cert_labels.get(cn)
+
+    async def get_webhook_hmac_secrets(self) -> list[str]:
+        return self._settings.parsed_webhook_hmac_secrets
 
 
 # ── Remote base (shared TTL cache logic) ──────────────────────────────────────
@@ -168,16 +186,22 @@ class RemoteCredentialVerifier(CredentialVerifier, ABC):
         store = await self._get_store()
         return store.cert_labels.get(cn)
 
+    async def get_webhook_hmac_secrets(self) -> list[str]:
+        store = await self._get_store()
+        return store.webhook_hmac_secrets
+
 
 def _build_store(
     api_keys_raw: str,
     cert_labels_raw: str,
     mqtt_password: str,
+    webhook_hmac_secrets_raw: str = "",
 ) -> CredentialStore:
     return CredentialStore(
         api_keys=CredentialStore.parse_labeled(api_keys_raw),
         cert_labels=CredentialStore.parse_cert_labels(cert_labels_raw),
         mqtt_password_hash=_sha256(mqtt_password) if mqtt_password else None,
+        webhook_hmac_secrets=CredentialStore.parse_secret_list(webhook_hmac_secrets_raw),
     )
 
 
@@ -206,6 +230,7 @@ class InfisicalCredentialVerifier(RemoteCredentialVerifier):
             kv.get("API_KEYS", ""),
             kv.get("CERT_LABELS", ""),
             kv.get("MQTT_PASSWORD", ""),
+            kv.get("WEBHOOK_HMAC_SECRETS", ""),
         )
 
 
@@ -229,6 +254,7 @@ class OpenBaoCredentialVerifier(RemoteCredentialVerifier):
             data.get("api_keys", ""),
             data.get("cert_labels", ""),
             data.get("mqtt_password", ""),
+            data.get("webhook_hmac_secrets", ""),
         )
 
 

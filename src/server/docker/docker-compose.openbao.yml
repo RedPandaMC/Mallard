@@ -44,6 +44,7 @@ services:
       API_KEYS: ${API_KEYS:-}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-}
       CERT_LABELS: ${CERT_LABELS:-}
+      WEBHOOK_HMAC_SECRETS: ${WEBHOOK_HMAC_SECRETS:-}
       INFLUX_TOKEN: ${INFLUX_TOKEN:-}
     # No `bao secrets enable -path=secret kv-v2` step: -dev mode already
     # auto-mounts a kv-v2 backend at secret/, so enabling it again fails with
@@ -59,7 +60,7 @@ services:
     # container still printed "OpenBao seeded successfully" and exited 0.
     entrypoint: >
       sh -c "
-        bao kv put secret/mallard/server api_keys=\"$${API_KEYS}\" mqtt_password=\"$${MQTT_PASSWORD}\" cert_labels=\"$${CERT_LABELS}\" influx_token=\"$${INFLUX_TOKEN}\" &&
+        bao kv put secret/mallard/server api_keys=\"$${API_KEYS}\" mqtt_password=\"$${MQTT_PASSWORD}\" cert_labels=\"$${CERT_LABELS}\" webhook_hmac_secrets=\"$${WEBHOOK_HMAC_SECRETS}\" influx_token=\"$${INFLUX_TOKEN}\" &&
         echo 'OpenBao seeded successfully'
       "
     restart: "no"

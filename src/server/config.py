@@ -55,6 +55,19 @@ class Settings(BaseSettings):
         description="Comma-separated 'label:cn' pairs for mTLS clients, static-mode only",
     )
 
+    # Optional HMAC request signing. When non-empty, every ingest request must
+    # carry a valid X-Mallard-Signature-256 header (HMAC-SHA256 of the raw
+    # body). Comma-separated plain values so a new secret can be added before
+    # the old one is retired (rotation window).
+    webhook_hmac_secrets: str = Field(
+        "",
+        description=(
+            "Comma-separated HMAC signing secrets for X-Mallard-Signature-256 "
+            "verification. Empty disables signature checking. Static-mode only — "
+            "production deployments store WEBHOOK_HMAC_SECRETS in the secret manager."
+        ),
+    )
+
     # Secret manager (required — every deployment must pick one; there is no
     # supported static/env-var-only production path)
     secret_manager_type: Literal["infisical", "openbao"] = Field(
@@ -113,6 +126,13 @@ class Settings(BaseSettings):
         from .credential_verifier import CredentialStore
 
         return CredentialStore.parse_cert_labels(self.cert_labels)
+
+    @cached_property
+    def parsed_webhook_hmac_secrets(self) -> list[str]:
+        """HMAC signing secrets (computed once), static-mode only."""
+        from .credential_verifier import CredentialStore
+
+        return CredentialStore.parse_secret_list(self.webhook_hmac_secrets)
 
     @property
     def secret_manager_base_url(self) -> str:

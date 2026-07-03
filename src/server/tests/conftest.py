@@ -60,13 +60,18 @@ def mock_influx_client(mock_write_api: MagicMock) -> MagicMock:
     return client
 
 
-@pytest.fixture()
-def client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> TestClient:
+def _build_client(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_influx_client: MagicMock,
+    extra_env: dict[str, str] | None = None,
+):
     """
     TestClient with mocked InfluxDB.  Import and build the app *inside* the
     fixture so the monkeypatched env is already in place when Settings() runs.
     """
     _patch_env_and_settings(monkeypatch)
+    for k, v in (extra_env or {}).items():
+        monkeypatch.setenv(k, v)
 
     from server.credential_verifier import StaticCredentialVerifier
 
@@ -101,6 +106,26 @@ def client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> Te
             TestClient(app, raise_server_exceptions=False) as tc,
         ):
             yield tc
+
+
+@pytest.fixture()
+def client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> TestClient:
+    yield from _build_client(monkeypatch, mock_influx_client)
+
+
+# Two secrets configured — the second is "current", the first simulates the
+# old secret still being accepted during a rotation window.
+HMAC_SECRETS = ["old-signing-secret", "test-signing-secret"]
+
+
+@pytest.fixture()
+def hmac_client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> TestClient:
+    """Client with X-Mallard-Signature-256 verification enabled."""
+    yield from _build_client(
+        monkeypatch,
+        mock_influx_client,
+        {"WEBHOOK_HMAC_SECRETS": ",".join(HMAC_SECRETS)},
+    )
 
 
 @pytest.fixture()

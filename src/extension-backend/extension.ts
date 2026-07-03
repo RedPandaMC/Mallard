@@ -324,6 +324,8 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.webhookApiKey)));
   reg('mallard.setWebhookBearerToken', () =>
     promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.webhookBearerToken)));
+  reg('mallard.setWebhookSigningSecret', () =>
+    promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.webhookSigningSecret)));
   reg('mallard.setGitHubPat', () =>
     promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.githubPat)));
 }

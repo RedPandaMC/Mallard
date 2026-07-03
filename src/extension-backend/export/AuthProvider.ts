@@ -34,6 +34,10 @@ export class AuthProvider {
         (await context.secrets.get(SECRET_KEYS.webhookApiKey)) || cfg.webhook.apiKey;
       const bearerToken =
         (await context.secrets.get(SECRET_KEYS.webhookBearerToken)) || cfg.webhook.bearerToken;
+      // Optional HMAC request signing (X-Mallard-Signature-256). Set via
+      // "Mallard: Set Webhook Signing Secret"; must match the server's
+      // WEBHOOK_HMAC_SECRETS entry.
+      const signingSecret = await context.secrets.get(SECRET_KEYS.webhookSigningSecret);
 
       const headers: Record<string, string> = {};
       if (cfg.webhook.auth === 'apiKey' && apiKey) {
@@ -55,6 +59,7 @@ export class AuthProvider {
         createWebhookExporter(
           {
             url,
+            ...opt('secret', signingSecret || undefined),
             ...opt('headers', Object.keys(headers).length > 0 ? headers : undefined),
             ...certOpts,
           },
