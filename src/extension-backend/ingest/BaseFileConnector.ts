@@ -117,9 +117,11 @@ export abstract class BaseFileConnector implements LogConnector {
   protected async buildContext(_globs: string[]): Promise<ParseContext> {
     const repo = currentRepo();
     const branch = activeBranch();
+    const tokenPrices = this.pricing.tokenPrices;
     return {
       pricePerCredit: this.pricing.pricePerCredit,
       manifest: this.pricing.currentManifest,
+      ...(tokenPrices !== undefined ? { tokenPrices } : {}),
       now: Date.now(),
       /* c8 ignore next */
       ...(repo !== undefined ? { repo } : {}),

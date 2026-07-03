@@ -2,7 +2,7 @@
 import * as path from 'path';
 import { ParseContext } from './otelParse';
 import { locateClaudeCodeLogDirs } from './locate';
-import { priceRequest } from '../domain/pricing';
+import { priceRequest, priceTokens } from '../domain/pricing';
 import { Surface, UsageEvent } from '../domain/types';
 import { PricingService } from '../pricing/PricingService';
 import { DuckDBFileReader } from '../store/DuckDBFileReader';
@@ -82,7 +82,7 @@ export class ClaudeCodeConnector extends BaseFileConnector {
     const ts            = parseTimestamp({ ...row, ...msg });
     if (ts === undefined) return null;
 
-    const { credits, cost } = priceRequest(model, {
+    const { credits, cost: creditCost } = priceRequest(model, {
       pricePerCredit: ctx.pricePerCredit,
       currency: 'USD',
       ...(ctx.manifest !== undefined ? { manifest: ctx.manifest } : {}),
@@ -95,7 +95,12 @@ export class ClaudeCodeConnector extends BaseFileConnector {
       ...(cacheRead     !== undefined ? { cacheRead }     : {}),
       ...(thinking      !== undefined ? { thinking }      : {}),
     };
-    const rawCbc       = cost > 0 ? splitCostByBreakdown(cost, tokens) : undefined;
+    // Exact per-token cost when the price feed knows the model; the
+    // credit-multiplier estimate (with a proportional split) is the fallback.
+    const tokenCost = priceTokens(model, tokens, ctx.tokenPrices);
+    const cost = tokenCost?.total ?? creditCost;
+    const rawCbc =
+      tokenCost?.byCategory ?? (cost > 0 ? splitCostByBreakdown(cost, tokens) : undefined);
     const costByCategory = rawCbc && Object.keys(rawCbc).length > 0 ? rawCbc : undefined;
 
     const surface: Surface = ctx.surface ?? 'agent';

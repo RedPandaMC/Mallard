@@ -2,7 +2,7 @@
 import * as path from 'path';
 import { ParseContext } from './otelParse';
 import { locateCopilotLogDirs } from './locate';
-import { priceRequest } from '../domain/pricing';
+import { priceRequest, priceTokens } from '../domain/pricing';
 import { UsageEvent } from '../domain/types';
 import { PricingService } from '../pricing/PricingService';
 import { DuckDBFileReader } from '../store/DuckDBFileReader';
@@ -74,15 +74,25 @@ export class CopilotConnector extends BaseFileConnector {
     const ts         = parseTimestamp(row) ?? parseTimestamp(attrs);
     if (ts === undefined) return null;
 
-    const { credits, cost } = priceRequest(String(model), {
+    const { credits, cost: creditCost } = priceRequest(String(model), {
       pricePerCredit: ctx.pricePerCredit,
       currency: 'USD',
       ...(ctx.manifest !== undefined ? { manifest: ctx.manifest } : {}),
     });
 
+    // Exact per-token cost (inline completions included) when the price feed
+    // knows the model; the credit-multiplier estimate is the fallback.
+    const tokenCost = priceTokens(
+      String(model),
+      { ...(prompt !== undefined ? { prompt } : {}), ...(completion !== undefined ? { completion } : {}) },
+      ctx.tokenPrices,
+    );
+    const cost = tokenCost?.total ?? creditCost;
+
     const totalTok = (prompt ?? 0) + (completion ?? 0);
     const costByCategory =
-      cost > 0 && totalTok > 0 ? splitCostSimple(cost, prompt ?? 0, totalTok) : undefined;
+      tokenCost?.byCategory ??
+      (cost > 0 && totalTok > 0 ? splitCostSimple(cost, prompt ?? 0, totalTok) : undefined);
 
     const surfaceHint =
       pick(attrs, ['gen_ai.operation.surface', 'surface', 'gen_ai.operation.name']) ?? row['name'];
