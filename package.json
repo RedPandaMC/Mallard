@@ -301,6 +301,7 @@
     "test": "vscode-test",
     "vscode:prepublish": "bun run package",
     "vsce:package": "vsce package",
+    "prune-duckdb": "node scripts/prune-duckdb.mjs",
     "assets": "node scripts/render-assets.mjs",
     "docs:build": "vitepress build docs",
     "docs:dev": "vitepress dev docs"
