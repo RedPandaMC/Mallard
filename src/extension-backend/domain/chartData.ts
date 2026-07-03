@@ -102,7 +102,10 @@ export function buildHourlyTimelineData(events: readonly UsageEvent[], filter?: 
     if (!matchesFilter(e, filter)) continue;
     hours[Math.floor(((e.ts + tzOffsetMs) % DAY_MS) / 3_600_000) % 24]! += e.credits;
   }
-  const peakHour = hours.indexOf(Math.max(...hours));
+  const max = Math.max(...hours);
+  // null when there is no hourly activity — indexOf(0) would otherwise always
+  // report midnight as the "peak".
+  const peakHour = max > 0 ? hours.indexOf(max) : null;
   return { hours, peakHour };
 }
 

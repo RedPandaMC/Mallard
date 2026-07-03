@@ -32,14 +32,22 @@ import {
 } from './schema';
 import { FilterClauseBuilder } from './FilterClauseBuilder';
 
-// ── SnapshotCache ─────────────────────────────────────────────────────────────
+// ── SnapshotSourceData ─────────────────────────────────────────────────────────
 
-export interface SnapshotCache {
+/**
+ * The normalized data bundle both snapshot read paths produce — the cached
+ * snap_* tables (readSnapshotCache) and the filtered DuckDB aggregation
+ * (readFilteredSnapshot) return the same shape, so UsageService assembles a
+ * snapshot from either through one code path.
+ */
+export interface SnapshotSourceData {
   totals: {
     all:   { credits: number; cost: number; tokens: number; eventCount: number };
     mtd:   { credits: number; cost: number; tokens: number; eventCount: number };
     today: { credits: number; cost: number; tokens: number; eventCount: number };
   };
+  /** Events whose cost is estimated (log-derived) rather than authoritative. */
+  estimatedEventCount: number;
   /** day_start = epoch ms of local midnight, DST-correct. */
   daily:      Array<{ dayStart: number; credits: number; cost: number; tokens: number; eventCount: number }>;
   models:     Array<{ modelId: string; credits: number; cost: number; tokens: number }>;
@@ -48,29 +56,7 @@ export interface SnapshotCache {
   hourly:     Array<{ hourLocal: number; credits: number }>;
   categories: Array<{ category: string; cost: number }>;
   sankey:     Array<{ model: string; surface: string; count: number; credits: number }>;
-  dims:       { models: string[]; surfaces: string[]; sources: string[]; repos: string[] };
-  /** Credits per weekday, index 0=Sun … 6=Sat. */
-  weekday:    number[];
-}
-
-// ── FilteredSnapshotData ───────────────────────────────────────────────────────
-
-/** Data returned by readFilteredSnapshot — all aggregations done server-side. */
-export interface FilteredSnapshotData {
-  totals: {
-    all:   { credits: number; cost: number; tokens: number; eventCount: number };
-    mtd:   { credits: number; cost: number; tokens: number; eventCount: number };
-    today: { credits: number; cost: number; tokens: number; eventCount: number };
-  };
-  /** day_start = epoch ms of local midnight, DST-correct (matches snap_daily format). */
-  daily:      Array<{ dayStart: number; credits: number; cost: number; tokens: number; eventCount: number }>;
-  topModels:  Array<{ modelId: string; credits: number; cost: number; tokens: number }>;
-  topRepos:   Array<{ repo: string; credits: number; cost: number; tokens: number }>;
-  sankey:     Array<{ model: string; surface: string; count: number; credits: number }>;
-  categories: Array<{ category: string; cost: number }>;
-  /** hour_local = 0-23, DST-correct. */
-  hourly:     Array<{ hourLocal: number; credits: number }>;
-  /** Distinct values scoped to range filter only — keeps dropdowns stable. */
+  /** Distinct values; in the filtered path scoped to the range filter only. */
   dims:       { models: string[]; surfaces: string[]; sources: string[]; repos: string[] };
   /** Credits per weekday, index 0=Sun … 6=Sat. */
   weekday:    number[];
@@ -96,8 +82,8 @@ export interface FactRow {
 
 /** Narrow interface for the two snapshot read paths used by UsageService. */
 export interface IEventSnapshotReader {
-  readSnapshotCache(): Promise<SnapshotCache>;
-  readFilteredSnapshot(filter: RecordFilter): Promise<FilteredSnapshotData>;
+  readSnapshotCache(): Promise<SnapshotSourceData>;
+  readFilteredSnapshot(filter: RecordFilter): Promise<SnapshotSourceData>;
   creditsByBranch(branch: string): Promise<number>;
 }
 
@@ -427,9 +413,9 @@ export class EventReader implements IEventReader {
     }));
   }
 
-  async readSnapshotCache(): Promise<SnapshotCache> {
+  async readSnapshotCache(): Promise<SnapshotSourceData> {
     const [totalsRaw, daily, models, repos, hourly, categories, sankey,
-           dimModels, dimSurfaces, dimSources, dimRepos, weekdayRows] = await Promise.all([
+           dimModels, dimSurfaces, dimSources, dimRepos, weekdayRows, estRows] = await Promise.all([
       readRows(this.conn, READ_SNAP_TOTALS, (r) => r),
       /* c8 ignore start */
       readRows(this.conn, READ_SNAP_DAILY,  (r) => ({
@@ -473,6 +459,7 @@ export class EventReader implements IEventReader {
         weekday: Number(r['weekday'] ?? 0),
         credits: Number(r['credits'] ?? 0),
       })),
+      readRows(this.conn, 'SELECT COUNT(*) AS c FROM events WHERE estimated', (r) => Number(r['c'] ?? 0)),
       /* c8 ignore stop */
     ]);
 
@@ -497,6 +484,7 @@ export class EventReader implements IEventReader {
 
     return {
       totals,
+      estimatedEventCount: estRows[0] ?? 0,
       daily,
       models,
       repos,
@@ -513,7 +501,7 @@ export class EventReader implements IEventReader {
     };
   }
 
-  async readFilteredSnapshot(filter: RecordFilter): Promise<FilteredSnapshotData> {
+  async readFilteredSnapshot(filter: RecordFilter): Promise<SnapshotSourceData> {
     const { clause, params }                           = buildFilterSQL(filter);
     const rangeOnly: RecordFilter                      = filter.range ? { range: filter.range } : {};
     const { clause: rangeClause, params: rangeParams } = buildFilterSQL(rangeOnly);
@@ -543,6 +531,7 @@ SELECT
   ${agg(`COALESCE(SUM(cost),0)`)}                        AS all_cost,
   ${agg(tok)}                                            AS all_tokens,
   ${agg(`COUNT(*)`)}                                     AS all_ec,
+  ${agg(`COUNT(*)`, `estimated`)}                        AS all_est_ec,
   ${agg(`COALESCE(SUM(credits),0)`, mtdCond)}            AS mtd_credits,
   ${agg(`COALESCE(SUM(cost),0)`,    mtdCond)}            AS mtd_cost,
   ${agg(tok,                        mtdCond)}            AS mtd_tokens,
@@ -611,7 +600,7 @@ SELECT
       return JSON.parse(String(v)) as T[];
     };
 
-    const mkTotals = (pfx: string): FilteredSnapshotData['totals']['all'] => ({
+    const mkTotals = (pfx: string): SnapshotSourceData['totals']['all'] => ({
       credits:    Number(row[`${pfx}_credits`] ?? 0),
       cost:       Number(row[`${pfx}_cost`]    ?? 0),
       tokens:     Number(row[`${pfx}_tokens`]  ?? 0),
@@ -623,7 +612,7 @@ SELECT
       ['cat_thinking', 'thinking'], ['cat_cache_creation', 'cache_creation'],
       ['cat_cache_read', 'cache_read'], ['cat_unknown', 'unknown'],
     ];
-    const categories: FilteredSnapshotData['categories'] = [];
+    const categories: SnapshotSourceData['categories'] = [];
     for (const [col, cat] of catPairs) {
       const cost = Number(row[col] ?? 0);
       if (cost > 0) categories.push({ category: cat, cost });
@@ -641,6 +630,7 @@ SELECT
 
     return {
       totals: { all: mkTotals('all'), mtd: mkTotals('mtd'), today: mkTotals('today') },
+      estimatedEventCount: Number(row['all_est_ec'] ?? 0),
       daily: dailyArr.map((r) => ({
         dayStart:   Number(r['day_start']   ?? 0),
         credits:    Number(r['credits']     ?? 0),
@@ -648,13 +638,13 @@ SELECT
         tokens:     Number(r['tokens']      ?? 0),
         eventCount: Number(r['event_count'] ?? 0),
       })),
-      topModels: modelArr.map((r) => ({
+      models: modelArr.map((r) => ({
         modelId: String(r['modelId'] ?? ''),
         credits: Number(r['credits'] ?? 0),
         cost:    Number(r['cost']    ?? 0),
         tokens:  Number(r['tokens']  ?? 0),
       })),
-      topRepos: repoArr.map((r) => ({
+      repos: repoArr.map((r) => ({
         repo:    String(r['repo']    ?? ''),
         credits: Number(r['credits'] ?? 0),
         cost:    Number(r['cost']    ?? 0),

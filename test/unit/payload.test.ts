@@ -261,28 +261,34 @@ describe('buildMetricPayload', () => {
     assert.equal(p.daily_credit_variance, 0);
   });
 
-  it('estimated_event_ratio is 0 when all events are from github source', () => {
+  it('estimated_event_ratio is 0 when every event is authoritative', () => {
     const now = Date.now();
     const s = buildSnapshot([makeEvent({ ts: now - 1000, source: 'github' })], opts({ now, source: 'github' }));
-    const p = buildMetricPayload(s);
+    const p = buildMetricPayload({ ...s, totalEventCount: 8, estimatedEventCount: 0 });
     assert.equal(p.estimated_event_ratio, 0);
   });
 
-  it('estimated_event_ratio is 1 when all events are estimated (local source)', () => {
+  it('estimated_event_ratio is 1 when every event is estimated', () => {
     const now = Date.now();
     const s = buildSnapshot([makeEvent({ ts: now - 1000, source: 'local' })], opts({ now }));
-    const p = buildMetricPayload(s);
+    const p = buildMetricPayload({ ...s, totalEventCount: 5, estimatedEventCount: 5 });
     assert.equal(p.estimated_event_ratio, 1);
   });
 
-  it('estimated_event_ratio is 0.5 when sources are mixed (github + local)', () => {
+  it('estimated_event_ratio is the real per-event fraction in mixed sessions', () => {
     const now = Date.now();
     const s = buildSnapshot([
       makeEvent({ ts: now - 1000, source: 'github' }),
       makeEvent({ ts: now - 2000, source: 'local' }),
     ], opts({ now }));
+    const p = buildMetricPayload({ ...s, totalEventCount: 10, estimatedEventCount: 3 });
+    assert.equal(p.estimated_event_ratio, 0.3);
+  });
+
+  it('estimated_event_ratio defaults to 1 for an empty snapshot (no counts known)', () => {
+    const s = buildSnapshot([], opts());
     const p = buildMetricPayload(s);
-    assert.equal(p.estimated_event_ratio, 0.5);
+    assert.equal(p.estimated_event_ratio, 1);
   });
 
   it('surface_concentration is 0 when there are no sankey links (empty surface_dist)', () => {

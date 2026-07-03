@@ -21,8 +21,8 @@ describe('EventReader.readFilteredSnapshot', () => {
       assert.equal(data.totals.mtd.credits, 0);
       assert.equal(data.totals.today.credits, 0);
       assert.deepEqual(data.daily, []);
-      assert.deepEqual(data.topModels, []);
-      assert.deepEqual(data.topRepos, []);
+      assert.deepEqual(data.models, []);
+      assert.deepEqual(data.repos, []);
       assert.deepEqual(data.sankey, []);
       assert.deepEqual(data.categories, []);
       assert.deepEqual(data.hourly, []);
@@ -42,9 +42,9 @@ describe('EventReader.readFilteredSnapshot', () => {
       assert.equal(data.totals.all.eventCount, 1);
       assert.equal(data.daily.length, 1);
       assert.equal(data.daily[0]!.credits, 5);
-      assert.equal(data.topModels.length, 1);
-      assert.equal(data.topModels[0]!.modelId, 'gpt-4o');
-      assert.equal(data.topModels[0]!.credits, 5);
+      assert.equal(data.models.length, 1);
+      assert.equal(data.models[0]!.modelId, 'gpt-4o');
+      assert.equal(data.models[0]!.credits, 5);
       assert.equal(data.sankey.length, 1);
       assert.equal(data.sankey[0]!.model, 'gpt-4o');
       assert.equal(data.sankey[0]!.surface, 'chat');
@@ -63,8 +63,8 @@ describe('EventReader.readFilteredSnapshot', () => {
       ]);
       const data = await store.reader.readFilteredSnapshot({ models: ['gpt-4o'] });
       assert.equal(data.totals.all.credits, 5);
-      assert.equal(data.topModels.length, 1);
-      assert.equal(data.topModels[0]!.modelId, 'gpt-4o');
+      assert.equal(data.models.length, 1);
+      assert.equal(data.models[0]!.modelId, 'gpt-4o');
     } finally { store.dispose(); }
   });
 
@@ -99,7 +99,7 @@ describe('EventReader.readFilteredSnapshot', () => {
       ]);
       const data = await store.reader.readFilteredSnapshot({ branches: ['main'] });
       assert.equal(data.totals.all.credits, 4);
-      assert.equal(data.topModels[0]!.credits, 4);
+      assert.equal(data.models[0]!.credits, 4);
     } finally { store.dispose(); }
   });
 
@@ -163,7 +163,7 @@ describe('EventReader.readFilteredSnapshot', () => {
         makeEvent({ ts: now - 2000, credits: 2 }), // no repo
       ]);
       const data = await store.reader.readFilteredSnapshot({});
-      const repoKeys = data.topRepos.map((r) => r.repo);
+      const repoKeys = data.repos.map((r) => r.repo);
       assert.ok(repoKeys.includes('octo/a'));
       assert.ok(repoKeys.includes('unattributed'));
       assert.ok(data.dims.repos.includes('unattributed'));

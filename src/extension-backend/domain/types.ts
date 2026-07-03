@@ -518,7 +518,8 @@ export interface ModelBreakdownData {
 /** Credits bucketed by hour-of-day (0–23), summed across the filter window. */
 export interface HourlyTimelineData {
   hours: number[];
-  peakHour: number;
+  /** Most active hour, or null when there is no hourly activity at all. */
+  peakHour: number | null;
 }
 
 export interface HeatmapData {
@@ -589,4 +590,8 @@ export interface UsageSnapshot {
   currentBranch?: string;
   /** Total credits attributed to the current branch in the visible window. */
   currentBranchCredits: number;
+  /** Events in the snapshot window (drives export counters). */
+  totalEventCount?: number;
+  /** Events whose cost is estimated (log-derived) rather than authoritative. */
+  estimatedEventCount?: number;
 }

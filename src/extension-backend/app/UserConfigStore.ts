@@ -5,12 +5,12 @@
  * and broadcast via {@link onDidChange}. Values are validated with zod and
  * clamped to sane defaults, so a malformed file degrades gracefully.
  */
-import { mkdirSync, readFileSync, writeFileSync, watch, FSWatcher } from 'fs';
-import * as path from 'path';
+import { watch, FSWatcher } from 'fs';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { UserConfig, SEED_USER_CONFIG } from '../domain/types';
 import { JsonConditionSchema } from '../domain/expr/jsonCondition';
+import { JsonFileStore } from '../util/JsonFileStore';
 import { mergeConfig } from './mergeConfig';
 
 export { mergeConfig } from './mergeConfig';
@@ -114,21 +114,20 @@ export class UserConfigStore implements vscode.Disposable {
   private readonly _onDidChange = new vscode.EventEmitter<UserConfig>();
   readonly onDidChange = this._onDidChange.event;
 
-  private readonly file: string;
+  private readonly store: JsonFileStore<UserConfig>;
   private current: UserConfig;
   private watcher: FSWatcher | undefined;
   private suppressUntil = 0;
 
   constructor(storageDir: string) {
-    mkdirSync(storageDir, { recursive: true });
-    this.file = path.join(storageDir, FILE);
+    this.store = new JsonFileStore<UserConfig>(storageDir, FILE);
     this.current = this.readFromDisk(true);
     this.startWatching();
   }
 
   /** The on-disk config file, for the "edit config" affordance. */
   get uri(): vscode.Uri {
-    return vscode.Uri.file(this.file);
+    return vscode.Uri.file(this.store.file);
   }
 
   get(): UserConfig {
@@ -158,10 +157,8 @@ export class UserConfigStore implements vscode.Disposable {
   }
 
   private readFromDisk(seedIfMissing: boolean): UserConfig {
-    try {
-      const parsed = ConfigSchema.safeParse(JSON.parse(readFileSync(this.file, 'utf8')));
-      return mergeConfig(parsed.success ? (parsed.data as Partial<UserConfig>) : {});
-    } catch {
+    const raw = this.store.read();
+    if (raw === undefined) {
       const def = seedIfMissing ? mergeConfig(SEED_USER_CONFIG) : mergeConfig({});
       if (seedIfMissing) {
         this.current = def;
@@ -169,21 +166,19 @@ export class UserConfigStore implements vscode.Disposable {
       }
       return def;
     }
+    const parsed = ConfigSchema.safeParse(raw);
+    return mergeConfig(parsed.success ? (parsed.data as Partial<UserConfig>) : {});
   }
 
   private writeToDisk(): void {
     this.suppressUntil = Date.now() + 500; // ignore the watch event for our own write
-    try {
-      writeFileSync(this.file, JSON.stringify(this.current, null, 2) + '\n', 'utf8');
-    } catch {
-      /* best-effort; in-memory value still applies */
-    }
+    this.store.write(this.current);
   }
 
   /** Pick up manual edits to the file and broadcast them. */
   private startWatching(): void {
     try {
-      this.watcher = watch(this.file, () => {
+      this.watcher = watch(this.store.file, () => {
         if (Date.now() < this.suppressUntil) return;
         const next = this.readFromDisk(false);
         if (JSON.stringify(next) !== JSON.stringify(this.current)) {

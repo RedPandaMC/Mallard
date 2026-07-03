@@ -8,8 +8,7 @@
  * can be exercised directly in the unit-test runner (see
  * test/unit/exportQueue.test.ts and the stub in test/unit/metricExporter.test.ts).
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'fs';
-import * as path from 'path';
+import { JsonFileStore } from '../util/JsonFileStore';
 
 const QUEUE_FILE = 'export-queue.json';
 
@@ -30,11 +29,10 @@ export interface QueuedExport {
 
 export class ExportQueue {
   private entries: QueuedExport[];
-  private readonly file: string;
+  private readonly store: JsonFileStore<QueuedExport[]>;
 
   constructor(storageDir: string) {
-    mkdirSync(storageDir, { recursive: true });
-    this.file = path.join(storageDir, QUEUE_FILE);
+    this.store = new JsonFileStore<QueuedExport[]>(storageDir, QUEUE_FILE);
     this.entries = this.readFromDisk();
   }
 
@@ -60,19 +58,11 @@ export class ExportQueue {
   }
 
   private readFromDisk(): QueuedExport[] {
-    try {
-      const parsed = JSON.parse(readFileSync(this.file, 'utf8')) as unknown;
-      return Array.isArray(parsed) ? (parsed as QueuedExport[]) : [];
-    } catch {
-      return [];
-    }
+    const parsed = this.store.read();
+    return Array.isArray(parsed) ? (parsed as QueuedExport[]) : [];
   }
 
   private writeToDisk(): void {
-    try {
-      writeFileSync(this.file, JSON.stringify(this.entries, null, 2) + '\n', 'utf8');
-    } catch {
-      /* best-effort */
-    }
+    this.store.write(this.entries);
   }
 }

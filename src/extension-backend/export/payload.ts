@@ -69,8 +69,8 @@ export interface MetricPayload {
   mtd_budget_pct: number;
   /** Number of distinct repositories observed (count only — no names). */
   repo_count: number;
-  /** Most active hour of the current day (0–23). */
-  peak_usage_hour: number;
+  /** Most active hour of the current day (0–23), or null with no activity. */
+  peak_usage_hour: number | null;
   /** Standard deviation of daily credits over the last 7 days. */
   daily_credit_variance: number;
   /** Number of distinct models seen in the snapshot window. */
@@ -166,12 +166,12 @@ export function buildMetricPayload(s: UsageSnapshot): MetricPayload {
   const surface_concentration = gini(surfaceValues);
 
   // ── estimated_event_ratio ───────────────────────────────────────────────────
-  // GitHub billing events are authoritative (estimated=false); all local/claude-code
-  // events are estimated. Derive the ratio from allSources rather than the top-level
-  // source field so mixed sessions produce a fractional value instead of 0 or 1.
-  const githubOnly = s.allSources.length > 0 && s.allSources.every((src) => src === 'github');
-  const noGithub   = s.allSources.every((src) => src !== 'github');
-  const estimated_event_ratio = githubOnly ? 0 : noGithub ? 1 : 0.5;
+  // Real per-event counts from the store (estimated = log-derived cost;
+  // non-estimated = authoritative GitHub billing). An empty snapshot reports 1:
+  // with no authoritative events observed, everything shown is an estimate.
+  const totalEvents = s.totalEventCount ?? 0;
+  const estimated_event_ratio =
+    totalEvents > 0 ? (s.estimatedEventCount ?? 0) / totalEvents : 1;
 
   // ── forecast fields ─────────────────────────────────────────────────────────
   const forecast_basis = s.forecast.basis;

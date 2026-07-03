@@ -4,11 +4,10 @@
  * whether the restriction popup (Dismiss/Snooze/Disable Mallard) should show.
  */
 import * as vscode from 'vscode';
-import { mkdirSync, readFileSync, writeFileSync } from 'fs';
-import * as path from 'path';
 import { AlertRule, DEFAULT_RESTRICTION_STATE, RestrictionState } from '../types';
 import { buildRuleContext, EvalBuildInput } from '../expr/context';
 import { evaluateRestrictionState } from './evaluator';
+import { JsonFileStore } from '../../util/JsonFileStore';
 
 const STATE_FILE = 'restriction.json';
 
@@ -23,11 +22,10 @@ export class RestrictionEngine {
   readonly onDidChange: vscode.Event<RestrictionState> = this._onDidChange.event;
 
   private state: RestrictionState = { ...DEFAULT_RESTRICTION_STATE };
-  private readonly file: string;
+  private readonly store: JsonFileStore<RestrictionState>;
 
   constructor(storageDir: string) {
-    mkdirSync(storageDir, { recursive: true });
-    this.file = path.join(storageDir, STATE_FILE);
+    this.store = new JsonFileStore<RestrictionState>(storageDir, STATE_FILE);
     this.state = this.readFromDisk();
   }
 
@@ -123,20 +121,13 @@ export class RestrictionEngine {
   }
 
   private readFromDisk(): RestrictionState {
-    try {
-      const raw = readFileSync(this.file, 'utf8');
-      const parsed = JSON.parse(raw) as Partial<RestrictionState>;
-      return { ...DEFAULT_RESTRICTION_STATE, ...parsed };
-    } catch {
-      return { ...DEFAULT_RESTRICTION_STATE };
-    }
+    const parsed = this.store.read();
+    return parsed && typeof parsed === 'object'
+      ? { ...DEFAULT_RESTRICTION_STATE, ...(parsed as Partial<RestrictionState>) }
+      : { ...DEFAULT_RESTRICTION_STATE };
   }
 
   private writeToDisk(): void {
-    try {
-      writeFileSync(this.file, JSON.stringify(this.state, null, 2) + '\n', 'utf8');
-    } catch {
-      /* best-effort */
-    }
+    this.store.write(this.state);
   }
 }
