@@ -223,27 +223,13 @@
           "type": "string",
           "enum": ["apiKey", "bearer", "certificate"],
           "enumDescriptions": [
-            "Send an X-API-Key header. Set mallard.webhook.apiKey.",
-            "Send an Authorization: Bearer header. Set mallard.webhook.bearerToken.",
+            "Send an X-API-Key header. Run 'Mallard: Set Webhook API Key' to store it.",
+            "Send an Authorization: Bearer header. Run 'Mallard: Set Webhook Bearer Token' to store it.",
             "Authenticate with a client TLS certificate. Set mallard.shared.certificate.*."
           ],
           "default": "apiKey",
           "scope": "machine-overridable",
-          "description": "Auth method for webhook transport."
-        },
-        "mallard.webhook.apiKey": {
-          "type": "string",
-          "default": "",
-          "scope": "machine-overridable",
-          "description": "API key sent as X-API-Key on every webhook POST. Active when mallard.webhook.auth = apiKey.",
-          "deprecationMessage": "Deprecated: settings.json stores this in plaintext. Use the command \"Mallard: Set Webhook API Key\" (SecretStorage) instead — an existing value is migrated automatically."
-        },
-        "mallard.webhook.bearerToken": {
-          "type": "string",
-          "default": "",
-          "scope": "machine-overridable",
-          "description": "Token sent as Authorization: Bearer on every webhook POST. Active when mallard.webhook.auth = bearer.",
-          "deprecationMessage": "Deprecated: settings.json stores this in plaintext. Use the command \"Mallard: Set Webhook Bearer Token\" (SecretStorage) instead — an existing value is migrated automatically."
+          "description": "Auth method for webhook transport. Credentials are stored in SecretStorage via the Mallard credential commands, never in settings."
         },
         "mallard.mqtt.url": {
           "type": "string",

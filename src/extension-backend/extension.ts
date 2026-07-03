@@ -5,9 +5,9 @@ import {
   ALL_SECRET_KEYS,
   CREDENTIAL_SLOTS,
   SECRET_KEYS,
+  exportTargetSlots,
   manageCredentials,
   promptAndStoreSecret,
-  webhookTargetSlots,
 } from './app/credentials';
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
@@ -297,7 +297,7 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     for (const key of context.globalState.keys()) {
       await context.globalState.update(key, undefined);
     }
-    const targetSlots = webhookTargetSlots(userConfig.get().export?.webhookTargets ?? []);
+    const targetSlots = exportTargetSlots(userConfig.get().export);
     for (const secretKey of [...ALL_SECRET_KEYS, ...targetSlots.map((s) => s.key)]) {
       await context.secrets.delete(secretKey);
     }
@@ -320,10 +320,7 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
 
   const slotByKey = (key: string) => CREDENTIAL_SLOTS.find((s) => s.key === key)!;
   reg('mallard.manageCredentials', () =>
-    manageCredentials(
-      context.secrets,
-      webhookTargetSlots(userConfig.get().export?.webhookTargets ?? []),
-    ));
+    manageCredentials(context.secrets, exportTargetSlots(userConfig.get().export)));
   reg('mallard.setMqttPassword', () =>
     promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.mqttPassword)));
   reg('mallard.setWebhookApiKey', () =>

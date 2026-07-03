@@ -2,8 +2,7 @@
  * Central registry and management UI for every secret Mallard stores.
  *
  * All credentials live in VS Code SecretStorage (OS keychain), never in
- * settings.json. The one-time migration below moves values users had in the
- * old plaintext settings into SecretStorage and blanks the settings.
+ * settings.json.
  */
 import * as vscode from 'vscode';
 
@@ -89,6 +88,31 @@ export function webhookTargetSlots(
   ]);
 }
 
+/**
+ * Credential slots for the extra MQTT brokers declared in config.json
+ * (`export.mqttTargets`). Each broker gets its own CONNECT password.
+ */
+export function mqttTargetSlots(
+  targets: ReadonlyArray<{ name: string }>,
+): CredentialSlot[] {
+  return targets.map((t) => ({
+    key: targetSecretKey(SECRET_KEYS.mqttPassword, t.name),
+    label: `MQTT password — broker "${t.name}"`,
+    description: `CONNECT password for the "${t.name}" MQTT broker`,
+  }));
+}
+
+/** All dynamic per-target slots for an export config block. */
+export function exportTargetSlots(exportCfg: {
+  webhookTargets?: ReadonlyArray<{ name: string }>;
+  mqttTargets?: ReadonlyArray<{ name: string }>;
+} | undefined): CredentialSlot[] {
+  return [
+    ...webhookTargetSlots(exportCfg?.webhookTargets ?? []),
+    ...mqttTargetSlots(exportCfg?.mqttTargets ?? []),
+  ];
+}
+
 /** Prompt for a value and store/clear the given secret. Reused by all setter commands. */
 export async function promptAndStoreSecret(
   secrets: vscode.SecretStorage,
@@ -151,39 +175,3 @@ export async function manageCredentials(
   await promptAndStoreSecret(secrets, picked.slot);
 }
 
-/**
- * One-time migration: move credentials out of the old plaintext settings into
- * SecretStorage and blank the settings. Runs once per install (globalState flag).
- */
-export async function migrateSecretsFromSettings(
-  context: vscode.ExtensionContext,
-): Promise<void> {
-  const FLAG = 'mallard.secretsMigrated.v1';
-  if (context.globalState.get<boolean>(FLAG)) return;
-
-  const c = vscode.workspace.getConfiguration('mallard');
-  const pairs: Array<[settingKey: string, secretKey: SecretKey]> = [
-    ['webhook.apiKey', SECRET_KEYS.webhookApiKey],
-    ['webhook.bearerToken', SECRET_KEYS.webhookBearerToken],
-  ];
-
-  let moved = 0;
-  for (const [settingKey, secretKey] of pairs) {
-    const value = c.get<string>(settingKey, '');
-    if (value && (await context.secrets.get(secretKey)) === undefined) {
-      await context.secrets.store(secretKey, value);
-      moved++;
-    }
-    if (value) {
-      await c.update(settingKey, undefined, vscode.ConfigurationTarget.Global);
-    }
-  }
-
-  await context.globalState.update(FLAG, true);
-  if (moved > 0) {
-    void vscode.window.showInformationMessage(
-      'Mallard: webhook credentials were moved from settings.json into secure storage. ' +
-        'Use "Mallard: Manage Credentials" to change them.',
-    );
-  }
-}

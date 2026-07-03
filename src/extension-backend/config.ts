@@ -18,8 +18,6 @@ export interface MallardConfig {
   };
   webhook: {
     auth: 'apiKey' | 'bearer' | 'certificate';
-    apiKey: string;
-    bearerToken: string;
   };
   mqtt: {
     url: string;
@@ -45,8 +43,6 @@ export const RELEVANT_CONFIG_KEYS = [
   'mallard.server.url',
   'mallard.export.transport',
   'mallard.webhook.auth',
-  'mallard.webhook.apiKey',
-  'mallard.webhook.bearerToken',
   'mallard.mqtt.url',
   'mallard.mqtt.auth',
   'mallard.mqtt.username',
@@ -87,8 +83,6 @@ export function readConfig(): MallardConfig {
     export: { transport },
     webhook: {
       auth: webhookAuth,
-      apiKey: c.get<string>('webhook.apiKey', ''),
-      bearerToken: c.get<string>('webhook.bearerToken', ''),
     },
     mqtt: {
       url: c.get<string>('mqtt.url', '').trim(),

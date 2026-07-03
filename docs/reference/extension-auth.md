@@ -24,7 +24,7 @@ tagged `source=team-a`.
 ## API key
 
 **Extension side:** run **Mallard: Set Webhook API Key** (stored in
-SecretStorage; the `mallard.webhook.apiKey` setting is deprecated).
+SecretStorage; credentials never live in settings files).
 
 The extension sends this header on every `POST /api/v1/ingest`:
 
@@ -179,8 +179,9 @@ authentication succeeds, on the raw request body.
 
 The extension should send exactly one credential per request. Sending both a cert and an API key is valid (the cert takes precedence), but is not necessary.
 
-## Backward compatibility
+## Bare (unlabeled) keys
 
-Clients using the old single-valued `API_KEYS=key1,key2` format (no labels) still work. The server assigns `source=unknown` to bare keys. Upgrade to labeled format to get per-team InfluxDB tagging.
+`API_KEYS` entries without a `label:` prefix are accepted and tagged
+`source=unknown`. Use the labeled format if you want per-team InfluxDB tagging.
 
 This covers authentication only. The ingest payload body is versioned separately via a `schema_version` field; the Metrics Schema reference page covers how old, current, and unrecognized future payload versions are all accepted.

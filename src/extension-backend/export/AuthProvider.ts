@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import type { MallardConfig } from '../config';
-import type { WebhookTarget } from '../domain/types';
-import { SECRET_KEYS, targetSecretKey } from '../app/credentials';
+import type { ExportConfig } from '../domain/types';
+import { SECRET_KEYS, targetSecretKey, type SecretKey } from '../app/credentials';
 import {
-  createMetricExporter,
+  createMqttProtocol,
   createWebhookProtocol,
   FanoutProtocol,
 } from './ExporterFactory';
@@ -18,18 +18,18 @@ import { opt } from '../util/lang';
 
 /**
  * Reads transport + auth config and builds the appropriate MetricExporter.
- * Credentials come from VS Code SecretStorage; the deprecated plaintext
- * settings are honoured as a fallback until the one-time migration has run.
+ * All credentials come from VS Code SecretStorage, never from settings.
  *
- * The transport is exclusive (webhook XOR mqtt), but the webhook transport can
- * mirror every payload to additional servers declared in config.json
- * (`export.webhookTargets`), each with its own SecretStorage credentials.
+ * The transport is exclusive (webhook XOR mqtt), but either transport can
+ * mirror every payload to additional targets declared in config.json
+ * (`export.webhookTargets` / `export.mqttTargets`), each with its own
+ * SecretStorage credentials namespaced by target name.
  */
 export class AuthProvider {
   constructor(
     private readonly cfg: MallardConfig,
     private readonly context: vscode.ExtensionContext,
-    private readonly webhookTargets: readonly WebhookTarget[] = [],
+    private readonly exportCfg: ExportConfig = {},
   ) {}
 
   async createExporter(): Promise<MetricExporter> {
@@ -39,56 +39,38 @@ export class AuthProvider {
     if (!transport) return new NullMetricExporter();
 
     const queue = new ExportQueue(context.globalStorageUri.fsPath);
-    const cert = cfg.shared.certificate;
 
+    const protocols: MetricProtocol[] = [];
     if (transport === 'webhook') {
-      const protocols: MetricProtocol[] = [];
-
       const primary = await this.buildWebhookProtocol(cfg.server.url, undefined);
       if (primary) protocols.push(primary);
-
-      for (const target of this.webhookTargets) {
+      for (const target of this.exportCfg.webhookTargets ?? []) {
         const p = await this.buildWebhookProtocol(target.url, target.name);
         if (p) protocols.push(p);
       }
-
-      if (protocols.length === 0) return new NullMetricExporter();
-      const protocol = protocols.length === 1 ? protocols[0]! : new FanoutProtocol(protocols);
-      return new MetricExporter(protocol, new MetricPayloadSerializer(), queue);
+    } else if (transport === 'mqtt') {
+      const primary = await this.buildMqttProtocol(cfg.mqtt.url || cfg.server.url, undefined);
+      if (primary) protocols.push(primary);
+      for (const target of this.exportCfg.mqttTargets ?? []) {
+        const p = await this.buildMqttProtocol(target.url, target.name);
+        if (p) protocols.push(p);
+      }
     }
 
-    if (transport === 'mqtt') {
-      const brokerUrl = cfg.mqtt.url || cfg.server.url;
-      if (!brokerUrl) return new NullMetricExporter();
+    if (protocols.length === 0) return new NullMetricExporter();
+    const protocol = protocols.length === 1 ? protocols[0]! : new FanoutProtocol(protocols);
+    return new MetricExporter(protocol, new MetricPayloadSerializer(), queue);
+  }
 
-      const password = (await context.secrets.get(SECRET_KEYS.mqttPassword)) ?? '';
-      const workspaceFolders = vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath);
-
-      return (
-        createMetricExporter(
-          {
-            brokerUrl,
-            ...opt('username', cfg.mqtt.username || undefined),
-            ...opt('password', password || undefined),
-            ...opt('certPath', cert.file || undefined),
-            ...opt('keyPath', cert.keyFile || undefined),
-            ...opt('caPath', cert.caFile || undefined),
-            ...(workspaceFolders?.length ? { workspaceFolders } : {}),
-          },
-          queue,
-        ) ?? new NullMetricExporter()
-      );
-    }
-
-    return new NullMetricExporter();
+  /** Per-target SecretStorage key: base key for the primary, `key:name` for named targets. */
+  private key(base: SecretKey, targetName: string | undefined): string {
+    return targetName === undefined ? base : targetSecretKey(base, targetName);
   }
 
   /**
    * Build one webhook protocol for `url`. `targetName` undefined = the primary
-   * target (mallard.server.url) using the base SecretStorage keys with
-   * deprecated-settings fallback; a named target reads only its own
-   * `<key>:<name>` SecretStorage entries. Auth method and mTLS cert paths are
-   * shared across targets — per-target is credentials only.
+   * target (mallard.server.url). Auth method and mTLS cert paths are shared
+   * across targets — per-target is credentials only.
    */
   private async buildWebhookProtocol(
     url: string,
@@ -97,19 +79,16 @@ export class AuthProvider {
     const { cfg, context } = this;
     if (!url) return null;
 
-    const key = (base: (typeof SECRET_KEYS)[keyof typeof SECRET_KEYS]) =>
-      targetName === undefined ? base : targetSecretKey(base, targetName);
-
-    const apiKey =
-      (await context.secrets.get(key(SECRET_KEYS.webhookApiKey))) ||
-      (targetName === undefined ? cfg.webhook.apiKey : '');
-    const bearerToken =
-      (await context.secrets.get(key(SECRET_KEYS.webhookBearerToken))) ||
-      (targetName === undefined ? cfg.webhook.bearerToken : '');
+    const apiKey = await context.secrets.get(this.key(SECRET_KEYS.webhookApiKey, targetName));
+    const bearerToken = await context.secrets.get(
+      this.key(SECRET_KEYS.webhookBearerToken, targetName),
+    );
     // Optional HMAC request signing (X-Mallard-Signature-256). Set via
     // "Mallard: Set Webhook Signing Secret" (or Manage Credentials for named
     // targets); must match the server's WEBHOOK_HMAC_SECRETS entry.
-    const signingSecret = await context.secrets.get(key(SECRET_KEYS.webhookSigningSecret));
+    const signingSecret = await context.secrets.get(
+      this.key(SECRET_KEYS.webhookSigningSecret, targetName),
+    );
 
     const headers: Record<string, string> = {};
     if (cfg.webhook.auth === 'apiKey' && apiKey) {
@@ -133,6 +112,34 @@ export class AuthProvider {
       ...opt('secret', signingSecret || undefined),
       ...opt('headers', Object.keys(headers).length > 0 ? headers : undefined),
       ...certOpts,
+    });
+  }
+
+  /**
+   * Build one MQTT protocol for `url`. `targetName` undefined = the primary
+   * broker (mallard.mqtt.url / mallard.server.url). Username and cert paths
+   * are shared; the CONNECT password is per-broker.
+   */
+  private async buildMqttProtocol(
+    url: string,
+    targetName: string | undefined,
+  ): Promise<MetricProtocol | null> {
+    const { cfg, context } = this;
+    if (!url) return null;
+
+    const password =
+      (await context.secrets.get(this.key(SECRET_KEYS.mqttPassword, targetName))) ?? '';
+    const cert = cfg.shared.certificate;
+    const workspaceFolders = vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath);
+
+    return createMqttProtocol({
+      brokerUrl: url,
+      ...opt('username', cfg.mqtt.username || undefined),
+      ...opt('password', password || undefined),
+      ...opt('certPath', cert.file || undefined),
+      ...opt('keyPath', cert.keyFile || undefined),
+      ...opt('caPath', cert.caFile || undefined),
+      ...(workspaceFolders?.length ? { workspaceFolders } : {}),
     });
   }
 }

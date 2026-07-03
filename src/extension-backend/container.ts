@@ -5,7 +5,6 @@
  */
 import * as vscode from 'vscode';
 import { readConfig } from './config';
-import { migrateSecretsFromSettings } from './app/credentials';
 import { UsageService } from './app/UsageService';
 import { UserConfigStore } from './app/UserConfigStore';
 import { LayoutStore } from './app/LayoutStore';
@@ -38,10 +37,6 @@ export interface Container {
 export async function buildContainer(context: vscode.ExtensionContext): Promise<Container> {
   void initRepoAttribution();
   const bundledManifest = await loadBundledManifest(context);
-
-  // Move any credentials from the deprecated plaintext settings into
-  // SecretStorage BEFORE reading config, so this run already sees them blanked.
-  await migrateSecretsFromSettings(context);
 
   const cfg = readConfig();
   const storageDir = context.globalStorageUri.fsPath;
@@ -95,12 +90,13 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     userConfig.onDidChange((c) => githubSession.configure(c.githubBilling)),
   );
 
-  // Extra webhook targets from config.json fan the export out to multiple
-  // servers. Like the rest of the exporter config, changes require a reload.
+  // Extra webhook/MQTT targets from config.json fan the export out to
+  // multiple destinations. Like the rest of the exporter config, changes
+  // require a reload.
   const exporter = await new AuthProvider(
     cfg,
     context,
-    userConfig.get().export?.webhookTargets ?? [],
+    userConfig.get().export ?? {},
   ).createExporter();
 
   const usage = new UsageService(store.reader, pricing, ingest, userConfig, currency, github, exporter);

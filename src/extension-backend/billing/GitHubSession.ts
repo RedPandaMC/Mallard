@@ -10,7 +10,6 @@ export class GitHubSession implements IAuthProvider {
   private readonly _sub: vscode.Disposable;
 
   private billingConfig: GitHubBillingConfig | undefined;
-  private patMigrationPrompted = false;
 
   constructor(
     private readonly secrets?: vscode.SecretStorage,
@@ -29,10 +28,9 @@ export class GitHubSession implements IAuthProvider {
 
   /**
    * Returns a bearer token. Resolution order:
-   * 1. PAT from SecretStorage (set via "Mallard: Set GitHub PAT")
-   * 2. PAT from config.json githubBilling.pat (deprecated — auto-migrated
-   *    into SecretStorage on first use, with a prompt to remove it from the file)
-   * 3. VS Code OAuth session (unless mode is explicitly "pat")
+   * 1. PAT from SecretStorage (set via "Mallard: Set GitHub Personal Access Token")
+   * 2. VS Code OAuth session — unless config.json sets githubBilling.mode to
+   *    "pat", which pins auth to the stored PAT and never falls through to OAuth.
    */
   async getToken(
     createIfNone = false,
@@ -40,21 +38,6 @@ export class GitHubSession implements IAuthProvider {
   ): Promise<{ token: string; username?: string } | undefined> {
     const stored = await this.secrets?.get(SECRET_KEYS.githubPat);
     if (stored) return { token: stored };
-
-    const pat = this.billingConfig?.pat?.trim();
-    if (pat) {
-      if (this.secrets) {
-        await this.secrets.store(SECRET_KEYS.githubPat, pat);
-        if (!this.patMigrationPrompted) {
-          this.patMigrationPrompted = true;
-          void vscode.window.showInformationMessage(
-            'Mallard: your GitHub PAT was copied from config.json into secure storage. ' +
-              'Please remove the "pat" field from config.json — the stored copy will be used from now on.',
-          );
-        }
-      }
-      return { token: pat };
-    }
 
     if (this.billingConfig?.mode === 'pat') return undefined;
 

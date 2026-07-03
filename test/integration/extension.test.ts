@@ -81,9 +81,7 @@ describe('Mallard extension (integration)', () => {
       'mallard.shared.certificate.caFile',
       'mallard.shared.certificate.file',
       'mallard.shared.certificate.keyFile',
-      'mallard.webhook.apiKey',
       'mallard.webhook.auth',
-      'mallard.webhook.bearerToken',
     ]);
   });
 });

@@ -21,20 +21,21 @@ describe('GitHubSession — token resolution order', () => {
   const originalGetSession = auth.getSession;
   afterEach(() => { auth.getSession = originalGetSession; });
 
-  it('1. SecretStorage PAT wins over everything', async () => {
+  it('1. SecretStorage PAT wins over the OAuth session', async () => {
+    auth.getSession = (() => {
+      throw new Error('must not be called when a PAT is stored');
+    }) as unknown as typeof auth.getSession;
     const secrets = makeSecrets({ [SECRET_KEYS.githubPat]: 'stored-pat' });
     const s = new GitHubSession(secrets);
-    s.configure({ mode: 'pat', pat: 'config-pat' });
     assert.deepEqual(await s.getToken(), { token: 'stored-pat' });
     s.dispose();
   });
 
-  it('2. config.json PAT is used and auto-migrated into SecretStorage', async () => {
-    const secrets = makeSecrets();
+  it('2. mode "pat" uses only the stored PAT', async () => {
+    const secrets = makeSecrets({ [SECRET_KEYS.githubPat]: 'stored-pat' });
     const s = new GitHubSession(secrets);
-    s.configure({ mode: 'pat', pat: 'config-pat' });
-    assert.deepEqual(await s.getToken(), { token: 'config-pat' });
-    assert.equal(await secrets.get(SECRET_KEYS.githubPat), 'config-pat', 'migrated');
+    s.configure({ mode: 'pat' });
+    assert.deepEqual(await s.getToken(), { token: 'stored-pat' });
     s.dispose();
   });
 

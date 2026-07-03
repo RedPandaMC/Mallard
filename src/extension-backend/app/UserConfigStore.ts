@@ -71,7 +71,6 @@ const ConfigSchema = z
     githubBilling: z
       .object({
         mode: z.enum(['vscode-session', 'pat']).optional(),
-        pat: z.string().optional(),
         org: z.string().optional(),
       })
       .optional(),
@@ -101,6 +100,9 @@ const ConfigSchema = z
     export: z
       .object({
         webhookTargets: z
+          .array(z.object({ name: z.string().min(1), url: z.string().min(1) }))
+          .optional(),
+        mqttTargets: z
           .array(z.object({ name: z.string().min(1), url: z.string().min(1) }))
           .optional(),
       })

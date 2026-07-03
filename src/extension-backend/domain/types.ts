@@ -222,19 +222,29 @@ export interface UserConfig {
 export interface ExportConfig {
   /**
    * Additional webhook servers to mirror every metric payload to, on top of
-   * the primary mallard.server.url target. Webhook transport only.
+   * the primary mallard.server.url target. Active when the transport is
+   * "webhook".
    */
-  webhookTargets?: WebhookTarget[];
+  webhookTargets?: ExportTarget[];
+  /**
+   * Additional MQTT brokers to mirror every metric payload to, on top of the
+   * primary mallard.mqtt.url / mallard.server.url broker. Active when the
+   * transport is "mqtt".
+   */
+  mqttTargets?: ExportTarget[];
 }
 
-/** One extra webhook destination. */
-export interface WebhookTarget {
+/** One extra export destination (webhook server or MQTT broker). */
+export interface ExportTarget {
   /**
    * Unique name for this target (e.g. "team"). Also namespaces the target's
    * credentials in SecretStorage — set them via "Mallard: Manage Credentials".
    */
   name: string;
-  /** HTTPS endpoint base URL, same semantics as mallard.server.url. */
+  /**
+   * Endpoint URL: https:// base URL for webhook targets, wss:// URL for MQTT
+   * targets — same semantics as mallard.server.url / mallard.mqtt.url.
+   */
   url: string;
 }
 
@@ -246,14 +256,11 @@ export interface GitHubBillingConfig {
   /**
    * Auth mode:
    *  - `"vscode-session"` (default): use VS Code's built-in GitHub OAuth session.
-   *  - `"pat"`: use the provided personal access token (`pat` field).
+   *  - `"pat"`: use the personal access token stored via
+   *    "Mallard: Set GitHub Personal Access Token" (SecretStorage) and never
+   *    fall through to an OAuth prompt.
    */
   mode?: 'vscode-session' | 'pat';
-  /**
-   * Personal access token. Required when `mode` is `"pat"`.
-   * Scopes needed: `read:user` for user billing, `read:org` for org billing.
-   */
-  pat?: string;
   /**
    * GitHub organization slug. When set, fetches org-level billing instead of
    * the individual user's billing. Requires `read:org` scope on the token or

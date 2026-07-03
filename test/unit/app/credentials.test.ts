@@ -4,8 +4,8 @@ import {
   ALL_SECRET_KEYS,
   CREDENTIAL_SLOTS,
   SECRET_KEYS,
+  exportTargetSlots,
   manageCredentials,
-  migrateSecretsFromSettings,
   promptAndStoreSecret,
 } from '../../../src/extension-backend/app/credentials';
 
@@ -21,20 +21,8 @@ function makeSecrets(initial: Record<string, string> = {}) {
   } as unknown as vscode.SecretStorage & { _map: Map<string, string> };
 }
 
-function makeContext(secrets: vscode.SecretStorage, state: Record<string, unknown> = {}) {
-  return {
-    secrets,
-    globalState: {
-      get: (k: string) => state[k],
-      update: async (k: string, v: unknown) => void (state[k] = v),
-      keys: () => Object.keys(state),
-    },
-  } as unknown as vscode.ExtensionContext;
-}
-
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 const win = vscode.window as Mutable<typeof vscode.window>;
-const ws = vscode.workspace as Mutable<typeof vscode.workspace>;
 
 describe('credentials — registry', () => {
   it('every slot key is covered by ALL_SECRET_KEYS (prepareUninstall deletes them all)', () => {
@@ -133,55 +121,19 @@ describe('credentials — manageCredentials', () => {
   });
 });
 
-describe('credentials — migrateSecretsFromSettings', () => {
-  const originalGetConfiguration = ws.getConfiguration;
-  afterEach(() => { ws.getConfiguration = originalGetConfiguration; });
-
-  function fakeConfig(values: Record<string, string>) {
-    const updates: Array<[string, unknown]> = [];
-    ws.getConfiguration = (() => ({
-      get: (key: string, fallback = '') => values[key] ?? fallback,
-      update: async (key: string, value: unknown) => void updates.push([key, value]),
-    })) as unknown as typeof ws.getConfiguration;
-    return updates;
-  }
-
-  it('moves plaintext settings into SecretStorage and blanks them', async () => {
-    const secrets = makeSecrets();
-    const ctx = makeContext(secrets);
-    const updates = fakeConfig({ 'webhook.apiKey': 'plain-key', 'webhook.bearerToken': 'plain-tok' });
-
-    await migrateSecretsFromSettings(ctx);
-
-    assert.equal(await secrets.get(SECRET_KEYS.webhookApiKey), 'plain-key');
-    assert.equal(await secrets.get(SECRET_KEYS.webhookBearerToken), 'plain-tok');
-    assert.deepEqual(
-      updates.map(([k, v]) => [k, v]),
-      [['webhook.apiKey', undefined], ['webhook.bearerToken', undefined]],
-    );
+describe('credentials — exportTargetSlots', () => {
+  it('combines webhook and mqtt target slots', () => {
+    const slots = exportTargetSlots({
+      webhookTargets: [{ name: 'team' }],
+      mqttTargets: [{ name: 'broker2' }],
+    });
+    const keys = slots.map((s) => s.key);
+    assert.equal(slots.length, 4); // 3 webhook slots + 1 mqtt password slot
+    assert.ok(keys.includes(`${SECRET_KEYS.webhookApiKey}:team`));
+    assert.ok(keys.includes(`${SECRET_KEYS.mqttPassword}:broker2`));
   });
 
-  it('does not overwrite an already-stored secret', async () => {
-    const secrets = makeSecrets({ [SECRET_KEYS.webhookApiKey]: 'from-command' });
-    const ctx = makeContext(secrets);
-    fakeConfig({ 'webhook.apiKey': 'stale-setting' });
-
-    await migrateSecretsFromSettings(ctx);
-    assert.equal(await secrets.get(SECRET_KEYS.webhookApiKey), 'from-command');
-  });
-
-  it('runs only once per install (globalState flag)', async () => {
-    const secrets = makeSecrets();
-    const state: Record<string, unknown> = {};
-    const ctx = makeContext(secrets, state);
-    fakeConfig({ 'webhook.apiKey': 'first' });
-
-    await migrateSecretsFromSettings(ctx);
-    assert.equal(await secrets.get(SECRET_KEYS.webhookApiKey), 'first');
-
-    await secrets.delete(SECRET_KEYS.webhookApiKey);
-    fakeConfig({ 'webhook.apiKey': 'second' });
-    await migrateSecretsFromSettings(ctx);
-    assert.equal(await secrets.get(SECRET_KEYS.webhookApiKey), undefined, 'second run must be a no-op');
+  it('returns no slots for an absent export block', () => {
+    assert.deepEqual(exportTargetSlots(undefined), []);
   });
 });

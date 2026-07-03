@@ -25,13 +25,10 @@ export interface WebhookExporterConfig {
   caFile?: string;
 }
 
-/** Creates a MetricExporter backed by MQTT. Returns null when brokerUrl is absent. */
-export function createMetricExporter(
-  cfg: Partial<MqttExporterConfig>,
-  queue?: ExportQueue,
-): MetricExporter | null {
+/** Creates the MQTT protocol alone — used by the multi-broker fanout path. */
+export function createMqttProtocol(cfg: Partial<MqttExporterConfig>): MqttProtocol | null {
   if (!cfg.brokerUrl) return null;
-  const protocol = new MqttProtocol({
+  return new MqttProtocol({
     brokerUrl: cfg.brokerUrl,
     topicPrefix: cfg.topic ?? 'mallard/v2/metrics',
     ...(cfg.username ? { username: cfg.username } : {}),
@@ -41,6 +38,15 @@ export function createMetricExporter(
     ...(cfg.caPath ? { caPath: cfg.caPath } : {}),
     ...(cfg.workspaceFolders ? { workspaceFolders: cfg.workspaceFolders } : {}),
   });
+}
+
+/** Creates a MetricExporter backed by MQTT. Returns null when brokerUrl is absent. */
+export function createMetricExporter(
+  cfg: Partial<MqttExporterConfig>,
+  queue?: ExportQueue,
+): MetricExporter | null {
+  const protocol = createMqttProtocol(cfg);
+  if (!protocol) return null;
   return new MetricExporter(protocol, new MetricPayloadSerializer(), queue);
 }
 

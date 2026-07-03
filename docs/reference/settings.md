@@ -31,15 +31,13 @@ so credentials are not synced across machines by VS Code Settings Sync.
 ### Webhook auth
 
 Active when `mallard.export.transport = "webhook"`. The credential itself is
-stored in SecretStorage — run **Mallard: Set Webhook API Key** or **Mallard:
-Set Webhook Bearer Token** (or **Mallard: Manage Credentials**) from the
-Command Palette.
+stored in SecretStorage, never in settings — run **Mallard: Set Webhook API
+Key** or **Mallard: Set Webhook Bearer Token** (or **Mallard: Manage
+Credentials**) from the Command Palette.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `mallard.webhook.auth` | `"apiKey" \| "bearer" \| "certificate"` | `"apiKey"` | Auth method. |
-| `mallard.webhook.apiKey` | `string` | `""` | **Deprecated** — plaintext in settings.json. Use the *Set Webhook API Key* command instead; an existing value is migrated into SecretStorage automatically. |
-| `mallard.webhook.bearerToken` | `string` | `""` | **Deprecated** — plaintext in settings.json. Use the *Set Webhook Bearer Token* command instead; an existing value is migrated into SecretStorage automatically. |
 
 ### MQTT
 
@@ -99,6 +97,18 @@ up as its own API key / bearer token / signing secret slot. The auth method
 targets. A payload is queued for retry only while every failing target is
 retryable; a target that rejects with a 4xx (bad credential) fails the batch
 fatally so the queue can't spin forever.
+
+The MQTT transport mirrors the same way with `"mqttTargets"` (each broker gets
+its own CONNECT password slot in **Manage Credentials**; the username and any
+certificate paths are shared):
+
+```json
+"export": {
+  "mqttTargets": [
+    { "name": "team-broker", "url": "wss://mallard.team.example.com/mqtt" }
+  ]
+}
+```
 
 ### MQTT example (password)
 
