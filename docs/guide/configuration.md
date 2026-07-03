@@ -109,7 +109,3 @@ Set `"restrict": { "reEnableWhen": <condition> }` to have the popup clear itself
 ## Dashboard layout
 
 Click **Edit layout** to drag, resize, or hide panels. Your layout is saved and restored on next launch. **Reset layout** restores defaults.
-
-## Removing your data
-
-Run **Mallard: Prepare for Uninstall** before removing the extension to wipe all events, settings, cached pricing, and secrets. VS Code does not delete extension storage on uninstall.
