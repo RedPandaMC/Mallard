@@ -18,7 +18,7 @@ function proto(result: SendResult) {
 }
 
 describe('FanoutProtocol — multi-server webhook export', () => {
-  const payload = { schema_version: 2 };
+  const payload = { schema_version: 3 };
 
   it('sends the same payload to every target and reports ok when all succeed', async () => {
     const a = proto({ ok: true });

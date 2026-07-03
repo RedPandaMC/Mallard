@@ -68,9 +68,9 @@ def _make_message(data: bytes | str) -> MagicMock:
 
 VALID_JSON = json.dumps({
     "instance_id": "abc123",
-    "schema_version": 2,
+    "schema_version": 3,
     "ts": 1_700_000_000_000,
-    "credits_velocity_per_hour": 1.5,
+    "tz_offset_minutes": 120,
     "mtd_budget_pct": 42.0,
     "mtd_credits": 100.0,
     "mtd_cost_usd": 3.50,

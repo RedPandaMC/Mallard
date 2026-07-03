@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from influxdb_client import InfluxDBClient, Point, WritePrecision
@@ -23,12 +24,27 @@ _MEASUREMENT = "mallard_metrics"
 # omitted rather than written as 0/empty, so a field a given schema version
 # never supplied is absent from the point instead of misleadingly zero).
 _FLOAT_FIELDS = (
-    "credits_velocity_per_hour", "mtd_budget_pct", "mtd_credits", "mtd_cost_usd",
-    "today_credits", "today_cost_usd", "daily_credit_variance",
-    "surface_concentration", "estimated_event_ratio", "token_per_credit",
+    "mtd_budget_pct", "mtd_credits", "mtd_cost_usd",
+    "today_credits", "today_cost_usd", "daily_credit_stddev",
     "forecast_low", "forecast_high",
+    "total_credits", "total_tokens",
 )
-_INT_FIELDS = ("repo_count", "peak_usage_hour", "model_count", "budget_trend")
+_INT_FIELDS = (
+    "repo_count", "model_count", "budget_trend", "tz_offset_minutes",
+    "total_event_count", "estimated_event_count",
+)
+
+# Map entries become individual fields ("model_credits_<key>"); keys are
+# sanitised so a hostile model id can't smuggle field-name syntax. Fields
+# (unlike tags) are not indexed, so per-model field names carry no
+# cardinality cost.
+_MAP_FIELDS = ("model_credits", "surface_credits", "cost_by_category")
+_FIELD_KEY_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _field_key(prefix: str, key: str) -> str:
+    safe = _FIELD_KEY_RE.sub("_", key)[:64] or "unknown"
+    return f"{prefix}_{safe}"
 
 
 def make_client(settings: Settings) -> InfluxDBClient:
@@ -78,9 +94,15 @@ def write_payload(
     if metric.forecast_basis is not None:
         point = point.field("forecast_basis", metric.forecast_basis)
 
-    # Store individual active models as separate fields for querying
-    for i, model in enumerate(metric.active_models):
-        point = point.field(f"active_model_{i}", model)
+    # Counter maps: one field per entry so Grafana can query them directly.
+    for map_name in _MAP_FIELDS:
+        for key, value in getattr(metric, map_name).items():
+            point = point.field(_field_key(map_name, key), float(value))
+
+    # One comma-joined list field — the old active_model_{i} position-indexed
+    # field names were unbounded and order-dependent (an InfluxDB anti-pattern).
+    if metric.active_models:
+        point = point.field("active_models", ",".join(metric.active_models))
 
     if metric.extra:
         point = point.field("extra_json", json.dumps(metric.extra, default=str))

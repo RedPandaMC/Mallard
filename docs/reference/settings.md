@@ -63,7 +63,7 @@ Used by any transport when `auth = certificate`.
 
 ### Payload schema
 
-Each publish sends a single JSON object, built by `buildMetricPayload` and published to the `mallard/v2/metrics` topic. The extension currently sends `schema_version: 2`. The Metrics Schema reference page has the full field table, version history, and how the server handles a schema version it doesn't recognize yet.
+Each publish sends a single JSON object, built by `buildMetricPayload` and published to the `mallard/v3/metrics` topic. The extension sends `schema_version: 3`. The Metrics Schema reference page has the full field table, aggregation semantics, and how the server handles a schema version it doesn't recognize yet.
 
 ### Webhook example (API key)
 

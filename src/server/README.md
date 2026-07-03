@@ -125,22 +125,30 @@ Returns `202 Accepted` on success, `401 Unauthorized` for bad credentials, `503 
 ```json
 {
   "instance_id": "abc123",
-  "schema_version": 2,
+  "schema_version": 3,
   "ts": 1750000000000,
-  "credits_velocity_per_hour": 18.4,
+  "tz_offset_minutes": 120,
   "mtd_budget_pct": 0.34,
   "mtd_credits": 120.5,
   "mtd_cost_usd": 4.82,
   "today_credits": 22.3,
   "today_cost_usd": 0.89,
+  "total_credits": 142.8,
+  "total_event_count": 57,
+  "estimated_event_count": 41,
+  "model_credits": { "claude-sonnet-4-6": 98.5, "gpt-4o": 44.3 },
+  "surface_credits": { "agent": 120.0, "chat": 22.8 },
+  "cost_by_category": { "input": 1.2, "output": 3.1 },
   "active_models": ["claude-sonnet-4-6", "gpt-4o"],
   "top_model": "claude-sonnet-4-6"
 }
 ```
 
+See the [Metrics Schema reference](https://redpandamc.github.io/Mallard/reference/metrics-schema) for the full field table and aggregation semantics (gauges vs additive counters).
+
 ### `GET /health`
 
-Returns `{"status": "ok"|"degraded", "influx": "pong"|"error"}`. Always HTTP 200.
+Returns `{"status": "ok"|"degraded", "influx": "pong"|"error", "min_known_schema_version": 3, "max_known_schema_version": 3}`. Always HTTP 200.
 
 ---
 

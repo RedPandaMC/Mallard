@@ -28,8 +28,8 @@ describe('WebhookProtocol — HMAC request signing', () => {
       quietLogger,
     );
 
-    const payload = { schema_version: 2, instance_id: 'abc', ts: 1_700_000_000_000 };
-    const result = await protocol.send('mallard/v2/metrics', payload);
+    const payload = { schema_version: 3, instance_id: 'abc', ts: 1_700_000_000_000 };
+    const result = await protocol.send('mallard/v3/metrics', payload);
     assert.equal(result.ok, true);
 
     const body = JSON.stringify(payload);
@@ -47,7 +47,7 @@ describe('WebhookProtocol — HMAC request signing', () => {
       { url: 'https://example.com/ingest', retries: 0 },
       quietLogger,
     );
-    await protocol.send('mallard/v2/metrics', { schema_version: 2 });
+    await protocol.send('mallard/v3/metrics', { schema_version: 3 });
     assert.equal(calls.length, 1);
     assert.ok(!('X-Mallard-Signature-256' in calls[0]!.headers));
     protocol.dispose();

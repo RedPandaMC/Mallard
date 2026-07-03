@@ -13,16 +13,22 @@ from server.normalize import NormalizedMetric
 @pytest.fixture()
 def sample_metric() -> NormalizedMetric:
     return NormalizedMetric(
-        schema_version=2,
+        schema_version=3,
         instance_id="inst-abc",
         ts_ms=1_700_000_000_000,
         connector="copilot",
-        credits_velocity_per_hour=2.5,
+        tz_offset_minutes=120,
         mtd_budget_pct=55.0,
         mtd_credits=200.0,
         mtd_cost_usd=7.00,
         today_credits=20.0,
         today_cost_usd=0.70,
+        total_credits=30.0,
+        total_event_count=12,
+        estimated_event_count=9,
+        model_credits={"claude-sonnet-4-5": 18.0},
+        surface_credits={"agent": 18.0},
+        cost_by_category={"input": 0.5},
         active_models=["claude-sonnet-4-5"],
         top_model="claude-sonnet-4-5",
     )
@@ -113,7 +119,9 @@ class TestWritePayload:
         point = captured[0]
         assert point._fields["mtd_cost_usd"] == 7.00
         assert point._fields["today_credits"] == 20.0
-        assert point._fields["credits_velocity_per_hour"] == 2.5
+        assert point._fields["total_credits"] == 30.0
+        assert point._fields["estimated_event_count"] == 9
+        assert point._fields["tz_offset_minutes"] == 120
 
     def test_none_fields_are_omitted_not_zeroed(self) -> None:
         """A field a given schema version never supplied should be absent
@@ -152,6 +160,53 @@ class TestWritePayload:
         assert stored["some_new_field"] == 42
         assert stored["model_dist"] == {"gpt-4o": 0.6}
 
+    def test_counter_maps_expand_to_prefixed_fields(self, sample_metric: NormalizedMetric) -> None:
+        from server.influx import write_payload
+
+        captured: list = []
+        mock_api = MagicMock()
+        mock_api.write.side_effect = lambda **kw: captured.append(kw["record"])
+
+        write_payload(mock_api, bucket="metrics", org="mallard", metric=sample_metric)
+
+        point = captured[0]
+        assert point._fields["model_credits_claude-sonnet-4-5"] == 18.0
+        assert point._fields["surface_credits_agent"] == 18.0
+        assert point._fields["cost_by_category_input"] == 0.5
+
+    def test_map_field_keys_are_sanitised(self) -> None:
+        from server.influx import write_payload
+
+        metric = NormalizedMetric(
+            schema_version=3,
+            instance_id="i",
+            ts_ms=1_700_000_000_000,
+            model_credits={"weird model!@#=,name": 1.0},
+        )
+        captured: list = []
+        mock_api = MagicMock()
+        mock_api.write.side_effect = lambda **kw: captured.append(kw["record"])
+
+        write_payload(mock_api, bucket="metrics", org="mallard", metric=metric)
+
+        keys = [k for k in captured[0]._fields if k.startswith("model_credits_")]
+        assert keys == ["model_credits_weird_model_name"]
+
+    def test_active_models_stored_as_one_joined_field(self, sample_metric: NormalizedMetric) -> None:
+        """No position-indexed active_model_{i} fields — unbounded, order-
+        dependent field names are an InfluxDB anti-pattern."""
+        from server.influx import write_payload
+
+        captured: list = []
+        mock_api = MagicMock()
+        mock_api.write.side_effect = lambda **kw: captured.append(kw["record"])
+
+        write_payload(mock_api, bucket="metrics", org="mallard", metric=sample_metric)
+
+        point = captured[0]
+        assert point._fields["active_models"] == "claude-sonnet-4-5"
+        assert not any(k.startswith("active_model_0") for k in point._fields)
+
     def test_no_extra_json_field_when_extra_is_empty(self, sample_metric: NormalizedMetric) -> None:
         from server.influx import write_payload
 
@@ -167,11 +222,10 @@ class TestWritePayload:
         from server.influx import write_payload
 
         metric = NormalizedMetric(
-            schema_version=2,
+            schema_version=3,
             instance_id="inst-xyz",
             ts_ms=1_700_000_000_000,
             connector="copilot",
-            credits_velocity_per_hour=0.0,
             mtd_budget_pct=0.0,
             mtd_credits=0.0,
             mtd_cost_usd=0.0,

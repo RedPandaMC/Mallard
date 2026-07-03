@@ -20,65 +20,51 @@ class IngestEnvelope(BaseModel):
     schema_version: int
 
 
-class IngestPayloadV1(BaseModel):
-    """The extension's original payload shape (schema_version: 1): rich
-    per-snapshot analytics, but no stable instance id and an ISO-8601
-    string timestamp rather than epoch milliseconds."""
+class IngestPayloadV3(BaseModel):
+    """Current payload shape (schema_version: 3).
 
-    model_config = ConfigDict(extra="allow")
-
-    schema_version: int
-    ts: str
-    model_dist: dict[str, float] = Field(default_factory=dict)
-    surface_dist: dict[str, float] = Field(default_factory=dict)
-    cost_dist: dict[str, float] = Field(default_factory=dict)
-    input_cost_ratio: float | None = None
-    credits_velocity_per_hour: float | None = None
-    mtd_budget_pct: float | None = None
-    repo_count: int | None = None
-    peak_usage_hour: int | None = None
-    daily_credit_variance: float | None = None
-    model_count: int | None = None
-    surface_concentration: float | None = None
-    estimated_event_ratio: float | None = None
-    forecast_basis: str | None = None
-    budget_trend: int | None = None
-    token_per_credit: float | None = None
-    forecast_low: float | None = None
-    forecast_high: float | None = None
-    source_connector: str | None = None
-
-
-class IngestPayloadV2(BaseModel):
-    """Current payload shape (schema_version: 2): adds the identity and
-    absolute fields the server needs for per-instance dashboards, alongside
-    the same analytics fields v1 already sent."""
+    Design principle: additive counters + per-instance gauges. The client no
+    longer sends normalized fractions, local-time peak hours, or other derived
+    ratios — those cannot be re-aggregated across instances (an average of
+    ratios is not the ratio of sums), so v3 sends the absolute inputs and the
+    server/Grafana derives what it needs.
+    """
 
     model_config = ConfigDict(extra="allow")
 
     schema_version: int
     instance_id: str = Field(..., description="Stable anonymous hash identifying the VS Code instance")
     ts: int = Field(..., description="Unix epoch milliseconds")
+    tz_offset_minutes: int | None = Field(
+        None, description="Client UTC offset in minutes; day/month windows are client-local"
+    )
+
+    # Gauges — last() per instance
     mtd_credits: float = Field(..., description="Month-to-date credits consumed")
     mtd_cost_usd: float = Field(..., description="Month-to-date cost in USD")
     today_credits: float = Field(..., description="Credits consumed today")
     today_cost_usd: float = Field(..., description="Cost today in USD")
-    active_models: list[str] = Field(default_factory=list, description="Models used in the current session")
-    top_model: str | None = Field(None, description="Most-used model by credit consumption")
-    credits_velocity_per_hour: float | None = None
     mtd_budget_pct: float | None = None
-    repo_count: int | None = None
-    peak_usage_hour: int | None = None
-    daily_credit_variance: float | None = None
-    model_count: int | None = None
-    surface_concentration: float | None = None
-    estimated_event_ratio: float | None = None
     forecast_basis: str | None = None
-    budget_trend: int | None = None
-    token_per_credit: float | None = None
     forecast_low: float | None = None
     forecast_high: float | None = None
+    budget_trend: int | None = None
+    daily_credit_stddev: float | None = None
+
+    # Counters — additive across instances. The maps are deliberately loose
+    # (dict[str, Any]): one malformed entry should be dropped by the
+    # normalizer, not degrade the whole payload to the unknown-version path.
+    total_credits: float | None = None
+    total_tokens: float | None = None
+    total_event_count: int | None = None
+    estimated_event_count: int | None = None
+    model_credits: dict[str, object] = Field(default_factory=dict)
+    surface_credits: dict[str, object] = Field(default_factory=dict)
+    cost_by_category: dict[str, object] = Field(default_factory=dict)
+
+    # Dimension metadata
+    active_models: list[str] = Field(default_factory=list, description="Models used in the current session")
+    top_model: str | None = Field(None, description="Most-used model by credit consumption")
+    model_count: int | None = None
+    repo_count: int | None = None
     source_connector: str | None = None
-    model_dist: dict[str, float] = Field(default_factory=dict)
-    surface_dist: dict[str, float] = Field(default_factory=dict)
-    cost_dist: dict[str, float] = Field(default_factory=dict)

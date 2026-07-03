@@ -30,7 +30,7 @@ export function createMqttProtocol(cfg: Partial<MqttExporterConfig>): MqttProtoc
   if (!cfg.brokerUrl) return null;
   return new MqttProtocol({
     brokerUrl: cfg.brokerUrl,
-    topicPrefix: cfg.topic ?? 'mallard/v2/metrics',
+    topicPrefix: cfg.topic ?? 'mallard/v3/metrics',
     ...(cfg.username ? { username: cfg.username } : {}),
     ...(cfg.password ? { password: cfg.password } : {}),
     ...(cfg.certPath ? { certPath: cfg.certPath } : {}),

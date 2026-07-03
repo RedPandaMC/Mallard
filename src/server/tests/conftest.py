@@ -132,14 +132,20 @@ def hmac_client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) 
 def valid_payload() -> dict:
     return {
         "instance_id": "abc123",
-        "schema_version": 2,
+        "schema_version": 3,
         "ts": 1_700_000_000_000,
-        "credits_velocity_per_hour": 1.5,
+        "tz_offset_minutes": 120,
         "mtd_budget_pct": 42.0,
         "mtd_credits": 100.0,
         "mtd_cost_usd": 3.50,
         "today_credits": 10.0,
         "today_cost_usd": 0.35,
+        "total_credits": 110.0,
+        "total_event_count": 12,
+        "estimated_event_count": 9,
+        "model_credits": {"claude-sonnet-4-5": 80.0, "claude-haiku-3": 30.0},
+        "surface_credits": {"agent": 110.0},
+        "cost_by_category": {"input": 1.5, "output": 2.0},
         "active_models": ["claude-sonnet-4-5", "claude-haiku-3"],
         "top_model": "claude-sonnet-4-5",
     }
