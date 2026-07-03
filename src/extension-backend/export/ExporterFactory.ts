@@ -44,13 +44,12 @@ export function createMetricExporter(
   return new MetricExporter(protocol, new MetricPayloadSerializer(), queue);
 }
 
-/** Creates a MetricExporter backed by HTTP webhook. Returns null when url is absent. */
-export function createWebhookExporter(
+/** Creates the webhook protocol alone — used by the multi-target fanout path. */
+export function createWebhookProtocol(
   cfg: Partial<WebhookExporterConfig>,
-  queue?: ExportQueue,
-): MetricExporter | null {
+): WebhookProtocol | null {
   if (!cfg.url) return null;
-  const protocol = new WebhookProtocol({
+  return new WebhookProtocol({
     url: cfg.url,
     ...(cfg.secret ? { secret: cfg.secret } : {}),
     ...(cfg.headers ? { headers: cfg.headers } : {}),
@@ -59,15 +58,24 @@ export function createWebhookExporter(
     ...(cfg.keyFile ? { keyFile: cfg.keyFile } : {}),
     ...(cfg.caFile ? { caFile: cfg.caFile } : {}),
   });
+}
+
+/** Creates a MetricExporter backed by HTTP webhook. Returns null when url is absent. */
+export function createWebhookExporter(
+  cfg: Partial<WebhookExporterConfig>,
+  queue?: ExportQueue,
+): MetricExporter | null {
+  const protocol = createWebhookProtocol(cfg);
+  if (!protocol) return null;
   return new MetricExporter(protocol, new MetricPayloadSerializer(), queue);
 }
 
 /**
- * FanoutProtocol: sends to multiple transports simultaneously.
- * Use when both MQTT and webhook are configured. Not currently constructed
- * anywhere in production (AuthProvider only ever picks one transport); kept
- * simple rather than tracking per-protocol partial success, since there's no
- * live caller to justify the extra complexity.
+ * FanoutProtocol: mirrors one payload to multiple webhook servers (e.g. a
+ * personal and a team ingest endpoint), constructed by AuthProvider when
+ * config.json declares `export.webhookTargets`. A batch is retried when every
+ * failure is retryable; one fatal (4xx) target aborts the retry so a
+ * misconfigured credential can't make the queue spin forever.
  */
 export class FanoutProtocol implements MetricProtocol {
   constructor(private readonly protocols: MetricProtocol[]) {}

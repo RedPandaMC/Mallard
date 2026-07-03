@@ -65,6 +65,46 @@ const ConfigSchema = z
       })
       .optional(),
     branchBudgets: z.record(z.string(), z.number()).optional(),
+    // The blocks below were documented in schemas/mallard-config.schema.json
+    // but missing here — zod strips unknown keys, so config.json's
+    // githubBilling/dashboard/display never survived a read.
+    githubBilling: z
+      .object({
+        mode: z.enum(['vscode-session', 'pat']).optional(),
+        pat: z.string().optional(),
+        org: z.string().optional(),
+      })
+      .optional(),
+    dashboard: z
+      .object({
+        columns: z.number().optional(),
+        panels: z
+          .array(
+            z.object({
+              id: z.string(),
+              gridColumn: z.string().optional(),
+              gridRow: z.string().optional(),
+              hidden: z.boolean().optional(),
+              size: z.enum(['compact', 'normal', 'tall']).optional(),
+            }),
+          )
+          .optional(),
+      })
+      .optional(),
+    display: z
+      .object({
+        dailyBarsWindow: z.number().optional(),
+        heatmapWeeks: z.number().optional(),
+        topN: z.number().optional(),
+      })
+      .optional(),
+    export: z
+      .object({
+        webhookTargets: z
+          .array(z.object({ name: z.string().min(1), url: z.string().min(1) }))
+          .optional(),
+      })
+      .optional(),
   })
   .partial();
 

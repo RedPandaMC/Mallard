@@ -214,6 +214,28 @@ export interface UserConfig {
   githubBilling?: GitHubBillingConfig;
   /** Dashboard display preferences (chart windows, top-N). */
   display?: DisplayPrefs;
+  /** Metric export extras beyond the mallard.* settings. */
+  export?: ExportConfig;
+}
+
+/** Metric export configuration block in config.json. */
+export interface ExportConfig {
+  /**
+   * Additional webhook servers to mirror every metric payload to, on top of
+   * the primary mallard.server.url target. Webhook transport only.
+   */
+  webhookTargets?: WebhookTarget[];
+}
+
+/** One extra webhook destination. */
+export interface WebhookTarget {
+  /**
+   * Unique name for this target (e.g. "team"). Also namespaces the target's
+   * credentials in SecretStorage — set them via "Mallard: Manage Credentials".
+   */
+  name: string;
+  /** HTTPS endpoint base URL, same semantics as mallard.server.url. */
+  url: string;
 }
 
 /**

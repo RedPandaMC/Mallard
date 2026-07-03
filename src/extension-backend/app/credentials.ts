@@ -17,10 +17,12 @@ export const SECRET_KEYS = {
 
 export type SecretKey = (typeof SECRET_KEYS)[keyof typeof SECRET_KEYS];
 
-export const ALL_SECRET_KEYS: SecretKey[] = Object.values(SECRET_KEYS);
+export const ALL_SECRET_KEYS: string[] = Object.values(SECRET_KEYS);
 
 export interface CredentialSlot {
-  key: SecretKey;
+  /** SecretStorage key. Base slots use a SECRET_KEYS value; per-target slots
+   * append `:<targetName>` (see webhookTargetSlots). */
+  key: string;
   /** Short name shown in the QuickPick. */
   label: string;
   /** What the credential is used for. */
@@ -55,6 +57,38 @@ export const CREDENTIAL_SLOTS: CredentialSlot[] = [
   },
 ];
 
+/** SecretStorage key for a per-target credential (multi-server webhook export). */
+export function targetSecretKey(base: SecretKey, targetName: string): string {
+  return `${base}:${targetName}`;
+}
+
+/**
+ * Credential slots for the extra webhook targets declared in config.json
+ * (`export.webhookTargets`). Each target gets its own API key / bearer token /
+ * signing secret, namespaced by the target name.
+ */
+export function webhookTargetSlots(
+  targets: ReadonlyArray<{ name: string }>,
+): CredentialSlot[] {
+  return targets.flatMap((t) => [
+    {
+      key: targetSecretKey(SECRET_KEYS.webhookApiKey, t.name),
+      label: `Webhook API key — target "${t.name}"`,
+      description: `X-API-Key for the "${t.name}" webhook target`,
+    },
+    {
+      key: targetSecretKey(SECRET_KEYS.webhookBearerToken, t.name),
+      label: `Webhook bearer token — target "${t.name}"`,
+      description: `Authorization: Bearer for the "${t.name}" webhook target`,
+    },
+    {
+      key: targetSecretKey(SECRET_KEYS.webhookSigningSecret, t.name),
+      label: `Webhook signing secret — target "${t.name}"`,
+      description: `HMAC-SHA256 signing for the "${t.name}" webhook target`,
+    },
+  ]);
+}
+
 /** Prompt for a value and store/clear the given secret. Reused by all setter commands. */
 export async function promptAndStoreSecret(
   secrets: vscode.SecretStorage,
@@ -77,11 +111,15 @@ export async function promptAndStoreSecret(
 /**
  * Full CRUD over every credential slot: a QuickPick listing each slot with
  * its configured/not-configured status (never the value), then Set/Update or
- * Clear on the chosen slot.
+ * Clear on the chosen slot. `extraSlots` adds dynamic entries (per-target
+ * webhook credentials).
  */
-export async function manageCredentials(secrets: vscode.SecretStorage): Promise<void> {
+export async function manageCredentials(
+  secrets: vscode.SecretStorage,
+  extraSlots: CredentialSlot[] = [],
+): Promise<void> {
   const items = await Promise.all(
-    CREDENTIAL_SLOTS.map(async (slot) => {
+    [...CREDENTIAL_SLOTS, ...extraSlots].map(async (slot) => {
       const configured = (await secrets.get(slot.key)) !== undefined;
       return {
         label: `${configured ? '$(pass-filled)' : '$(circle-large-outline)'} ${slot.label}`,

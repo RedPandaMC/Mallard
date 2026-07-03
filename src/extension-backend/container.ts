@@ -95,7 +95,13 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     userConfig.onDidChange((c) => githubSession.configure(c.githubBilling)),
   );
 
-  const exporter = await new AuthProvider(cfg, context).createExporter();
+  // Extra webhook targets from config.json fan the export out to multiple
+  // servers. Like the rest of the exporter config, changes require a reload.
+  const exporter = await new AuthProvider(
+    cfg,
+    context,
+    userConfig.get().export?.webhookTargets ?? [],
+  ).createExporter();
 
   const usage = new UsageService(store.reader, pricing, ingest, userConfig, currency, github, exporter);
   const restriction = new RestrictionEngine(storageDir);

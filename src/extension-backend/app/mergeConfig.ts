@@ -58,5 +58,12 @@ export function mergeConfig(stored?: Partial<UserConfig>): UserConfig {
     ...(stored?.branchBudgets !== undefined
       ? { branchBudgets: stored.branchBudgets }
       : {}),
+    // Pass-through blocks with no defaults. These were previously dropped
+    // here (and by the zod schema), silently killing the config.json
+    // githubBilling/dashboard/display features.
+    ...(stored?.githubBilling !== undefined ? { githubBilling: stored.githubBilling } : {}),
+    ...(stored?.dashboard !== undefined ? { dashboard: stored.dashboard } : {}),
+    ...(stored?.display !== undefined ? { display: stored.display } : {}),
+    ...(stored?.export !== undefined ? { export: stored.export } : {}),
   };
 }

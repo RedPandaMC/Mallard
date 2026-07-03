@@ -79,6 +79,27 @@ Then run **Mallard: Set Webhook API Key** from the Command Palette to store the
 key securely. (The key's *label* — which team/person it belongs to — is
 configured server-side in the secret manager, not in the key value you enter.)
 
+### Multiple webhook servers
+
+The webhook transport can mirror every payload to additional servers (e.g. a
+personal and a team endpoint). Declare them in `config.json`:
+
+```json
+"export": {
+  "webhookTargets": [
+    { "name": "team", "url": "https://mallard.team.example.com" }
+  ]
+}
+```
+
+Each target authenticates with its own credentials, namespaced by the target
+name — set them via **Mallard: Manage Credentials**, where each target shows
+up as its own API key / bearer token / signing secret slot. The auth method
+(`mallard.webhook.auth`) and any mTLS certificate paths are shared across all
+targets. A payload is queued for retry only while every failing target is
+retryable; a target that rejects with a 4xx (bad credential) fails the batch
+fatally so the queue can't spin forever.
+
 ### MQTT example (password)
 
 ```json
