@@ -4,6 +4,7 @@
  * all subscribe to.
  */
 import * as vscode from 'vscode';
+import { readConfig } from '../config';
 import { evaluateAlerts, SnapshotSample } from '../domain/alerts';
 import { evaluateAlertRules, shouldNotify } from '../domain/alertRules';
 import { computeBudget } from '../domain/budget';
@@ -152,8 +153,7 @@ export class UsageService implements vscode.Disposable {
 
     const branch = activeBranch();
 
-    const displayCurrency = vscode.workspace.getConfiguration('mallard')
-      .get<string>('currency', 'USD').trim().toUpperCase() || 'USD';
+    const displayCurrency = readConfig().currency;
     const fxRates = this.currency.currentRates();
     const fxRate = displayCurrency !== 'USD' ? (fxRates[displayCurrency] ?? 1) : 1;
 
@@ -433,8 +433,9 @@ export class UsageService implements vscode.Disposable {
   }
 
   private scheduleTimer(): void {
-    const mins = vscode.workspace.getConfiguration('mallard').get<number>('refreshIntervalMinutes', 10);
-    this.timer.schedule(() => void this.refresh(), Math.max(1, mins) * 60_000);
+    // readConfig() already clamps refreshIntervalMinutes to [1, 60]
+    const mins = readConfig().refreshIntervalMinutes;
+    this.timer.schedule(() => void this.refresh(), mins * 60_000);
   }
 
   dispose(): void {

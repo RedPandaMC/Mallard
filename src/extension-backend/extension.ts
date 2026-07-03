@@ -1,6 +1,13 @@
 import * as vscode from 'vscode';
 import { RELEVANT_CONFIG_KEYS } from './config';
 import { buildContainer, Container } from './container';
+import {
+  ALL_SECRET_KEYS,
+  CREDENTIAL_SLOTS,
+  SECRET_KEYS,
+  manageCredentials,
+  promptAndStoreSecret,
+} from './app/credentials';
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
 import { SidebarView } from './ui/SidebarView';
@@ -289,7 +296,7 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     for (const key of context.globalState.keys()) {
       await context.globalState.update(key, undefined);
     }
-    for (const secretKey of ['mallard.mqtt.password', 'mallard.webhook.secret']) {
+    for (const secretKey of ALL_SECRET_KEYS) {
       await context.secrets.delete(secretKey);
     }
     void vscode.window.showInformationMessage(
@@ -309,18 +316,14 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     void vscode.window.showInformationMessage('Mallard: Click "Disable" next to Mallard above.');
   });
 
-  reg('mallard.setMqttPassword', async () => {
-    const pwd = await vscode.window.showInputBox({
-      prompt: 'Enter MQTT export password (leave blank to clear)',
-      password: true,
-    });
-    if (pwd === undefined) return;
-    if (pwd === '') {
-      await context.secrets.delete('mallard.mqtt.password');
-      void vscode.window.showInformationMessage('Mallard: MQTT password cleared.');
-    } else {
-      await context.secrets.store('mallard.mqtt.password', pwd);
-      void vscode.window.showInformationMessage('Mallard: MQTT password saved securely.');
-    }
-  });
+  const slotByKey = (key: string) => CREDENTIAL_SLOTS.find((s) => s.key === key)!;
+  reg('mallard.manageCredentials', () => manageCredentials(context.secrets));
+  reg('mallard.setMqttPassword', () =>
+    promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.mqttPassword)));
+  reg('mallard.setWebhookApiKey', () =>
+    promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.webhookApiKey)));
+  reg('mallard.setWebhookBearerToken', () =>
+    promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.webhookBearerToken)));
+  reg('mallard.setGitHubPat', () =>
+    promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.githubPat)));
 }

@@ -5,6 +5,7 @@
  */
 import * as vscode from 'vscode';
 import { readConfig } from './config';
+import { migrateSecretsFromSettings } from './app/credentials';
 import { UsageService } from './app/UsageService';
 import { UserConfigStore } from './app/UserConfigStore';
 import { LayoutStore } from './app/LayoutStore';
@@ -37,6 +38,10 @@ export interface Container {
 export async function buildContainer(context: vscode.ExtensionContext): Promise<Container> {
   void initRepoAttribution();
   const bundledManifest = await loadBundledManifest(context);
+
+  // Move any credentials from the deprecated plaintext settings into
+  // SecretStorage BEFORE reading config, so this run already sees them blanked.
+  await migrateSecretsFromSettings(context);
 
   const cfg = readConfig();
   const storageDir = context.globalStorageUri.fsPath;
@@ -77,10 +82,18 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
       .build(),
   );
 
-  const githubSession = new GitHubSession();
+  const githubSession = new GitHubSession(context.secrets);
   const github = new GitHubUsageService(githubSession);
   const userConfig = new UserConfigStore(storageDir);
   const layout = new LayoutStore(context.globalState);
+
+  // Deliver the config.json githubBilling block (mode/pat/org) and keep it
+  // live on config changes — previously configure() was never called, so the
+  // whole user-level PAT path was dead.
+  githubSession.configure(userConfig.get().githubBilling);
+  context.subscriptions.push(
+    userConfig.onDidChange((c) => githubSession.configure(c.githubBilling)),
+  );
 
   const exporter = await new AuthProvider(cfg, context).createExporter();
 
@@ -89,14 +102,14 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
 
   context.subscriptions.push(
     usage.onDidChangeSnapshot((snapshot) => {
-      const cfg = userConfig.get();
+      const userCfg = userConfig.get();
       void restriction.reconcile({
         snapshot,
-        rules: cfg.rules ?? [],
-        ...opt('vars',           cfg.vars),
-        ...opt('groups',         cfg.groups),
+        rules: userCfg.rules ?? [],
+        ...opt('vars',           userCfg.vars),
+        ...opt('groups',         userCfg.groups),
         signedIn: snapshot.authStatus === 'signed-in',
-        ...opt('branchBudgets', cfg.branchBudgets),
+        ...opt('branchBudgets', userCfg.branchBudgets),
       }).catch((err: unknown) =>
         console.error('[mallard] restriction reconcile failed:', err),
       );

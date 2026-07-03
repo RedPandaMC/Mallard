@@ -106,6 +106,30 @@
         "title": "Set MQTT Export Password",
         "category": "Mallard",
         "icon": "$(key)"
+      },
+      {
+        "command": "mallard.manageCredentials",
+        "title": "Manage Credentials",
+        "category": "Mallard",
+        "icon": "$(key)"
+      },
+      {
+        "command": "mallard.setWebhookApiKey",
+        "title": "Set Webhook API Key",
+        "category": "Mallard",
+        "icon": "$(key)"
+      },
+      {
+        "command": "mallard.setWebhookBearerToken",
+        "title": "Set Webhook Bearer Token",
+        "category": "Mallard",
+        "icon": "$(key)"
+      },
+      {
+        "command": "mallard.setGitHubPat",
+        "title": "Set GitHub Personal Access Token",
+        "category": "Mallard",
+        "icon": "$(key)"
       }
     ],
     "viewsContainers": {
@@ -205,13 +229,15 @@
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "API key sent as X-API-Key on every webhook POST. Active when mallard.webhook.auth = apiKey."
+          "description": "API key sent as X-API-Key on every webhook POST. Active when mallard.webhook.auth = apiKey.",
+          "deprecationMessage": "Deprecated: settings.json stores this in plaintext. Use the command \"Mallard: Set Webhook API Key\" (SecretStorage) instead — an existing value is migrated automatically."
         },
         "mallard.webhook.bearerToken": {
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "Token sent as Authorization: Bearer on every webhook POST. Active when mallard.webhook.auth = bearer."
+          "description": "Token sent as Authorization: Bearer on every webhook POST. Active when mallard.webhook.auth = bearer.",
+          "deprecationMessage": "Deprecated: settings.json stores this in plaintext. Use the command \"Mallard: Set Webhook Bearer Token\" (SecretStorage) instead — an existing value is migrated automatically."
         },
         "mallard.mqtt.url": {
           "type": "string",
@@ -234,7 +260,13 @@
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "MQTT username. Active when mallard.mqtt.auth = password."
+          "description": "MQTT username, sent in the CONNECT packet as broker metadata. The Mallard server identifies you by the shared broker password and tags all MQTT data source='mqtt' — the username is not used for identification."
+        },
+        "mallard.githubBilling.org": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "GitHub organization slug for org-level Copilot billing in this workspace. Overrides the githubBilling.org value from config.json. Leave blank for personal billing."
         },
         "mallard.shared.certificate.file": {
           "type": "string",

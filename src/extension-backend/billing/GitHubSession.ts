@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { GitHubBillingConfig } from '../domain/types';
 import type { IAuthProvider } from './IBillingProvider';
+import { SECRET_KEYS } from '../app/credentials';
 import { defaultLogger, Logger } from '../util/logger';
 
 export class GitHubSession implements IAuthProvider {
@@ -9,8 +10,12 @@ export class GitHubSession implements IAuthProvider {
   private readonly _sub: vscode.Disposable;
 
   private billingConfig: GitHubBillingConfig | undefined;
+  private patMigrationPrompted = false;
 
-  constructor(private readonly logger: Logger = defaultLogger) {
+  constructor(
+    private readonly secrets?: vscode.SecretStorage,
+    private readonly logger: Logger = defaultLogger,
+  ) {
     this._sub = vscode.authentication.onDidChangeSessions((e) => {
       if (e.provider.id === 'github') this._onDidChange.fire();
     });
@@ -24,24 +29,32 @@ export class GitHubSession implements IAuthProvider {
 
   /**
    * Returns a bearer token. Resolution order:
-   * 1. Workspace-scoped PAT from VS Code settings (if scope provided)
-   * 2. User-level PAT from billing config
-   * 3. VS Code OAuth session
+   * 1. PAT from SecretStorage (set via "Mallard: Set GitHub PAT")
+   * 2. PAT from config.json githubBilling.pat (deprecated — auto-migrated
+   *    into SecretStorage on first use, with a prompt to remove it from the file)
+   * 3. VS Code OAuth session (unless mode is explicitly "pat")
    */
   async getToken(
     createIfNone = false,
-    scope?: vscode.WorkspaceFolder,
+    _scope?: vscode.WorkspaceFolder,
   ): Promise<{ token: string; username?: string } | undefined> {
-    if (scope) {
-      const wsPat = vscode.workspace
-        .getConfiguration('mallard', scope)
-        .get<string>('githubBilling.pat')
-        ?.trim();
-      if (wsPat) return { token: wsPat };
-    }
+    const stored = await this.secrets?.get(SECRET_KEYS.githubPat);
+    if (stored) return { token: stored };
 
     const pat = this.billingConfig?.pat?.trim();
-    if (pat) return { token: pat };
+    if (pat) {
+      if (this.secrets) {
+        await this.secrets.store(SECRET_KEYS.githubPat, pat);
+        if (!this.patMigrationPrompted) {
+          this.patMigrationPrompted = true;
+          void vscode.window.showInformationMessage(
+            'Mallard: your GitHub PAT was copied from config.json into secure storage. ' +
+              'Please remove the "pat" field from config.json — the stored copy will be used from now on.',
+          );
+        }
+      }
+      return { token: pat };
+    }
 
     if (this.billingConfig?.mode === 'pat') return undefined;
 

@@ -13,6 +13,7 @@ thresholds are not settings; you edit them in the dashboard and they are stored 
 | `mallard.palette` | `"swiss" \| "theme"` | `"swiss"` | Dashboard chart palette. `swiss` is the fixed duotone; `theme` derives the accent from your VS Code theme. Both keep the duotone structure and are checked for accessibility. |
 | `mallard.refreshIntervalMinutes` | `number` | `10` | How often Mallard re-scans logs and rebuilds the snapshot. Range: 1–60 minutes. Lower values update the dashboard faster but increase CPU usage. |
 | `mallard.dataRetentionDays` | `number` | `90` | How many days of raw events to keep before rolling up to daily rows. Range: 30–365. Older events are stored as daily aggregates; per-event detail is lost after this window. |
+| `mallard.githubBilling.org` | `string` | `""` | GitHub organization slug for org-level Copilot billing in this workspace. Overrides the `githubBilling.org` value from `config.json`. Blank means personal billing. |
 
 ## Metric export settings
 
@@ -29,13 +30,16 @@ so credentials are not synced across machines by VS Code Settings Sync.
 
 ### Webhook auth
 
-Active when `mallard.export.transport = "webhook"`.
+Active when `mallard.export.transport = "webhook"`. The credential itself is
+stored in SecretStorage — run **Mallard: Set Webhook API Key** or **Mallard:
+Set Webhook Bearer Token** (or **Mallard: Manage Credentials**) from the
+Command Palette.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `mallard.webhook.auth` | `"apiKey" \| "bearer" \| "certificate"` | `"apiKey"` | Auth method. |
-| `mallard.webhook.apiKey` | `string` | `""` | API key sent as `X-API-Key` header. Active when `auth = apiKey`. |
-| `mallard.webhook.bearerToken` | `string` | `""` | Token sent as `Authorization: Bearer`. Active when `auth = bearer`. |
+| `mallard.webhook.apiKey` | `string` | `""` | **Deprecated** — plaintext in settings.json. Use the *Set Webhook API Key* command instead; an existing value is migrated into SecretStorage automatically. |
+| `mallard.webhook.bearerToken` | `string` | `""` | **Deprecated** — plaintext in settings.json. Use the *Set Webhook Bearer Token* command instead; an existing value is migrated into SecretStorage automatically. |
 
 ### MQTT
 
@@ -45,7 +49,7 @@ Active when `mallard.export.transport = "mqtt"`. Only `wss://` URLs are accepted
 |---------|------|---------|-------------|
 | `mallard.mqtt.url` | `string` | `""` | MQTT broker WebSocket URL (e.g. `wss://mallard.example.com/mqtt`). Overrides `mallard.server.url` for MQTT. |
 | `mallard.mqtt.auth` | `"password" \| "certificate"` | `"password"` | Auth method. |
-| `mallard.mqtt.username` | `string` | `""` | MQTT username. Active when `auth = password`. |
+| `mallard.mqtt.username` | `string` | `""` | MQTT username, sent in CONNECT as broker metadata. The server identifies you by the shared broker password and tags all MQTT data `source='mqtt'` — the username is **not** used for identification. |
 
 Run **Mallard: Set MQTT Export Password** from the Command Palette to store the password securely in VS Code's SecretStorage (never written to settings files).
 
@@ -68,9 +72,12 @@ Each publish sends a single JSON object, built by `buildMetricPayload` and publi
 ```json
 "mallard.server.url": "https://your-server",
 "mallard.export.transport": "webhook",
-"mallard.webhook.auth": "apiKey",
-"mallard.webhook.apiKey": "team-alpha:key-abc123"
+"mallard.webhook.auth": "apiKey"
 ```
+
+Then run **Mallard: Set Webhook API Key** from the Command Palette to store the
+key securely. (The key's *label* — which team/person it belongs to — is
+configured server-side in the secret manager, not in the key value you enter.)
 
 ### MQTT example (password)
 

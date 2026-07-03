@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { MallardConfig } from '../config';
+import { SECRET_KEYS } from '../app/credentials';
 import { createMetricExporter, createWebhookExporter } from './ExporterFactory';
 import { NullMetricExporter, type MetricExporter } from './MetricExporter';
 import { ExportQueue } from './ExportQueue';
@@ -7,7 +8,8 @@ import { opt } from '../util/lang';
 
 /**
  * Reads transport + auth config and builds the appropriate MetricExporter.
- * Password credentials are read from VS Code SecretStorage, never from settings.
+ * Credentials come from VS Code SecretStorage; the deprecated plaintext
+ * settings are honoured as a fallback until the one-time migration has run.
  */
 export class AuthProvider {
   constructor(
@@ -28,11 +30,16 @@ export class AuthProvider {
       const url = cfg.server.url;
       if (!url) return new NullMetricExporter();
 
+      const apiKey =
+        (await context.secrets.get(SECRET_KEYS.webhookApiKey)) || cfg.webhook.apiKey;
+      const bearerToken =
+        (await context.secrets.get(SECRET_KEYS.webhookBearerToken)) || cfg.webhook.bearerToken;
+
       const headers: Record<string, string> = {};
-      if (cfg.webhook.auth === 'apiKey' && cfg.webhook.apiKey) {
-        headers['X-API-Key'] = cfg.webhook.apiKey;
-      } else if (cfg.webhook.auth === 'bearer' && cfg.webhook.bearerToken) {
-        headers['Authorization'] = `Bearer ${cfg.webhook.bearerToken}`;
+      if (cfg.webhook.auth === 'apiKey' && apiKey) {
+        headers['X-API-Key'] = apiKey;
+      } else if (cfg.webhook.auth === 'bearer' && bearerToken) {
+        headers['Authorization'] = `Bearer ${bearerToken}`;
       }
 
       const certOpts =
@@ -60,7 +67,7 @@ export class AuthProvider {
       const brokerUrl = cfg.mqtt.url || cfg.server.url;
       if (!brokerUrl) return new NullMetricExporter();
 
-      const password = (await context.secrets.get('mallard.mqtt.password')) ?? '';
+      const password = (await context.secrets.get(SECRET_KEYS.mqttPassword)) ?? '';
       const workspaceFolders = vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath);
 
       return (

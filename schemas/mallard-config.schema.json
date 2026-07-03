@@ -286,7 +286,8 @@
         },
         "pat": {
           "type": "string",
-          "description": "Personal access token. Required when mode is 'pat'. Scopes: read:user for user billing, read:org for org billing."
+          "description": "DEPRECATED — config.json stores this in plaintext. Run the command 'Mallard: Set GitHub Personal Access Token' instead (stored in your OS keychain via VS Code SecretStorage). A value found here is copied into secure storage on first use; remove it from this file afterwards. Scopes: read:user for user billing, read:org for org billing.",
+          "deprecated": true
         },
         "org": {
           "type": "string",

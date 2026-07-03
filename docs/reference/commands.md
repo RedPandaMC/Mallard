@@ -68,12 +68,46 @@ you type (`.csv` or `.json`). The output contains one row per event with all
 stored fields (timestamp, model, surface, source, credits, cost, tokens, repo,
 branch).
 
+## Mallard: Manage Credentials
+
+ID `mallard.manageCredentials`. One place for every secret Mallard stores: a
+picker lists each credential slot (webhook API key, webhook bearer token,
+webhook signing secret, MQTT password, GitHub personal access token) with its
+configured/not-configured status — values are never shown — and offers
+Set/Update or Clear per slot. All credentials live in VS Code's SecretStorage
+(your OS keychain); they are never written to settings files and are not synced
+across machines by Settings Sync.
+
 ## Mallard: Set MQTT Export Password
 
 ID `mallard.setMqttPassword`. Prompts for the MQTT broker password and stores it
 in VS Code's SecretStorage. Secrets are never written to settings files and are
 not synced across machines by Settings Sync. Leave the input blank to clear a
 previously saved password.
+
+## Mallard: Set Webhook API Key
+
+ID `mallard.setWebhookApiKey`. Prompts for the API key sent as `X-API-Key` on
+webhook exports and stores it in SecretStorage. Replaces the deprecated
+plaintext `mallard.webhook.apiKey` setting — an existing setting value is
+migrated automatically on startup. Leave blank to clear.
+
+## Mallard: Set Webhook Bearer Token
+
+ID `mallard.setWebhookBearerToken`. Prompts for the token sent as
+`Authorization: Bearer` on webhook exports and stores it in SecretStorage.
+Replaces the deprecated plaintext `mallard.webhook.bearerToken` setting — an
+existing setting value is migrated automatically on startup. Leave blank to
+clear.
+
+## Mallard: Set GitHub Personal Access Token
+
+ID `mallard.setGitHubPat`. Prompts for a GitHub PAT (scopes: `read:user` for
+user billing, `read:org` for org billing) and stores it in SecretStorage. Used
+for GitHub billing when you don't want to use VS Code's built-in GitHub
+sign-in — set `githubBilling.mode` to `"pat"` in `config.json` to skip the
+OAuth prompt entirely. A PAT found in `config.json`'s deprecated `pat` field is
+copied into SecretStorage on first use. Leave blank to clear.
 
 ## Mallard: Simulate Restriction State
 
