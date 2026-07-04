@@ -1,0 +1,131 @@
+import { strict as assert } from 'assert';
+import * as vscode from 'vscode';
+import { UsageService } from '../../../src/extension-backend/app/UsageService';
+import type { IEventSnapshotReader, SnapshotSourceData } from '../../../src/extension-backend/store/EventReader';
+import { PricingService } from '../../../src/extension-backend/pricing/PricingService';
+import { IngestService } from '../../../src/extension-backend/ingest/IngestService';
+import { UserConfigStore } from '../../../src/extension-backend/app/UserConfigStore';
+import { CurrencyService } from '../../../src/extension-backend/pricing/CurrencyService';
+import type { VscodeHost } from '../../../src/extension-backend/util/vscodeHost';
+import * as os from 'os';
+import * as path from 'path';
+import { promises as fs } from 'fs';
+
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+const ws = vscode.workspace as Mutable<typeof vscode.workspace>;
+
+const EMPTY_DATA: SnapshotSourceData = {
+  totals: {
+    all: { credits: 0, cost: 0, tokens: 0, eventCount: 0 },
+    mtd: { credits: 0, cost: 0, tokens: 0, eventCount: 0 },
+    today: { credits: 0, cost: 0, tokens: 0, eventCount: 0 },
+  },
+  estimatedEventCount: 0,
+  daily: [],
+  models: [],
+  repos: [],
+  hourly: [],
+  categories: [],
+  sankey: [],
+  dims: { models: [], surfaces: [], sources: [], repos: [] },
+  weekday: [0, 0, 0, 0, 0, 0, 0],
+};
+
+function makeReader(data: SnapshotSourceData = EMPTY_DATA): IEventSnapshotReader {
+  return {
+    readSnapshotCache: async () => data,
+    readFilteredSnapshot: async () => data,
+    creditsByBranch: async () => 0,
+  };
+}
+
+async function tmpDir(): Promise<string> {
+  return fs.mkdtemp(path.join(os.tmpdir(), 'mallard-usagesvc-'));
+}
+
+describe('UsageService — start/refresh/fireAlerts/scheduleTimer', () => {
+  let dir: string;
+  let pricing: PricingService;
+  let ingest: IngestService;
+  let userConfig: UserConfigStore;
+  let currency: CurrencyService;
+  const origGetConfig = ws.getConfiguration;
+
+  beforeEach(async () => {
+    dir = await tmpDir();
+    pricing = new PricingService(dir, {
+      version: 1, pricePerCredit: 0.04, updatedAt: new Date().toISOString(), models: { 'gpt-4o': 1 },
+    });
+    ingest = new IngestService([]);
+    userConfig = new UserConfigStore(dir);
+    currency = new CurrencyService(dir);
+    ws.getConfiguration = (() => ({
+      get: (_k: string, fallback: unknown) => fallback,
+      update: () => Promise.resolve(),
+    })) as unknown as typeof ws.getConfiguration;
+  });
+  afterEach(async () => {
+    ws.getConfiguration = origGetConfig;
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('start() emits a snapshot, schedules the timer, and fires alerts without throwing', async () => {
+    const data: SnapshotSourceData = {
+      ...EMPTY_DATA,
+      totals: {
+        all: { credits: 500, cost: 20, tokens: 10000, eventCount: 100 },
+        mtd: { credits: 500, cost: 20, tokens: 10000, eventCount: 100 },
+        today: { credits: 500, cost: 20, tokens: 10000, eventCount: 100 },
+      },
+      models: [{ modelId: 'gpt-4o', credits: 500, cost: 20, tokens: 10000 }],
+    };
+    const host: VscodeHost = {
+      showWarningMessage: () => Promise.resolve(undefined),
+      executeCommand: () => Promise.resolve(undefined),
+    };
+    const svc = new UsageService(makeReader(data), pricing, ingest, userConfig, currency, undefined, undefined, host);
+    let snapshots = 0;
+    svc.onDidChangeSnapshot(() => snapshots++);
+    await svc.start();
+    await new Promise((r) => setTimeout(r, 50)); // let ingest.start().then(compute) settle
+    assert.ok(snapshots >= 1, 'at least one snapshot emitted');
+    assert.ok(svc.current, 'snapshot is set');
+    svc.dispose();
+  });
+
+  it('refresh() re-reads and emits a new snapshot', async () => {
+    const svc = new UsageService(makeReader(), pricing, ingest, userConfig, currency);
+    let snapshots = 0;
+    svc.onDidChangeSnapshot(() => snapshots++);
+    await svc.start();
+    await new Promise((r) => setTimeout(r, 50));
+    const before = snapshots;
+    await svc.refresh();
+    assert.ok(snapshots > before, 'refresh emitted a new snapshot');
+    svc.dispose();
+  });
+
+  it('setFilter triggers a filtered recompute', async () => {
+    const svc = new UsageService(makeReader(), pricing, ingest, userConfig, currency);
+    await svc.start();
+    await new Promise((r) => setTimeout(r, 50));
+    await svc.setFilter({ models: ['gpt-4o'] });
+    assert.deepEqual(svc.getFilter(), { models: ['gpt-4o'] });
+    svc.dispose();
+  });
+
+  it('onConfigChanged reschedules the timer and recomputes', async () => {
+    const svc = new UsageService(makeReader(), pricing, ingest, userConfig, currency);
+    await svc.start();
+    await new Promise((r) => setTimeout(r, 50));
+    assert.doesNotThrow(() => svc.onConfigChanged());
+    svc.dispose();
+  });
+
+  it('dispose() cleans up without throwing', async () => {
+    const svc = new UsageService(makeReader(), pricing, ingest, userConfig, currency);
+    await svc.start();
+    await new Promise((r) => setTimeout(r, 50));
+    assert.doesNotThrow(() => svc.dispose());
+  });
+});

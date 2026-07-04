@@ -105,8 +105,8 @@ describe('ReportGenerator', () => {
 
   it('renders the projected-cost range and budget percent when both are set', () => {
     const s = snapshot({
-      forecast: { basis: 'linear', projectedCost: 12.5, low: 10, high: 15 },
-      budget: { monthly: 50, percentOfBudget: 25, trend: 'on-track', remaining: 37.5 },
+      forecast: { granularity: 'month', projectedCredits: 300, projectedCost: 12.5, low: 10, high: 15, basis: 'linear', asOf: Date.now() },
+      budget: { monthly: 50, includedCredits: 300, usedCredits: 12.5, usedCost: 0.5, percentOfBudget: 25, percentOfIncluded: 4, projectedOverage: null, pace: 'on-track' },
     });
     const html = generateReport(s);
     assert.ok(html.includes('12.5'), 'projected cost rendered');

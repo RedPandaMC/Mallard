@@ -178,6 +178,41 @@ describe('dashboardBridge — message routing', () => {
     assert.equal(h.disposables.length, 7);
     for (const d of h.disposables) assert.doesNotThrow(() => d.dispose());
   });
+
+  it('posts a new theme message when mallard.palette config changes', async () => {
+    const posted: WebviewBoundMsg[] = [];
+    let configCb: ((e: { affectsConfiguration(s: string): boolean }) => void) | undefined;
+    const webview = {
+      postMessage: (m: WebviewBoundMsg) => { posted.push(m); return Promise.resolve(true); },
+      onDidReceiveMessage: (_handler: (m: unknown) => void) => { return { dispose() {} }; },
+    } as unknown as vscode.Webview;
+    const wsc = vscode.workspace as Mutable<typeof vscode.workspace>;
+    const origOnChanged = wsc.onDidChangeConfiguration;
+    wsc.onDidChangeConfiguration = ((fn: (e: { affectsConfiguration(s: string): boolean }) => void) => {
+      configCb = fn;
+      return { dispose() {} };
+    }) as unknown as typeof wsc.onDidChangeConfiguration;
+    try {
+      const deps = {
+        usage: { current: undefined, onDidChangeSnapshot: emitter<unknown>().event },
+        userConfig: { get: () => ({}), uri: vscode.Uri.file('/x'), onDidChange: emitter<unknown>().event },
+        layout: { get: () => [], onDidChange: emitter<unknown>().event },
+        restriction: { getState: () => ({ active: false }), onDidChange: emitter<unknown>().event },
+      } as unknown as DashboardDeps;
+      bindDashboard(webview, deps);
+      const before = posted.filter((m) => m.type === 'theme').length;
+      configCb!({ affectsConfiguration: (s: string) => s === 'mallard.palette' });
+      await Promise.resolve();
+      assert.ok(posted.filter((m) => m.type === 'theme').length > before, 'theme re-posted on palette change');
+      // Non-matching config change must not re-post.
+      const mid = posted.filter((m) => m.type === 'theme').length;
+      configCb!({ affectsConfiguration: () => false });
+      await Promise.resolve();
+      assert.equal(posted.filter((m) => m.type === 'theme').length, mid, 'no theme re-post for unrelated config');
+    } finally {
+      wsc.onDidChangeConfiguration = origOnChanged;
+    }
+  });
 });
 
 describe('dashboardBridge — theme kind mapping', () => {

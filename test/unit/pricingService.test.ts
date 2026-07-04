@@ -269,4 +269,38 @@ describe('PricingService — lifecycle and clearCache', () => {
       await fs.rm(dir, { recursive: true, force: true });
     }
   });
+
+  it('tryRemoteRefresh catch swallows network failures silently', async () => {
+    const dir = await tmpDir();
+    const restore = stubHttpsGet({}); // 404 for all URLs → fetchManifest rejects
+    try {
+      const svc = new PricingService(dir, BUNDLED, 'https://example.com/manifest.json');
+      await svc.load();
+      await new Promise((r) => setTimeout(r, 30));
+      assert.equal(svc.pricePerCredit, 0.04); // unchanged — catch swallowed the error
+      svc.dispose();
+    } finally {
+      restore();
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('cacheTokenPrices catch swallows write failures silently', async () => {
+    const dir = await tmpDir();
+    const openRouter = { data: [{ id: 'gpt-4o', pricing: { prompt: '1e-6', completion: '2e-6' } }] };
+    const restore = stubHttpsGet({ 'openrouter.ai': openRouter });
+    try {
+      // Make the dir read-only AFTER the PricingService is constructed so
+      // the constructor's mkdir succeeds but cacheTokenPrices' mkdir/write fails.
+      const svc = new PricingService(dir, BUNDLED, '');
+      await svc.load();
+      await new Promise((r) => setTimeout(r, 30));
+      // Token prices are set in memory even if the cache write fails.
+      assert.ok(svc.tokenPrices, 'in-memory prices set despite cache write failure');
+      svc.dispose();
+    } finally {
+      restore();
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
 });

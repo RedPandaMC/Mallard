@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { UserConfigStore } from '../../../src/extension-backend/app/UserConfigStore';
+import { DEFAULT_USER_CONFIG } from '../../../src/extension-backend/domain/types';
 import { UserConfig } from '../../../src/extension-backend/domain/types';
 
 async function tmpDir(): Promise<string> {
@@ -91,6 +92,26 @@ describe('UserConfigStore', () => {
     const dir = await tmpDir();
     const store = new UserConfigStore(dir);
     assert.ok(store.uri.fsPath.endsWith('config.json'));
+    store.dispose();
+  });
+
+  it('detects external file changes and fires onDidChange (fs.watch)', async () => {
+    const dir = await tmpDir();
+    const store = new UserConfigStore(dir);
+    const fired: UserConfig[] = [];
+    store.onDidChange((c) => fired.push(c));
+
+    // Wait past the suppress window (500ms after our own write), then write
+    // a different config on disk directly — the watcher must pick it up.
+    await new Promise((r) => setTimeout(r, 600));
+    await fs.writeFile(
+      path.join(dir, 'config.json'),
+      JSON.stringify({ ...DEFAULT_USER_CONFIG, monthlyBudget: 99 }),
+      'utf8',
+    );
+    // Give the watcher a moment to fire.
+    await new Promise((r) => setTimeout(r, 300));
+    assert.ok(fired.some((c) => c.monthlyBudget === 99), 'external change detected');
     store.dispose();
   });
 });

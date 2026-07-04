@@ -162,6 +162,25 @@ describe('MqttProtocol — send() publish outcomes', () => {
       restore();
     }
   });
+
+  it('returns retryable when the publish ack never fires (timeout)', async () => {
+    const fake: FakeClient = {
+      connected: true,
+      on() {},
+      publish() { /* never calls the callback — simulates a stuck broker */ },
+      end() {},
+    };
+    const restore = setMqttImpl(() => fake);
+    try {
+      const p = new MqttProtocol({ brokerUrl: 'mqtts://broker:8883', topicPrefix: TOPIC }, quietLogger);
+      const r = await p.send('t', { schema_version: 3 });
+      assert.equal(r.ok, false);
+      assert.equal((r as { retryable: boolean }).retryable, true);
+      p.dispose();
+    } finally {
+      restore();
+    }
+  });
 });
 
 describe('MqttProtocol — mTLS cert handling', () => {

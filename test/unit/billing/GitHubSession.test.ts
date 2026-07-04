@@ -105,7 +105,7 @@ describe('GitHubSession — getOrg()', () => {
       update: () => Promise.resolve(),
     })) as unknown as typeof ws.getConfiguration;
     const s = new GitHubSession(makeSecrets());
-    s.configure({ mode: 'oauth', org: 'config-org' });
+    s.configure({ mode: 'vscode-session', org: 'config-org' });
     assert.equal(s.getOrg({} as vscode.WorkspaceFolder), 'ws-org');
     s.dispose();
   });
@@ -116,7 +116,7 @@ describe('GitHubSession — getOrg()', () => {
       update: () => Promise.resolve(),
     })) as unknown as typeof ws.getConfiguration;
     const s = new GitHubSession(makeSecrets());
-    s.configure({ mode: 'oauth', org: 'config-org' });
+    s.configure({ mode: 'vscode-session', org: 'config-org' });
     assert.equal(s.getOrg(), 'config-org');
     assert.equal(s.getOrg({} as vscode.WorkspaceFolder), 'config-org');
     s.dispose();
@@ -150,7 +150,7 @@ describe('GitHubSession — get() (session accessor)', () => {
     const fakeSession = { accessToken: 't', account: { label: 'u' } } as unknown as vscode.AuthenticationSession;
     auth3.getSession = (() => Promise.resolve(fakeSession)) as unknown as typeof auth3.getSession;
     const s = new GitHubSession(makeSecrets());
-    s.configure({ mode: 'oauth' });
+    s.configure({ mode: 'vscode-session' });
     assert.equal(await s.get(false), fakeSession);
     s.dispose();
   });
