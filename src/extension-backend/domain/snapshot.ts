@@ -13,7 +13,7 @@ import {
   topBy,
 } from './aggregate';
 import { computeBudget } from './budget';
-import { buildCategoryBreakdownData, buildChartData, buildHourlyTimelineData } from './chartData';
+import { buildCategoryBreakdownData, buildChartData, buildHourlyTimelineData, buildWeekdayTotals } from './chartData';
 import { forecastMonth } from './forecast';
 import { PricingManifest } from './pricing';
 import {
@@ -142,6 +142,7 @@ export function buildSnapshot(events: readonly UsageEvent[], opts: SnapshotOptio
       buildHourlyTimelineData(events, opts.filter),
       opts.pricePerCredit,
       opts.manifest,
+      buildWeekdayTotals(events, opts.filter),
     ),
     authStatus: opts.authStatus,
     isIncremental: false,
