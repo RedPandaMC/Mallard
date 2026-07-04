@@ -74,4 +74,11 @@ describe('IngestService', () => {
     svc.dispose();
     assert.equal(disposed, 2);
   });
+
+  it('getKnownDirs returns the platform default log dirs', () => {
+    const svc = new IngestService([]);
+    const dirs = svc.getKnownDirs();
+    assert.ok(Array.isArray(dirs));
+    assert.ok(dirs.length > 0, 'at least one default dir');
+  });
 });

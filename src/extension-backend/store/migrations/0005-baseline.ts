@@ -6,4 +6,5 @@ export const baseline: Migration = {
   async up() {
     // no-op: anchors schema_version at 5 for all fresh and existing installs
   },
+  /* c8 ignore next */
 };

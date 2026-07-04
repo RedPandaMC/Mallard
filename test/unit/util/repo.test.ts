@@ -141,3 +141,29 @@ describe('currentRepo (repoResolver)', () => {
     assert.ok(repo === undefined || typeof repo === 'string', 'returns a string slug or undefined');
   });
 });
+
+describe('initRepoAttribution — error handling', () => {
+  const ext = vscode.extensions as Mutable<typeof vscode.extensions>;
+  const origGetExt = ext.getExtension;
+
+  afterEach(() => { ext.getExtension = origGetExt; });
+
+  it('catches when getExtension throws and falls back to folder names', async () => {
+    ext.getExtension = (() => { throw new Error('extension host unavailable'); }) as unknown as typeof ext.getExtension;
+    await assert.doesNotReject(() => initRepoAttribution());
+  });
+
+  it('catches when ext.activate() rejects', async () => {
+    ext.getExtension = (() => ({
+      isActive: false,
+      activate: () => Promise.reject(new Error('activation failed')),
+      exports: undefined,
+    })) as unknown as typeof ext.getExtension;
+    await assert.doesNotReject(() => initRepoAttribution());
+  });
+
+  it('returns early when the git extension is not installed', async () => {
+    ext.getExtension = (() => undefined) as unknown as typeof ext.getExtension;
+    await assert.doesNotReject(() => initRepoAttribution());
+  });
+});

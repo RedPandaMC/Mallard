@@ -7,6 +7,9 @@ import { IngestService } from '../../../src/extension-backend/ingest/IngestServi
 import { UserConfigStore } from '../../../src/extension-backend/app/UserConfigStore';
 import { CurrencyService } from '../../../src/extension-backend/pricing/CurrencyService';
 import type { VscodeHost } from '../../../src/extension-backend/util/vscodeHost';
+import type { IBillingProvider } from '../../../src/extension-backend/billing/IBillingProvider';
+import type { AlertRule } from '../../../src/extension-backend/domain/types';
+import { okAsync, errAsync } from 'neverthrow';
 import * as os from 'os';
 import * as path from 'path';
 import { promises as fs } from 'fs';
@@ -127,5 +130,100 @@ describe('UsageService — start/refresh/fireAlerts/scheduleTimer', () => {
     await svc.start();
     await new Promise((r) => setTimeout(r, 50));
     assert.doesNotThrow(() => svc.dispose());
+  });
+});
+
+describe('UsageService — GitHub billing + alert rule notify', () => {
+  let dir: string;
+  let pricing: PricingService;
+  let ingest: IngestService;
+  let userConfig: UserConfigStore;
+  let currency: CurrencyService;
+  const origGetConfig = ws.getConfiguration;
+
+  beforeEach(async () => {
+    dir = await tmpDir();
+    pricing = new PricingService(dir, {
+      version: 1, pricePerCredit: 0.04, updatedAt: new Date().toISOString(), models: { 'gpt-4o': 1 },
+    });
+    ingest = new IngestService([]);
+    userConfig = new UserConfigStore(dir);
+    currency = new CurrencyService(dir);
+    ws.getConfiguration = (() => ({
+      get: (_k: string, fallback: unknown) => fallback,
+      update: () => Promise.resolve(),
+    })) as unknown as typeof ws.getConfiguration;
+  });
+  afterEach(async () => {
+    ws.getConfiguration = origGetConfig;
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('refreshGitHub sets signed-out when the error is "Not signed in"', async () => {
+    const mockBilling: IBillingProvider = {
+      name: 'mock',
+      fetch: () => errAsync(new Error('Not signed in')),
+      onDidChange: () => ({ dispose() {} }),
+      dispose() {},
+    };
+    const svc = new UsageService(makeReader(), pricing, ingest, userConfig, currency, mockBilling);
+    await svc.start();
+    await new Promise((r) => setTimeout(r, 100));
+    svc.dispose();
+  });
+
+  it('refreshGitHub sets error status for non-sign-in errors', async () => {
+    const mockBilling: IBillingProvider = {
+      name: 'mock',
+      fetch: () => errAsync(new Error('Network timeout')),
+      onDidChange: () => ({ dispose() {} }),
+      dispose() {},
+    };
+    const svc = new UsageService(makeReader(), pricing, ingest, userConfig, currency, mockBilling);
+    await svc.start();
+    await new Promise((r) => setTimeout(r, 100));
+    svc.dispose();
+  });
+
+  it('refreshGitHub sets signed-in on a successful fetch', async () => {
+    const mockBilling: IBillingProvider = {
+      name: 'mock',
+      fetch: () => okAsync({ quota: null, items: [], fetchedAt: Date.now(), totalNetAmount: 0 }),
+      onDidChange: () => ({ dispose() {} }),
+      dispose() {},
+    };
+    const svc = new UsageService(makeReader(), pricing, ingest, userConfig, currency, mockBilling);
+    await svc.start();
+    await new Promise((r) => setTimeout(r, 100));
+    svc.dispose();
+  });
+
+  it('fires a warning for an alert rule with notify=true that matches', async () => {
+    const warnings: string[] = [];
+    const host: VscodeHost = {
+      showWarningMessage: (msg: string) => { warnings.push(msg); return Promise.resolve(undefined); },
+      executeCommand: () => Promise.resolve(undefined),
+    };
+    const rule: AlertRule = {
+      id: 'test-alert',
+      severity: 'warning',
+      message: 'Credits exceeded',
+      when: { '>': [{ var: 'today.credits' }, 0] },
+      notify: true,
+    };
+    await userConfig.set({ rules: [rule] });
+    const data: SnapshotSourceData = {
+      ...EMPTY_DATA,
+      totals: {
+        all: { credits: 10, cost: 0.4, tokens: 100, eventCount: 1 },
+        mtd: { credits: 10, cost: 0.4, tokens: 100, eventCount: 1 },
+        today: { credits: 10, cost: 0.4, tokens: 100, eventCount: 1 },
+      },
+    };
+    const svc = new UsageService(makeReader(data), pricing, ingest, userConfig, currency, undefined, undefined, host);
+    await svc.start();
+    await new Promise((r) => setTimeout(r, 100));
+    assert.ok(warnings.some((w) => w.includes('Credits exceeded')), 'alert warning fired');
+    svc.dispose();
   });
 });

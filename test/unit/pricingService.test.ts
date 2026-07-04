@@ -303,4 +303,17 @@ describe('PricingService — lifecycle and clearCache', () => {
       await fs.rm(dir, { recursive: true, force: true });
     }
   });
+
+  it('loadCached returns null for an invalid manifest shape', async () => {
+    const dir = await tmpDir();
+    writeFileSync(path.join(dir, 'pricing-manifest.json'), JSON.stringify({ version: 'not-a-number' }));
+    try {
+      const svc = new PricingService(dir, BUNDLED, '');
+      await svc.load();
+      assert.equal(svc.pricePerCredit, 0.04); // bundled, cache rejected
+      svc.dispose();
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
 });

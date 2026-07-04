@@ -186,7 +186,7 @@ export class UserConfigStore implements vscode.Disposable {
           this._onDidChange.fire(this.current);
         }
       });
-    } catch {
+    } /* c8 ignore next 3 */ catch {
       /* watching is best-effort */
     }
   }

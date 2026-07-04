@@ -128,4 +128,32 @@ describe('CurrencyService', () => {
       await fs.rm(dir, { recursive: true, force: true });
     }
   });
+
+  it('loadCached returns null for a non-object cache file', async () => {
+    const dir = await tmpDir();
+    writeFileSync(path.join(dir, 'fx-rates.json'), JSON.stringify({ fetchedAt: new Date().toISOString(), rates: 'not-an-object' }));
+    try {
+      const svc = new CurrencyService(dir);
+      await svc.load();
+      assert.deepEqual(svc.currentRates(), { USD: 1 }); // cache rejected
+      svc.dispose();
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('writeCache catch swallows write failures (read-only dir)', async () => {
+    const dir = await tmpDir();
+    const restore = stubHttpsGet({ rates: { EUR: 0.92 } });
+    try {
+      const svc = new CurrencyService(dir);
+      await svc.load();
+      await new Promise((r) => setTimeout(r, 30));
+      assert.equal(svc.currentRates()['EUR'], 0.92); // in-memory set despite write failure
+      svc.dispose();
+    } finally {
+      restore();
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
 });
