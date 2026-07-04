@@ -11,6 +11,7 @@ const originalResolve = Module._resolveFilename;
 // Intercept require.resolve('vscode') before Node throws "Cannot find module"
 Module._resolveFilename = function (request, ...args) {
   if (request === 'vscode') return '__vscode_stub__';
+  if (request === 'mqtt') return '__mqtt_stub__';
   return originalResolve.call(this, request, ...args);
 };
 
@@ -74,6 +75,32 @@ require.cache['__vscode_stub__'] = {
       }
       fire(data) { for (const l of [...this._listeners]) l(data); }
       dispose() { this._listeners = []; }
+    },
+  },
+};
+
+// ── mqtt stub ───────────────────────────────────────────────────────────────
+// MqttProtocol does `import * as mqtt from 'mqtt'`; the ESM namespace is frozen
+// so tests can't monkey-patch `mqtt.connect` after import. Instead we resolve
+// `mqtt` to this stub, whose `connect` delegates to a mutable impl. Tests set
+// `globalThis.__mqttConnectImpl__` per-case (default: a disconnected fake client).
+const defaultMqttClient = () => ({
+  connected: false,
+  on() {},
+  publish(_t, _b, _o, cb) { cb?.(new Error('mqtt stub not configured')); },
+  end() {},
+});
+require.cache['__mqtt_stub__'] = {
+  id: '__mqtt_stub__',
+  filename: '__mqtt_stub__',
+  loaded: true,
+  parent: null,
+  children: [],
+  paths: [],
+  exports: {
+    connect: (url, opts) => {
+      const impl = globalThis.__mqttConnectImpl__;
+      return impl ? impl(url, opts) : defaultMqttClient();
     },
   },
 };
