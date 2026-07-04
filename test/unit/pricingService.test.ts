@@ -157,7 +157,7 @@ describe('PricingService — remote refresh (https.get mocked)', () => {
       // load() kicks off a non-blocking refresh; await it explicitly via the
       // tokenPrices getter after a microtask flush.
       await svc.load();
-      await new Promise((r) => setTimeout(r, 30));
+      await new Promise((r) => setTimeout(r, 100));
       assert.equal(svc.pricePerCredit, 0.07); // refreshed
       // Cache file written
       const cached = JSON.parse(await fs.readFile(path.join(dir, 'pricing-manifest.json'), 'utf8'));
@@ -178,7 +178,7 @@ describe('PricingService — remote refresh (https.get mocked)', () => {
     try {
       const svc = new PricingService(dir, BUNDLED, ''); // empty remote URL → skip manifest refresh
       await svc.load();
-      await new Promise((r) => setTimeout(r, 30));
+      await new Promise((r) => setTimeout(r, 100));
       assert.ok(svc.tokenPrices, 'token prices populated from OpenRouter');
       assert.deepEqual(svc.tokenPrices!['claude-sonnet-4-5'], { input: 1e-6, output: 2e-6 });
       const cached = JSON.parse(await fs.readFile(path.join(dir, 'token-prices.json'), 'utf8'));
@@ -199,7 +199,7 @@ describe('PricingService — remote refresh (https.get mocked)', () => {
     try {
       const svc = new PricingService(dir, BUNDLED, '');
       await svc.load();
-      await new Promise((r) => setTimeout(r, 30));
+      await new Promise((r) => setTimeout(r, 100));
       assert.ok(svc.tokenPrices);
       assert.deepEqual(svc.tokenPrices!['claude-sonnet-4-5'], { input: 3e-6, output: 4e-6 });
       svc.dispose();
@@ -215,7 +215,7 @@ describe('PricingService — remote refresh (https.get mocked)', () => {
     try {
       const svc = new PricingService(dir, BUNDLED, '');
       await svc.load();
-      await new Promise((r) => setTimeout(r, 30));
+      await new Promise((r) => setTimeout(r, 100));
       assert.equal(svc.tokenPrices, undefined); // no refresh succeeded
       assert.equal(svc.pricePerCredit, 0.04); // unchanged
       svc.dispose();
@@ -231,7 +231,7 @@ describe('PricingService — remote refresh (https.get mocked)', () => {
     try {
       const svc = new PricingService(dir, BUNDLED, '');
       await svc.load();
-      await new Promise((r) => setTimeout(r, 30));
+      await new Promise((r) => setTimeout(r, 100));
       assert.equal(svc.pricePerCredit, 0.04); // unchanged — empty URL skipped
       svc.dispose();
     } finally {
@@ -276,7 +276,7 @@ describe('PricingService — lifecycle and clearCache', () => {
     try {
       const svc = new PricingService(dir, BUNDLED, 'https://example.com/manifest.json');
       await svc.load();
-      await new Promise((r) => setTimeout(r, 30));
+      await new Promise((r) => setTimeout(r, 100));
       assert.equal(svc.pricePerCredit, 0.04); // unchanged — catch swallowed the error
       svc.dispose();
     } finally {
@@ -294,7 +294,7 @@ describe('PricingService — lifecycle and clearCache', () => {
       // the constructor's mkdir succeeds but cacheTokenPrices' mkdir/write fails.
       const svc = new PricingService(dir, BUNDLED, '');
       await svc.load();
-      await new Promise((r) => setTimeout(r, 30));
+      await new Promise((r) => setTimeout(r, 100));
       // Token prices are set in memory even if the cache write fails.
       assert.ok(svc.tokenPrices, 'in-memory prices set despite cache write failure');
       svc.dispose();

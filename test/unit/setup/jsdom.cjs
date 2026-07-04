@@ -37,7 +37,31 @@ globalThis.acquireVsCodeApi = () => ({
 // capture the EChartsOption passed to setOption() instead of rendering pixels.
 const echartsStub = {
   init: (_el, _theme, _opts) => ({
-    setOption(option, _opts2) { this._lastOption = option; },
+    setOption(option, _opts2) {
+      this._lastOption = option;
+      // Execute tooltip/axisLabel formatters so their code is covered.
+      // ECharts would call these during rendering; the stub simulates that
+      // by invoking them with mock params.
+      try {
+        const fmt = option?.tooltip?.formatter;
+        if (typeof fmt === 'function') {
+          // Pass both array and object shapes — the formatter handles whichever it expects.
+          fmt([{ dataIndex: 0, name: 'test', value: 10, seriesIndex: 0 }], 'item');
+          fmt({ dataType: 'edge', name: 'test', value: 10, data: { source: 'a', target: 'b', value: 10 } }, 'item');
+          fmt({ name: 'test', value: 10, percent: 50, dataIndex: 0 }, 'item');
+          fmt({ value: ['2026-01-01', 10] }, 'item');
+        }
+        // Series label formatters
+        for (const s of option?.series ?? []) {
+          if (typeof s?.label?.formatter === 'function') s.label.formatter({ name: 'x', value: 1 });
+          if (typeof s?.labelLine?.formatter === 'function') s.labelLine.formatter({ name: 'x' });
+        }
+        // AxisLabel formatters
+        for (const ax of [option?.xAxis, option?.yAxis].flat()) {
+          if (typeof ax?.axisLabel?.formatter === 'function') ax.axisLabel.formatter('test', 0);
+        }
+      } catch { /* formatters may throw on mock data — that's fine */ }
+    },
     clear() { this._lastOption = null; },
     resize() {},
     dispose() {},

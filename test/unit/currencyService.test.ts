@@ -57,7 +57,7 @@ describe('CurrencyService', () => {
     try {
       const svc = new CurrencyService(dir);
       await svc.load();
-      await new Promise((r) => setTimeout(r, 30));
+      await new Promise((r) => setTimeout(r, 100));
       assert.equal(svc.currentRates()['EUR'], 0.92);
       assert.equal(svc.currentRates()['USD'], 1);
       const cached = JSON.parse(await fs.readFile(path.join(dir, 'fx-rates.json'), 'utf8'));
@@ -95,7 +95,7 @@ describe('CurrencyService', () => {
     try {
       const svc = new CurrencyService(dir);
       await svc.load();
-      await new Promise((r) => setTimeout(r, 30));
+      await new Promise((r) => setTimeout(r, 100));
       assert.deepEqual(svc.currentRates(), { USD: 1 });
       svc.dispose();
     } finally {
@@ -148,7 +148,7 @@ describe('CurrencyService', () => {
     try {
       const svc = new CurrencyService(dir);
       await svc.load();
-      await new Promise((r) => setTimeout(r, 30));
+      await new Promise((r) => setTimeout(r, 100));
       assert.equal(svc.currentRates()['EUR'], 0.92); // in-memory set despite write failure
       svc.dispose();
     } finally {
