@@ -132,8 +132,8 @@
   Supports username/password and mTLS client certificates.
 - **Expanded alerting**: threshold escalation levels, snooze duration, and
   structured `conditions` shorthand (no DSL required). Alert rules support
-  named `vars`, `groups`, and a `restrict` action that blocks Copilot inline
-  completions.
+  named `vars`, `groups`, and a `restrict` action that shows a restriction
+  popup (it never disables Copilot — only creates friction).
 - **Holt-Winters seasonal forecaster**: pluggable `Forecaster` seam; the
   triple-exponential method is selected automatically when enough history is present,
   falling back to linear regression.
@@ -181,9 +181,9 @@ Initial public release.
   alert, and spending-velocity alert, all configured in the dashboard.
   `mallard.config.json` in `.vscode/` provides workspace-level overrides validated
   against the bundled JSON Schema.
-- **Restriction engine**: alert rules can trigger a `restrict` action that blocks
-  GitHub Copilot inline completions until the condition clears or the user overrides
-  for N minutes. Named scopes, a grace period, and a simulate command for testing
+- **Restriction engine**: alert rules can trigger a `restrict` action that shows a
+  popup prompting the user to slow down. It never disables Copilot; the condition
+  clears or the user overrides for N minutes. Named scopes, a grace period, and a simulate command for testing
   rules before deploying them.
 - **GitHub billing reconciliation**: optional sign-in via VS Code's session API
   surfaces your Copilot plan, included quota, and overage rate alongside the

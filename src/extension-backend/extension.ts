@@ -40,7 +40,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const auth = s?.authStatus ?? 'signed-out';
     const r = restriction.getState();
     if (r.active) {
-      statusBar.text = `$(shield) Copilot restricted`;
+      statusBar.text = `$(shield) Usage limit reached`;
       statusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
       statusBar.tooltip = r.reasonMessage;
       statusBar.show();

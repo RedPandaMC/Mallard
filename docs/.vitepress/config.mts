@@ -1,16 +1,12 @@
-import { createRequire } from 'node:module';
 import { defineConfig } from 'vitepress';
 import { withMermaid } from 'vitepress-plugin-mermaid';
-
-const require = createRequire(import.meta.url);
-const pkg = require('../../package.json');
 
 // NOTE: these URLs assume the GitHub repo has been renamed to "Mallard"
 // (Pages then serves the site at /Mallard/). The rename happens right after
 // this lands on main; until then the published docs link may 404 briefly.
 const site = 'https://redpandamc.github.io/Mallard';
 const ogImage = `${site}/brand/og-dark.png`;
-const desc = "Mallard reads Copilot's local usage logs and shows a live dashboard of spend, model usage, and where every credit goes. No sign-in, no telemetry.";
+const desc = "Mallard reads Copilot's local usage logs and shows a live dashboard of spend, model usage, and where every credit goes. No telemetry by default; sign-in and export are opt-in.";
 
 export default withMermaid(defineConfig({
   title: 'Mallard',
@@ -79,8 +75,8 @@ export default withMermaid(defineConfig({
     socialLinks: [{ icon: 'github', link: 'https://github.com/RedPandaMC/Mallard' }],
 
     footer: {
-      message: `Mallard · v${pkg.version} · Built for VS Code · MIT License`,
-      copyright: 'Copyright © 2025 RedPandaMC',
+      message: `v1 · Built for VS Code · MIT License`,
+      copyright: '© 2026 RedPandaMC',
     },
   },
 }));

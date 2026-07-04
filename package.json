@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/RedPandaMC/mallard.git"
+    "url": "https://github.com/RedPandaMC/Mallard.git"
   },
   "bugs": {
     "url": "https://github.com/RedPandaMC/mallard/issues"
@@ -209,7 +209,11 @@
         },
         "mallard.export.transport": {
           "type": "string",
-          "enum": ["", "webhook", "mqtt"],
+          "enum": [
+            "",
+            "webhook",
+            "mqtt"
+          ],
           "enumDescriptions": [
             "Metric export disabled.",
             "POST usage metrics as JSON to the server's HTTP webhook endpoint.",
@@ -221,7 +225,11 @@
         },
         "mallard.webhook.auth": {
           "type": "string",
-          "enum": ["apiKey", "bearer", "certificate"],
+          "enum": [
+            "apiKey",
+            "bearer",
+            "certificate"
+          ],
           "enumDescriptions": [
             "Send an X-API-Key header. Run 'Mallard: Set Webhook API Key' to store it.",
             "Send an Authorization: Bearer header. Run 'Mallard: Set Webhook Bearer Token' to store it.",
@@ -239,7 +247,10 @@
         },
         "mallard.mqtt.auth": {
           "type": "string",
-          "enum": ["password", "certificate"],
+          "enum": [
+            "password",
+            "certificate"
+          ],
           "enumDescriptions": [
             "Authenticate with username and password. Set mallard.mqtt.username and run Mallard: Set MQTT Export Password.",
             "Authenticate with a client TLS certificate. Set mallard.shared.certificate.*."
@@ -340,5 +351,6 @@
     "vitepress": "^1.6.4",
     "vitepress-plugin-mermaid": "^2.0.17",
     "zustand": "^5.0.14"
-  }
+  },
+  "homepage": "https://redpandamc.github.io/Mallard/"
 }

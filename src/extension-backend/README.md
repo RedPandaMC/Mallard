@@ -78,5 +78,5 @@ Unit tests live in `../../test/unit/`, mirroring this structure: `connectors/` f
 ```bash
 bun run check-types   # type-check both host and webview tsconfigs
 bun run test:unit     # pure logic tests (mocha)
-bun test               # integration tests in a real VS Code host
+bun run test          # integration tests in a real VS Code host
 ```
