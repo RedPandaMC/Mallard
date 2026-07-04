@@ -114,8 +114,8 @@ export function buildRuleContext(input: EvalBuildInput): Record<string, unknown>
             ? 1 -
               toFiniteNumber(snapshot.githubBilling.quota.used) /
                 toFiniteNumber(snapshot.githubBilling.quota.entitlement)
-            : 1
-          : 1,
+            : null
+          : null,
         unlimited: snapshot.githubBilling.quota?.unlimited ?? false,
       }
     : null;

@@ -205,6 +205,11 @@ async def ingest(
         ) from exc
     if hmac_secrets:
         signature = request.headers.get("X-Mallard-Signature-256", "")
+        if not signature:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing signature",
+            )
         if not _verify_signature(body, signature, hmac_secrets):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

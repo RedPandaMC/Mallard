@@ -666,6 +666,9 @@ SELECT
   }
 
   async exportTo(filePath: string, format: 'csv' | 'json'): Promise<void> {
+    if (format !== 'csv' && format !== 'json') {
+      throw new Error(`Invalid export format: ${format}`);
+    }
     const safePath = filePath.replace(/'/g, "''");
     const fmt = format === 'json' ? 'JSON' : 'CSV, HEADER true';
     await this.conn.run(

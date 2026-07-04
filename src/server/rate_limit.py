@@ -48,3 +48,17 @@ class SlidingWindowLimiter:
             return hits[0] + self.window_seconds - t
         hits.append(t)
         return None
+
+    def cleanup(self, now: float | None = None) -> int:
+        """Remove expired entries from all keys. Returns the number of keys removed."""
+        t = time.monotonic() if now is None else now
+        cutoff = t - self.window_seconds
+        removed_keys = []
+        for key, hits in self._hits.items():
+            while hits and hits[0] <= cutoff:
+                hits.popleft()
+            if not hits:
+                removed_keys.append(key)
+        for key in removed_keys:
+            del self._hits[key]
+        return len(removed_keys)
