@@ -179,3 +179,39 @@ describe('dashboardBridge — message routing', () => {
     for (const d of h.disposables) assert.doesNotThrow(() => d.dispose());
   });
 });
+
+describe('dashboardBridge — theme kind mapping', () => {
+  type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+  const win = vscode.window as Mutable<typeof vscode.window>;
+  const origTheme = win.activeColorTheme;
+
+  afterEach(() => { win.activeColorTheme = origTheme; });
+
+  for (const [name, kind, expected] of [
+    ['Light', vscode.ColorThemeKind.Light, 'light'],
+    ['HighContrast', vscode.ColorThemeKind.HighContrast, 'high-contrast'],
+    ['HighContrastLight', vscode.ColorThemeKind.HighContrastLight, 'high-contrast-light'],
+    ['Dark (default)', vscode.ColorThemeKind.Dark, 'dark'],
+  ] as const) {
+    it(`maps ${name} to '${expected}'`, async () => {
+      win.activeColorTheme = { kind };
+      const posted: WebviewBoundMsg[] = [];
+      let receive: ((m: unknown) => void) | undefined;
+      const webview = {
+        postMessage: (m: WebviewBoundMsg) => { posted.push(m); return Promise.resolve(true); },
+        onDidReceiveMessage: (handler: (m: unknown) => void) => { receive = handler; return { dispose() {} }; },
+      } as unknown as vscode.Webview;
+      const deps = {
+        usage: { current: undefined, onDidChangeSnapshot: emitter<unknown>().event },
+        userConfig: { get: () => ({}), uri: vscode.Uri.file('/x'), onDidChange: emitter<unknown>().event },
+        layout: { get: () => [], onDidChange: emitter<unknown>().event },
+        restriction: { getState: () => ({ active: false }), onDidChange: emitter<unknown>().event },
+      } as unknown as DashboardDeps;
+      bindDashboard(webview, deps);
+      receive!({ type: 'ready' });
+      await Promise.resolve();
+      const theme = posted.at(-1) as Extract<WebviewBoundMsg, { type: 'theme' }>;
+      assert.equal(theme.kind, expected);
+    });
+  }
+});

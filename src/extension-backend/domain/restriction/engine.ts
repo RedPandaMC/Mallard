@@ -68,8 +68,8 @@ export class RestrictionEngine {
         // (already done at snooze time) and the banner will say "override".
         return state;
       }
-      // Override expired
-      if (state.userOverrideUntil <= now) state.userOverrideUntil = null;
+      // Override still active but not currently restricted — fall through;
+      // the override is honoured by isRestricted() until it expires.
     }
 
     if (!desired.active) {

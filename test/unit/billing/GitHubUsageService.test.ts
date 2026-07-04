@@ -157,4 +157,21 @@ describe('GitHubUsageService', () => {
     assert.equal(interactive, true);
     svc.dispose();
   });
+
+  it('skips the billing endpoint when neither org nor username is available', async () => {
+    const requests = stubFetch({ copilot_internal: QUOTA_RESPONSE });
+    const svc = new GitHubUsageService(
+      makeSession({ getToken: async () => ({ token: 't' }), getOrg: () => undefined }),
+    );
+    const result = await svc.fetch();
+    assert.ok(result.isOk());
+    const data = result._unsafeUnwrap();
+    assert.ok(data.items.length === 0, 'no billing items when no org/username');
+    assert.equal(
+      requests.some((u) => u.includes('settings/billing')),
+      false,
+      'no billing request made',
+    );
+    svc.dispose();
+  });
 });

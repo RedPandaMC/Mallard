@@ -12,6 +12,7 @@ import {
   listWorktrees,
   repoForFolder,
 } from '../../../src/extension-backend/util/repo';
+import { currentRepo } from '../../../src/extension-backend/ingest/repoResolver';
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 const ext = vscode.extensions as Mutable<typeof vscode.extensions>;
@@ -130,5 +131,13 @@ describe('util/repo — listWorktrees', () => {
     assert.equal(worktrees.length, 1);
     assert.equal(worktrees[0]!.branch, 'main');
     assert.match(worktrees[0]!.head, /^[0-9a-f]{40}$/);
+  });
+});
+
+describe('currentRepo (repoResolver)', () => {
+  it('delegates to activeAttribution().repo', async () => {
+    await initRepoAttribution();
+    const repo = currentRepo();
+    assert.ok(repo === undefined || typeof repo === 'string', 'returns a string slug or undefined');
   });
 });

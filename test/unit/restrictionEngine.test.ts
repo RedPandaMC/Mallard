@@ -120,4 +120,42 @@ describe('RestrictionEngine', () => {
     assert.equal(engine.getState().active, false);
     engine.dispose();
   });
+
+  it('reconcile honours an active override while restricted (returns early)', async () => {
+    const dir = await tmpDir();
+    const engine = new RestrictionEngine(dir);
+    await engine.reconcile({ snapshot: snapshot(100), rules: [RESTRICT_RULE], signedIn: false });
+    assert.equal(engine.getState().active, true);
+    await engine.snooze(15); // override active, state.active stays true underneath
+    const state = await engine.reconcile({
+      snapshot: snapshot(100),
+      rules: [RESTRICT_RULE],
+      signedIn: false,
+      now: Date.now() + 5 * 60_000, // override still active
+    });
+    // Early-return: state unchanged (still active, override still set, no new fire)
+    assert.equal(state.active, true);
+    assert.ok(state.userOverrideUntil);
+    engine.dispose();
+  });
+
+  it('reconcile refreshes the message when the same rule stays active but its text changes', async () => {
+    const dir = await tmpDir();
+    const engine = new RestrictionEngine(dir);
+    await engine.reconcile({
+      snapshot: snapshot(100),
+      rules: [RESTRICT_RULE],
+      signedIn: false,
+    });
+    const original = engine.getState().reasonMessage;
+    const updatedRule: AlertRule = { ...RESTRICT_RULE, message: 'Over 50 credits — UPDATED' };
+    await engine.reconcile({
+      snapshot: snapshot(100),
+      rules: [updatedRule],
+      signedIn: false,
+    });
+    assert.notEqual(engine.getState().reasonMessage, original);
+    assert.equal(engine.getState().reasonMessage, 'Over 50 credits — UPDATED');
+    engine.dispose();
+  });
 });

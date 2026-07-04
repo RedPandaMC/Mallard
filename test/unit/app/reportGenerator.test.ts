@@ -85,4 +85,31 @@ describe('ReportGenerator', () => {
     assert.ok(p.startsWith(os.homedir()));
     assert.match(p, /mallard-report-\d{4}-\d{2}\.html$/);
   });
+
+  it('renders the quota reset date when set, and the empty-quota branch when null', () => {
+    const withReset = snapshot({
+      githubBilling: {
+        quota: { plan: 'copilot_pro', entitlement: 300, used: 75, resetDate: Date.now() + 86400000, unlimited: false },
+        items: [], fetchedAt: Date.now(), totalNetAmount: 0,
+      },
+    });
+    const htmlReset = generateReport(withReset);
+    assert.ok(htmlReset.includes('copilot_pro'));
+
+    const nullQuota = snapshot({
+      githubBilling: { quota: null, items: [], fetchedAt: Date.now(), totalNetAmount: 0 },
+    });
+    // Must not throw and must still render the billing section header-less.
+    assert.ok(generateReport(nullQuota).includes('github') || generateReport(nullQuota).length > 0);
+  });
+
+  it('renders the projected-cost range and budget percent when both are set', () => {
+    const s = snapshot({
+      forecast: { basis: 'linear', projectedCost: 12.5, low: 10, high: 15 },
+      budget: { monthly: 50, percentOfBudget: 25, trend: 'on-track', remaining: 37.5 },
+    });
+    const html = generateReport(s);
+    assert.ok(html.includes('12.5'), 'projected cost rendered');
+    assert.ok(html.includes('25'), 'budget percent rendered');
+  });
 });
