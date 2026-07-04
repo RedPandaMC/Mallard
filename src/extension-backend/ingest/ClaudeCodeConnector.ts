@@ -48,7 +48,8 @@ export class ClaudeCodeConnector extends BaseFileConnector {
 
     /* c8 ignore start */
     this.logPaths = dirs;
-    const globs = dirs.map((d) => path.join(d, '**', '*.jsonl'));
+    // Use forward slashes for DuckDB glob compatibility on Windows.
+    const globs = dirs.map((d) => path.join(d, '**', '*.jsonl').replace(/\\/g, '/'));
     return { globs, allowedRoots: dirs, searchedDirs: dirs };
     /* c8 ignore stop */
   }

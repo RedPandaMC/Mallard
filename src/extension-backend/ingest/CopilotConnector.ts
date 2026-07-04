@@ -56,9 +56,10 @@ export class CopilotConnector extends BaseFileConnector {
     // `**` glob sweeps every extension's logs, and one structurally-non-JSON
     // file (e.g. Mypy.log) aborts DuckDB's whole read_ndjson run —
     // ignore_errors only skips malformed records, not unparseable files.
+    // Use forward slashes for DuckDB glob compatibility on Windows.
     const globs = dirs.flatMap((d) => [
-      path.join(d, '**', '*copilot*'),
-      path.join(d, '**', '*Copilot*'),
+      path.join(d, '**', '*copilot*').replace(/\\/g, '/'),
+      path.join(d, '**', '*Copilot*').replace(/\\/g, '/'),
     ]);
     return { globs, allowedRoots: dirs, searchedDirs: dirs };
     /* c8 ignore stop */
