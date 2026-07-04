@@ -103,6 +103,7 @@ export function evalSimpleCondition(c: SimpleCondition, ctx: Record<string, unkn
 
   if (c.op === 'matches') {
     try {
+      // eslint-disable-next-line security/detect-non-literal-regexp -- user config validated by zod + VS Code JSON schema; bad patterns caught and return false
       return new RegExp(String(c.value)).test(String(fieldValue ?? ''));
     } catch {
       return false;

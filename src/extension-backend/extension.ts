@@ -57,6 +57,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         severity === 'error'   ? new vscode.ThemeColor('statusBarItem.errorBackground')
         : severity === 'warning' ? new vscode.ThemeColor('statusBarItem.warningBackground')
         : undefined;
+      // eslint-disable-next-line security/detect-possible-timing-attacks -- auth is an AuthStatus enum, not a secret
       if (auth === 'signed-in') {
         const plan = s.githubBilling?.quota?.plan ?? 'GitHub';
         statusBar.text = `$(verified-filled) ${plan} · ${cr} cr`;
