@@ -1,7 +1,7 @@
 /* c8 ignore next */
 import { DuckDBConnection } from '@duckdb/node-api';
 import { z } from 'zod';
-import { CostCategory, Filter, SourceKind, Surface, UsageEvent } from '../domain/types';
+import { CostCategory, SourceKind, Surface, UsageEvent } from '../domain/types';
 import { DAY_MS } from '../util/time';
 import {
   AggregateResult,
@@ -99,8 +99,6 @@ export interface IEventReader extends IEventSnapshotReader {
   rank(filter: RecordFilter, by: string, limit?: number): Promise<TimeBucket[]>;
   queryFacts(filter?: RecordFilter): Promise<FactRow[]>;
   exportTo(filePath: string, format: 'csv' | 'json'): Promise<void>;
-  /** @deprecated Use find(). */
-  query(filter?: Filter): Promise<UsageEvent[]>;
 }
 
 // ── Row parsing ────────────────────────────────────────────────────────────────
@@ -239,11 +237,6 @@ export class EventReader implements IEventReader {
 
   async dump(): Promise<UsageEvent[]> {
     return this.find();
-  }
-
-  /** @deprecated Use find(). */
-  async query(filter?: Filter): Promise<UsageEvent[]> {
-    return this.find(filter);
   }
 
   async aggregate(filter: RecordFilter, fields: string[]): Promise<AggregateResult> {
