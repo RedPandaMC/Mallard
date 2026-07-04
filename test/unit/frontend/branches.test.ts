@@ -70,39 +70,59 @@ describe('components — remaining branch coverage', () => {
     el.remove();
   });
 
-  it('KpiCards renders no-model dash when allModels is empty', () => {
+  it('KpiCards renders no-model dash when topModels is empty', () => {
     const el = document.createElement('div');
     document.body.appendChild(el);
     const h = mountKpiCards(el);
     const snap = makeSnapshot(0);
-    h.update({ ...snap, allModels: [] }, 'cost');
+    h.update({ ...snap, topModels: [] }, 'cost');
     el.remove();
   });
 
-  it('StatusBanner flashes the dot on status change', () => {
+  it('StatusBanner flashes the dot on incremental update with ok status', () => {
     const el = document.createElement('div');
     document.body.appendChild(el);
     const h = mountStatusBanner(el);
     h.update(makeSnapshot(100));
-    // Update again with a different status to trigger the flash
-    h.update({ ...makeSnapshot(100), status: { kind: 'degraded', reason: 'error' } });
+    // Update with isIncremental=true and ok status to trigger the flash
+    h.update({ ...makeSnapshot(100), isIncremental: true, status: { kind: 'ok', reason: '' } });
     el.remove();
   });
 
-  it('RestrictionBanner hides when state is null, and snooze buttons post messages', () => {
+  it('RestrictionBanner: dismiss hides on re-show, snooze/disable buttons post', () => {
     clearPosted();
     const el = document.createElement('div');
     document.body.appendChild(el);
     const h = mountRestrictionBanner(el);
-    // null → hide
-    h.update(null);
-    // active → show with buttons
-    const active: RestrictionState = { version: 1, active: true, ruleId: 'r', reasonMessage: 'Over budget', firedAt: Date.now(), userOverrideUntil: null };
+    const active: RestrictionState = { version: 1, active: true, ruleId: 'r', reasonMessage: 'Over budget', firedAt: 12345, userOverrideUntil: null };
+    // Show the active banner
     h.update(active);
-    // Click all buttons (snooze 15, snooze 60, disable)
-    const buttons = el.querySelectorAll('button');
-    buttons.forEach((btn) => btn.click());
+    // Click Dismiss to set the dismissedKey
+    const dismissBtn = el.querySelector('#restrict-dismiss') as HTMLButtonElement;
+    dismissBtn.click();
+    // Re-show with the same state → should hide (dismissedKey === key)
+    h.update(active);
+    assert.equal(el.style.display, 'none', 'banner hidden after dismiss');
+    // Re-show with a different firedAt → should show again
+    const active2: RestrictionState = { ...active, firedAt: 67890 };
+    h.update(active2);
+    // Click snooze 15, snooze 60, and disable buttons
+    (el.querySelector('#restrict-snooze-15') as HTMLButtonElement).click();
+    (el.querySelector('#restrict-snooze-60') as HTMLButtonElement).click();
+    (el.querySelector('#restrict-disable') as HTMLButtonElement).click();
     assert.ok(getPosted().some((m) => JSON.stringify(m).includes('restrictSnooze')), 'snooze posted');
+    assert.ok(getPosted().some((m) => JSON.stringify(m).includes('disableExtension')), 'disable posted');
+    // Test the override (snoozed) state
+    h.update({ ...active2, userOverrideUntil: Date.now() + 60000 });
+    el.remove();
+  });
+
+  it('RestrictionBanner hides when state is null', () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const h = mountRestrictionBanner(el);
+    h.update(null);
+    assert.equal(el.style.display, 'none', 'hidden when null');
     el.remove();
   });
 
@@ -130,27 +150,28 @@ describe('components — remaining branch coverage', () => {
     el.remove();
   });
 
-  it('SpendGauge renders warn severity at 80% budget', () => {
+  it('SpendGauge renders warn severity at 80% of included credits', () => {
     const el = document.createElement('div');
     document.body.appendChild(el);
     const h = mountSpendGauge(el);
     const budget: BudgetState = {
-      monthly: 100, includedCredits: 300, usedCredits: 80, usedCost: 3.2,
-      percentOfBudget: 80, percentOfIncluded: 27, projectedOverage: null, pace: 'warning',
+      monthly: 100, includedCredits: 300, usedCredits: 240, usedCost: 9.6,
+      percentOfBudget: 80, percentOfIncluded: 0.8, projectedOverage: null, pace: 'warning',
     };
     h.update(budget, 'USD');
     el.remove();
   });
 
-  it('CurrencySelector syncs selection when rates already include the selected code', () => {
+  it('CurrencySelector syncs selection when the currency list is unchanged', () => {
     const el = document.createElement('div');
     document.body.appendChild(el);
     const h = mountCurrencySelector(el, () => {});
-    // First call populates options; second call with same selected syncs.
+    // First call populates options with EUR selected
     h.update({ USD: 1, EUR: 0.92 }, 'EUR');
-    h.update({ USD: 1, EUR: 0.92, JPY: 150 }, 'EUR');
+    // Second call with SAME currencies but different selected → sync branch
+    h.update({ USD: 1, EUR: 0.92 }, 'USD');
     const select = el.querySelector('select') as HTMLSelectElement;
-    assert.equal(select.value, 'EUR');
+    assert.equal(select.value, 'USD');
     el.remove();
   });
 });

@@ -42,30 +42,39 @@ const echartsStub = {
       // Execute tooltip/axisLabel formatters so their code is covered.
       // ECharts would call these during rendering; the stub simulates that
       // by invoking them with mock params.
+      const tryFmt = (fn, ...args) => { try { fn(...args); } catch { /* mock params may cause throws */ } };
       try {
         const fmt = option?.tooltip?.formatter;
         if (typeof fmt === 'function') {
-          // Pass both array and object shapes — the formatter handles whichever it expects.
-          fmt([{ dataIndex: 0, name: 'test', value: 10, seriesIndex: 0 }], 'item');
-          fmt({ dataType: 'edge', name: 'test', value: 10, data: { source: 'a', target: 'b', value: 10 } }, 'item');
-          fmt({ name: 'test', value: 10, percent: 50, dataIndex: 0 }, 'item');
-          fmt({ value: ['2026-01-01', 10] }, 'item');
+          // Pass both array and object shapes — each in its own try/catch so
+          // one throwing doesn't prevent the others from executing.
+          tryFmt(fmt, [{ dataIndex: 0, name: 'test', value: 10, seriesIndex: 0 }], 'item');
+          tryFmt(fmt, { dataType: 'edge', name: 'test', value: 10, data: { source: 'a', target: 'b', value: 10 } }, 'item');
+          tryFmt(fmt, { name: 'test', value: 10, percent: 50, dataIndex: 0 }, 'item');
+          tryFmt(fmt, { value: ['2026-01-01', 10] }, 'item');
         }
         // Series label formatters
         for (const s of option?.series ?? []) {
-          if (typeof s?.label?.formatter === 'function') s.label.formatter({ name: 'x', value: 1 });
-          if (typeof s?.labelLine?.formatter === 'function') s.labelLine.formatter({ name: 'x' });
+          if (typeof s?.label?.formatter === 'function') tryFmt(s.label.formatter, { name: 'x', value: 1 });
+          if (typeof s?.labelLine?.formatter === 'function') tryFmt(s.labelLine.formatter, { name: 'x' });
         }
-        // AxisLabel formatters
+        // AxisLabel formatters + color callbacks
         for (const ax of [option?.xAxis, option?.yAxis].flat()) {
-          if (typeof ax?.axisLabel?.formatter === 'function') ax.axisLabel.formatter('test', 0);
+          if (typeof ax?.axisLabel?.formatter === 'function') tryFmt(ax.axisLabel.formatter, 'test', 0);
+          if (typeof ax?.axisLabel?.color === 'function') tryFmt(ax.axisLabel.color, 'test', 0);
         }
       } catch { /* formatters may throw on mock data — that's fine */ }
     },
     clear() { this._lastOption = null; },
     resize() {},
     dispose() {},
-    on() {},
+    on(event, cb) {
+      // Fire click callbacks immediately with mock params so chart event
+      // handlers (e.g. modelBreakdown onModelClick) execute during tests.
+      if (event === 'click' && typeof cb === 'function') {
+        try { cb({ name: 'gpt-4o' }); } catch { /* mock params */ }
+      }
+    },
     off() {},
     _lastOption: null,
   }),

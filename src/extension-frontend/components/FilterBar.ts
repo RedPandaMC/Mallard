@@ -44,6 +44,7 @@ function presetToRange(preset: DatePreset, now: number): { start: number; end: n
     }
     case 'all':
       return undefined;
+    /* c8 ignore next 4 */
     default: {
       const _exhaustive: never = preset;
       throw new Error(`Unknown preset: ${String(_exhaustive)}`);

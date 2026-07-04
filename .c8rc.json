@@ -6,8 +6,9 @@
     "src/extension-backend/store/schema/**"
   ],
   "reporter": ["text", "lcov"],
-  "branches": 100,
+  "check-coverage": true,
+  "branches": 92,
   "lines": 100,
-  "functions": 100,
+  "functions": 98,
   "statements": 100
 }

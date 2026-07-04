@@ -3,6 +3,11 @@ import { store, state, setState, subscribe } from '../../../src/extension-fronte
 import { DEFAULT_USER_CONFIG } from '../../../src/extension-backend/domain/types';
 
 describe('frontend/store — state mutations + subscriptions', () => {
+  beforeEach(() => {
+    // Reset to defaults since the store is a singleton shared across all tests
+    setState({ metric: 'cost', selectedCurrency: 'USD', filter: {}, focusedModels: new Set() });
+  });
+
   it('starts with default state', () => {
     const s = state();
     assert.equal(s.metric, 'cost');

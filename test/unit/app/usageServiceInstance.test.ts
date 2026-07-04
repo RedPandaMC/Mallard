@@ -131,6 +131,36 @@ describe('UsageService — start/refresh/fireAlerts/scheduleTimer', () => {
     await new Promise((r) => setTimeout(r, 50));
     assert.doesNotThrow(() => svc.dispose());
   });
+
+  it('getStatus delegates to the ingest service', async () => {
+    const svc = new UsageService(makeReader(), pricing, ingest, userConfig, currency);
+    const status = svc.getStatus();
+    assert.ok(status.kind, 'status has a kind');
+    svc.dispose();
+  });
+
+  it('getLogPaths, getSearchedDirs, getKnownDirs delegate to ingest', () => {
+    const svc = new UsageService(makeReader(), pricing, ingest, userConfig, currency);
+    assert.ok(Array.isArray(svc.getLogPaths()));
+    assert.ok(Array.isArray(svc.getSearchedDirs()));
+    assert.ok(Array.isArray(svc.getKnownDirs()));
+    svc.dispose();
+  });
+
+  it('signInGitHub calls the billing provider signIn + refreshGitHub', async () => {
+    let signedIn = false;
+    const mockBilling: IBillingProvider = {
+      name: 'mock',
+      fetch: () => okAsync({ quota: null, items: [], fetchedAt: Date.now(), totalNetAmount: 0 }),
+      signIn: async () => { signedIn = true; },
+      onDidChange: () => ({ dispose() {} }),
+      dispose() {},
+    };
+    const svc = new UsageService(makeReader(), pricing, ingest, userConfig, currency, mockBilling);
+    await svc.signInGitHub();
+    assert.equal(signedIn, true);
+    svc.dispose();
+  });
 });
 
 describe('UsageService — GitHub billing + alert rule notify', () => {

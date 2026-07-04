@@ -178,6 +178,7 @@ export class PricingService {
 
   startDailyRefresh(): void {
     this.refreshTimer = setInterval(() => {
+      /* c8 ignore next 2 */
       void this.tryRemoteRefresh();
       void this.tryTokenPricesRefresh();
     }, REFRESH_INTERVAL_MS);
@@ -192,7 +193,7 @@ export class PricingService {
     try {
       await fs.rm(path.join(this.storageDir, CACHE_FILE), { force: true });
       await fs.rm(path.join(this.storageDir, TOKEN_PRICES_CACHE_FILE), { force: true });
-    } catch {
+    } /* c8 ignore next 2 */ catch {
       // Nothing cached, or already gone.
     }
   }
@@ -278,7 +279,7 @@ export class PricingService {
         JSON.stringify({ fetchedAt: new Date().toISOString(), prices }),
         'utf8',
       );
-    } catch {
+    } /* c8 ignore next 2 */ catch {
       // Cache write failures are silent.
     }
   }

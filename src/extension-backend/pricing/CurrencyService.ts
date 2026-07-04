@@ -80,7 +80,7 @@ export class CurrencyService {
   async clearCache(): Promise<void> {
     try {
       await fs.rm(path.join(this.storageDir, CACHE_FILE), { force: true });
-    } catch {
+    } /* c8 ignore next 2 */ catch {
       // Nothing cached.
     }
   }
@@ -114,7 +114,7 @@ export class CurrencyService {
       await fs.mkdir(this.storageDir, { recursive: true });
       const payload: CachePayload = { fetchedAt: new Date().toISOString(), rates };
       await fs.writeFile(path.join(this.storageDir, CACHE_FILE), JSON.stringify(payload), 'utf8');
-    } catch {
+    } /* c8 ignore next 2 */ catch {
       // Cache write failures are silent.
     }
   }
