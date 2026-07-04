@@ -162,7 +162,7 @@ describe('buildRuleContext — velocity', () => {
 });
 
 describe('buildRuleContext — billing quota edge cases', () => {
-  it('quotaPercentRemaining is 1 when entitlement is 0', () => {
+  it('quotaPercentRemaining is null when entitlement is 0', () => {
     const snap = minimalSnapshot({} as Partial<UsageSnapshot>);
     (snap as unknown as Record<string, unknown>)['githubBilling'] = {
       totalNetAmount: 0,
@@ -171,7 +171,7 @@ describe('buildRuleContext — billing quota edge cases', () => {
     };
     const ctx = buildRuleContext({ snapshot: snap });
     const billing = ctx['billing'] as Record<string, unknown>;
-    assert.equal(billing['quotaPercentRemaining'], 1);
+    assert.equal(billing['quotaPercentRemaining'], null);
   });
 });
 
@@ -191,7 +191,7 @@ describe('buildRuleContext — billing', () => {
     assert.equal(billing['unlimited'], false);
   });
 
-  it('quotaPercentRemaining is 1 when quota is null', () => {
+  it('quotaPercentRemaining is null when quota is null', () => {
     const snap = minimalSnapshot({} as Partial<UsageSnapshot>);
     (snap as unknown as Record<string, unknown>)['githubBilling'] = {
       totalNetAmount: 0,
@@ -200,7 +200,7 @@ describe('buildRuleContext — billing', () => {
     };
     const ctx = buildRuleContext({ snapshot: snap });
     const billing = ctx['billing'] as Record<string, unknown>;
-    assert.equal(billing['quotaPercentRemaining'], 1);
+    assert.equal(billing['quotaPercentRemaining'], null);
   });
 });
 
