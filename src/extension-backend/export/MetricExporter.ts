@@ -230,7 +230,14 @@ export class MqttProtocol implements MetricProtocol {
    * backfill the way a webhook receiver replaying queued entries would.
    */
   async send(topic: string, payload: Record<string, unknown>): Promise<SendResult> {
-    if (!this.client?.connected || !this.resolvedTopic) {
+    // A permanently-invalid config (rejected in the constructor — e.g. a
+    // plaintext broker URL) leaves resolvedTopic empty and no client. That's
+    // a fatal config error: never retry it (would hold an export slot forever).
+    if (!this.resolvedTopic) {
+      return { ok: false, retryable: false };
+    }
+    // No client yet, or not yet connected — transient; the broker may come up.
+    if (!this.client?.connected) {
       return { ok: false, retryable: true };
     }
     // The topic passed by MetricExporter is the serializer's logical topic;
