@@ -13,7 +13,7 @@ When you connect to a remote machine via VS Code Remote SSH (or Remote Tunnels),
 | `anthropic.claude-code` | Remote host | Remote host |
 | `mallard` | Remote host | Remote host |
 
-The GitHub Copilot base extension (the one that makes API calls and writes OTel usage telemetry) is classified as a UI extension by Microsoft. It runs on your **local laptop or desktop**, so its log files are written there, not on the remote host. Mallard runs on the remote host and cannot read files from your local machine.
+The GitHub Copilot base extension (the one that makes API calls) is classified as a UI extension by Microsoft and runs on your **local laptop or desktop**. If you enable Copilot's OpenTelemetry exporter (see [No Copilot usage after install](#no-logs-found)), its usage file is written wherever that extension runs — locally — so Mallard on the remote host cannot read it.
 
 **Result:** Copilot usage shows "No signal yet" or zero, even when you have actively used Copilot in that session.
 
@@ -27,21 +27,23 @@ Open a local (non-remote) VS Code window, install Mallard there, and leave it ru
 
 **Option 2: Force-install the Copilot base extension on the remote**
 
-In the Extensions panel, find GitHub Copilot, click the dropdown next to Install, and choose **Install in SSH: \<host\>** (or equivalent for your remote type). Once the base extension runs in the remote exthost, it writes OTel logs to the remote host's log directory where Mallard can read them.
+In the Extensions panel, find GitHub Copilot, click the dropdown next to Install, and choose **Install in SSH: \<host\>** (or equivalent for your remote type). Once the base extension runs in the remote exthost, its OTel exporter (once enabled) writes to the remote host where Mallard can read it.
 
 This is not an officially supported configuration by GitHub/Microsoft, but it works in practice for many setups. Inline completions may behave differently since the extension now runs remote.
 
 **Option 3: Point Mallard at a synced log directory**
 
-If you sync your local VS Code log directory to the remote (e.g. via `sshfs`, `rclone`, or a cloud drive), set `mallard.copilotLogPath` to the mount path. Mallard will then read from the synced copy.
+If you point Copilot's OTel exporter at a file and sync it to the remote (e.g. via `sshfs`, `rclone`, or a cloud drive), set `mallard.copilotOtelPath` to the mount path. Mallard will then read from the synced copy.
 
-## No logs found after install {#no-logs-found}
+## No Copilot usage after install {#no-logs-found}
 
-Run **Mallard: Show Detected Log Path** from the Command Palette. If Mallard reports no files found:
+**Claude Code** is discovered automatically — if it shows nothing, use it once, click **Refresh**, and run **Mallard: Show Detected Log Path** to confirm discovery.
 
-1. **Use Copilot first.** Copilot only writes OTel log files when it makes API calls. Open a file, trigger a completion or chat, then click **Refresh** in the Mallard dashboard.
-2. **Check the path.** The detected path should be inside VS Code's log directory (e.g. `~/.vscode-server/data/logs` on Linux). If it points somewhere unexpected, set `mallard.copilotLogPath` to override it.
-3. **Snap / Flatpak installs.** VS Code installed via Snap or Flatpak uses a sandboxed log path. Mallard includes the standard Snap and Flatpak paths in its search list, but if your install is non-standard, override with `mallard.copilotLogPath`.
+**GitHub Copilot writes no local usage until you enable its OpenTelemetry exporter:**
+
+1. **Enable it.** Run **Mallard: Enable Copilot Usage Tracking** (or accept the prompt / click **Enable Copilot tracking** in the empty state). Mallard sets `github.copilot.chat.otel.exporterType` to `file` and points `otel.outfile` at a file it ingests. Reload the window if prompted, use Copilot once, then click **Refresh**.
+2. **No Copilot token?** If you use a BYOK model with no active Copilot subscription, Copilot makes no billable calls and emits no usage. Sign in to GitHub for authoritative billing instead — **Mallard: Sign In to GitHub**.
+3. **Custom path.** If you configured the exporter yourself (or want a SQLite span DB), point `mallard.copilotOtelPath` at the JSONL file or `.sqlite`/`.db` database.
 
 ## Data cleared after uninstall {#data-cleared}
 
