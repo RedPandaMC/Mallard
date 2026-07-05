@@ -37,7 +37,6 @@ export class DashboardPanel {
         localResourceRoots: [
           vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview'),
           vscode.Uri.joinPath(context.extensionUri, 'media'),
-          vscode.Uri.joinPath(context.extensionUri, 'node_modules', '@vscode', 'codicons', 'dist'),
         ],
       },
     );

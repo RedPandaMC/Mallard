@@ -44,6 +44,8 @@ describe('renderHtml — webview shell + CSP', () => {
     assert.ok(html.includes('vscode-resource:/ext/dist/webview/main.js'));
     assert.ok(html.includes('vscode-resource:/ext/dist/webview/main.css'));
     assert.ok(html.includes('vscode-resource:/ext/media/mallard-icon-128.png'));
-    assert.ok(html.includes('codicon.css'));
+    // Codicons are bundled into main.css (via the frontend build), not linked
+    // from node_modules — that path is stripped from the packaged VSIX.
+    assert.ok(!html.includes('node_modules'), 'must not link assets from node_modules');
   });
 });

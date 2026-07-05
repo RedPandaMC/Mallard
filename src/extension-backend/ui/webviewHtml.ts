@@ -18,9 +18,6 @@ export function renderHtml(webview: vscode.Webview, extensionUri: vscode.Uri): s
   const logoUri = webview.asWebviewUri(
     vscode.Uri.joinPath(extensionUri, 'media', 'mallard-icon-128.png'),
   );
-  const codiconsUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(extensionUri, 'node_modules', '@vscode/codicons', 'dist', 'codicon.css'),
-  );
 
   const csp = [
     `default-src 'none'`,
@@ -37,7 +34,6 @@ export function renderHtml(webview: vscode.Webview, extensionUri: vscode.Uri): s
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="${csp}" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link href="${codiconsUri}" rel="stylesheet" />
     <link href="${styleUri}" rel="stylesheet" />
     <title>Mallard</title>
   </head>
