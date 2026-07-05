@@ -5,23 +5,25 @@ import { ParseContext } from './otelParse';
 import { PricingService } from '../pricing/PricingService';
 import { DuckDBFileReader, RowMapper } from '../store/DuckDBFileReader';
 import type { IMetaStore as MetaStore } from '../store/MetaStore';
-import type { ConnectorStatus, LogConnector } from './LogConnector';
+import type { ConnectorStatus, DiscoverResult, LogConnector } from './LogConnector';
+import type { SetupRequirement } from './SetupRequirement';
 import type { UsageEvent } from '../domain/types';
 import { IFsWatcher, NodeFsWatcher } from './IFsWatcher';
 import { defaultLogger, Logger } from '../util/logger';
 
 const DEBOUNCE_MS = 1_500;
 
+/** A discovered target is "empty" when it points at nothing on disk. */
+function isEmptyTarget(t: DiscoverResult): boolean {
+  return 'kind' in t ? !t.dbPath : t.globs.length === 0;
+}
+
 export abstract class BaseFileConnector implements LogConnector {
   abstract readonly id: string;
   abstract readonly displayName: string;
 
-  /** Discover globs and allowed root dirs for this connector. */
-  protected abstract discover(): Promise<{
-    globs: string[];
-    allowedRoots: string[];
-    searchedDirs: string[];
-  }>;
+  /** Discover the ingest target (NDJSON globs or a SQLite DB) for this connector. */
+  protected abstract discover(): Promise<DiscoverResult>;
 
   /** Map one raw DuckDB row to a UsageEvent, or null to skip. */
   protected abstract mapRow(row: Record<string, unknown>, ctx: ParseContext): UsageEvent | null;
@@ -38,7 +40,7 @@ export abstract class BaseFileConnector implements LogConnector {
   private eventsSeenEver = false;
   private watchers: Array<{ close(): void }> = [];
   private debounceTimer?: ReturnType<typeof setTimeout>;
-  private currentGlobs: string[] = [];
+  private currentTarget?: DiscoverResult;
   private ingestRunning = false;
   private rerunQueued = false;
 
@@ -51,16 +53,16 @@ export abstract class BaseFileConnector implements LogConnector {
   ) {}
 
   async start(): Promise<void> {
-    const { globs, allowedRoots, searchedDirs } = await this.discover();
-    this.searchedDirs_ = searchedDirs;
-    if (globs.length === 0) {
+    const target = await this.discover();
+    this.searchedDirs_ = target.searchedDirs;
+    if (isEmptyTarget(target)) {
       this.status = 'empty';
       return;
     }
-    this.currentGlobs = globs;
+    this.currentTarget = target;
     this.status = 'loading';
-    await this.runIngest(globs);
-    this.watchDirs(allowedRoots);
+    await this.runIngest(target);
+    this.watchDirs(target.allowedRoots);
   }
 
   /**
@@ -69,7 +71,7 @@ export abstract class BaseFileConnector implements LogConnector {
    * overlap), later triggers queue exactly one re-run instead of racing the
    * shared watermark.
    */
-  protected async runIngest(globs: string[]): Promise<void> {
+  protected async runIngest(target: DiscoverResult): Promise<void> {
     if (this.ingestRunning) {
       this.rerunQueued = true;
       return;
@@ -78,23 +80,23 @@ export abstract class BaseFileConnector implements LogConnector {
     try {
       do {
         this.rerunQueued = false;
-        await this.ingestOnce(globs);
+        await this.ingestOnce(target);
       } while (this.rerunQueued);
     } finally {
       this.ingestRunning = false;
     }
   }
 
-  private async ingestOnce(globs: string[]): Promise<void> {
+  private async ingestOnce(target: DiscoverResult): Promise<void> {
     const sinceMs = await this.loadWatermark();
+    const globs = 'kind' in target ? [] : target.globs;
     const ctx = await this.buildContext(globs);
     try {
-      const { inserted, maxEventTs } = await this.fileReader.ingestGlob(
-        globs,
-        this.mapRow.bind(this) as RowMapper,
-        ctx,
-        sinceMs ?? undefined,
-      );
+      const mapRow = this.mapRow.bind(this) as RowMapper;
+      const { inserted, maxEventTs } =
+        'kind' in target
+          ? await this.fileReader.ingestSqlite(target.dbPath, target.query, mapRow, ctx)
+          : await this.fileReader.ingestGlob(target.globs, mapRow, ctx, sinceMs ?? undefined);
       if (inserted > 0) {
         this.eventsSeenEver = true;
         // Advance the watermark to the newest *event* timestamp, not the wall
@@ -152,11 +154,10 @@ export abstract class BaseFileConnector implements LogConnector {
   }
 
   private scheduleReparse(): void {
+    const target = this.currentTarget;
+    if (!target) return;
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
-    this.debounceTimer = setTimeout(
-      () => void this.runIngest(this.currentGlobs),
-      DEBOUNCE_MS,
-    );
+    this.debounceTimer = setTimeout(() => void this.runIngest(target), DEBOUNCE_MS);
   }
 
   private async loadWatermark(): Promise<number | null> {
@@ -181,5 +182,7 @@ export abstract class BaseFileConnector implements LogConnector {
   getStatus(): ConnectorStatus { return this.status; }
   getLogPaths(): string[] { return this.logPaths.slice(); }
   getSearchedDirs(): string[] { return this.searchedDirs_.slice(); }
+  /** No external prerequisites by default; connectors override to declare them. */
+  getSetupRequirements(): SetupRequirement[] { return []; }
   /* c8 ignore next */
 }

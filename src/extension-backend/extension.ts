@@ -117,6 +117,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   await usage.start();
+  container.setupGate.start();
 
   if (vscode.env.remoteName && !context.globalState.get<boolean>('mallard.remoteCopilotWarned')) {
     const d = usage.onDidChangeSnapshot(() => {
@@ -154,9 +155,13 @@ export async function deactivate(): Promise<void> {
 }
 
 function registerCommands(context: vscode.ExtensionContext, c: Container): void {
-  const { usage, store, userConfig, layout, pricing, restriction } = c;
+  const { usage, store, userConfig, layout, pricing, restriction, setupGate } = c;
   const reg = (id: string, fn: (...args: unknown[]) => unknown) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
+
+  reg('mallard.enableCopilotTelemetry', async () => {
+    await setupGate.run('copilot-otel');
+  });
 
   reg('mallard.openDashboard', () => {
     try {

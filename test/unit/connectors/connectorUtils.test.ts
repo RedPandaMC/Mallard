@@ -5,11 +5,46 @@ import {
   toSurface,
   fileKeyOf,
   parseTimestamp,
+  flattenOtelAttributes,
   splitCostSimple,
   splitCostByBreakdown,
 } from '../../../src/extension-backend/ingest/connectorUtils';
 
 describe('connectorUtils', () => {
+  describe('parseTimestamp() — OTel nanoseconds', () => {
+    it('falls back to startTimeUnixNano (ns → ms)', () => {
+      assert.equal(parseTimestamp({ startTimeUnixNano: 1_700_000_000_000_000_000 }), 1_700_000_000_000);
+    });
+    it('accepts a string nanosecond value', () => {
+      assert.equal(parseTimestamp({ timeUnixNano: '1700000000000000000' }), 1_700_000_000_000);
+    });
+    it('returns undefined when no timestamp of any kind is present', () => {
+      assert.equal(parseTimestamp({ foo: 'bar' }), undefined);
+      assert.equal(parseTimestamp({ startTimeUnixNano: {} }), undefined);
+    });
+  });
+
+  describe('flattenOtelAttributes()', () => {
+    it('flattens an OTLP {key,value} array, unwrapping typed values', () => {
+      const out = flattenOtelAttributes([
+        { key: 'gen_ai.request.model', value: { stringValue: 'gpt-4o' } },
+        { key: 'gen_ai.usage.input_tokens', value: { intValue: 100 } },
+        { key: 'flag', value: { boolValue: true } },
+        { key: 'raw', value: 42 },
+        { notAKey: true },
+      ]);
+      assert.equal(out['gen_ai.request.model'], 'gpt-4o');
+      assert.equal(out['gen_ai.usage.input_tokens'], 100);
+      assert.equal(out['flag'], true);
+      assert.equal(out['raw'], 42);
+    });
+    it('returns a plain object map as-is, and {} for non-objects', () => {
+      const obj = { 'gen_ai.request.model': 'gpt-4o' };
+      assert.equal(flattenOtelAttributes(obj), obj);
+      assert.deepEqual(flattenOtelAttributes(undefined), {});
+      assert.deepEqual(flattenOtelAttributes('nope'), {});
+    });
+  });
   // ── num ──────────────────────────────────────────────────────────────────────
 
   describe('num()', () => {

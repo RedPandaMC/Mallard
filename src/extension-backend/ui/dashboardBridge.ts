@@ -74,6 +74,8 @@ export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vsc
         else if (raw.id === 'signIn') void usage.signInGitHub();
         else if (raw.id === 'disableExtension') {
           void vscode.commands.executeCommand('mallard.disableExtension');
+        } else if (raw.id === 'enableCopilotTelemetry') {
+          void vscode.commands.executeCommand('mallard.enableCopilotTelemetry');
         }
         break;
       case 'restrictSnooze':

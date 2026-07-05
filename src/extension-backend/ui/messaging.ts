@@ -11,7 +11,7 @@ import {
   UserConfig,
 } from '../domain/types';
 
-export type CommandId = 'openDashboard' | 'signIn' | 'disableExtension';
+export type CommandId = 'openDashboard' | 'signIn' | 'disableExtension' | 'enableCopilotTelemetry';
 
 /** Active editor theme kind, mirrored to the webview so it can derive an
  *  accessible accent (the webview also sees VS Code's body theme class). */
@@ -34,7 +34,7 @@ export type HostBoundMsg =
   | { type: 'command'; id: CommandId }
   | { type: 'restrictSnooze'; minutes: number };
 
-const COMMAND_IDS: CommandId[] = ['openDashboard', 'signIn', 'disableExtension'];
+const COMMAND_IDS: CommandId[] = ['openDashboard', 'signIn', 'disableExtension', 'enableCopilotTelemetry'];
 
 function isObject(m: unknown): m is Record<string, unknown> {
   return typeof m === 'object' && m !== null;

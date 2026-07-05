@@ -131,8 +131,9 @@ describe('dashboardBridge — message routing', () => {
       h.send({ type: 'command', id: 'openDashboard' });
       h.send({ type: 'command', id: 'disableExtension' });
       h.send({ type: 'command', id: 'signIn' });
+      h.send({ type: 'command', id: 'enableCopilotTelemetry' });
       await new Promise((r) => setImmediate(r));
-      assert.deepEqual(executed, ['mallard.openDashboard', 'mallard.disableExtension']);
+      assert.deepEqual(executed, ['mallard.openDashboard', 'mallard.disableExtension', 'mallard.enableCopilotTelemetry']);
       assert.equal(h.calls.signIn!.length, 1);
     } finally {
       cmd.executeCommand = originalExec;

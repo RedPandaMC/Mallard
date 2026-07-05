@@ -51,7 +51,37 @@ export function parseTimestamp(row: AnyRecord): number | undefined {
     typeof raw === 'string' ? Date.parse(raw) :
     typeof raw === 'number' ? raw :
     NaN;
-  return Number.isNaN(ts) ? undefined : ts;
+  if (!Number.isNaN(ts)) return ts;
+  // OTel spans carry a nanosecond epoch instead of an ISO/ms timestamp.
+  const nanos = row['startTimeUnixNano'] ?? row['timeUnixNano'];
+  const n = typeof nanos === 'string' ? Number(nanos) : typeof nanos === 'number' ? nanos : NaN;
+  return Number.isNaN(n) ? undefined : Math.floor(n / 1e6);
+}
+
+/** Unwrap an OTLP attribute value ({ stringValue | intValue | … }) to a scalar. */
+function unwrapOtelValue(v: unknown): unknown {
+  if (v && typeof v === 'object') {
+    const o = v as AnyRecord;
+    return o['stringValue'] ?? o['intValue'] ?? o['doubleValue'] ?? o['boolValue'] ?? v;
+  }
+  return v;
+}
+
+/**
+ * Normalise an OTel span's `attributes` into a flat `{ key: value }` map.
+ * Handles both the OTLP array form (`[{ key, value: { stringValue } }]`) and a
+ * plain object map; anything else yields an empty map.
+ */
+export function flattenOtelAttributes(attrs: unknown): AnyRecord {
+  if (Array.isArray(attrs)) {
+    const out: AnyRecord = {};
+    for (const item of attrs) {
+      const kv = item as { key?: unknown; value?: unknown };
+      if (typeof kv.key === 'string') out[kv.key] = unwrapOtelValue(kv.value);
+    }
+    return out;
+  }
+  return attrs && typeof attrs === 'object' ? (attrs as AnyRecord) : {};
 }
 
 /**

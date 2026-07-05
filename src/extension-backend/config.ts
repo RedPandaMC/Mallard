@@ -4,6 +4,8 @@ import { PaletteMode } from './domain/types';
 export interface MallardConfig {
   currency: string;
   copilotLogPath: string;
+  /** Optional override for Copilot's OTel export file / SQLite DB path. */
+  copilotOtelPath: string;
   pricingManifestUrl: string;
   palette: PaletteMode;
   /** Minutes between automatic log re-reads and snapshot refreshes. Default 10. */
@@ -36,6 +38,7 @@ export interface MallardConfig {
 export const RELEVANT_CONFIG_KEYS = [
   'mallard.currency',
   'mallard.copilotLogPath',
+  'mallard.copilotOtelPath',
   'mallard.pricingManifestUrl',
   'mallard.palette',
   'mallard.refreshIntervalMinutes',
@@ -50,6 +53,32 @@ export const RELEVANT_CONFIG_KEYS = [
   'mallard.shared.certificate.keyFile',
   'mallard.shared.certificate.caFile',
 ];
+
+export type CopilotOtelKind = 'ndjson' | 'sqlite' | 'none';
+
+/** Where Copilot's local OTel export writes usage, resolved from settings. */
+export interface CopilotOtelSource {
+  kind: CopilotOtelKind;
+  /** Absolute path to the JSONL file or SQLite DB; '' when kind is 'none'. */
+  path: string;
+}
+
+/**
+ * Resolve Copilot's local OTel export target. A Mallard override
+ * (`mallard.copilotOtelPath`) wins; otherwise the file exporter's own
+ * `github.copilot.chat.otel.outfile` is used when the exporter is enabled.
+ * A `.sqlite`/`.db` path selects the SQLite source; anything else is NDJSON.
+ */
+export function readCopilotOtel(): CopilotOtelSource {
+  const copilot = vscode.workspace.getConfiguration('github.copilot.chat');
+  const exporterType = String(copilot.get('otel.exporterType', '') ?? '');
+  const outfile = String(copilot.get('otel.outfile', '') ?? '');
+  const override = String(vscode.workspace.getConfiguration('mallard').get('copilotOtelPath', '') ?? '');
+  const resolved = override || (exporterType === 'file' ? outfile : '');
+  if (!resolved) return { kind: 'none', path: '' };
+  const kind: CopilotOtelKind = /\.(sqlite|db)$/i.test(resolved) ? 'sqlite' : 'ndjson';
+  return { kind, path: resolved };
+}
 
 export function readConfig(): MallardConfig {
   const c = vscode.workspace.getConfiguration('mallard');
@@ -73,6 +102,7 @@ export function readConfig(): MallardConfig {
   return {
     currency: c.get<string>('currency', 'USD').trim().toUpperCase() || 'USD',
     copilotLogPath: c.get('copilotLogPath', ''),
+    copilotOtelPath: c.get('copilotOtelPath', ''),
     pricingManifestUrl: c.get('pricingManifestUrl', ''),
     palette: c.get<string>('palette', 'swiss') === 'theme' ? 'theme' : 'swiss',
     refreshIntervalMinutes: Math.max(1, Math.min(60, c.get('refreshIntervalMinutes', 10))),

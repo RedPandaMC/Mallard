@@ -28,6 +28,7 @@ export class ClaudeCodeConnector extends BaseFileConnector {
     tokenFields: ['promptTokens', 'completionTokens', 'cacheCreationTokens', 'cacheReadTokens', 'thinkingTokens'],
     costCategories: ['input', 'output', 'cache_creation', 'cache_read', 'thinking'],
     supportsRepoAttribution: true,
+    sources: ['ndjson'],
   };
 
   constructor(

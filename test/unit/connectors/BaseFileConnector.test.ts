@@ -9,7 +9,9 @@ import type { UsageEvent } from '../../../src/extension-backend/domain/types';
 
 // ── Minimal concrete subclass for testing ──────────────────────────────────────
 
-type DiscoverResult = { globs: string[]; allowedRoots: string[]; searchedDirs: string[] };
+type DiscoverResult =
+  | { globs: string[]; allowedRoots: string[]; searchedDirs: string[] }
+  | { kind: 'sqlite'; dbPath: string; query: string; allowedRoots: string[]; searchedDirs: string[] };
 
 class TestConnector extends BaseFileConnector {
   readonly id = 'test';
@@ -18,6 +20,7 @@ class TestConnector extends BaseFileConnector {
     tokenFields: [] as const,
     costCategories: [] as const,
     supportsRepoAttribution: false,
+    sources: ['ndjson'] as const,
   };
   private _discoverResult: DiscoverResult = { globs: [], allowedRoots: [], searchedDirs: [] };
 
@@ -42,11 +45,13 @@ function makeStubs() {
     set: async (_k, v) => { state.watermark = v; },
   };
   const ingestResults: number[] = [];
+  const shiftResult = () => {
+    const n = ingestResults.shift() ?? 0;
+    return { inserted: n, maxEventTs: n > 0 ? FIXED_EVENT_TS : null };
+  };
   const fileReader = {
-    ingestGlob: async () => {
-      const n = ingestResults.shift() ?? 0;
-      return { inserted: n, maxEventTs: n > 0 ? FIXED_EVENT_TS : null };
-    },
+    ingestGlob: async () => shiftResult(),
+    ingestSqlite: async () => shiftResult(),
     hasField: async () => false,
   } as unknown as DuckDBFileReader;
   return { pricing, meta, fileReader, ingestResults, state };
@@ -84,6 +89,23 @@ describe('BaseFileConnector — lifecycle', () => {
     const c = new TestConnector(pricing, meta, fileReader);
     c.setDiscoverResult({ globs: ['/tmp/test/*.jsonl'], allowedRoots: ['/tmp/test'], searchedDirs: ['/tmp/test'] });
     // ingestResults is empty so ingestGlob returns 0
+    await c.start();
+    assert.equal(c.getStatus(), 'empty');
+  });
+
+  it('start() dispatches to ingestSqlite for a sqlite target', async () => {
+    const { pricing, meta, fileReader, ingestResults } = makeStubs();
+    ingestResults.push(2);
+    const c = new TestConnector(pricing, meta, fileReader);
+    c.setDiscoverResult({ kind: 'sqlite', dbPath: '/db/spans.sqlite', query: 'SELECT 1', allowedRoots: ['/db'], searchedDirs: ['/db'] });
+    await c.start();
+    assert.equal(c.getStatus(), 'ok');
+  });
+
+  it('start() sets status "empty" for a sqlite target with no dbPath', async () => {
+    const { pricing, meta, fileReader } = makeStubs();
+    const c = new TestConnector(pricing, meta, fileReader);
+    c.setDiscoverResult({ kind: 'sqlite', dbPath: '', query: 'SELECT 1', allowedRoots: [], searchedDirs: [] });
     await c.start();
     assert.equal(c.getStatus(), 'empty');
   });

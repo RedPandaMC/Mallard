@@ -6,12 +6,13 @@ function makeStub(over: Partial<LogConnector> = {}): LogConnector {
   return {
     id: 'stub',
     displayName: 'Stub',
-    capabilities: { tokenFields: [], costCategories: [], supportsRepoAttribution: false },
+    capabilities: { tokenFields: [], costCategories: [], supportsRepoAttribution: false, sources: ['ndjson'] },
     start: async () => {},
     dispose: () => {},
     getStatus: () => 'idle',
     getLogPaths: () => [],
     getSearchedDirs: () => [],
+    getSetupRequirements: () => [],
     ...over,
   };
 }

@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
 import * as vscode from 'vscode';
-import { readConfig, RELEVANT_CONFIG_KEYS } from '../../src/extension-backend/config';
+import { readConfig, readCopilotOtel, RELEVANT_CONFIG_KEYS } from '../../src/extension-backend/config';
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 const ws = vscode.workspace as Mutable<typeof vscode.workspace>;
@@ -91,5 +91,44 @@ describe('readConfig', () => {
     ]) {
       assert.ok(RELEVANT_CONFIG_KEYS.includes(key), `${key} missing from RELEVANT_CONFIG_KEYS`);
     }
+  });
+});
+
+describe('readCopilotOtel', () => {
+  const originalGetConfiguration = ws.getConfiguration;
+  afterEach(() => { ws.getConfiguration = originalGetConfiguration; });
+
+  function withOtel(copilot: Record<string, unknown>, mallard: Record<string, unknown> = {}) {
+    ws.getConfiguration = ((section: string) => ({
+      get: (key: string, fallback?: unknown) => {
+        const src = section === 'mallard' ? mallard : copilot;
+        return key in src ? src[key] : fallback;
+      },
+      update: () => Promise.resolve(),
+    })) as unknown as typeof ws.getConfiguration;
+  }
+
+  it('returns none when nothing is configured', () => {
+    withOtel({});
+    assert.deepEqual(readCopilotOtel(), { kind: 'none', path: '' });
+  });
+
+  it('returns ndjson for the file exporter outfile', () => {
+    withOtel({ 'otel.exporterType': 'file', 'otel.outfile': '/x/copilot.jsonl' });
+    assert.deepEqual(readCopilotOtel(), { kind: 'ndjson', path: '/x/copilot.jsonl' });
+  });
+
+  it('ignores the outfile when the exporter is not the file exporter', () => {
+    withOtel({ 'otel.exporterType': 'otlp-http', 'otel.outfile': '/x/copilot.jsonl' });
+    assert.deepEqual(readCopilotOtel(), { kind: 'none', path: '' });
+  });
+
+  it('lets the Mallard override win and infers sqlite from a .sqlite/.db path', () => {
+    withOtel({ 'otel.exporterType': 'file', 'otel.outfile': '/x/a.jsonl' }, { copilotOtelPath: '/y/spans.sqlite' });
+    assert.deepEqual(readCopilotOtel(), { kind: 'sqlite', path: '/y/spans.sqlite' });
+    withOtel({}, { copilotOtelPath: '/y/data.db' });
+    assert.equal(readCopilotOtel().kind, 'sqlite');
+    withOtel({}, { copilotOtelPath: '/y/spans.log' });
+    assert.equal(readCopilotOtel().kind, 'ndjson');
   });
 });

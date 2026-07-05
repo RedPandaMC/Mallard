@@ -6,12 +6,13 @@ function makeStub(id: string): LogConnector {
   return {
     id,
     displayName: id,
-    capabilities: { tokenFields: [], costCategories: [], supportsRepoAttribution: false },
+    capabilities: { tokenFields: [], costCategories: [], supportsRepoAttribution: false, sources: ['ndjson'] },
     start: async () => {},
     dispose: () => {},
     getStatus: () => 'idle',
     getLogPaths: () => [],
     getSearchedDirs: () => [],
+    getSetupRequirements: () => [],
   };
 }
 

@@ -4,7 +4,7 @@
  * context's subscriptions.
  */
 import * as vscode from 'vscode';
-import { readConfig } from './config';
+import { readConfig, readCopilotOtel } from './config';
 import { UsageService } from './app/UsageService';
 import { UserConfigStore } from './app/UserConfigStore';
 import { LayoutStore } from './app/LayoutStore';
@@ -14,8 +14,10 @@ import { RestrictionEngine } from './domain/restriction/engine';
 import { PricingManifest } from './domain/pricing';
 import { initRepoAttribution } from './ingest/repoResolver';
 import { CopilotConnector } from './ingest/CopilotConnector';
+import { CopilotOtelRequirement } from './ingest/CopilotOtelRequirement';
 import { ClaudeCodeConnector } from './ingest/ClaudeCodeConnector';
 import { ConnectorRegistry } from './ingest/ConnectorRegistry';
+import { ConnectorSetupGate } from './ingest/ConnectorSetupGate';
 import { WorkspaceFolderMatcher } from './ingest/WorkspaceFolderMatcher';
 import { IngestService } from './ingest/IngestService';
 import { PricingService } from './pricing/PricingService';
@@ -32,6 +34,7 @@ export interface Container {
   pricing: PricingService;
   restriction: RestrictionEngine;
   ingest: IngestService;
+  setupGate: ConnectorSetupGate;
 }
 
 export async function buildContainer(context: vscode.ExtensionContext): Promise<Container> {
@@ -60,8 +63,8 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     pricing,
     store.meta,
     store.fileReader,
-    context.logUri?.fsPath,
-    cfg.copilotLogPath || undefined,
+    () => readCopilotOtel(),
+    [new CopilotOtelRequirement()],
   );
   const claudeCode = new ClaudeCodeConnector(
     pricing,
@@ -102,6 +105,10 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const usage = new UsageService(store.reader, pricing, ingest, userConfig, currency, github, exporter);
   const restriction = new RestrictionEngine(storageDir);
 
+  // Generic gate that nudges the user to enable any connector prerequisite
+  // (e.g. Copilot's OTel exporter) and re-refreshes once applied.
+  const setupGate = new ConnectorSetupGate(context, [copilot, claudeCode], () => void usage.refresh());
+
   context.subscriptions.push(
     usage.onDidChangeSnapshot((snapshot) => {
       const userCfg = userConfig.get();
@@ -128,9 +135,10 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     usage,
     restriction,
     { dispose: () => exporter.dispose() },
+    setupGate,
   );
 
-  return { usage, store, userConfig, layout, pricing, restriction, ingest };
+  return { usage, store, userConfig, layout, pricing, restriction, ingest, setupGate };
 }
 
 async function loadBundledManifest(context: vscode.ExtensionContext): Promise<PricingManifest> {
