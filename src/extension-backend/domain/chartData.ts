@@ -102,8 +102,23 @@ export function buildHourlyTimelineData(events: readonly UsageEvent[], filter?: 
     if (!matchesFilter(e, filter)) continue;
     hours[Math.floor(((e.ts + tzOffsetMs) % DAY_MS) / 3_600_000) % 24]! += e.credits;
   }
-  const peakHour = hours.indexOf(Math.max(...hours));
+  const max = Math.max(...hours);
+  // null when there is no hourly activity — indexOf(0) would otherwise always
+  // report midnight as the "peak".
+  const peakHour = max > 0 ? hours.indexOf(max) : null;
   return { hours, peakHour };
+}
+
+/** Credits per weekday (index 0=Sun … 6=Sat) from raw events. */
+export function buildWeekdayTotals(events: readonly UsageEvent[], filter?: Filter): number[] {
+  const totals = new Array(7).fill(0) as number[];
+  const tzOffsetMs = -new Date().getTimezoneOffset() * 60_000;
+  for (const e of events) {
+    if (!matchesFilter(e, filter)) continue;
+    const day = Math.floor((e.ts + tzOffsetMs) / DAY_MS);
+    totals[day % 7]! += e.credits;
+  }
+  return totals;
 }
 
 export function buildHeatmapData(dayAggregates: UsageAggregate[], now: number, weeks = HEATMAP_WEEKS): HeatmapData {

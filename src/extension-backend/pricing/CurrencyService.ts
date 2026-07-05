@@ -7,11 +7,13 @@
 import { promises as fs } from 'fs';
 import * as https from 'https';
 import * as path from 'path';
+import { defaultLogger, Logger } from '../util/logger';
 
 const CACHE_FILE = 'fx-rates.json';
 const API_URL = 'https://api.frankfurter.app/latest?from=USD';
 const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 5_000;
+const MAX_REDIRECTS = 3;
 
 export type FxRates = Record<string, number>;
 
@@ -20,10 +22,24 @@ interface CachePayload {
   rates: FxRates;
 }
 
-function fetchRates(): Promise<FxRates> {
+function fetchRates(url: string = API_URL, redirectsLeft: number = MAX_REDIRECTS): Promise<FxRates> {
   return new Promise((resolve, reject) => {
-    const req = https.get(API_URL, { timeout: FETCH_TIMEOUT_MS }, (res) => {
-      if (res.statusCode !== 200) {
+    const req = https.get(url, { timeout: FETCH_TIMEOUT_MS }, (res) => {
+      const status = res.statusCode ?? 0;
+      // Follow redirects — Frankfurter has moved hosts (.app ↔ .dev) before, and
+      // https.get does not follow 30x on its own, so a redirect would otherwise
+      // silently strand rates at USD-only.
+      if (status >= 300 && status < 400 && res.headers.location) {
+        res.resume();
+        if (redirectsLeft <= 0) {
+          reject(new Error('Too many redirects'));
+          return;
+        }
+        resolve(fetchRates(new URL(res.headers.location, url).toString(), redirectsLeft - 1));
+        return;
+      }
+      if (status !== 200) {
+        res.resume();
         reject(new Error(`HTTP ${res.statusCode}`));
         return;
       }
@@ -54,7 +70,10 @@ export class CurrencyService {
   private rates: FxRates = { USD: 1 };
   private refreshTimer?: ReturnType<typeof setInterval>;
 
-  constructor(private readonly storageDir: string) {}
+  constructor(
+    private readonly storageDir: string,
+    private readonly logger: Logger = defaultLogger,
+  ) {}
 
   /** Returns the latest cached rates (USD = 1.0, others relative to USD). */
   currentRates(): FxRates {
@@ -64,9 +83,15 @@ export class CurrencyService {
   async load(): Promise<void> {
     const cached = await this.loadCached();
     if (cached) {
+      // Fresh cache already populates the selector — refresh in the background
+      // so activation isn't blocked on the network.
       this.rates = cached;
+      void this.tryRefresh();
+    } else {
+      // Cold start (no/stale cache): await the fetch so the first snapshot
+      // carries real rates and the currency selector isn't stuck on USD-only.
+      await this.tryRefresh();
     }
-    void this.tryRefresh();
   }
 
   startDailyRefresh(): void {
@@ -80,7 +105,7 @@ export class CurrencyService {
   async clearCache(): Promise<void> {
     try {
       await fs.rm(path.join(this.storageDir, CACHE_FILE), { force: true });
-    } catch {
+    } /* c8 ignore next 2 */ catch {
       // Nothing cached.
     }
   }
@@ -104,8 +129,9 @@ export class CurrencyService {
       const rates = await fetchRates();
       this.rates = rates;
       await this.writeCache(rates);
-    } catch {
-      // Network failures are silent — we keep the last known rates.
+    } catch (err) {
+      // Keep the last known rates; log so a stuck USD-only selector is diagnosable.
+      this.logger.debug('currency', `FX refresh failed: ${String(err)}`);
     }
   }
 
@@ -114,7 +140,7 @@ export class CurrencyService {
       await fs.mkdir(this.storageDir, { recursive: true });
       const payload: CachePayload = { fetchedAt: new Date().toISOString(), rates };
       await fs.writeFile(path.join(this.storageDir, CACHE_FILE), JSON.stringify(payload), 'utf8');
-    } catch {
+    } /* c8 ignore next 2 */ catch {
       // Cache write failures are silent.
     }
   }

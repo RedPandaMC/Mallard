@@ -2,6 +2,10 @@ import './styles/fonts.css';
 import './styles/reset.css';
 import './styles/theme.css';
 import './styles/dashboard.css';
+// Bundle the codicon font+CSS into the webview build so it ships inside the
+// VSIX. Linking it live from node_modules 404s once packaged (node_modules is
+// stripped), which blanks every icon; esbuild inlines this and copies the .ttf.
+import '@vscode/codicons/dist/codicon.css';
 
 import { onMessage, post } from './api';
 import { state, setState, subscribe } from './store';

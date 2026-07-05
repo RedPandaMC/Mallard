@@ -19,10 +19,10 @@ describe('ExportQueue', () => {
   it('enqueue then peekAll returns the entry with topic/payload/enqueuedAt', async () => {
     const dir = await makeTmpDir();
     const queue = new ExportQueue(dir);
-    queue.enqueue('mallard/v2/metrics', { mtd_credits: 5 });
+    queue.enqueue('mallard/v3/metrics', { mtd_credits: 5 });
     const all = queue.peekAll();
     assert.equal(all.length, 1);
-    assert.equal(all[0]!.topic, 'mallard/v2/metrics');
+    assert.equal(all[0]!.topic, 'mallard/v3/metrics');
     assert.deepEqual(all[0]!.payload, { mtd_credits: 5 });
     assert.ok(typeof all[0]!.enqueuedAt === 'number');
     assert.ok(typeof all[0]!.id === 'string' && all[0]!.id.length > 0);

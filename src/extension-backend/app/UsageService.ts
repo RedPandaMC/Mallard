@@ -4,6 +4,7 @@
  * all subscribe to.
  */
 import * as vscode from 'vscode';
+import { readConfig } from '../config';
 import { evaluateAlerts, SnapshotSample } from '../domain/alerts';
 import { evaluateAlertRules, shouldNotify } from '../domain/alertRules';
 import { computeBudget } from '../domain/budget';
@@ -28,8 +29,7 @@ import type { IBillingProvider } from '../billing/IBillingProvider';
 import { IngestService } from '../ingest/IngestService';
 import { PricingService } from '../pricing/PricingService';
 import { CurrencyService } from '../pricing/CurrencyService';
-import type { IEventSnapshotReader } from '../store/EventReader';
-import type { RecordFilter } from '../store/EventRepository';
+import type { IEventSnapshotReader, SnapshotSourceData } from '../store/EventReader';
 import { UserConfigStore } from './UserConfigStore';
 import { MetricExporter, NullMetricExporter } from '../export/MetricExporter';
 import { activeBranch } from '../util/repo';
@@ -152,33 +152,56 @@ export class UsageService implements vscode.Disposable {
 
     const branch = activeBranch();
 
-    const displayCurrency = vscode.workspace.getConfiguration('mallard')
-      .get<string>('currency', 'USD').trim().toUpperCase() || 'USD';
+    const displayCurrency = readConfig().currency;
     const fxRates = this.currency.currentRates();
     const fxRate = displayCurrency !== 'USD' ? (fxRates[displayCurrency] ?? 1) : 1;
 
-    if (isEmptyFilter(this.filter)) {
-      await this.computeFromCache(now, userConfig, branch, displayCurrency, fxRate);
-    } else {
-      await this.computeFromEvents(now, userConfig, branch, displayCurrency, fxRate);
-    }
-  }
-
-  /** Fast path: read pre-materialized snap_* tables — no raw event scan. */
-  private async computeFromCache(
-    now: number,
-    userConfig: ReturnType<UserConfigStore['get']>,
-    branch: string | undefined,
-    displayCurrency: string,
-    fxRate: number,
-  ): Promise<void> {
-    const [cache, currentBranchCredits] = await Promise.all([
-      this.reader.readSnapshotCache(),
+    // Both read paths return the same SnapshotSourceData shape: the fast path
+    // reads the pre-materialized snap_* tables, the filtered path pushes all
+    // aggregation into DuckDB. Only the filtered path computes isIncremental
+    // (partial dashboard updates only make sense while filtering).
+    const filtered = !isEmptyFilter(this.filter);
+    const dataPromise = filtered
+      ? this.reader.readFilteredSnapshot({
+          ...this.filter,
+          range: this.filter.range ?? { start: startOf(now - 365 * DAY_MS, 'day'), end: now + DAY_MS },
+        })
+      : this.reader.readSnapshotCache();
+    const [data, currentBranchCredits] = await Promise.all([
+      dataPromise,
       branch ? this.reader.creditsByBranch(branch) : Promise.resolve(0),
     ]);
 
+    const next = this.assembleSnapshot(data, {
+      now, userConfig, branch, displayCurrency, fxRate, currentBranchCredits,
+    });
+    if (filtered) next.isIncremental = isIncrementalUpdate(this.snapshot, next);
+
+    this.snapshot = next;
+    this.recordSample(now, next);
+    this.fireAlerts(next, userConfig, now);
+    this._onDidChange.fire(next);
+    // intentionally not awaited — see ExportQueue; export() persists a durable
+    // retry queue on failure, so a slow/unreachable endpoint never blocks the UI.
+    void this.exporter.export(next);
+  }
+
+  /** Build a UsageSnapshot from the normalized data bundle (either read path). */
+  private assembleSnapshot(
+    data: SnapshotSourceData,
+    opts: {
+      now: number;
+      userConfig: ReturnType<UserConfigStore['get']>;
+      branch: string | undefined;
+      displayCurrency: string;
+      fxRate: number;
+      currentBranchCredits: number;
+    },
+  ): UsageSnapshot {
+    const { now, userConfig, branch, displayCurrency, fxRate, currentBranchCredits } = opts;
+
     // ── Day aggregates (for forecast + chart) ──────────────────────────────
-    const dayAggregates: UsageAggregate[] = cache.daily.map((row) => ({
+    const dayAggregates: UsageAggregate[] = data.daily.map((row) => ({
       granularity: 'day',
       bucketKey:   bucketKey(row.dayStart, 'day'),
       start:       row.dayStart,
@@ -196,135 +219,6 @@ export class UsageService implements vscode.Disposable {
     const budget = computeBudget({
       monthlyBudget:   userConfig.monthlyBudget > 0 ? userConfig.monthlyBudget : null,
       includedCredits: userConfig.includedCredits,
-      mtdCredits:      cache.totals.mtd.credits,
-      mtdCost:         cache.totals.mtd.cost * fxRate,
-      forecast,
-    });
-
-    // ── Dimensions ──────────────────────────────────────────────────────────
-    const allModels   = cache.dims.models;
-    const allSurfaces = cache.dims.surfaces.filter((s): s is Surface    => SURFACES.has(s as Surface));
-    const allSources  = cache.dims.sources.filter( (s): s is SourceKind => SOURCE_KINDS.has(s as SourceKind));
-    const allRepos    = cache.dims.repos;
-
-    const topModels = cache.models.map((m) => ({
-      key:     m.modelId,
-      credits: m.credits,
-      cost:    m.cost * fxRate,
-      tokens:  Number(m.tokens),
-    }));
-
-    const byRepo = cache.repos.map((r) => ({
-      key:     r.repo,
-      credits: r.credits,
-      cost:    r.cost * fxRate,
-      tokens:  Number(r.tokens),
-    }));
-
-    const sankeyLinks = cache.sankey.map((s) => ({
-      source: s.model,
-      target: s.surface,
-      value:  s.credits,
-    }));
-
-    // ── Chart data ──────────────────────────────────────────────────────────
-    const catMap = new Map(cache.categories.map((c) => [c.category, c.cost]));
-    const catKeys = COST_CATEGORIES.filter((c) => (catMap.get(c) ?? 0) > 0);
-    const categoryBreakdown = catKeys.length > 0
-      ? { categories: catKeys, costs: catKeys.map((c) => catMap.get(c) ?? 0), available: true }
-      : { categories: [] as typeof catKeys, costs: [] as number[], available: false };
-
-    const hourArr = new Array<number>(24).fill(0);
-    for (const h of cache.hourly) hourArr[h.hourLocal] = h.credits;
-    const peakHour = hourArr.indexOf(Math.max(...hourArr));
-    const hourlyTimeline = { hours: hourArr, peakHour };
-
-    const chartData = buildChartData(
-      dayAggregates, topModels, budget, forecast, now,
-      categoryBreakdown, hourlyTimeline,
-      this.pricing.pricePerCredit * fxRate, this.pricing.currentManifest,
-      cache.weekday,
-      userConfig.display,
-    );
-
-    // ── Range from snap_daily extent ───────────────────────────────────────
-    const rangeStart = cache.daily[0]?.dayStart ?? startOf(now - 29 * DAY_MS, 'day');
-    const rangeEnd   = (cache.daily[cache.daily.length - 1]?.dayStart ?? now) + DAY_MS;
-
-    const hasData = cache.totals.all.eventCount > 0;
-    const source: SourceKind = allSources.includes('local') ? 'local' : (hasData ? 'lm' : 'local');
-
-    const next: UsageSnapshot = {
-      generatedAt:   now,
-      source,
-      status:        hasData ? { kind: 'ok' } : this.ingest.getStatus(),
-      currency:      displayCurrency,
-      pricePerCredit: this.pricing.pricePerCredit * fxRate,
-      fxRates:       this.currency.currentRates(),
-      filter:        this.filter,
-      range:         { start: rangeStart, end: rangeEnd },
-      forecast,
-      budget,
-      topModels,
-      today:         { credits: cache.totals.today.credits, cost: cache.totals.today.cost * fxRate, tokens: Number(cache.totals.today.tokens) },
-      allModels,
-      allSurfaces,
-      allSources,
-      sankeyLinks,
-      allRepos,
-      byRepo,
-      chartData,
-      authStatus:    this.authStatus,
-      isIncremental: false,
-      currentBranchCredits,
-      ...opt('currentBranch', branch),
-      ...opt('githubBilling', this.githubBilling),
-    };
-
-    this.snapshot = next;
-    this.recordSample(now, next);
-    this.fireAlerts(next, userConfig, now);
-    this._onDidChange.fire(next);
-    // intentionally not awaited — see ExportQueue; export() persists a durable
-    // retry queue on failure, so a slow/unreachable endpoint never blocks the UI.
-    void this.exporter.export(next);
-  }
-
-  /** Filtered path: all aggregations pushed to DuckDB; no raw event transfer. */
-  private async computeFromEvents(
-    now: number,
-    userConfig: ReturnType<UserConfigStore['get']>,
-    branch: string | undefined,
-    displayCurrency: string,
-    fxRate: number,
-  ): Promise<void> {
-    const rangeStart = startOf(now - 365 * DAY_MS, 'day');
-    const effectiveRange = this.filter.range ?? { start: rangeStart, end: now + DAY_MS };
-    const filter: RecordFilter = { ...this.filter, range: effectiveRange };
-
-    const [data, currentBranchCredits] = await Promise.all([
-      this.reader.readFilteredSnapshot(filter),
-      branch ? this.reader.creditsByBranch(branch) : Promise.resolve(0),
-    ]);
-
-    // ── Day aggregates (for forecast + chart) ──────────────────────────────
-    const dayAggregates: UsageAggregate[] = data.daily.map((row) => ({
-      granularity: 'day',
-      bucketKey:   bucketKey(row.dayStart, 'day'),
-      start:       row.dayStart,
-      end:         nextBucketStart(row.dayStart, 'day'),
-      credits:     row.credits,
-      cost:        row.cost * fxRate,
-      tokens:      Number(row.tokens),
-      byModel:     {},
-      eventCount:  row.eventCount,
-      estimated:   false,
-    }));
-
-    const forecast = forecastMonth(dayAggregates, now, this.pricing.pricePerCredit * fxRate);
-    const budget   = computeBudget({
-      monthlyBudget:   userConfig.monthlyBudget > 0 ? userConfig.monthlyBudget : null,
-      includedCredits: userConfig.includedCredits,
       mtdCredits:      data.totals.mtd.credits,
       mtdCost:         data.totals.mtd.cost * fxRate,
       forecast,
@@ -336,12 +230,28 @@ export class UsageService implements vscode.Disposable {
     const allSources  = data.dims.sources.filter( (s): s is SourceKind => SOURCE_KINDS.has(s as SourceKind));
     const allRepos    = data.dims.repos;
 
-    const topModels = data.topModels.map((m) => ({ key: m.modelId, credits: m.credits, cost: m.cost * fxRate, tokens: Number(m.tokens) }));
-    const byRepo    = data.topRepos.map( (r) => ({ key: r.repo,    credits: r.credits, cost: r.cost * fxRate, tokens: Number(r.tokens) }));
-    const sankeyLinks = data.sankey.map((s) => ({ source: s.model, target: s.surface, value: s.credits }));
+    const topModels = data.models.map((m) => ({
+      key:     m.modelId,
+      credits: m.credits,
+      cost:    m.cost * fxRate,
+      tokens:  Number(m.tokens),
+    }));
+
+    const byRepo = data.repos.map((r) => ({
+      key:     r.repo,
+      credits: r.credits,
+      cost:    r.cost * fxRate,
+      tokens:  Number(r.tokens),
+    }));
+
+    const sankeyLinks = data.sankey.map((s) => ({
+      source: s.model,
+      target: s.surface,
+      value:  s.credits,
+    }));
 
     // ── Chart data ──────────────────────────────────────────────────────────
-    const catMap  = new Map(data.categories.map((c) => [c.category, c.cost]));
+    const catMap = new Map(data.categories.map((c) => [c.category, c.cost]));
     const catKeys = COST_CATEGORIES.filter((c) => (catMap.get(c) ?? 0) > 0);
     const categoryBreakdown = catKeys.length > 0
       ? { categories: catKeys, costs: catKeys.map((c) => catMap.get(c) ?? 0), available: true }
@@ -349,7 +259,10 @@ export class UsageService implements vscode.Disposable {
 
     const hourArr = new Array<number>(24).fill(0);
     for (const h of data.hourly) hourArr[h.hourLocal] = h.credits;
-    const peakHour = hourArr.indexOf(Math.max(...hourArr));
+    const maxHourCredits = Math.max(...hourArr);
+    // null when there is no hourly activity at all — indexOf(0) would
+    // otherwise always report midnight as the "peak".
+    const peakHour = maxHourCredits > 0 ? hourArr.indexOf(maxHourCredits) : null;
     const hourlyTimeline = { hours: hourArr, peakHour };
 
     const chartData = buildChartData(
@@ -360,13 +273,17 @@ export class UsageService implements vscode.Disposable {
       userConfig.display,
     );
 
-    // ── Assemble snapshot ───────────────────────────────────────────────────
-    const hasData    = data.totals.all.eventCount > 0;
-    const source: SourceKind = allSources.includes('local') ? 'local' : (hasData ? 'lm' : 'local');
-    const rangeStart2 = data.daily[0]?.dayStart ?? startOf(now - 29 * DAY_MS, 'day');
+    // ── Range from the daily extent ─────────────────────────────────────────
+    const rangeStart = data.daily[0]?.dayStart ?? startOf(now - 29 * DAY_MS, 'day');
     const rangeEnd   = (data.daily[data.daily.length - 1]?.dayStart ?? now) + DAY_MS;
 
-    const next: UsageSnapshot = {
+    const hasData = data.totals.all.eventCount > 0;
+    // Snapshot-level source kind: 'local' (Copilot log telemetry) when any
+    // event came from it; otherwise the data is purely LM/API-derived ('lm').
+    // With no data at all, 'local' is the neutral default the UI expects.
+    const source: SourceKind = allSources.includes('local') ? 'local' : (hasData ? 'lm' : 'local');
+
+    return {
       generatedAt:   now,
       source,
       status:        hasData ? { kind: 'ok' } : this.ingest.getStatus(),
@@ -374,7 +291,7 @@ export class UsageService implements vscode.Disposable {
       pricePerCredit: this.pricing.pricePerCredit * fxRate,
       fxRates:       this.currency.currentRates(),
       filter:        this.filter,
-      range:         { start: rangeStart2, end: rangeEnd },
+      range:         { start: rangeStart, end: rangeEnd },
       forecast,
       budget,
       topModels,
@@ -389,18 +306,11 @@ export class UsageService implements vscode.Disposable {
       authStatus:    this.authStatus,
       isIncremental: false,
       currentBranchCredits,
+      totalEventCount:     data.totals.all.eventCount,
+      estimatedEventCount: data.estimatedEventCount,
       ...opt('currentBranch', branch),
       ...opt('githubBilling', this.githubBilling),
     };
-    next.isIncremental = isIncrementalUpdate(this.snapshot, next);
-
-    this.snapshot = next;
-    this.recordSample(now, next);
-    this.fireAlerts(next, userConfig, now);
-    this._onDidChange.fire(next);
-    // intentionally not awaited — see ExportQueue; export() persists a durable
-    // retry queue on failure, so a slow/unreachable endpoint never blocks the UI.
-    void this.exporter.export(next);
   }
 
   private recordSample(now: number, s: UsageSnapshot): void {
@@ -433,8 +343,9 @@ export class UsageService implements vscode.Disposable {
   }
 
   private scheduleTimer(): void {
-    const mins = vscode.workspace.getConfiguration('mallard').get<number>('refreshIntervalMinutes', 10);
-    this.timer.schedule(() => void this.refresh(), Math.max(1, mins) * 60_000);
+    // readConfig() already clamps refreshIntervalMinutes to [1, 60]
+    const mins = readConfig().refreshIntervalMinutes;
+    this.timer.schedule(() => void this.refresh(), mins * 60_000);
   }
 
   dispose(): void {

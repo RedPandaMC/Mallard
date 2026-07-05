@@ -42,6 +42,9 @@ spec:
               mountPath: /var/lib/grafana
             - name: tmp
               mountPath: /tmp
+            - name: provisioning-datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /api/health
@@ -67,3 +70,6 @@ spec:
             claimName: grafana-data
         - name: tmp
           emptyDir: {}
+        - name: provisioning-datasources
+          configMap:
+            name: grafana-provisioning-datasources

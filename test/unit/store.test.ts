@@ -665,16 +665,34 @@ describe('EventStore — queryFacts', () => {
 });
 
 describe('EventStore — deprecated query()', () => {
-  it('query() delegates to find() and returns the same results', async () => {
+  it('find() returns the same results as the underlying query', async () => {
     const dir = await tmpDir();
     const store = await EventStore.open(dir);
     await store.writer.insert([makeEvent({ id: 'a', ts: 1000, modelId: 'gpt-4o' })]);
-    const fromQuery = await store.reader.query({ models: ['gpt-4o'] });
     const fromFind = await store.reader.find({ models: ['gpt-4o'] });
-    assert.deepStrictEqual(
-      fromQuery.map((e) => e.id),
-      fromFind.map((e) => e.id),
-    );
+    assert.deepStrictEqual(fromFind.map((e) => e.id), ['a']);
+    store.dispose();
+  });
+
+  it('exportTo() writes a CSV file with the events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.writer.insert([makeEvent({ id: 'a', ts: 1000, modelId: 'gpt-4o', credits: 5 })]);
+    const outPath = path.join(dir, 'export.csv');
+    await store.reader.exportTo(outPath, 'csv');
+    const content = await fs.readFile(outPath, 'utf8');
+    assert.ok(content.includes('gpt-4o'), 'CSV contains the model id');
+    store.dispose();
+  });
+
+  it('exportTo() writes a JSON file with the events', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.writer.insert([makeEvent({ id: 'b', ts: 2000, modelId: 'claude-sonnet-4-5', credits: 3 })]);
+    const outPath = path.join(dir, 'export.json');
+    await store.reader.exportTo(outPath, 'json');
+    const content = await fs.readFile(outPath, 'utf8');
+    assert.ok(content.includes('claude-sonnet-4-5'), 'JSON contains the model id');
     store.dispose();
   });
 });

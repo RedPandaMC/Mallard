@@ -17,6 +17,7 @@ from .config import get_settings
 from .credential_verifier import create_verifier
 from .influx import make_client
 from .mqtt import run_mqtt_broker
+from .rate_limit import SlidingWindowLimiter
 from .routers import health as health_router
 from .routers import ingest as ingest_router
 
@@ -27,12 +28,13 @@ _MAX_BODY_BYTES = 64 * 1024  # 64 KB
 
 def _get_key_for_rate_limit(request: Request) -> str:
     """
-    Use the raw X-API-Key header value as the rate-limit key so limits are
-    per-key, not per-IP.  Falls back to client IP when the header is absent
-    (unauthenticated requests will be rejected by auth before actually being
-    rate-limited, but we still need a key function).
+    Pre-auth limiter key: client IP only. Keying on a client-supplied header
+    (the previous X-API-Key scheme) let an attacker mint a fresh bucket per
+    request with junk values, defeating the limit entirely — and stored raw
+    secrets as limiter keys. Per-credential limiting happens after auth in the
+    ingest route, keyed on the verified label (see rate_limit.py).
     """
-    return request.headers.get("X-API-Key") or request.client.host  # type: ignore[union-attr]
+    return request.client.host if request.client else "unknown"
 
 
 @asynccontextmanager
@@ -56,6 +58,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.influx_client = influx_client
     app.state.write_api = write_api
     app.state.verifier = verifier
+    # Post-auth per-credential limiter (the slowapi middleware above is per-IP)
+    app.state.label_limiter = SlidingWindowLimiter.from_string(settings.rate_limit)
 
     if settings.mqtt_enabled:
         import asyncio
@@ -117,7 +121,7 @@ if __name__ == "__main__":  # pragma: no cover
 
     s = get_settings()
     uvicorn.run(
-        "src.main:app",
+        "server.main:app",
         host=s.server_host,
         port=s.server_port,
         log_level=s.log_level.lower(),

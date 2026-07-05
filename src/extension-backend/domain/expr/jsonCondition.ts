@@ -101,9 +101,22 @@ export function evalSimpleCondition(c: SimpleCondition, ctx: Record<string, unkn
     return allowed.includes(fieldValue as string | number);
   }
 
-  if (c.op === 'matches') {
+  const _REGEX_DANGEROUS_PATTERN = /\(\?|[*+]\)|\[\^?[\s\S]*?\[[\s\S]*?\]/;
+
+function _isSafeRegex(pattern: string): boolean {
+  if (pattern.length > 500) return false;
+  if (_REGEX_DANGEROUS_PATTERN.test(pattern)) return false;
+  return true;
+}
+
+if (c.op === 'matches') {
+    const regexPattern = String(c.value);
+    if (!_isSafeRegex(regexPattern)) {
+      return false;
+    }
     try {
-      return new RegExp(String(c.value)).test(String(fieldValue ?? ''));
+      // eslint-disable-next-line security/detect-non-literal-regexp -- user config validated by zod + VS Code JSON schema; bad patterns caught and return false
+      return new RegExp(regexPattern).test(String(fieldValue ?? ''));
     } catch {
       return false;
     }

@@ -2,7 +2,7 @@
 import * as path from 'path';
 import { ParseContext } from './otelParse';
 import { locateClaudeCodeLogDirs } from './locate';
-import { priceRequest } from '../domain/pricing';
+import { priceRequest, priceTokens } from '../domain/pricing';
 import { Surface, UsageEvent } from '../domain/types';
 import { PricingService } from '../pricing/PricingService';
 import { DuckDBFileReader } from '../store/DuckDBFileReader';
@@ -28,6 +28,7 @@ export class ClaudeCodeConnector extends BaseFileConnector {
     tokenFields: ['promptTokens', 'completionTokens', 'cacheCreationTokens', 'cacheReadTokens', 'thinkingTokens'],
     costCategories: ['input', 'output', 'cache_creation', 'cache_read', 'thinking'],
     supportsRepoAttribution: true,
+    sources: ['ndjson'],
   };
 
   constructor(
@@ -48,7 +49,8 @@ export class ClaudeCodeConnector extends BaseFileConnector {
 
     /* c8 ignore start */
     this.logPaths = dirs;
-    const globs = dirs.map((d) => path.join(d, '**', '*.jsonl'));
+    // Use forward slashes for DuckDB glob compatibility on Windows.
+    const globs = dirs.map((d) => path.join(d, '**', '*.jsonl').replace(/\\/g, '/'));
     return { globs, allowedRoots: dirs, searchedDirs: dirs };
     /* c8 ignore stop */
   }
@@ -79,9 +81,10 @@ export class ClaudeCodeConnector extends BaseFileConnector {
     const cacheCreation = num(usage['cache_creation_input_tokens']);
     const cacheRead     = num(usage['cache_read_input_tokens']);
     const thinking      = num(usage['thinking_tokens'] ?? usage['output_thinking_tokens']);
-    const ts            = parseTimestamp({ ...row, ...msg }, ctx.now);
+    const ts            = parseTimestamp({ ...row, ...msg });
+    if (ts === undefined) return null;
 
-    const { credits, cost } = priceRequest(model, {
+    const { credits, cost: creditCost } = priceRequest(model, {
       pricePerCredit: ctx.pricePerCredit,
       currency: 'USD',
       ...(ctx.manifest !== undefined ? { manifest: ctx.manifest } : {}),
@@ -94,7 +97,12 @@ export class ClaudeCodeConnector extends BaseFileConnector {
       ...(cacheRead     !== undefined ? { cacheRead }     : {}),
       ...(thinking      !== undefined ? { thinking }      : {}),
     };
-    const rawCbc       = cost > 0 ? splitCostByBreakdown(cost, tokens) : undefined;
+    // Exact per-token cost when the price feed knows the model; the
+    // credit-multiplier estimate (with a proportional split) is the fallback.
+    const tokenCost = priceTokens(model, tokens, ctx.tokenPrices);
+    const cost = tokenCost?.total ?? creditCost;
+    const rawCbc =
+      tokenCost?.byCategory ?? (cost > 0 ? splitCostByBreakdown(cost, tokens) : undefined);
     const costByCategory = rawCbc && Object.keys(rawCbc).length > 0 ? rawCbc : undefined;
 
     const surface: Surface = ctx.surface ?? 'agent';

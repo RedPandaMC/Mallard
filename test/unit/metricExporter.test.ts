@@ -24,6 +24,10 @@ import { buildSnapshot } from '../../src/extension-backend/domain/snapshot';
 import { makeEvent } from './helpers';
 import { ExportQueue } from '../../src/extension-backend/export/ExportQueue';
 import type { MetricProtocol, MetricSerializer, SendResult } from '../../src/extension-backend/export/MetricExporter';
+// The real classes are importable now that vscode + mqtt are stubbed by the
+// mocharc require hooks — exercise them directly so flushQueue and the null
+// exporter are covered (not just the mirrored stub above).
+import { MetricExporter, NullMetricExporter } from '../../src/extension-backend/export/MetricExporter';
 
 async function makeTmpDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'mallard-metricexporter-test-'));
@@ -271,21 +275,20 @@ describe('MetricExporter (offline queue + retry)', () => {
 describe('MetricPayloadSerializer', () => {
   const serializer = new MetricPayloadSerializer();
 
-  it('topic is "mallard/v2/metrics"', () => {
-    assert.equal(serializer.topic, 'mallard/v2/metrics');
+  it('topic is "mallard/v3/metrics"', () => {
+    assert.equal(serializer.topic, 'mallard/v3/metrics');
   });
 
   it('serialize returns an object with all expected metric keys', () => {
     const payload = serializer.serialize(makeSnapshot());
     const EXPECTED_KEYS = [
-      'schema_version', 'instance_id',
-      'ts', 'mtd_credits', 'mtd_cost_usd', 'today_credits', 'today_cost_usd',
-      'active_models', 'top_model',
-      'model_dist', 'surface_dist', 'cost_dist', 'input_cost_ratio',
-      'credits_velocity_per_hour', 'mtd_budget_pct', 'repo_count',
-      'peak_usage_hour', 'daily_credit_variance', 'model_count',
-      'surface_concentration', 'estimated_event_ratio', 'forecast_basis',
-      'budget_trend', 'token_per_credit', 'forecast_low', 'forecast_high',
+      'schema_version', 'instance_id', 'ts', 'tz_offset_minutes',
+      'mtd_credits', 'mtd_cost_usd', 'today_credits', 'today_cost_usd',
+      'mtd_budget_pct', 'forecast_basis', 'forecast_low', 'forecast_high',
+      'budget_trend', 'daily_credit_stddev',
+      'total_credits', 'total_tokens', 'total_event_count', 'estimated_event_count',
+      'model_credits', 'surface_credits', 'cost_by_category',
+      'active_models', 'top_model', 'model_count', 'repo_count',
       'source_connector',
     ];
     for (const key of EXPECTED_KEYS) {
@@ -299,15 +302,15 @@ describe('MetricPayloadSerializer', () => {
     assert.notEqual(payload, null);
   });
 
-  it('schema_version is 2', () => {
+  it('schema_version is 3', () => {
     const payload = serializer.serialize(makeSnapshot());
-    assert.equal(payload['schema_version'], 2);
+    assert.equal(payload['schema_version'], 3);
   });
 
-  it('cost_dist is a record of string→number', () => {
+  it('cost_by_category is a record of string→number', () => {
     const payload = serializer.serialize(makeSnapshot());
-    assert.equal(typeof payload['cost_dist'], 'object');
-    assert.notEqual(payload['cost_dist'], null);
+    assert.equal(typeof payload['cost_by_category'], 'object');
+    assert.notEqual(payload['cost_by_category'], null);
   });
 
   it('source_connector is "none" for a snapshot with no events', () => {
@@ -336,9 +339,70 @@ describe('MetricPayloadSerializer', () => {
     assert.notEqual(payload['source_connector'], 'none');
   });
 
-  it('estimated_event_ratio is 0 for github-only, 1 for non-github, 0.5 for mixed', () => {
+  it('event counts are exported raw — the server derives the estimated ratio', () => {
     const payload = serializer.serialize(makeSnapshot());
-    // makeEvent defaults to 'local' source, so all events are estimated
-    assert.equal(payload['estimated_event_ratio'], 1);
+    assert.equal(typeof payload['total_event_count'], 'number');
+    assert.equal(typeof payload['estimated_event_count'], 'number');
+  });
+});
+
+// ── Real MetricExporter (flushQueue) + NullMetricExporter ─────────────────────
+
+describe('MetricExporter (real class) — flushQueue', () => {
+  it('flushQueue returns false when there is no queue', async () => {
+    const exporter = new MetricExporter(fakeProtocol(), fakeSerializer());
+    const stillDown = await (exporter as unknown as { flushQueue(): Promise<boolean> }).flushQueue();
+    assert.equal(stillDown, false);
+    exporter.dispose();
+  });
+
+  it('dequeues on ok and stops (enqueuing the new payload) on a retryable entry', async () => {
+    const dir = await makeTmpDir();
+    const queue = new ExportQueue(dir);
+    queue.enqueue('t', { n: 1 });
+    queue.enqueue('t', { n: 2 });
+    const protocol = fakeProtocol([{ ok: true }, { ok: false, retryable: true }]);
+    const exporter = new MetricExporter(protocol, fakeSerializer(), queue);
+    await exporter.export(makeSnapshot());
+    const remaining = queue.peekAll();
+    assert.deepEqual(remaining[0]!.payload, { n: 2 }, 'first entry dequeued, second remains');
+    assert.ok('ts' in remaining[remaining.length - 1]!.payload, 'new payload appended');
+    exporter.dispose();
+    await fs.rm(dir, { recursive: true });
+  });
+
+  it('drops a fatal entry and continues flushing', async () => {
+    const dir = await makeTmpDir();
+    const queue = new ExportQueue(dir);
+    queue.enqueue('t', { n: 1 });
+    const protocol = fakeProtocol([{ ok: false, retryable: false }]);
+    const exporter = new MetricExporter(protocol, fakeSerializer(), queue);
+    await exporter.export(makeSnapshot());
+    assert.equal(queue.peekAll().length, 0, 'fatal entry dropped, new payload sent');
+    exporter.dispose();
+    await fs.rm(dir, { recursive: true });
+  });
+
+  it('stops flushing when disposed mid-flush', async () => {
+    const dir = await makeTmpDir();
+    const queue = new ExportQueue(dir);
+    queue.enqueue('t', { n: 1 });
+    let exporter!: MetricExporter;
+    const protocol: MetricProtocol = {
+      async send() { exporter.dispose(); return { ok: true }; },
+      dispose() {},
+    };
+    exporter = new MetricExporter(protocol, fakeSerializer(), queue);
+    await exporter.export(makeSnapshot());
+    assert.equal(queue.peekAll().length, 1, 'entry left intact when disposed mid-flush');
+    await fs.rm(dir, { recursive: true });
+  });
+});
+
+describe('NullMetricExporter', () => {
+  it('export is a no-op through the null protocol and dispose is safe', async () => {
+    const exporter = new NullMetricExporter();
+    await exporter.export(makeSnapshot()); // exercises the null protocol send
+    exporter.dispose();
   });
 });

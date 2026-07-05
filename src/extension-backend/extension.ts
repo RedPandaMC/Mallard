@@ -1,6 +1,14 @@
 import * as vscode from 'vscode';
 import { RELEVANT_CONFIG_KEYS } from './config';
 import { buildContainer, Container } from './container';
+import {
+  ALL_SECRET_KEYS,
+  CREDENTIAL_SLOTS,
+  SECRET_KEYS,
+  exportTargetSlots,
+  manageCredentials,
+  promptAndStoreSecret,
+} from './app/credentials';
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
 import { SidebarView } from './ui/SidebarView';
@@ -32,7 +40,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const auth = s?.authStatus ?? 'signed-out';
     const r = restriction.getState();
     if (r.active) {
-      statusBar.text = `$(shield) Copilot restricted`;
+      statusBar.text = `$(shield) Usage limit reached`;
       statusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
       statusBar.tooltip = r.reasonMessage;
       statusBar.show();
@@ -49,6 +57,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         severity === 'error'   ? new vscode.ThemeColor('statusBarItem.errorBackground')
         : severity === 'warning' ? new vscode.ThemeColor('statusBarItem.warningBackground')
         : undefined;
+      // eslint-disable-next-line security/detect-possible-timing-attacks -- auth is an AuthStatus enum, not a secret
       if (auth === 'signed-in') {
         const plan = s.githubBilling?.quota?.plan ?? 'GitHub';
         statusBar.text = `$(verified-filled) ${plan} · ${cr} cr`;
@@ -108,6 +117,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   await usage.start();
+  container.setupGate.start();
 
   if (vscode.env.remoteName && !context.globalState.get<boolean>('mallard.remoteCopilotWarned')) {
     const d = usage.onDidChangeSnapshot(() => {
@@ -145,9 +155,13 @@ export async function deactivate(): Promise<void> {
 }
 
 function registerCommands(context: vscode.ExtensionContext, c: Container): void {
-  const { usage, store, userConfig, layout, pricing, restriction } = c;
+  const { usage, store, userConfig, layout, pricing, restriction, setupGate } = c;
   const reg = (id: string, fn: (...args: unknown[]) => unknown) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
+
+  reg('mallard.enableCopilotTelemetry', async () => {
+    await setupGate.run('copilot-otel');
+  });
 
   reg('mallard.openDashboard', () => {
     try {
@@ -289,7 +303,8 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     for (const key of context.globalState.keys()) {
       await context.globalState.update(key, undefined);
     }
-    for (const secretKey of ['mallard.mqtt.password', 'mallard.webhook.secret']) {
+    const targetSlots = exportTargetSlots(userConfig.get().export);
+    for (const secretKey of [...ALL_SECRET_KEYS, ...targetSlots.map((s) => s.key)]) {
       await context.secrets.delete(secretKey);
     }
     void vscode.window.showInformationMessage(
@@ -309,18 +324,17 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     void vscode.window.showInformationMessage('Mallard: Click "Disable" next to Mallard above.');
   });
 
-  reg('mallard.setMqttPassword', async () => {
-    const pwd = await vscode.window.showInputBox({
-      prompt: 'Enter MQTT export password (leave blank to clear)',
-      password: true,
-    });
-    if (pwd === undefined) return;
-    if (pwd === '') {
-      await context.secrets.delete('mallard.mqtt.password');
-      void vscode.window.showInformationMessage('Mallard: MQTT password cleared.');
-    } else {
-      await context.secrets.store('mallard.mqtt.password', pwd);
-      void vscode.window.showInformationMessage('Mallard: MQTT password saved securely.');
-    }
-  });
+  const slotByKey = (key: string) => CREDENTIAL_SLOTS.find((s) => s.key === key)!;
+  reg('mallard.manageCredentials', () =>
+    manageCredentials(context.secrets, exportTargetSlots(userConfig.get().export)));
+  reg('mallard.setMqttPassword', () =>
+    promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.mqttPassword)));
+  reg('mallard.setWebhookApiKey', () =>
+    promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.webhookApiKey)));
+  reg('mallard.setWebhookBearerToken', () =>
+    promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.webhookBearerToken)));
+  reg('mallard.setWebhookSigningSecret', () =>
+    promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.webhookSigningSecret)));
+  reg('mallard.setGitHubPat', () =>
+    promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.githubPat)));
 }

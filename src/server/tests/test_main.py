@@ -21,21 +21,29 @@ _ENV = {
 
 
 class TestRateLimitKeyFunction:
-    def test_returns_api_key_header(self) -> None:
+    def test_ignores_api_key_header(self) -> None:
+        """Keying on a client-supplied header let attackers mint a fresh bucket
+        per junk key — the pre-auth limiter must key on the client IP only."""
         from server.main import _get_key_for_rate_limit
 
         req = MagicMock()
         req.headers = {"X-API-Key": "abc123"}
-        assert _get_key_for_rate_limit(req) == "abc123"
+        req.client.host = "10.0.0.1"
+        assert _get_key_for_rate_limit(req) == "10.0.0.1"
 
-    def test_falls_back_to_client_ip_when_header_absent(self) -> None:
+    def test_uses_client_ip(self) -> None:
         from server.main import _get_key_for_rate_limit
 
         req = MagicMock()
-        req.headers = MagicMock()
-        req.headers.get = MagicMock(return_value=None)
         req.client.host = "10.0.0.1"
         assert _get_key_for_rate_limit(req) == "10.0.0.1"
+
+    def test_unknown_when_no_client(self) -> None:
+        from server.main import _get_key_for_rate_limit
+
+        req = MagicMock()
+        req.client = None
+        assert _get_key_for_rate_limit(req) == "unknown"
 
 
 class TestMqttLifespan:
@@ -45,7 +53,7 @@ class TestMqttLifespan:
         for k, v in _ENV.items():
             monkeypatch.setenv(k, v)
         monkeypatch.setenv("MQTT_ENABLED", "true")
-        monkeypatch.setenv("MQTT_CREDENTIALS", "test-mqtt-password")
+        monkeypatch.setenv("MQTT_PASSWORD", "test-mqtt-password")
 
         import server.config as config_module
 

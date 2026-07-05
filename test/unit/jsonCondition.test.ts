@@ -223,6 +223,11 @@ describe('evalSimpleCondition', () => {
   it('returns false for matches with invalid regex', () => {
     assert.equal(evalSimpleCondition({ field: 'topModel.id', op: 'matches', value: '[invalid(' }, ctx), false);
   });
+
+  it('returns false for a matches pattern rejected by the ReDoS safety guard', () => {
+    // Contains `(?` — flagged as unsafe before ever compiling the RegExp.
+    assert.equal(evalSimpleCondition({ field: 'topModel.id', op: 'matches', value: '(?:a)' }, ctx), false);
+  });
 });
 
 describe('compileConditions', () => {

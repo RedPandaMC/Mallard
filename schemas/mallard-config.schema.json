@@ -282,15 +282,28 @@
           "type": "string",
           "enum": ["vscode-session", "pat"],
           "default": "vscode-session",
-          "description": "Auth mode. 'vscode-session' uses VS Code's built-in GitHub OAuth. 'pat' uses the provided personal access token."
-        },
-        "pat": {
-          "type": "string",
-          "description": "Personal access token. Required when mode is 'pat'. Scopes: read:user for user billing, read:org for org billing."
+          "description": "Auth mode. 'vscode-session' uses VS Code's built-in GitHub OAuth. 'pat' uses the personal access token stored via the 'Mallard: Set GitHub Personal Access Token' command (SecretStorage; scopes: read:user for user billing, read:org for org billing) and never falls through to an OAuth prompt."
         },
         "org": {
           "type": "string",
           "description": "GitHub organization slug. When set, fetches org-level billing instead of individual user billing. Requires read:org scope."
+        }
+      },
+      "additionalProperties": false
+    },
+    "export": {
+      "type": "object",
+      "description": "Metric export extras beyond the mallard.* settings.",
+      "properties": {
+        "webhookTargets": {
+          "type": "array",
+          "description": "Additional webhook servers to mirror every metric payload to, on top of the primary mallard.server.url target. Active when the transport is 'webhook'. Each target's credentials live in SecretStorage, namespaced by the target name — set them via 'Mallard: Manage Credentials'.",
+          "items": { "$ref": "#/definitions/exportTarget" }
+        },
+        "mqttTargets": {
+          "type": "array",
+          "description": "Additional MQTT brokers to mirror every metric payload to, on top of the primary mallard.mqtt.url / mallard.server.url broker. Active when the transport is 'mqtt'. Each broker's password lives in SecretStorage, namespaced by the target name — set it via 'Mallard: Manage Credentials'.",
+          "items": { "$ref": "#/definitions/exportTarget" }
         }
       },
       "additionalProperties": false
@@ -370,6 +383,25 @@
           "maximum": 20,
           "default": 8,
           "description": "How many models and repos to show in ranked lists."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "definitions": {
+    "exportTarget": {
+      "type": "object",
+      "required": ["name", "url"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._-]{1,32}$",
+          "description": "Unique target name (e.g. 'team'); namespaces the target's SecretStorage credentials."
+        },
+        "url": {
+          "type": "string",
+          "description": "Endpoint URL: https:// base URL for webhook targets, wss:// URL for MQTT targets."
         }
       },
       "additionalProperties": false

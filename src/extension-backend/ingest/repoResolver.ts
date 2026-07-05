@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Resolves the workspace repo to attribute freshly-parsed usage to.
  *

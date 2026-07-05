@@ -56,7 +56,7 @@ describe('Copilot + Claude Code connector coexistence', () => {
   it('use distinct connector ids and watermark keys even when sharing one MetaStore', async () => {
     const metaStore = new Map<string, string>();
     const meta = makeMeta(metaStore);
-    const copilot = new CopilotConnector(makePricing(), meta, {} as DuckDBFileReader);
+    const copilot = new CopilotConnector(makePricing(), meta, {} as DuckDBFileReader, () => ({ kind: 'none', path: '' }));
     const claudeCode = new ClaudeCodeConnector(makePricing(), meta, {} as DuckDBFileReader, noopMatcher);
 
     assert.notEqual(copilot.id, claudeCode.id);
@@ -74,7 +74,7 @@ describe('Copilot + Claude Code connector coexistence', () => {
 
   it('ConnectorRegistry holds both without one replacing the other', () => {
     const meta = makeMeta(new Map());
-    const copilot = new CopilotConnector(makePricing(), meta, {} as DuckDBFileReader);
+    const copilot = new CopilotConnector(makePricing(), meta, {} as DuckDBFileReader, () => ({ kind: 'none', path: '' }));
     const claudeCode = new ClaudeCodeConnector(makePricing(), meta, {} as DuckDBFileReader, noopMatcher);
 
     const registry = new ConnectorRegistry().register(copilot).register(claudeCode).build();
@@ -85,7 +85,7 @@ describe('Copilot + Claude Code connector coexistence', () => {
 
   it('events mapped by each connector carry distinct source values and ids', () => {
     const meta = makeMeta(new Map());
-    const copilot = new CopilotConnector(makePricing(), meta, {} as DuckDBFileReader);
+    const copilot = new CopilotConnector(makePricing(), meta, {} as DuckDBFileReader, () => ({ kind: 'none', path: '' }));
     const claudeCode = new ClaudeCodeConnector(makePricing(), meta, {} as DuckDBFileReader, noopMatcher);
 
     const copilotEvent = copilot.mapRow(
@@ -117,7 +117,7 @@ describe('Copilot + Claude Code connector coexistence', () => {
 
   it('a snapshot built from both connectors\' events aggregates each source correctly, not clobbered by the other', () => {
     const meta = makeMeta(new Map());
-    const copilot = new CopilotConnector(makePricing(), meta, {} as DuckDBFileReader);
+    const copilot = new CopilotConnector(makePricing(), meta, {} as DuckDBFileReader, () => ({ kind: 'none', path: '' }));
     const claudeCode = new ClaudeCodeConnector(makePricing(), meta, {} as DuckDBFileReader, noopMatcher);
 
     const copilotEvent = copilot.mapRow(

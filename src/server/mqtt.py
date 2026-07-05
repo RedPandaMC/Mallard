@@ -1,4 +1,10 @@
-"""Embedded MQTT broker: accepts metric payloads via WebSocket and writes to InfluxDB."""
+"""Embedded MQTT broker: accepts metric payloads via WebSocket and writes to InfluxDB.
+
+Auth model: one shared broker password verified via the CredentialVerifier;
+everything ingested over MQTT is tagged source='mqtt'. Per-credential labels
+exist only for API keys and cert CNs (see credential_verifier.py), so there is
+no per-client label bookkeeping here.
+"""
 
 from __future__ import annotations
 
@@ -23,28 +29,43 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Shared at module level so amqtt plugin instances (created by the broker) can reach runtime objects.
-_ctx: dict = {}
+MQTT_SOURCE = "mqtt"
+
+
+@dataclass
+class BrokerContext:
+    settings: "Settings"
+    write_api: "WriteApi"
+    verifier: "CredentialVerifier"
+
+
+# amqtt instantiates plugins from their dotted module path, so runtime objects
+# can only reach them through module state. A single typed context object
+# (set once per broker run) replaces the previous untyped dict.
+_broker_ctx: BrokerContext | None = None
 
 
 class _MallardAuthPlugin(BaseAuthPlugin):
-    """Validates MQTT passwords via the configured CredentialVerifier."""
+    """Validates the shared MQTT password via the configured CredentialVerifier."""
 
     @dataclass
     class Config:
         pass
 
     async def authenticate(self, *, session: Session) -> bool | None:
+        if _broker_ctx is None:
+            logger.error("MQTT auth invoked before broker context was initialised")
+            return False
         password = session.password
         if not password:
             return False
-        verifier: CredentialVerifier = _ctx["verifier"]
-        identity = await verifier.verify_mqtt_credential(password)
-        if identity is None:
+        try:
+            return await _broker_ctx.verifier.verify_mqtt_password(password)
+        except Exception as exc:
+            # Secret manager unreachable with no cache — refuse the connection
+            # rather than crashing the broker.
+            logger.error("MQTT auth: credential verification unavailable: %s", exc)
             return False
-        # Record label for source tagging; keyed by client_id for lookup in message handler
-        _ctx.setdefault("client_labels", {})[session.client_id] = identity.label
-        return True
 
 
 class _MallardMessagePlugin(BasePlugin):
@@ -55,20 +76,16 @@ class _MallardMessagePlugin(BasePlugin):
         pass
 
     async def on_broker_message_received(self, *, client_id: str = "", message=None, **kwargs) -> None:
-        if message is None:
+        if message is None or _broker_ctx is None:
             return
-        source = _ctx.get("client_labels", {}).get(client_id, "unknown")
-        _handle_message(message, _ctx["write_api"], _ctx["settings"], source)
-
-    async def on_broker_client_disconnected(self, *, client_id: str = "", **kwargs) -> None:
-        _ctx.get("client_labels", {}).pop(client_id, None)
+        _handle_message(message, _broker_ctx.write_api, _broker_ctx.settings, MQTT_SOURCE)
 
 
 def _handle_message(
     message,
     write_api: "WriteApi",
     settings: "Settings",
-    source: str = "unknown",
+    source: str = MQTT_SOURCE,
 ) -> None:
     try:
         data = json.loads(message.data)
@@ -95,10 +112,8 @@ async def run_mqtt_broker(
     verifier: "CredentialVerifier",
 ) -> None:
     """Start the embedded amqtt broker on the configured WebSocket port; blocks until cancelled."""
-    _ctx["settings"] = settings
-    _ctx["write_api"] = write_api
-    _ctx["verifier"] = verifier
-    _ctx["client_labels"] = {}
+    global _broker_ctx
+    _broker_ctx = BrokerContext(settings=settings, write_api=write_api, verifier=verifier)
 
     config = {
         "listeners": {
@@ -121,4 +136,5 @@ async def run_mqtt_broker(
         pass
     finally:
         await broker.shutdown()
+        _broker_ctx = None
         logger.info("MQTT broker stopped")

@@ -54,17 +54,19 @@ export class WebhookProtocol implements MetricProtocol {
   async send(_topic: string, payload: Record<string, unknown>): Promise<SendResult> {
     if (!this.active || !this.opts.url) return { ok: false, retryable: false };
     const body = JSON.stringify(payload);
+    let aborted = false; // set when a 4xx AbortError stops the retry loop
     try {
-      await this.post(body);
+      await this.post(body, (fatal) => { aborted = fatal; });
       return { ok: true };
     } catch (err) {
-      const retryable = !(err instanceof AbortError);
       this.logger.error('webhook', 'export failed:', (err as Error).message);
-      return { ok: false, retryable };
+      // p-retry v8 rethrows AbortError as a plain Error, so track the abort
+      // explicitly via the closure flag rather than `instanceof AbortError`.
+      return { ok: false, retryable: !aborted };
     }
   }
 
-  private async post(body: string): Promise<void> {
+  private async post(body: string, onAbort: (fatal: boolean) => void): Promise<void> {
     const { url, secret, headers = {}, retries = 3, certFile, keyFile, caFile } = this.opts;
 
     const extraHeaders: Record<string, string> = { ...headers, 'Content-Type': 'application/json' };
@@ -91,6 +93,7 @@ export class WebhookProtocol implements MetricProtocol {
         }
         if (status >= 400) {
           // 4xx = client error; abort immediately (no retry).
+          onAbort(true);
           throw new AbortError(`HTTP ${status} from webhook endpoint`);
         }
       },

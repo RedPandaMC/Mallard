@@ -65,7 +65,7 @@ class TestLiveInfluxWriteAndRead:
         ts_ms = int(time.time() * 1000)
 
         metric = NormalizedMetric(
-            schema_version=2,
+            schema_version=3,
             instance_id=instance_id,
             ts_ms=ts_ms,
             connector="claude-code",

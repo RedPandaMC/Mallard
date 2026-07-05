@@ -109,20 +109,24 @@ Once the server is running, configure VS Code:
 ```json
 "mallard.server.url": "https://mallard.your-org.com",
 "mallard.export.transport": "webhook",
-"mallard.webhook.auth": "apiKey",
-"mallard.webhook.apiKey": "change-me-too"
+"mallard.webhook.auth": "apiKey"
 ```
 
-**Webhook (Bearer token), useful when your identity provider issues tokens:**
+Then run **Mallard: Set Webhook API Key** from the Command Palette — credentials
+are stored in VS Code's SecretStorage, never in settings files.
+
+**Webhook (Bearer token):**
 
 ```json
 "mallard.server.url": "https://mallard.your-org.com",
 "mallard.export.transport": "webhook",
-"mallard.webhook.auth": "bearer",
-"mallard.webhook.bearerToken": "eyJhbGc..."
+"mallard.webhook.auth": "bearer"
 ```
 
-The server treats the bearer token identically to an API key: it is hashed and looked up in the same credential store. This lets you use a machine token issued by Infisical or OpenBao directly in the extension without a separate `API_KEYS` entry.
+Then run **Mallard: Set Webhook Bearer Token**. The server treats the bearer
+token identically to an API key: it is hashed and looked up in the same
+`API_KEYS` credential store, so the token value must be registered there — the
+server does not validate tokens against an identity provider.
 
 **MQTT (password):**
 

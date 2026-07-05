@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/RedPandaMC/mallard.git"
+    "url": "https://github.com/RedPandaMC/Mallard.git"
   },
   "bugs": {
     "url": "https://github.com/RedPandaMC/mallard/issues"
@@ -102,8 +102,44 @@
         "icon": "$(circle-slash)"
       },
       {
+        "command": "mallard.enableCopilotTelemetry",
+        "title": "Enable Copilot Usage Tracking",
+        "category": "Mallard",
+        "icon": "$(broadcast)"
+      },
+      {
         "command": "mallard.setMqttPassword",
         "title": "Set MQTT Export Password",
+        "category": "Mallard",
+        "icon": "$(key)"
+      },
+      {
+        "command": "mallard.manageCredentials",
+        "title": "Manage Credentials",
+        "category": "Mallard",
+        "icon": "$(key)"
+      },
+      {
+        "command": "mallard.setWebhookApiKey",
+        "title": "Set Webhook API Key",
+        "category": "Mallard",
+        "icon": "$(key)"
+      },
+      {
+        "command": "mallard.setWebhookBearerToken",
+        "title": "Set Webhook Bearer Token",
+        "category": "Mallard",
+        "icon": "$(key)"
+      },
+      {
+        "command": "mallard.setWebhookSigningSecret",
+        "title": "Set Webhook Signing Secret",
+        "category": "Mallard",
+        "icon": "$(key)"
+      },
+      {
+        "command": "mallard.setGitHubPat",
+        "title": "Set GitHub Personal Access Token",
         "category": "Mallard",
         "icon": "$(key)"
       }
@@ -138,6 +174,11 @@
           "type": "string",
           "default": "",
           "description": "Override path to the Copilot log directory (blank = auto-detect via VS Code logUri)."
+        },
+        "mallard.copilotOtelPath": {
+          "type": "string",
+          "default": "",
+          "description": "Override path to Copilot's OpenTelemetry export target — a JSONL file, or a .sqlite/.db database. Blank = auto-detect from github.copilot.chat.otel.outfile. Run 'Mallard: Enable Copilot Usage Tracking' to set it up automatically."
         },
         "mallard.pricingManifestUrl": {
           "type": "string",
@@ -179,7 +220,11 @@
         },
         "mallard.export.transport": {
           "type": "string",
-          "enum": ["", "webhook", "mqtt"],
+          "enum": [
+            "",
+            "webhook",
+            "mqtt"
+          ],
           "enumDescriptions": [
             "Metric export disabled.",
             "POST usage metrics as JSON to the server's HTTP webhook endpoint.",
@@ -191,27 +236,19 @@
         },
         "mallard.webhook.auth": {
           "type": "string",
-          "enum": ["apiKey", "bearer", "certificate"],
+          "enum": [
+            "apiKey",
+            "bearer",
+            "certificate"
+          ],
           "enumDescriptions": [
-            "Send an X-API-Key header. Set mallard.webhook.apiKey.",
-            "Send an Authorization: Bearer header. Set mallard.webhook.bearerToken.",
+            "Send an X-API-Key header. Run 'Mallard: Set Webhook API Key' to store it.",
+            "Send an Authorization: Bearer header. Run 'Mallard: Set Webhook Bearer Token' to store it.",
             "Authenticate with a client TLS certificate. Set mallard.shared.certificate.*."
           ],
           "default": "apiKey",
           "scope": "machine-overridable",
-          "description": "Auth method for webhook transport."
-        },
-        "mallard.webhook.apiKey": {
-          "type": "string",
-          "default": "",
-          "scope": "machine-overridable",
-          "description": "API key sent as X-API-Key on every webhook POST. Active when mallard.webhook.auth = apiKey."
-        },
-        "mallard.webhook.bearerToken": {
-          "type": "string",
-          "default": "",
-          "scope": "machine-overridable",
-          "description": "Token sent as Authorization: Bearer on every webhook POST. Active when mallard.webhook.auth = bearer."
+          "description": "Auth method for webhook transport. Credentials are stored in SecretStorage via the Mallard credential commands, never in settings."
         },
         "mallard.mqtt.url": {
           "type": "string",
@@ -221,7 +258,10 @@
         },
         "mallard.mqtt.auth": {
           "type": "string",
-          "enum": ["password", "certificate"],
+          "enum": [
+            "password",
+            "certificate"
+          ],
           "enumDescriptions": [
             "Authenticate with username and password. Set mallard.mqtt.username and run Mallard: Set MQTT Export Password.",
             "Authenticate with a client TLS certificate. Set mallard.shared.certificate.*."
@@ -234,7 +274,13 @@
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "MQTT username. Active when mallard.mqtt.auth = password."
+          "description": "MQTT username, sent in the CONNECT packet as broker metadata. The Mallard server identifies you by the shared broker password and tags all MQTT data source='mqtt' — the username is not used for identification."
+        },
+        "mallard.githubBilling.org": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "GitHub organization slug for org-level Copilot billing in this workspace. Overrides the githubBilling.org value from config.json. Leave blank for personal billing."
         },
         "mallard.shared.certificate.file": {
           "type": "string",
@@ -277,13 +323,13 @@
     "test": "vscode-test",
     "vscode:prepublish": "bun run package",
     "vsce:package": "vsce package",
+    "prune-duckdb": "node scripts/prune-duckdb.mjs",
     "assets": "node scripts/render-assets.mjs",
     "docs:build": "vitepress build docs",
     "docs:dev": "vitepress dev docs"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.3-r.3",
-    "chalk": "2.4.2",
     "echarts": "^6.1.0",
     "mqtt": "^5.15.1",
     "neverthrow": "^8.2.0",
@@ -306,6 +352,7 @@
     "eslint": "^10.6.0",
     "eslint-plugin-security": "^4.0.1",
     "fast-check": "^4.8.0",
+    "jsdom": "^29.1.1",
     "mermaid": "^11.12.3",
     "mocha": "^10.7.0",
     "prettier": "^3.3.3",
@@ -315,5 +362,6 @@
     "vitepress": "^1.6.4",
     "vitepress-plugin-mermaid": "^2.0.17",
     "zustand": "^5.0.14"
-  }
+  },
+  "homepage": "https://redpandamc.github.io/Mallard/"
 }

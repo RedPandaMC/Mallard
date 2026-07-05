@@ -1,17 +1,24 @@
 import { strict as assert } from 'assert';
+import * as path from 'path';
 import { CopilotConnector } from '../../../src/extension-backend/ingest/CopilotConnector';
+import type { CopilotOtelSource } from '../../../src/extension-backend/config';
+import type { SetupRequirement } from '../../../src/extension-backend/ingest/SetupRequirement';
 import type { ParseContext } from '../../../src/extension-backend/ingest/otelParse';
 import type { PricingService } from '../../../src/extension-backend/pricing/PricingService';
 import type { IMetaStore as MetaStore } from '../../../src/extension-backend/store/MetaStore';
 import type { DuckDBFileReader } from '../../../src/extension-backend/store/DuckDBFileReader';
 
 const now = new Date('2026-01-15T10:00:00.000Z').getTime();
+const NONE: CopilotOtelSource = { kind: 'none', path: '' };
 
-function makeConnector(): CopilotConnector {
+function makeConnector(
+  resolveOtel: () => CopilotOtelSource = () => NONE,
+  requirements: SetupRequirement[] = [],
+): CopilotConnector {
   const pricing = { pricePerCredit: 0.04, currentManifest: undefined } as unknown as PricingService;
   const meta = { get: async () => null, set: async () => {} } as MetaStore;
   const fileReader = {} as DuckDBFileReader;
-  return new CopilotConnector(pricing, meta, fileReader);
+  return new CopilotConnector(pricing, meta, fileReader, resolveOtel, requirements);
 }
 
 function makeCtx(overrides?: Partial<ParseContext>): ParseContext {
@@ -24,12 +31,16 @@ const baseAttrs = {
   'gen_ai.usage.output_tokens': 50,
 };
 
-function makeConnectorWithLogPath(logPath: string): CopilotConnector {
-  const pricing = { pricePerCredit: 0.04, currentManifest: undefined } as unknown as PricingService;
-  const meta = { get: async () => null, set: async () => {} } as MetaStore;
-  const fileReader = {} as DuckDBFileReader;
-  return new CopilotConnector(pricing, meta, fileReader, undefined, logPath);
-}
+type DiscoverShape = {
+  globs?: string[];
+  kind?: string;
+  dbPath?: string;
+  query?: string;
+  allowedRoots: string[];
+  searchedDirs: string[];
+};
+const discoverOf = (c: CopilotConnector): Promise<DiscoverShape> =>
+  (c as unknown as { discover(): Promise<DiscoverShape> }).discover();
 
 describe('CopilotConnector — lifecycle', () => {
   it('watermarkKey returns "copilot:watermark"', () => {
@@ -40,24 +51,33 @@ describe('CopilotConnector — lifecycle', () => {
     );
   });
 
-  it('discover() returns an object with globs/allowedRoots/searchedDirs arrays', async () => {
-    const connector = makeConnector();
-    const result = await (connector as unknown as {
-      discover(): Promise<{ globs: string[]; allowedRoots: string[]; searchedDirs: string[] }>;
-    }).discover();
-    assert.ok(Array.isArray(result.globs));
-    assert.ok(Array.isArray(result.allowedRoots));
-    assert.ok(Array.isArray(result.searchedDirs));
+  it('discover() returns an empty ndjson target when no OTel source is configured', async () => {
+    const result = await discoverOf(makeConnector(() => NONE));
+    assert.deepEqual(result.globs, []);
+    assert.deepEqual(result.allowedRoots, []);
+    assert.deepEqual(result.searchedDirs, []);
   });
 
-  it('discover() returns globs when a log dir path override points to an existing dir', async () => {
-    const connector = makeConnectorWithLogPath('/tmp');
-    const result = await (connector as unknown as {
-      discover(): Promise<{ globs: string[]; allowedRoots: string[]; searchedDirs: string[] }>;
-    }).discover();
-    assert.ok(result.globs.length > 0, 'globs should be non-empty when /tmp exists');
-    assert.ok(result.allowedRoots.includes('/tmp'));
-    assert.ok(result.searchedDirs.includes('/tmp'));
+  it('discover() returns an ndjson glob at the configured OTel outfile', async () => {
+    const file = path.join('/tmp', 'otel', 'copilot.jsonl');
+    const result = await discoverOf(makeConnector(() => ({ kind: 'ndjson', path: file })));
+    assert.equal(result.globs?.length, 1);
+    assert.ok(result.globs?.[0]?.endsWith('copilot.jsonl'));
+    assert.ok(!result.globs?.[0]?.includes('\\'), 'globs use forward slashes');
+    assert.ok(result.allowedRoots.includes(path.dirname(file)));
+  });
+
+  it('discover() returns a sqlite target when the OTel source is a DB', async () => {
+    const db = path.join('/tmp', 'otel', 'copilot.sqlite');
+    const result = await discoverOf(makeConnector(() => ({ kind: 'sqlite', path: db })));
+    assert.equal(result.kind, 'sqlite');
+    assert.equal(result.dbPath, db);
+    assert.ok(typeof result.query === 'string' && result.query.includes('mallard_otel'));
+  });
+
+  it('getSetupRequirements() returns the injected requirements', () => {
+    const req = { id: 'copilot-otel' } as unknown as SetupRequirement;
+    assert.deepEqual(makeConnector(() => NONE, [req]).getSetupRequirements(), [req]);
   });
 });
 
@@ -103,24 +123,22 @@ describe('CopilotConnector.mapRow()', () => {
     assert.equal(result.ts, new Date(ts).getTime());
   });
 
-  it('falls back to ctx.now for NaN timestamp', () => {
+  it('skips rows with an unparseable timestamp (would mis-bucket into "now")', () => {
     const connector = makeConnector();
     const result = connector.mapRow(
       { timestamp: 'not-a-date', attributes: baseAttrs },
       makeCtx(),
     );
-    assert.ok(result);
-    assert.equal(result.ts, now);
+    assert.equal(result, null);
   });
 
-  it('falls back to ctx.now when timestamp is an object', () => {
+  it('skips rows whose timestamp is an object', () => {
     const connector = makeConnector();
     const result = connector.mapRow(
       { timestamp: { value: 1 }, attributes: baseAttrs },
       makeCtx(),
     );
-    assert.ok(result);
-    assert.equal(result.ts, now);
+    assert.equal(result, null);
   });
 
   it('uses numeric timestamp directly', () => {

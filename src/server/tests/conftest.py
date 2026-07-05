@@ -19,7 +19,11 @@ _DEFAULT_ENV = {
     # Bare keys (no label) — label will be "unknown"; labeled keys also supported.
     # Only used to build a StaticCredentialVerifier directly in the `client` fixture
     # below; production Settings can no longer select the static backend at all.
-    "API_KEYS": "test-key-valid,second-key",
+    # First key bare (label "unknown"); second labeled so per-credential tests
+    # can distinguish the two buckets.
+    "API_KEYS": "test-key-valid,team-b:second-key",
+    # mTLS CN → label mapping exercised by TestCertLabelMapping
+    "CERT_LABELS": "team-cert:machine-01",
     "LOG_LEVEL": "DEBUG",
     "RATE_LIMIT": "1000/minute",  # effectively unlimited during tests
     # A secret manager is mandatory to construct Settings at all now, even though
@@ -56,13 +60,18 @@ def mock_influx_client(mock_write_api: MagicMock) -> MagicMock:
     return client
 
 
-@pytest.fixture()
-def client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> TestClient:
+def _build_client(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_influx_client: MagicMock,
+    extra_env: dict[str, str] | None = None,
+):
     """
     TestClient with mocked InfluxDB.  Import and build the app *inside* the
     fixture so the monkeypatched env is already in place when Settings() runs.
     """
     _patch_env_and_settings(monkeypatch)
+    for k, v in (extra_env or {}).items():
+        monkeypatch.setenv(k, v)
 
     from server.credential_verifier import StaticCredentialVerifier
 
@@ -87,7 +96,7 @@ def client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> Te
         # SECRET_MANAGER_URL above. Patched after the reload so it isn't rebound
         # back to the real function by the `from .credential_verifier import
         # create_verifier` line executing again. Tests want the fast, no-network
-        # static verifier instead, keyed off the same API_KEYS/MQTT_CREDENTIALS env vars.
+        # static verifier instead, keyed off the same API_KEYS/MQTT_PASSWORD env vars.
         with (
             patch.object(
                 main_module,
@@ -100,17 +109,43 @@ def client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> Te
 
 
 @pytest.fixture()
+def client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> TestClient:
+    yield from _build_client(monkeypatch, mock_influx_client)
+
+
+# Two secrets configured — the second is "current", the first simulates the
+# old secret still being accepted during a rotation window.
+HMAC_SECRETS = ["old-signing-secret", "test-signing-secret"]
+
+
+@pytest.fixture()
+def hmac_client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> TestClient:
+    """Client with X-Mallard-Signature-256 verification enabled."""
+    yield from _build_client(
+        monkeypatch,
+        mock_influx_client,
+        {"WEBHOOK_HMAC_SECRETS": ",".join(HMAC_SECRETS)},
+    )
+
+
+@pytest.fixture()
 def valid_payload() -> dict:
     return {
         "instance_id": "abc123",
-        "schema_version": 2,
+        "schema_version": 3,
         "ts": 1_700_000_000_000,
-        "credits_velocity_per_hour": 1.5,
+        "tz_offset_minutes": 120,
         "mtd_budget_pct": 42.0,
         "mtd_credits": 100.0,
         "mtd_cost_usd": 3.50,
         "today_credits": 10.0,
         "today_cost_usd": 0.35,
+        "total_credits": 110.0,
+        "total_event_count": 12,
+        "estimated_event_count": 9,
+        "model_credits": {"claude-sonnet-4-5": 80.0, "claude-haiku-3": 30.0},
+        "surface_credits": {"agent": 110.0},
+        "cost_by_category": {"input": 1.5, "output": 2.0},
         "active_models": ["claude-sonnet-4-5", "claude-haiku-3"],
         "top_model": "claude-sonnet-4-5",
     }

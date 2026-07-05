@@ -39,14 +39,49 @@ export function fileKeyOf(filePath: string): string {
   return (hash >>> 0).toString(36);
 }
 
-/** Parse an event timestamp from a raw row, falling back to `fallback` (epoch ms). */
-export function parseTimestamp(row: AnyRecord, fallback: number): number {
+/**
+ * Parse an event timestamp from a raw row, or undefined when the row has no
+ * parseable timestamp. Callers should skip such rows: falling back to "now"
+ * would mis-bucket the event into the current period and, because the id is
+ * derived from ts, re-insert the same row with a fresh id on every ingest run.
+ */
+export function parseTimestamp(row: AnyRecord): number | undefined {
   const raw = row['timestamp'] ?? row['time'];
   const ts =
     typeof raw === 'string' ? Date.parse(raw) :
     typeof raw === 'number' ? raw :
     NaN;
-  return Number.isNaN(ts) ? fallback : ts;
+  if (!Number.isNaN(ts)) return ts;
+  // OTel spans carry a nanosecond epoch instead of an ISO/ms timestamp.
+  const nanos = row['startTimeUnixNano'] ?? row['timeUnixNano'];
+  const n = typeof nanos === 'string' ? Number(nanos) : typeof nanos === 'number' ? nanos : NaN;
+  return Number.isNaN(n) ? undefined : Math.floor(n / 1e6);
+}
+
+/** Unwrap an OTLP attribute value ({ stringValue | intValue | … }) to a scalar. */
+function unwrapOtelValue(v: unknown): unknown {
+  if (v && typeof v === 'object') {
+    const o = v as AnyRecord;
+    return o['stringValue'] ?? o['intValue'] ?? o['doubleValue'] ?? o['boolValue'] ?? v;
+  }
+  return v;
+}
+
+/**
+ * Normalise an OTel span's `attributes` into a flat `{ key: value }` map.
+ * Handles both the OTLP array form (`[{ key, value: { stringValue } }]`) and a
+ * plain object map; anything else yields an empty map.
+ */
+export function flattenOtelAttributes(attrs: unknown): AnyRecord {
+  if (Array.isArray(attrs)) {
+    const out: AnyRecord = {};
+    for (const item of attrs) {
+      const kv = item as { key?: unknown; value?: unknown };
+      if (typeof kv.key === 'string') out[kv.key] = unwrapOtelValue(kv.value);
+    }
+    return out;
+  }
+  return attrs && typeof attrs === 'object' ? (attrs as AnyRecord) : {};
 }
 
 /**

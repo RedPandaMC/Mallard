@@ -6,7 +6,7 @@
   <img src="media/brand/readme-banner-light.png" alt="Mallard, a GitHub Copilot cost tracker for VS Code" width="480" style="max-width:100%" />
 </picture>
 
-**Know exactly what GitHub Copilot and Claude Code are costing you.**
+**Know what GitHub Copilot and Claude Code are costing you — estimated from local logs.**
 
 [![CI](https://github.com/RedPandaMC/Mallard/actions/workflows/ci.yml/badge.svg)](https://github.com/RedPandaMC/Mallard/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/RedPandaMC/Mallard/branch/main/graph/badge.svg)](https://codecov.io/gh/RedPandaMC/Mallard)
@@ -16,9 +16,18 @@
 
 ---
 
-Mallard is a VS Code extension that turns GitHub Copilot's local usage logs into a live cost dashboard: today's spend, month-to-date, and a projected month-end total, broken down by model, surface, cost type, and repository. There's nothing to sign into and nothing to configure. Install it, use Copilot, and watch the numbers update in real time. Connect GitHub billing later if you want the authoritative charge alongside Mallard's estimate.
+Mallard is a VS Code extension that turns GitHub Copilot's local usage logs into a live cost dashboard: today's spend, month-to-date, and a projected month-end total, broken down by model, surface, cost type, and repository. By default there's nothing to sign into and nothing to configure — install it, use Copilot, and watch the numbers update in real time. Connect GitHub billing later if you want the authoritative charge alongside Mallard's estimate.
 
-Under the hood it's a DuckDB-backed dashboard with branch-aware spend tracking, programmable budget alerts, and optional Copilot restriction when a budget runs out, all running locally, with no telemetry and no external accounts required.
+Under the hood it's a DuckDB-backed dashboard with branch-aware spend tracking, programmable budget alerts, and an optional restriction popup when a budget runs out, all running locally. No telemetry is collected and no external accounts are required by default; GitHub sign-in and metric export are opt-in.
+
+## What talks to the network
+
+By default, Mallard reads only local log files and sends nothing anywhere. Two background reference fetches are unconditional (no user data is sent):
+
+- **Pricing manifest** — the Copilot credit-multiplier table is fetched daily from `raw.githubusercontent.com/RedPandaMC/mallard/main/media/pricing-manifest.json`. Per-token model prices are fetched from OpenRouter's public `/api/v1/models` endpoint (LiteLLM's community price sheet as fallback).
+- **Currency rates** — daily FX rates from `api.frankfurter.app` for display-currency conversion.
+
+If you opt in to metric export, payloads are sent to your self-hosted server only. If you opt in to GitHub billing, the extension calls GitHub's billing API using your token.
 
 ## Quick start
 
@@ -56,7 +65,7 @@ bun run check-types    # type-check both tsconfigs
 bun run lint
 bun run test:unit      # pure logic tests
 bun run test:coverage  # tests with c8 coverage report
-bun test               # integration tests in a real VS Code host
+bun run test           # integration tests in a real VS Code host
 bun run bench          # performance benchmarks (not run in CI)
 bun run assets         # regenerate brand rasters from the source SVG art
 bun run docs:dev       # preview the documentation site
@@ -67,3 +76,7 @@ Press F5 to launch an Extension Development Host.
 ## License
 
 MIT
+
+---
+
+Mallard is an independent project and is not affiliated with, endorsed by, or sponsored by GitHub, Microsoft, or Anthropic. "GitHub Copilot" and "Claude Code" are trademarks of their respective owners.

@@ -205,18 +205,16 @@ describe('ClaudeCodeConnector.mapRow()', () => {
     assert.equal(result.modelId, 'claude-opus-4');
   });
 
-  it('falls back to ctx.now for NaN timestamp', () => {
+  it('skips rows with an unparseable timestamp (would mis-bucket into "now")', () => {
     const connector = makeConnector();
     const result = connector.mapRow(makeLine({ timestamp: 'garbage' }), makeCtx());
-    assert.ok(result);
-    assert.equal(result.ts, now);
+    assert.equal(result, null);
   });
 
-  it('uses ctx.now when timestamp is an object', () => {
+  it('skips rows whose timestamp is an object', () => {
     const connector = makeConnector();
     const result = connector.mapRow(makeLine({ timestamp: { value: 1 } }), makeCtx());
-    assert.ok(result);
-    assert.equal(result.ts, now);
+    assert.equal(result, null);
   });
 
   it('handles numeric timestamp', () => {

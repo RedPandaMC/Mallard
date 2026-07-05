@@ -33,7 +33,7 @@ All settings are environment variables. In Docker Compose, set them in `.env`. I
 | `INFLUX_BUCKET` | no | `metrics` | InfluxDB bucket |
 | `API_KEYS` | no | `""` | `label:key` pairs, comma-separated. Only meaningful for OpenBao's seed step or for constructing a `StaticCredentialVerifier` directly in tests — the running server always reads credentials from the configured secret manager. |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG\|INFO\|WARNING\|ERROR\|CRITICAL` |
-| `RATE_LIMIT` | no | `60/minute` | Per-key rate limit (slowapi format) |
+| `RATE_LIMIT` | no | `60/minute` | Post-auth per-label rate limit (slowapi format); a pre-auth per-IP limit also applies |
 
 ### MQTT
 
@@ -41,7 +41,7 @@ All settings are environment variables. In Docker Compose, set them in `.env`. I
 |---|---|---|---|
 | `MQTT_ENABLED` | no | `false` | Enable the embedded amqtt broker |
 | `MQTT_PORT` | no | `8083` | WebSocket port for MQTT |
-| `MQTT_CREDENTIALS` | no | none | `label:password` pairs, separate from `API_KEYS` |
+| `MQTT_PASSWORD` | no | none | Single shared broker password for MQTT auth (all MQTT ingest tagged `source=mqtt`) |
 
 ### Secret management
 
@@ -66,7 +66,7 @@ Credentials use a `label:secret` format. The label becomes the `source` tag in I
 
 ```bash
 API_KEYS=team-alpha:key-abc123,team-beta:key-def456
-MQTT_CREDENTIALS=alice:mqtt-pass1,ci-pipeline:mqtt-pass2
+MQTT_PASSWORD=shared-broker-password
 ```
 
 Bare values (no label) get `source=unknown`.
@@ -81,7 +81,7 @@ The server accepts three credential types (HTTP):
 2. **Bearer token**: `Authorization: Bearer <key>` (same key lookup as API key)
 3. **mTLS certificate**: client cert CN is used as `source`; no API key needed
 
-For MQTT: CONNECT password is verified against `MQTT_CREDENTIALS`.
+For MQTT: CONNECT password is verified against the single `MQTT_PASSWORD`. All MQTT ingest is tagged `source=mqtt`.
 
 See [docs/extension-auth.md](docs/extension-auth.md) for the full auth contract between the server and the VS Code extension.
 
@@ -118,29 +118,37 @@ Credentials are fetched from the manager with a 30-second TTL cache; rotation re
 
 ### `POST /api/v1/ingest`
 
-Rate-limited per credential. Body must be ≤ 64 KB.
+Rate-limited in two layers: pre-auth per client IP (prevents bucket-minting via junk credentials), then post-auth per verified label. Body must be ≤ 64 KB.
 
 Returns `202 Accepted` on success, `401 Unauthorized` for bad credentials, `503 Service Unavailable` if InfluxDB is unreachable.
 
 ```json
 {
   "instance_id": "abc123",
-  "schema_version": 2,
+  "schema_version": 3,
   "ts": 1750000000000,
-  "credits_velocity_per_hour": 18.4,
+  "tz_offset_minutes": 120,
   "mtd_budget_pct": 0.34,
   "mtd_credits": 120.5,
   "mtd_cost_usd": 4.82,
   "today_credits": 22.3,
   "today_cost_usd": 0.89,
+  "total_credits": 142.8,
+  "total_event_count": 57,
+  "estimated_event_count": 41,
+  "model_credits": { "claude-sonnet-4-6": 98.5, "gpt-4o": 44.3 },
+  "surface_credits": { "agent": 120.0, "chat": 22.8 },
+  "cost_by_category": { "input": 1.2, "output": 3.1 },
   "active_models": ["claude-sonnet-4-6", "gpt-4o"],
   "top_model": "claude-sonnet-4-6"
 }
 ```
 
+See the [Metrics Schema reference](https://redpandamc.github.io/Mallard/reference/metrics-schema) for the full field table and aggregation semantics (gauges vs additive counters).
+
 ### `GET /health`
 
-Returns `{"status": "ok"|"degraded", "influx": "pong"|"error"}`. Always HTTP 200.
+Returns `{"status": "ok"|"degraded", "influx": "pong"|"error", "min_known_schema_version": 3, "max_known_schema_version": 3}`. Always HTTP 200.
 
 ---
 
@@ -148,7 +156,7 @@ Returns `{"status": "ok"|"degraded", "influx": "pong"|"error"}`. Always HTTP 200
 
 - Credentials are SHA-256 hashed in memory at startup; raw values are never stored or logged.
 - All comparisons use `hmac.compare_digest` to prevent timing attacks.
-- Rate limiting is per-credential, not per-IP (handles NAT/shared IPs correctly).
+- Rate limiting is two-layer: pre-auth per client IP (prevents bucket-minting via junk `X-API-Key` values), post-auth per verified label.
 - Docker Compose: backend services run on an internal network; Caddy is the only publicly reachable service.
 - Kubernetes: NetworkPolicy enforces default-deny with explicit allowlist rules; the server pod runs as non-root with a read-only filesystem.
 
@@ -167,10 +175,10 @@ Returns `{"status": "ok"|"degraded", "influx": "pong"|"error"}`. Always HTTP 200
 ## Running tests
 
 ```bash
-cd server
 pip install uv
 uv pip install -e ".[dev]"
-pytest tests/ -v --cov=src --cov-report=term-missing
+pytest -v
+pytest --cov=server --cov-report=term-missing
 ```
 
-All new Python code maintains 100% test coverage. Property-based fuzz tests run with `pytest tests/fuzz/`.
+Server tests live in `src/server/tests/`. Property-based fuzz tests run with `pytest src/server/tests/fuzz/ -v`.

@@ -6,7 +6,12 @@ WORKDIR /build
 RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml .
-RUN uv pip install --system --no-cache .
+# Install into a self-contained venv instead of system site-packages: copying
+# /usr/local/lib/pythonX.Y/site-packages hardcoded the interpreter minor
+# version and silently broke on base-image bumps (it already bit once with
+# 3.13→3.14). The venv path is version-independent; both stages use the same
+# base image so the interpreter symlink inside the venv stays valid.
+RUN uv venv /opt/venv && uv pip install --python /opt/venv/bin/python --no-cache .
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM python:3.14-slim
@@ -15,8 +20,8 @@ WORKDIR /app
 
 RUN groupadd -r -g 1000 mallard && useradd -r -u 1000 -g mallard mallard
 
-COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 COPY src/server/*.py ./server/
 COPY src/server/routers/ ./server/routers/
 

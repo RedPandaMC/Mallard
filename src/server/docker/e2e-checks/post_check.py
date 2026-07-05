@@ -15,7 +15,7 @@ r = httpx.post(
     headers={"X-API-Key": api_key},
     json={
         "instance_id": "e2e-instance",
-        "schema_version": 2,
+        "schema_version": 3,
         "ts": 1700000000000,
         "mtd_credits": 42.5,
         "mtd_cost_usd": 1.5,

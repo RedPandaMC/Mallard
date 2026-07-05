@@ -2,23 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 from functools import cached_property
 from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-def _parse_labeled(raw: str) -> dict[str, str]:
-    """'label:secret,...' → {sha256(secret): label}. Bare values get label 'unknown'."""
-    result: dict[str, str] = {}
-    for entry in (e.strip() for e in raw.split(",") if e.strip()):
-        label, _, key = entry.partition(":")
-        if not key:
-            label, key = "unknown", label
-        result[hashlib.sha256(key.encode()).hexdigest()] = label.strip()
-    return result
 
 
 class Settings(BaseSettings):
@@ -50,8 +38,34 @@ class Settings(BaseSettings):
     # MQTT (optional — embedded broker started when mqtt_enabled = true)
     mqtt_enabled: bool = Field(False, description="Start the embedded MQTT broker on mqtt_port")
     mqtt_port: int = Field(8083, description="WebSocket MQTT port (internal; proxied by Caddy/Ingress)")
-    mqtt_credentials: str = Field(
-        "", description="Comma-separated MQTT passwords in label:secret or bare format"
+    mqtt_password: str = Field(
+        "",
+        description=(
+            "Single shared password for the embedded MQTT broker. All MQTT ingest is "
+            "tagged source='mqtt'; per-credential labels exist only for API keys "
+            "(and cert CNs via CERT_LABELS). Static-mode only — production deployments "
+            "store MQTT_PASSWORD in the secret manager."
+        ),
+    )
+
+    # mTLS cert labels — 'label:cn' pairs mapping a client-cert CommonName to a
+    # source label; CNs without an entry fall back to the CN itself as the source.
+    cert_labels: str = Field(
+        "",
+        description="Comma-separated 'label:cn' pairs for mTLS clients, static-mode only",
+    )
+
+    # Optional HMAC request signing. When non-empty, every ingest request must
+    # carry a valid X-Mallard-Signature-256 header (HMAC-SHA256 of the raw
+    # body). Comma-separated plain values so a new secret can be added before
+    # the old one is retired (rotation window).
+    webhook_hmac_secrets: str = Field(
+        "",
+        description=(
+            "Comma-separated HMAC signing secrets for X-Mallard-Signature-256 "
+            "verification. Empty disables signature checking. Static-mode only — "
+            "production deployments store WEBHOOK_HMAC_SECRETS in the secret manager."
+        ),
     )
 
     # Secret manager (required — every deployment must pick one; there is no
@@ -100,14 +114,33 @@ class Settings(BaseSettings):
     @cached_property
     def hashed_api_keys(self) -> dict[str, str]:
         """SHA-256 hash → label map for configured API keys (computed once)."""
-        return _parse_labeled(self.api_keys)
+        # Local import: credential_verifier imports Settings for typing, so a
+        # module-level import here would be circular.
+        from .credential_verifier import CredentialStore
+
+        return CredentialStore.parse_labeled(self.api_keys)
 
     @cached_property
-    def hashed_mqtt_credentials(self) -> dict[str, str]:
-        """SHA-256 hash → label map for configured MQTT passwords (computed once)."""
-        if not self.mqtt_credentials.strip():
-            return {}
-        return _parse_labeled(self.mqtt_credentials)
+    def parsed_cert_labels(self) -> dict[str, str]:
+        """CN → label map for mTLS clients (computed once), static-mode only."""
+        from .credential_verifier import CredentialStore
+
+        return CredentialStore.parse_cert_labels(self.cert_labels)
+
+    @cached_property
+    def parsed_webhook_hmac_secrets(self) -> list[str]:
+        """HMAC signing secrets (computed once), static-mode only."""
+        from .credential_verifier import CredentialStore
+
+        return CredentialStore.parse_secret_list(self.webhook_hmac_secrets)
+
+    @property
+    def secret_manager_base_url(self) -> str:
+        """secret_manager_url normalised for the verifiers: no trailing slash, and a
+        trailing '/api' stripped — the Infisical verifier appends '/api/v3/...' itself,
+        so a URL configured with '/api' would otherwise fetch '/api/api/v3/...'."""
+        base = self.secret_manager_url.rstrip("/")
+        return base[: -len("/api")] if base.endswith("/api") else base
 
 
 _settings: Settings | None = None

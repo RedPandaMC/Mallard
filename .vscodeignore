@@ -2,11 +2,30 @@
 .vscode-test/**
 .vscode-test.mjs
 .github/**
+.claude/**
 src/**
 webview/**
 test/**
 out/**
+docs/**
+scripts/**
+coverage/**
+.venv/**
+.mypy_cache/**
+.pytest_cache/**
+.hypothesis/**
+media/brand/**
+pyproject.toml
+codecov.yml
+bun.lock
+.c8rc.json
+.trivyignore
 node_modules/**
+# DuckDB native binding ships inside the VSIX. Run scripts/prune-duckdb.mjs
+# <target> before `vsce package --target <target>` so exactly ONE platform
+# binding remains under @duckdb — otherwise every installed platform's
+# ~35-70 MB binding is bundled, and platforms without an installed binding
+# get a broken build.
 !node_modules/@duckdb/**
 **/*.ts
 **/*.map

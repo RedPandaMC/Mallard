@@ -2,10 +2,121 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+
+from .conftest import HMAC_SECRETS
+
+
+def _sign(body: bytes, secret: str) -> str:
+    return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+
+class TestHmacSignature:
+    """X-Mallard-Signature-256 verification — opt-in via WEBHOOK_HMAC_SECRETS."""
+
+    def test_valid_signature_returns_202(self, hmac_client: TestClient, valid_payload: dict) -> None:
+        body = json.dumps(valid_payload).encode()
+        response = hmac_client.post(
+            "/api/v1/ingest",
+            content=body,
+            headers={
+                "X-API-Key": "test-key-valid",
+                "Content-Type": "application/json",
+                "X-Mallard-Signature-256": _sign(body, HMAC_SECRETS[1]),
+            },
+        )
+        assert response.status_code == 202
+
+    def test_rotation_old_secret_still_accepted(
+        self, hmac_client: TestClient, valid_payload: dict
+    ) -> None:
+        body = json.dumps(valid_payload).encode()
+        response = hmac_client.post(
+            "/api/v1/ingest",
+            content=body,
+            headers={
+                "X-API-Key": "test-key-valid",
+                "Content-Type": "application/json",
+                "X-Mallard-Signature-256": _sign(body, HMAC_SECRETS[0]),
+            },
+        )
+        assert response.status_code == 202
+
+    def test_bad_signature_returns_401(self, hmac_client: TestClient, valid_payload: dict) -> None:
+        body = json.dumps(valid_payload).encode()
+        response = hmac_client.post(
+            "/api/v1/ingest",
+            content=body,
+            headers={
+                "X-API-Key": "test-key-valid",
+                "Content-Type": "application/json",
+                "X-Mallard-Signature-256": _sign(body, "wrong-secret"),
+            },
+        )
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Invalid signature"
+
+    def test_missing_signature_returns_401_when_secrets_configured(
+        self, hmac_client: TestClient, valid_payload: dict
+    ) -> None:
+        response = hmac_client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={"X-API-Key": "test-key-valid"},
+        )
+        assert response.status_code == 401
+
+    def test_signature_over_different_body_rejected(
+        self, hmac_client: TestClient, valid_payload: dict
+    ) -> None:
+        other_body = json.dumps({**valid_payload, "mtd_credits": 999999}).encode()
+        body = json.dumps(valid_payload).encode()
+        response = hmac_client.post(
+            "/api/v1/ingest",
+            content=body,
+            headers={
+                "X-API-Key": "test-key-valid",
+                "Content-Type": "application/json",
+                "X-Mallard-Signature-256": _sign(other_body, HMAC_SECRETS[1]),
+            },
+        )
+        assert response.status_code == 401
+
+    def test_header_ignored_when_no_secrets_configured(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """Backward compatible: without WEBHOOK_HMAC_SECRETS the header is not checked."""
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={
+                "X-API-Key": "test-key-valid",
+                "X-Mallard-Signature-256": "sha256=deadbeef",
+            },
+        )
+        assert response.status_code == 202
+
+    def test_malformed_header_prefix_rejected(
+        self, hmac_client: TestClient, valid_payload: dict
+    ) -> None:
+        body = json.dumps(valid_payload).encode()
+        sig = _sign(body, HMAC_SECRETS[1]).removeprefix("sha256=")
+        response = hmac_client.post(
+            "/api/v1/ingest",
+            content=body,
+            headers={
+                "X-API-Key": "test-key-valid",
+                "Content-Type": "application/json",
+                "X-Mallard-Signature-256": sig,  # missing "sha256=" prefix
+            },
+        )
+        assert response.status_code == 401
 
 
 class TestIngestHappyPath:
@@ -323,7 +434,8 @@ class TestIngestRouteDirectly:
 
         mock_settings = MagicMock()
         mock_settings.hashed_api_keys = {}
-        mock_settings.hashed_mqtt_credentials = {}
+        mock_settings.mqtt_password = ""
+        mock_settings.parsed_cert_labels = {}
         verifier = StaticCredentialVerifier(mock_settings)
 
         # The 413 check runs before the body is ever read, so request.body()
@@ -348,6 +460,217 @@ class TestIngestInfluxFailure:
         assert response.status_code == 503
         body = response.json()
         assert "detail" in body
+
+
+class TestCertLabelMapping:
+    """mTLS CNs map through the CERT_LABELS store; unmapped CNs fall back to
+    the CN itself as the source tag."""
+
+    def test_mapped_cn_uses_label_as_source(self, client: TestClient, valid_payload: dict) -> None:
+        # conftest seeds CERT_LABELS with team-cert:machine-01
+        with patch("server.routers.ingest.write_payload") as write_mock:
+            response = client.post(
+                "/api/v1/ingest",
+                json=valid_payload,
+                headers={"SSL_CLIENT_S_DN_CN": "machine-01"},
+            )
+        assert response.status_code == 202
+        assert write_mock.call_args.kwargs["source"] == "team-cert"
+
+    def test_unmapped_cn_falls_back_to_cn(self, client: TestClient, valid_payload: dict) -> None:
+        with patch("server.routers.ingest.write_payload") as write_mock:
+            response = client.post(
+                "/api/v1/ingest",
+                json=valid_payload,
+                headers={"SSL_CLIENT_S_DN_CN": "unmapped-cn"},
+            )
+        assert response.status_code == 202
+        assert write_mock.call_args.kwargs["source"] == "unmapped-cn"
+
+
+class TestVerifierOutage:
+    def test_verifier_exception_returns_503_not_500(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """Remote verifier with no warm cache re-raises when the secret manager is
+        unreachable; the route must surface a deliberate 503, never a 500."""
+        from unittest.mock import AsyncMock
+
+        raising = MagicMock()
+        raising.verify_api_key = AsyncMock(side_effect=RuntimeError("vault down"))
+        original = client.app.state.verifier
+        client.app.state.verifier = raising
+        try:
+            response = client.post(
+                "/api/v1/ingest",
+                json=valid_payload,
+                headers={"X-API-Key": "test-key-valid"},
+            )
+        finally:
+            client.app.state.verifier = original
+        assert response.status_code == 503
+        assert "Credential verification" in response.json()["detail"]
+
+    def test_cert_label_lookup_exception_returns_503(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        from unittest.mock import AsyncMock
+
+        raising = MagicMock()
+        raising.lookup_cert_label = AsyncMock(side_effect=RuntimeError("vault down"))
+        original = client.app.state.verifier
+        client.app.state.verifier = raising
+        try:
+            response = client.post(
+                "/api/v1/ingest",
+                json=valid_payload,
+                headers={"SSL_CLIENT_S_DN_CN": "machine-01"},
+            )
+        finally:
+            client.app.state.verifier = original
+        assert response.status_code == 503
+
+
+class TestPerCredentialRateLimit:
+    def test_label_exceeding_limit_gets_429_with_retry_after(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        from server.rate_limit import SlidingWindowLimiter
+
+        original = client.app.state.label_limiter
+        client.app.state.label_limiter = SlidingWindowLimiter(2, 60)
+        try:
+            for _ in range(2):
+                ok = client.post(
+                    "/api/v1/ingest",
+                    json=valid_payload,
+                    headers={"X-API-Key": "test-key-valid"},
+                )
+                assert ok.status_code == 202
+            blocked = client.post(
+                "/api/v1/ingest",
+                json=valid_payload,
+                headers={"X-API-Key": "test-key-valid"},
+            )
+        finally:
+            client.app.state.label_limiter = original
+        assert blocked.status_code == 429
+        assert int(blocked.headers["Retry-After"]) >= 1
+
+    def test_limit_is_per_credential_not_global(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """Exhausting one credential's budget must not block another's."""
+        from server.rate_limit import SlidingWindowLimiter
+
+        original = client.app.state.label_limiter
+        client.app.state.label_limiter = SlidingWindowLimiter(1, 60)
+        try:
+            first = client.post(
+                "/api/v1/ingest",
+                json=valid_payload,
+                headers={"X-API-Key": "test-key-valid"},
+            )
+            blocked = client.post(
+                "/api/v1/ingest",
+                json=valid_payload,
+                headers={"X-API-Key": "test-key-valid"},
+            )
+            other = client.post(
+                "/api/v1/ingest",
+                json=valid_payload,
+                headers={"X-API-Key": "second-key"},
+            )
+        finally:
+            client.app.state.label_limiter = original
+        assert first.status_code == 202
+        assert blocked.status_code == 429
+        assert other.status_code == 202
+
+
+class TestChunkedBodyCap:
+    def test_chunked_body_over_limit_returns_413(self, client: TestClient) -> None:
+        """Transfer-Encoding: chunked carries no Content-Length, bypassing the
+        middleware fast path — the streamed read must still enforce the cap."""
+
+        def gen():
+            for _ in range(70):
+                yield b"x" * 1024
+
+        response = client.post(
+            "/api/v1/ingest",
+            content=gen(),
+            headers={"X-API-Key": "test-key-valid", "Content-Type": "application/json"},
+        )
+        assert response.status_code == 413
+
+    def test_chunked_body_under_limit_processed(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        import json as json_module
+
+        raw = json_module.dumps(valid_payload).encode()
+
+        def gen():
+            yield raw
+
+        response = client.post(
+            "/api/v1/ingest",
+            content=gen(),
+            headers={"X-API-Key": "test-key-valid", "Content-Type": "application/json"},
+        )
+        assert response.status_code == 202
+
+
+class TestExtractCertCn:
+    """Proxies differ in what they forward: a bare CN, or the full subject DN
+    (nginx $ssl_client_s_dn, Caddy {tls_client_subject})."""
+
+    def test_bare_cn_passes_through(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("machine-01") == "machine-01"
+
+    def test_comma_dn_extracts_cn(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("CN=machine-01,O=team,C=NL") == "machine-01"
+
+    def test_slash_dn_extracts_cn(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("/C=NL/O=team/CN=machine-01") == "machine-01"
+
+    def test_lowercase_cn_attribute(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("cn=machine-01,o=team") == "machine-01"
+
+    def test_empty_returns_empty(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("") == ""
+        assert _extract_cert_cn("   ") == ""
+
+    def test_dn_without_cn_rejected(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("O=team,C=NL") == ""
+
+    def test_cn_with_unsafe_chars_rejected(self) -> None:
+        from server.routers.ingest import _extract_cert_cn
+
+        assert _extract_cert_cn("CN=bad cn with spaces,O=x") == ""
+
+    def test_full_dn_via_route_maps_to_label(self, client: TestClient, valid_payload: dict) -> None:
+        with patch("server.routers.ingest.write_payload") as write_mock:
+            response = client.post(
+                "/api/v1/ingest",
+                json=valid_payload,
+                headers={"SSL_CLIENT_S_DN_CN": "CN=machine-01,O=acme"},
+            )
+        assert response.status_code == 202
+        assert write_mock.call_args.kwargs["source"] == "team-cert"
 
 
 class TestExtractBearer:

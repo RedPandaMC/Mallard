@@ -5,7 +5,7 @@
 - VS Code 1.95 or later
 - [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) and/or Claude Code installed and active
 
-Mallard requires no sign-in or API token: it reads local usage logs these tools already write to disk (Copilot's OTel logs in VS Code's own log directory, Claude Code's JSONL session logs). Install one or both; Mallard tracks whichever it finds.
+Mallard reads local usage logs these tools write to disk — no sign-in or API token required. **Claude Code** works out of the box (Mallard auto-discovers its JSONL session logs). **GitHub Copilot does not write local usage by default**: you enable its OpenTelemetry exporter once and Mallard ingests the resulting file. Install one or both; Mallard tracks whichever it finds. Prefer zero setup? Sign in to GitHub for authoritative Copilot billing instead (see below).
 
 ## Installation
 
@@ -19,7 +19,12 @@ code --install-extension RedPandaMC.mallard
 
 ## First run
 
-Click the Mallard icon in the activity bar. If the dashboard shows an empty state, use Copilot or Claude Code for a minute then click **Refresh**. Run **Mallard: Show Detected Log Path** to confirm Mallard found the right directory. If Copilot's isn't found, set `mallard.copilotLogPath` to override it; Claude Code's log directory is auto-detected and has no override setting.
+Click the Mallard icon in the activity bar.
+
+- **Claude Code** is tracked automatically — use it for a minute, then click **Refresh**. Run **Mallard: Show Detected Log Path** to confirm discovery.
+- **GitHub Copilot** writes no local usage until you turn on its OpenTelemetry exporter. When Copilot is installed but the exporter is off, Mallard shows a one-time prompt and an **Enable Copilot tracking** button in the empty state. Accept it, or run **Mallard: Enable Copilot Usage Tracking** from the Command Palette — Mallard sets `github.copilot.chat.otel.exporterType` to `file` and points `otel.outfile` at a file it then ingests. (You may be asked to reload the window.) To do it manually, or to read a SQLite span DB, set those Copilot settings yourself or point `mallard.copilotOtelPath` at the JSONL/`.sqlite` file.
+
+No structured Copilot usage on disk (e.g. you use a BYOK model with no Copilot token)? Sign in to GitHub for billing data instead — see below.
 
 ## What Mallard tracks
 

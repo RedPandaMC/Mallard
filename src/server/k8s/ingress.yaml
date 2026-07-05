@@ -13,8 +13,15 @@ metadata:
     nginx.ingress.kubernetes.io/auth-tls-secret: "mallard/mallard-ca-key-pair"
     nginx.ingress.kubernetes.io/auth-tls-verify-client: "optional"
     nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: "true"
+    # $ssl_client_s_dn is the standard nginx variable and carries the FULL
+    # subject DN ("CN=machine-01,O=team"); the server extracts the CN itself
+    # (routers/ingest.py:_extract_cert_cn). The previously used
+    # $ssl_client_s_dn_cn is not a standard nginx variable — nginx rejects
+    # configs referencing unknown variables, which broke the whole ingress.
+    # Always setting the header (even empty) also prevents clients from
+    # spoofing a CN of their own.
     nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header SSL_CLIENT_S_DN_CN $ssl_client_s_dn_cn;
+      proxy_set_header SSL_CLIENT_S_DN_CN $ssl_client_s_dn;
 spec:
   tls:
     - hosts:
@@ -38,10 +45,15 @@ spec:
                 name: mallard-server
                 port:
                   number: 8080
-          - path: /mqtt
-            pathType: Prefix
-            backend:
-              service:
-                name: mallard-server
-                port:
-                  number: 8083
+          # MQTT-over-WebSocket. Disabled by default: nothing listens on 8083
+          # unless MQTT_ENABLED=true in k8s/server/configmap.yaml — with the
+          # route active but the listener off, /mqtt would 502. Uncomment this
+          # path together with MQTT_ENABLED=true (and set MQTT_PASSWORD in the
+          # secret manager).
+          # - path: /mqtt
+          #   pathType: Prefix
+          #   backend:
+          #     service:
+          #       name: mallard-server
+          #       port:
+          #         number: 8083

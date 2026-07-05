@@ -15,7 +15,7 @@ helm install infisical infisical-helm-charts/infisical \
 ## Configure
 
 1. Open the Infisical UI and create a project named `mallard`. Note its project ID.
-2. Add secrets to the `prod` environment: `API_KEYS`, `MQTT_CREDENTIALS`, `INFLUX_TOKEN`, etc. (see the credential format below).
+2. Add secrets to the `prod` environment: `API_KEYS`, `MQTT_PASSWORD`, `CERT_LABELS`, `INFLUX_TOKEN`, etc. (see the credential format below).
 3. Under Organization → Machine Identities, create a service token (or machine identity token) scoped to read access on the `mallard` project's `prod` environment. This is a plain bearer token, not a Universal Auth clientId/clientSecret pair.
 
 ## Apply the overlay
@@ -33,13 +33,14 @@ kubectl apply -k server/k8s/infisical/
 
 ## Credential format in Infisical
 
-Use `label:value` format so each identity gets a `source` tag in InfluxDB:
+Labels drive the `source` tag in InfluxDB so analytics can filter by team/person:
 
-| Secret key | Example value |
-|---|---|
-| `API_KEYS` | `team-alpha:key-abc123,team-beta:key-def456` |
-| `MQTT_CREDENTIALS` | `alice:mqtt-pass1,ci-pipeline:mqtt-pass2` |
-| `INFLUX_TOKEN` | `your-influx-token` |
+| Secret key | Example value | Notes |
+|---|---|---|
+| `API_KEYS` | `team-alpha:key-abc123,team-beta:key-def456` | `label:secret` pairs; Bearer tokens verify against the same store |
+| `MQTT_PASSWORD` | `shared-broker-password` | single shared password; all MQTT ingest is tagged `source='mqtt'` |
+| `CERT_LABELS` | `ci:build-agent-01` | optional `label:cn` pairs for mTLS certs; unmapped CNs fall back to the CN |
+| `INFLUX_TOKEN` | `your-influx-token` | |
 
 ## Credential rotation
 

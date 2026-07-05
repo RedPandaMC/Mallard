@@ -77,10 +77,26 @@ jobs:
         run: xvfb-run -a bun vscode-test
 
   package:
-    name: Package .vsix
+    name: Package .vsix (${{ matrix.target }})
     runs-on: ubuntu-latest
     needs: [build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        # One VSIX per platform: the DuckDB native binding ships inside the
+        # package, so a universal VSIX would either bundle every platform's
+        # ~35-70 MB binding or break on platforms without one. Packing is
+        # filesystem-only (no native code runs), so every target builds on
+        # ubuntu-latest.
+        target:
+          - win32-x64
+          - win32-arm64
+          - linux-x64
+          - linux-arm64
+          - alpine-x64
+          - darwin-x64
+          - darwin-arm64
 
     steps:
       - name: Checkout
@@ -88,13 +104,27 @@ jobs:
 
       - uses: ./.github/actions/setup-toolchain
 
+      - name: Keep only the ${{ matrix.target }} DuckDB binding
+        run: bun run prune-duckdb ${{ matrix.target }}
+
       - name: Package .vsix
-        run: bun run vsce:package
+        run: bun run vsce:package -- --target ${{ matrix.target }}
+
+      - name: Enforce VSIX size budget
+        # A regression back to bundling all platform bindings would inflate the
+        # artifact to ~175 MB+; one binding keeps it well under this budget.
+        run: |
+          size=$(stat -c%s *.vsix)
+          echo "VSIX size: $((size / 1024 / 1024)) MB"
+          if [ "$size" -gt $((120 * 1024 * 1024)) ]; then
+            echo "::error::VSIX exceeds the 120 MB budget — are multiple DuckDB bindings bundled?"
+            exit 1
+          fi
 
       - name: Upload .vsix artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: mallard-vsix
+          name: mallard-${{ matrix.target }}
           path: "*.vsix"
           retention-days: 90
 

@@ -4,7 +4,7 @@
  * context's subscriptions.
  */
 import * as vscode from 'vscode';
-import { readConfig } from './config';
+import { readConfig, readCopilotOtel } from './config';
 import { UsageService } from './app/UsageService';
 import { UserConfigStore } from './app/UserConfigStore';
 import { LayoutStore } from './app/LayoutStore';
@@ -14,8 +14,10 @@ import { RestrictionEngine } from './domain/restriction/engine';
 import { PricingManifest } from './domain/pricing';
 import { initRepoAttribution } from './ingest/repoResolver';
 import { CopilotConnector } from './ingest/CopilotConnector';
+import { CopilotOtelRequirement } from './ingest/CopilotOtelRequirement';
 import { ClaudeCodeConnector } from './ingest/ClaudeCodeConnector';
 import { ConnectorRegistry } from './ingest/ConnectorRegistry';
+import { ConnectorSetupGate } from './ingest/ConnectorSetupGate';
 import { WorkspaceFolderMatcher } from './ingest/WorkspaceFolderMatcher';
 import { IngestService } from './ingest/IngestService';
 import { PricingService } from './pricing/PricingService';
@@ -32,6 +34,7 @@ export interface Container {
   pricing: PricingService;
   restriction: RestrictionEngine;
   ingest: IngestService;
+  setupGate: ConnectorSetupGate;
 }
 
 export async function buildContainer(context: vscode.ExtensionContext): Promise<Container> {
@@ -60,8 +63,8 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     pricing,
     store.meta,
     store.fileReader,
-    context.logUri?.fsPath,
-    cfg.copilotLogPath || undefined,
+    () => readCopilotOtel(),
+    [new CopilotOtelRequirement()],
   );
   const claudeCode = new ClaudeCodeConnector(
     pricing,
@@ -77,26 +80,45 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
       .build(),
   );
 
-  const githubSession = new GitHubSession();
+  const githubSession = new GitHubSession(context.secrets);
   const github = new GitHubUsageService(githubSession);
   const userConfig = new UserConfigStore(storageDir);
   const layout = new LayoutStore(context.globalState);
 
-  const exporter = await new AuthProvider(cfg, context).createExporter();
+  // Deliver the config.json githubBilling block (mode/pat/org) and keep it
+  // live on config changes — previously configure() was never called, so the
+  // whole user-level PAT path was dead.
+  githubSession.configure(userConfig.get().githubBilling);
+  context.subscriptions.push(
+    userConfig.onDidChange((c) => githubSession.configure(c.githubBilling)),
+  );
+
+  // Extra webhook/MQTT targets from config.json fan the export out to
+  // multiple destinations. Like the rest of the exporter config, changes
+  // require a reload.
+  const exporter = await new AuthProvider(
+    cfg,
+    context,
+    userConfig.get().export ?? {},
+  ).createExporter();
 
   const usage = new UsageService(store.reader, pricing, ingest, userConfig, currency, github, exporter);
   const restriction = new RestrictionEngine(storageDir);
 
+  // Generic gate that nudges the user to enable any connector prerequisite
+  // (e.g. Copilot's OTel exporter) and re-refreshes once applied.
+  const setupGate = new ConnectorSetupGate(context, [copilot, claudeCode], () => void usage.refresh());
+
   context.subscriptions.push(
     usage.onDidChangeSnapshot((snapshot) => {
-      const cfg = userConfig.get();
+      const userCfg = userConfig.get();
       void restriction.reconcile({
         snapshot,
-        rules: cfg.rules ?? [],
-        ...opt('vars',           cfg.vars),
-        ...opt('groups',         cfg.groups),
+        rules: userCfg.rules ?? [],
+        ...opt('vars',           userCfg.vars),
+        ...opt('groups',         userCfg.groups),
         signedIn: snapshot.authStatus === 'signed-in',
-        ...opt('branchBudgets', cfg.branchBudgets),
+        ...opt('branchBudgets', userCfg.branchBudgets),
       }).catch((err: unknown) =>
         console.error('[mallard] restriction reconcile failed:', err),
       );
@@ -113,9 +135,10 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     usage,
     restriction,
     { dispose: () => exporter.dispose() },
+    setupGate,
   );
 
-  return { usage, store, userConfig, layout, pricing, restriction, ingest };
+  return { usage, store, userConfig, layout, pricing, restriction, ingest, setupGate };
 }
 
 async function loadBundledManifest(context: vscode.ExtensionContext): Promise<PricingManifest> {

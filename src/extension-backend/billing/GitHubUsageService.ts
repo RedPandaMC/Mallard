@@ -157,7 +157,8 @@ function parseQuota(raw: unknown): GitHubQuota | null {
   const parsedData = parsed.data;
   const pi = parsedData.quota_snapshots?.premium_interactions;
   if (!pi) return null;
-  const used = Math.round(pi.entitlement * (1 - pi.percent_remaining));
+  // percent_remaining is 0-100 (e.g. 81.25), not a 0-1 fraction.
+  const used = Math.round(pi.entitlement * (1 - pi.percent_remaining / 100));
   const resetDate = parsedData.quota_reset_date ? new Date(parsedData.quota_reset_date).getTime() : null;
   return {
     plan: parsedData.copilot_plan ?? 'unknown',

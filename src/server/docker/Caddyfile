@@ -15,7 +15,9 @@ log {
 # Caddy obtains and auto-renews a Let's Encrypt certificate.
 {$SERVER_DOMAIN:localhost} {
 	tls internal {
-		# Optional mTLS: present a CA cert to accept but not require client certs.
+		# mTLS is OPT-IN and disabled as shipped — uncomment the block below to
+		# enable it. verify_if_given accepts but does not require client certs,
+		# so plain API-key clients keep working.
 		# Set MALLARD_CA_CERT=/certs/mallard-ca.crt and mount the cert into the container.
 		# client_auth {
 		#   mode verify_if_given
@@ -23,7 +25,11 @@ log {
 		# }
 	}
 
-	# Forward client cert CN as a header so the server can use it as the InfluxDB source tag.
+	# Forward the client cert subject so the server can derive its source tag.
+	# {tls_client_subject} is the FULL subject DN ("CN=machine-01,O=team"); the
+	# server extracts the CN itself (routers/ingest.py:_extract_cert_cn).
+	# Unconditionally setting the header — empty when no cert was presented —
+	# also stops clients from injecting a CN of their own.
 	request_header SSL_CLIENT_S_DN_CN {tls_client_subject}
 
 	# WebSocket MQTT — the Mallard extension connects to wss://host/mqtt

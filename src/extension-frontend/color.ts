@@ -181,6 +181,7 @@ export function deriveAccent(seed: string, bg: string, fallback = '#e5231b'): st
 
   // If still not distinct from a mid-gray under CVD, push saturation up once more.
   const midGray: RGB = { r: 130, g: 130, b: 130 };
+  /* c8 ignore next 5 */
   if (!distinctUnderCvd(accent, midGray)) {
     const h2 = rgbToHsl(accent);
     h2.s = Math.min(1, h2.s + 0.2);

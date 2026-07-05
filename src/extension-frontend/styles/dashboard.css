@@ -177,6 +177,7 @@ body {
   .wv-banner[data-kind='ok'] .wv-banner-dot { animation: none; }
   .wv-banner[data-kind='loading'] .wv-banner-dot { animation: none; }
   .wv-banner-dot--flash { animation: none !important; }
+  .wv-empty-icon { animation: none; }
 }
 
 /* ─────────────────────────────────────────
@@ -388,12 +389,18 @@ body {
   opacity: 0.5;
 }
 
-.wv-empty-logo {
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
-  opacity: 0.8;
+.wv-empty-icon {
+  display: inline-block;
+  font-size: 64px;
+  line-height: 1;
+  color: var(--w-action);
   margin-top: var(--w-s3);
+  animation: wv-signal-pulse 2s ease-in-out infinite;
+}
+
+@keyframes wv-signal-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.94); }
+  50%      { opacity: 0.9;  transform: scale(1.06); }
 }
 
 .wv-empty-title {

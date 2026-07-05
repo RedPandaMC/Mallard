@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+import server.mqtt as mqtt_module
+from server.mqtt import MQTT_SOURCE, BrokerContext
 
 
 @pytest.fixture()
@@ -27,14 +29,13 @@ def settings(monkeypatch) -> MagicMock:
 
 @pytest.fixture()
 def static_verifier():
-    """StaticCredentialVerifier with MQTT password 'secret' → label 'test-client'."""
+    """StaticCredentialVerifier with shared MQTT password 'secret'."""
     from server.credential_verifier import StaticCredentialVerifier
 
     mock_settings = MagicMock()
     mock_settings.hashed_api_keys = {}
-    mock_settings.hashed_mqtt_credentials = {
-        hashlib.sha256(b"secret").hexdigest(): "test-client"
-    }
+    mock_settings.mqtt_password = "secret"
+    mock_settings.parsed_cert_labels = {}
     return StaticCredentialVerifier(mock_settings)
 
 
@@ -45,8 +46,17 @@ def empty_verifier():
 
     mock_settings = MagicMock()
     mock_settings.hashed_api_keys = {}
-    mock_settings.hashed_mqtt_credentials = {}
+    mock_settings.mqtt_password = ""
+    mock_settings.parsed_cert_labels = {}
     return StaticCredentialVerifier(mock_settings)
+
+
+@pytest.fixture()
+def broker_ctx(settings, mock_write_api, static_verifier, monkeypatch):
+    """Install a BrokerContext for the plugin under test; restored afterwards."""
+    ctx = BrokerContext(settings=settings, write_api=mock_write_api, verifier=static_verifier)
+    monkeypatch.setattr(mqtt_module, "_broker_ctx", ctx)
+    return ctx
 
 
 def _make_message(data: bytes | str) -> MagicMock:
@@ -58,9 +68,9 @@ def _make_message(data: bytes | str) -> MagicMock:
 
 VALID_JSON = json.dumps({
     "instance_id": "abc123",
-    "schema_version": 2,
+    "schema_version": 3,
     "ts": 1_700_000_000_000,
-    "credits_velocity_per_hour": 1.5,
+    "tz_offset_minutes": 120,
     "mtd_budget_pct": 42.0,
     "mtd_credits": 100.0,
     "mtd_cost_usd": 3.50,
@@ -115,76 +125,66 @@ class TestMallardAuthPlugin:
         ctx.logger = logging.getLogger("test.auth")
         return _MallardAuthPlugin(ctx)
 
-    async def test_rejects_missing_password(self, static_verifier) -> None:
-        from server.mqtt import _ctx
-
-        _ctx["verifier"] = static_verifier
+    async def test_rejects_missing_password(self, broker_ctx) -> None:
         plugin = self._make_plugin()
         session = MagicMock()
         session.password = None
 
-        result = await plugin.authenticate(session=session)
-        assert result is False
+        assert await plugin.authenticate(session=session) is False
 
-    async def test_rejects_empty_password(self, static_verifier) -> None:
-        from server.mqtt import _ctx
-
-        _ctx["verifier"] = static_verifier
+    async def test_rejects_empty_password(self, broker_ctx) -> None:
         plugin = self._make_plugin()
         session = MagicMock()
         session.password = ""
 
-        result = await plugin.authenticate(session=session)
-        assert result is False
+        assert await plugin.authenticate(session=session) is False
 
-    async def test_rejects_wrong_password(self, static_verifier) -> None:
-        from server.mqtt import _ctx
-
-        _ctx["verifier"] = static_verifier
+    async def test_rejects_wrong_password(self, broker_ctx) -> None:
         plugin = self._make_plugin()
         session = MagicMock()
         session.password = "wrong-password"
 
-        result = await plugin.authenticate(session=session)
-        assert result is False
+        assert await plugin.authenticate(session=session) is False
 
-    async def test_accepts_valid_credential(self, static_verifier) -> None:
-        from server.mqtt import _ctx
-
-        _ctx["verifier"] = static_verifier
-        _ctx["client_labels"] = {}
+    async def test_accepts_shared_password(self, broker_ctx) -> None:
         plugin = self._make_plugin()
         session = MagicMock()
         session.password = "secret"
         session.client_id = "client-1"
 
-        result = await plugin.authenticate(session=session)
-        assert result is True
-        assert _ctx["client_labels"]["client-1"] == "test-client"
+        assert await plugin.authenticate(session=session) is True
 
-    async def test_rejects_when_no_credentials_configured(self, empty_verifier) -> None:
-        from server.mqtt import _ctx
-
-        _ctx["verifier"] = empty_verifier
+    async def test_rejects_when_no_password_configured(
+        self, settings, mock_write_api, empty_verifier, monkeypatch
+    ) -> None:
+        ctx = BrokerContext(settings=settings, write_api=mock_write_api, verifier=empty_verifier)
+        monkeypatch.setattr(mqtt_module, "_broker_ctx", ctx)
         plugin = self._make_plugin()
         session = MagicMock()
         session.password = "any-password"
 
-        result = await plugin.authenticate(session=session)
-        assert result is False
+        assert await plugin.authenticate(session=session) is False
 
-    async def test_client_label_stored_on_authenticate(self, static_verifier) -> None:
-        from server.mqtt import _ctx
-
-        _ctx["verifier"] = static_verifier
-        _ctx["client_labels"] = {}
+    async def test_rejects_without_broker_context(self, monkeypatch) -> None:
+        monkeypatch.setattr(mqtt_module, "_broker_ctx", None)
         plugin = self._make_plugin()
         session = MagicMock()
         session.password = "secret"
-        session.client_id = "my-device"
 
-        await plugin.authenticate(session=session)
-        assert _ctx["client_labels"].get("my-device") == "test-client"
+        assert await plugin.authenticate(session=session) is False
+
+    async def test_rejects_when_verifier_raises(
+        self, settings, mock_write_api, monkeypatch
+    ) -> None:
+        raising_verifier = MagicMock()
+        raising_verifier.verify_mqtt_password = AsyncMock(side_effect=RuntimeError("vault down"))
+        ctx = BrokerContext(settings=settings, write_api=mock_write_api, verifier=raising_verifier)
+        monkeypatch.setattr(mqtt_module, "_broker_ctx", ctx)
+        plugin = self._make_plugin()
+        session = MagicMock()
+        session.password = "secret"
+
+        assert await plugin.authenticate(session=session) is False
 
 
 class TestMallardMessagePlugin:
@@ -198,12 +198,7 @@ class TestMallardMessagePlugin:
         ctx.logger = logging.getLogger("test.msg")
         return _MallardMessagePlugin(ctx)
 
-    async def test_valid_message_calls_write(self, mock_write_api, settings) -> None:
-        from server.mqtt import _ctx
-
-        _ctx["write_api"] = mock_write_api
-        _ctx["settings"] = settings
-        _ctx["client_labels"] = {"test-client": "team-alpha"}
+    async def test_valid_message_calls_write(self, broker_ctx, mock_write_api) -> None:
         plugin = self._make_plugin()
 
         await plugin.on_broker_message_received(
@@ -211,23 +206,22 @@ class TestMallardMessagePlugin:
         )
         mock_write_api.write.assert_called_once()
 
-    async def test_none_message_does_not_crash(self, mock_write_api, settings) -> None:
-        from server.mqtt import _ctx
+    async def test_all_messages_tagged_source_mqtt(self, broker_ctx, mock_write_api) -> None:
+        plugin = self._make_plugin()
 
-        _ctx["write_api"] = mock_write_api
-        _ctx["settings"] = settings
-        _ctx["client_labels"] = {}
+        with patch("server.mqtt.write_payload") as write_mock:
+            await plugin.on_broker_message_received(
+                client_id="whoever", message=_make_message(VALID_JSON)
+            )
+        assert write_mock.call_args.kwargs["source"] == MQTT_SOURCE
+
+    async def test_none_message_does_not_crash(self, broker_ctx, mock_write_api) -> None:
         plugin = self._make_plugin()
 
         await plugin.on_broker_message_received(client_id="test-client", message=None)
         mock_write_api.write.assert_not_called()
 
-    async def test_invalid_json_does_not_crash(self, mock_write_api, settings) -> None:
-        from server.mqtt import _ctx
-
-        _ctx["write_api"] = mock_write_api
-        _ctx["settings"] = settings
-        _ctx["client_labels"] = {}
+    async def test_invalid_json_does_not_crash(self, broker_ctx, mock_write_api) -> None:
         plugin = self._make_plugin()
 
         await plugin.on_broker_message_received(
@@ -235,42 +229,16 @@ class TestMallardMessagePlugin:
         )
         mock_write_api.write.assert_not_called()
 
-    async def test_source_defaults_to_unknown_for_unlabeled_client(
-        self, mock_write_api, settings
+    async def test_message_without_broker_context_does_not_crash(
+        self, mock_write_api, monkeypatch
     ) -> None:
-        from server.mqtt import _ctx
-
-        _ctx["write_api"] = mock_write_api
-        _ctx["settings"] = settings
-        _ctx["client_labels"] = {}  # no label for this client
+        monkeypatch.setattr(mqtt_module, "_broker_ctx", None)
         plugin = self._make_plugin()
 
         await plugin.on_broker_message_received(
-            client_id="unknown-client", message=_make_message(VALID_JSON)
+            client_id="test-client", message=_make_message(VALID_JSON)
         )
-        mock_write_api.write.assert_called_once()
-
-    async def test_disconnect_cleans_label(self, mock_write_api, settings) -> None:
-        from server.mqtt import _ctx
-
-        _ctx["write_api"] = mock_write_api
-        _ctx["settings"] = settings
-        _ctx["client_labels"] = {"dc-client": "some-label"}
-        plugin = self._make_plugin()
-
-        await plugin.on_broker_client_disconnected(client_id="dc-client")
-        assert "dc-client" not in _ctx["client_labels"]
-
-    async def test_disconnect_missing_client_does_not_crash(self, mock_write_api, settings) -> None:
-        from server.mqtt import _ctx
-
-        _ctx["write_api"] = mock_write_api
-        _ctx["settings"] = settings
-        _ctx["client_labels"] = {}
-        plugin = self._make_plugin()
-
-        # Should not raise
-        await plugin.on_broker_client_disconnected(client_id="nonexistent")
+        mock_write_api.write.assert_not_called()
 
 
 class TestMqttBrokerLifecycle:
@@ -294,3 +262,4 @@ class TestMqttBrokerLifecycle:
 
         mock_broker.start.assert_called_once()
         mock_broker.shutdown.assert_called_once()
+        assert mqtt_module._broker_ctx is None  # cleared on shutdown

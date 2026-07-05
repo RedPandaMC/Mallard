@@ -83,7 +83,9 @@ describe('formatCredits', () => {
   it('rounds to 1 decimal place', () => {
     const r = formatCredits(1234.55);
     // 1234.55 * 10 = 12345.5 → round → 12346 → 12346/10 = 1234.6
-    assert.ok(r.includes('1234.6') || r.includes('1,234.6'), `unexpected: ${r}`);
+    // formatCredits renders via toLocaleString(), so compare against the same
+    // locale-dependent rendering instead of hardcoding en-US separators.
+    assert.equal(r, (1234.6).toLocaleString(), `unexpected: ${r}`);
   });
 
   it('returns a string', () => {

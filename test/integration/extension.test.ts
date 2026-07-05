@@ -12,7 +12,12 @@ const EXPECTED_COMMANDS = [
   'mallard.exportReport',
   'mallard.exportData',
   'mallard.prepareUninstall',
+  'mallard.manageCredentials',
   'mallard.setMqttPassword',
+  'mallard.setWebhookApiKey',
+  'mallard.setWebhookBearerToken',
+  'mallard.setWebhookSigningSecret',
+  'mallard.setGitHubPat',
   'mallard.simulateRestriction',
   'mallard.disableExtension',
 ];
@@ -25,7 +30,7 @@ describe('Mallard extension (integration)', () => {
     assert.strictEqual(ext!.isActive, true);
   });
 
-  it('registers exactly the eleven contributed mallard.* commands', async () => {
+  it('registers exactly the contributed mallard.* commands', async () => {
     const ext = vscode.extensions.getExtension(EXT_ID);
     await ext!.activate();
     const all = await vscode.commands.getCommands(true);
@@ -65,6 +70,7 @@ describe('Mallard extension (integration)', () => {
       'mallard.currency',
       'mallard.dataRetentionDays',
       'mallard.export.transport',
+      'mallard.githubBilling.org',
       'mallard.mqtt.auth',
       'mallard.mqtt.url',
       'mallard.mqtt.username',
@@ -75,9 +81,7 @@ describe('Mallard extension (integration)', () => {
       'mallard.shared.certificate.caFile',
       'mallard.shared.certificate.file',
       'mallard.shared.certificate.keyFile',
-      'mallard.webhook.apiKey',
       'mallard.webhook.auth',
-      'mallard.webhook.bearerToken',
     ]);
   });
 });

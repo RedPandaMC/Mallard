@@ -1,5 +1,5 @@
 {
-  "require": ["test/unit/setup/vscode-mock.cjs", "tsx/cjs"],
+  "require": ["test/unit/setup/vscode-mock.cjs", "test/unit/setup/jsdom.cjs", "tsx/cjs"],
   "spec": "test/unit/**/*.test.ts",
   "extension": ["ts"],
   "timeout": 10000,

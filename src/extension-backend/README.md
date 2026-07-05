@@ -35,7 +35,7 @@ extension-backend/
 
 ## ingest/
 
-`IngestService` aggregates one `LogConnector` per data source: `CopilotConnector` for GitHub Copilot's OTel logs and `ClaudeCodeConnector` for Claude Code's JSONL session files. `locate.ts` handles platform-specific log directory discovery (including Snap and Flatpak paths). `otelParse.ts` parses log lines incrementally, tracking file offsets so re-scans never reprocess already-ingested data.
+`IngestService` aggregates one `LogConnector` per data source: `CopilotConnector` for GitHub Copilot's OpenTelemetry export (a JSONL file or SQLite span DB, resolved from settings by `config.readCopilotOtel`) and `ClaudeCodeConnector` for Claude Code's JSONL session files. Both extend `BaseFileConnector`, whose `discover()` returns a discriminated ingest target (`ndjson` globs or a `sqlite` DB) that the base dispatches to `DuckDBFileReader.ingestGlob`/`ingestSqlite`. Copilot writes no usage by default; `ConnectorSetupGate` drives a generic detect → notify → enable flow over each connector's declared `SetupRequirement`s (e.g. `CopilotOtelRequirement`) to turn the exporter on. `locate.ts` handles platform-specific log directory discovery (including Snap and Flatpak paths).
 
 ## store/
 
@@ -78,5 +78,5 @@ Unit tests live in `../../test/unit/`, mirroring this structure: `connectors/` f
 ```bash
 bun run check-types   # type-check both host and webview tsconfigs
 bun run test:unit     # pure logic tests (mocha)
-bun test               # integration tests in a real VS Code host
+bun run test          # integration tests in a real VS Code host
 ```

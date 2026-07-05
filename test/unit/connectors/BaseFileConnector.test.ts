@@ -9,7 +9,9 @@ import type { UsageEvent } from '../../../src/extension-backend/domain/types';
 
 // ── Minimal concrete subclass for testing ──────────────────────────────────────
 
-type DiscoverResult = { globs: string[]; allowedRoots: string[]; searchedDirs: string[] };
+type DiscoverResult =
+  | { globs: string[]; allowedRoots: string[]; searchedDirs: string[] }
+  | { kind: 'sqlite'; dbPath: string; query: string; allowedRoots: string[]; searchedDirs: string[] };
 
 class TestConnector extends BaseFileConnector {
   readonly id = 'test';
@@ -18,6 +20,7 @@ class TestConnector extends BaseFileConnector {
     tokenFields: [] as const,
     costCategories: [] as const,
     supportsRepoAttribution: false,
+    sources: ['ndjson'] as const,
   };
   private _discoverResult: DiscoverResult = { globs: [], allowedRoots: [], searchedDirs: [] };
 
@@ -32,19 +35,26 @@ class TestConnector extends BaseFileConnector {
   }
 }
 
+const FIXED_EVENT_TS = 1_700_000_000_000;
+
 function makeStubs() {
   const pricing = { pricePerCredit: 0.04, currentManifest: undefined } as unknown as PricingService;
-  let watermark: string | null = null;
+  const state = { watermark: null as string | null };
   const meta: MetaStore = {
-    get: async () => watermark,
-    set: async (_k, v) => { watermark = v; },
+    get: async () => state.watermark,
+    set: async (_k, v) => { state.watermark = v; },
   };
   const ingestResults: number[] = [];
+  const shiftResult = () => {
+    const n = ingestResults.shift() ?? 0;
+    return { inserted: n, maxEventTs: n > 0 ? FIXED_EVENT_TS : null };
+  };
   const fileReader = {
-    ingestGlob: async () => { const r = ingestResults.shift() ?? 0; return r; },
+    ingestGlob: async () => shiftResult(),
+    ingestSqlite: async () => shiftResult(),
     hasField: async () => false,
   } as unknown as DuckDBFileReader;
-  return { pricing, meta, fileReader, ingestResults };
+  return { pricing, meta, fileReader, ingestResults, state };
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -79,6 +89,23 @@ describe('BaseFileConnector — lifecycle', () => {
     const c = new TestConnector(pricing, meta, fileReader);
     c.setDiscoverResult({ globs: ['/tmp/test/*.jsonl'], allowedRoots: ['/tmp/test'], searchedDirs: ['/tmp/test'] });
     // ingestResults is empty so ingestGlob returns 0
+    await c.start();
+    assert.equal(c.getStatus(), 'empty');
+  });
+
+  it('start() dispatches to ingestSqlite for a sqlite target', async () => {
+    const { pricing, meta, fileReader, ingestResults } = makeStubs();
+    ingestResults.push(2);
+    const c = new TestConnector(pricing, meta, fileReader);
+    c.setDiscoverResult({ kind: 'sqlite', dbPath: '/db/spans.sqlite', query: 'SELECT 1', allowedRoots: ['/db'], searchedDirs: ['/db'] });
+    await c.start();
+    assert.equal(c.getStatus(), 'ok');
+  });
+
+  it('start() sets status "empty" for a sqlite target with no dbPath', async () => {
+    const { pricing, meta, fileReader } = makeStubs();
+    const c = new TestConnector(pricing, meta, fileReader);
+    c.setDiscoverResult({ kind: 'sqlite', dbPath: '', query: 'SELECT 1', allowedRoots: [], searchedDirs: [] });
     await c.start();
     assert.equal(c.getStatus(), 'empty');
   });
@@ -147,6 +174,56 @@ describe('BaseFileConnector — lifecycle', () => {
     ingestResults.push(1);
     await c.start();
     assert.equal(c.getStatus(), 'ok');
+  });
+
+  it('watermark is the max event timestamp, not the wall clock', async () => {
+    const { pricing, meta, fileReader, ingestResults, state } = makeStubs();
+    ingestResults.push(2);
+    const c = new TestConnector(pricing, meta, fileReader);
+    c.setDiscoverResult({ globs: ['/tmp/*.jsonl'], allowedRoots: ['/tmp'], searchedDirs: ['/tmp'] });
+    await c.start();
+    // FIXED_EVENT_TS is far in the past relative to Date.now(); saving "now"
+    // instead would permanently skip late-flushed lines with older timestamps.
+    assert.equal(state.watermark, String(FIXED_EVENT_TS));
+  });
+
+  it('watermark is untouched when ingest inserts nothing', async () => {
+    const { pricing, meta, fileReader, state } = makeStubs();
+    const c = new TestConnector(pricing, meta, fileReader);
+    c.setDiscoverResult({ globs: ['/tmp/*.jsonl'], allowedRoots: ['/tmp'], searchedDirs: ['/tmp'] });
+    await c.start(); // ingestResults empty → inserted 0
+    assert.equal(state.watermark, null);
+  });
+
+  it('overlapping runIngest calls coalesce into one queued re-run', async () => {
+    const { pricing, meta } = makeStubs();
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let calls = 0;
+    const slowReader = {
+      ingestGlob: async () => {
+        calls++;
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((r) => setTimeout(r, 20));
+        inFlight--;
+        return { inserted: 1, maxEventTs: FIXED_EVENT_TS };
+      },
+      hasField: async () => false,
+    } as unknown as DuckDBFileReader;
+    const c = new TestConnector(pricing, meta, slowReader);
+    c.setDiscoverResult({ globs: ['/tmp/*.jsonl'], allowedRoots: ['/tmp'], searchedDirs: ['/tmp'] });
+
+    const run = (c as unknown as { runIngest(g: string[]): Promise<void> }).runIngest.bind(c);
+    // First run starts; three triggers land while it is in flight.
+    const p1 = run(['/tmp/*.jsonl']);
+    const p2 = run(['/tmp/*.jsonl']);
+    const p3 = run(['/tmp/*.jsonl']);
+    const p4 = run(['/tmp/*.jsonl']);
+    await Promise.all([p1, p2, p3, p4]);
+
+    assert.equal(maxInFlight, 1, 'ingest passes must never overlap');
+    assert.equal(calls, 2, 'concurrent triggers coalesce into exactly one re-run');
   });
 
   it('status remains "ok" after second start if events were already seen', async () => {

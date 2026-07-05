@@ -1,9 +1,11 @@
-import { PricingManifest } from '../domain/pricing';
+import { PricingManifest, TokenPrices } from '../domain/pricing';
 import type { Surface } from '../domain/types';
 
 export interface ParseContext {
   pricePerCredit: number;
   manifest?: PricingManifest;
+  /** Per-token USD prices from the daily feed; absent before the first fetch. */
+  tokenPrices?: TokenPrices;
   now: number;
   /** Repo to attribute these events to (active workspace repo at parse time). */
   repo?: string;
