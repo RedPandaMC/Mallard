@@ -169,6 +169,31 @@ describe('PricingService — remote refresh (https.get mocked)', () => {
     }
   });
 
+  it('keeps the bundled manifest when the remote body is not valid JSON', async () => {
+    const dir = await tmpDir();
+    const origGet = https.get;
+    https.get = ((_url: unknown, _opts: unknown, cb: (res: unknown) => void) => {
+      const fakeReq = { on() { return fakeReq; }, destroy() { return fakeReq; } } as unknown as ReturnType<typeof https.get>;
+      setImmediate(() => {
+        const listeners: Record<string, (d?: Buffer) => void> = {};
+        const res = { statusCode: 200, on(ev: string, fn: (d?: Buffer) => void) { listeners[ev] = fn; } };
+        cb(res);
+        setImmediate(() => { listeners['data']?.(Buffer.from('not json{')); listeners['end']?.(); });
+      });
+      return fakeReq;
+    }) as typeof https.get;
+    try {
+      const svc = new PricingService(dir, BUNDLED);
+      await svc.load();
+      await new Promise((r) => setTimeout(r, 100));
+      assert.equal(svc.pricePerCredit, 0.04); // parse failed → bundled retained
+      svc.dispose();
+    } finally {
+      https.get = origGet;
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('tryTokenPricesRefresh prefers OpenRouter and caches the parsed prices', async () => {
     const dir = await tmpDir();
     const openRouter = {

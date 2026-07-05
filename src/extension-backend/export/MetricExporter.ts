@@ -275,4 +275,5 @@ export class MqttProtocol implements MetricProtocol {
     this.client?.end(true);
     this.client = null;
   }
+  /* c8 ignore next */
 }

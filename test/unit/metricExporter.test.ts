@@ -24,6 +24,10 @@ import { buildSnapshot } from '../../src/extension-backend/domain/snapshot';
 import { makeEvent } from './helpers';
 import { ExportQueue } from '../../src/extension-backend/export/ExportQueue';
 import type { MetricProtocol, MetricSerializer, SendResult } from '../../src/extension-backend/export/MetricExporter';
+// The real classes are importable now that vscode + mqtt are stubbed by the
+// mocharc require hooks — exercise them directly so flushQueue and the null
+// exporter are covered (not just the mirrored stub above).
+import { MetricExporter, NullMetricExporter } from '../../src/extension-backend/export/MetricExporter';
 
 async function makeTmpDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'mallard-metricexporter-test-'));
@@ -339,5 +343,66 @@ describe('MetricPayloadSerializer', () => {
     const payload = serializer.serialize(makeSnapshot());
     assert.equal(typeof payload['total_event_count'], 'number');
     assert.equal(typeof payload['estimated_event_count'], 'number');
+  });
+});
+
+// ── Real MetricExporter (flushQueue) + NullMetricExporter ─────────────────────
+
+describe('MetricExporter (real class) — flushQueue', () => {
+  it('flushQueue returns false when there is no queue', async () => {
+    const exporter = new MetricExporter(fakeProtocol(), fakeSerializer());
+    const stillDown = await (exporter as unknown as { flushQueue(): Promise<boolean> }).flushQueue();
+    assert.equal(stillDown, false);
+    exporter.dispose();
+  });
+
+  it('dequeues on ok and stops (enqueuing the new payload) on a retryable entry', async () => {
+    const dir = await makeTmpDir();
+    const queue = new ExportQueue(dir);
+    queue.enqueue('t', { n: 1 });
+    queue.enqueue('t', { n: 2 });
+    const protocol = fakeProtocol([{ ok: true }, { ok: false, retryable: true }]);
+    const exporter = new MetricExporter(protocol, fakeSerializer(), queue);
+    await exporter.export(makeSnapshot());
+    const remaining = queue.peekAll();
+    assert.deepEqual(remaining[0]!.payload, { n: 2 }, 'first entry dequeued, second remains');
+    assert.ok('ts' in remaining[remaining.length - 1]!.payload, 'new payload appended');
+    exporter.dispose();
+    await fs.rm(dir, { recursive: true });
+  });
+
+  it('drops a fatal entry and continues flushing', async () => {
+    const dir = await makeTmpDir();
+    const queue = new ExportQueue(dir);
+    queue.enqueue('t', { n: 1 });
+    const protocol = fakeProtocol([{ ok: false, retryable: false }]);
+    const exporter = new MetricExporter(protocol, fakeSerializer(), queue);
+    await exporter.export(makeSnapshot());
+    assert.equal(queue.peekAll().length, 0, 'fatal entry dropped, new payload sent');
+    exporter.dispose();
+    await fs.rm(dir, { recursive: true });
+  });
+
+  it('stops flushing when disposed mid-flush', async () => {
+    const dir = await makeTmpDir();
+    const queue = new ExportQueue(dir);
+    queue.enqueue('t', { n: 1 });
+    let exporter!: MetricExporter;
+    const protocol: MetricProtocol = {
+      async send() { exporter.dispose(); return { ok: true }; },
+      dispose() {},
+    };
+    exporter = new MetricExporter(protocol, fakeSerializer(), queue);
+    await exporter.export(makeSnapshot());
+    assert.equal(queue.peekAll().length, 1, 'entry left intact when disposed mid-flush');
+    await fs.rm(dir, { recursive: true });
+  });
+});
+
+describe('NullMetricExporter', () => {
+  it('export is a no-op through the null protocol and dispose is safe', async () => {
+    const exporter = new NullMetricExporter();
+    await exporter.export(makeSnapshot()); // exercises the null protocol send
+    exporter.dispose();
   });
 });

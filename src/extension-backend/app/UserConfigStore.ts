@@ -190,4 +190,5 @@ export class UserConfigStore implements vscode.Disposable {
       /* watching is best-effort */
     }
   }
+  /* c8 ignore next */
 }
