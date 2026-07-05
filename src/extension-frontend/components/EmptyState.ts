@@ -5,10 +5,9 @@ export interface EmptyStateHandle {
 }
 
 export function mountEmptyState(el: HTMLElement): EmptyStateHandle {
-  const logo = document.body.dataset.logo ?? '';
   el.innerHTML = `
     <div class="wv-empty" role="status">
-      <img class="wv-empty-logo" src="${logo}" alt="" aria-hidden="true" />
+      <i class="codicon codicon-broadcast wv-empty-icon" aria-hidden="true"></i>
       <h2 class="wv-empty-title">No signal yet</h2>
       <p class="wv-empty-body">
         Mallard reads Copilot's local OTel log files automatically.<br/>
@@ -26,6 +25,9 @@ export function mountEmptyState(el: HTMLElement): EmptyStateHandle {
         <button class="wv-btn" id="empty-signin">
           <i class="codicon codicon-account"></i> Sign in to verify spend
         </button>
+        <button class="wv-btn" id="empty-enable-copilot">
+          <i class="codicon codicon-broadcast"></i> Enable Copilot tracking
+        </button>
       </div>
       <p class="wv-empty-reason" id="empty-reason"></p>
     </div>`;
@@ -37,6 +39,9 @@ export function mountEmptyState(el: HTMLElement): EmptyStateHandle {
   });
   el.querySelector('#empty-signin')!.addEventListener('click', () => {
     post({ type: 'command', id: 'signIn' });
+  });
+  el.querySelector('#empty-enable-copilot')!.addEventListener('click', () => {
+    post({ type: 'command', id: 'enableCopilotTelemetry' });
   });
 
   return {
