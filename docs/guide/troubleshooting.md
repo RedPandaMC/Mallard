@@ -47,7 +47,7 @@ If you point Copilot's OTel exporter at a file and sync it to the remote (e.g. v
 
 ## Data cleared after uninstall {#data-cleared}
 
-VS Code does not delete extension storage when you uninstall an extension. Run **Mallard: Clear All Data** before uninstalling if you want to remove the DuckDB event store and all cached state. Reinstalling without clearing first will restore your historical data.
+VS Code does not delete extension storage when you uninstall an extension. Run **Mallard: Prepare for Uninstall** before uninstalling if you want to remove the DuckDB event store and all cached state. Reinstalling without clearing first will restore your historical data.
 
 ## Alert rule not firing {#rule-not-firing}
 

@@ -25,13 +25,15 @@ ID `mallard.refresh`. Re-scans discovered log files and recomputes the dashboard
 You rarely need this: Mallard watches the log files and updates within a second or
 two of new entries. Use it after switching machines or if a view looks stale.
 
-## Mallard: Clear All Data
+## Mallard: Rebuild Ingested Data (Re-ingest From Scratch)
 
-ID `mallard.clearData`. Asks for confirmation, then wipes everything Mallard
-stores: recorded usage events, your budget and alert settings, the saved
-dashboard layout, and the cached pricing manifest. Run it to start fresh or
-before uninstalling, since VS Code keeps an extension's storage after removal.
-Cleared data cannot be recovered.
+ID `mallard.clearData`. Asks for confirmation, then wipes recorded usage
+events and re-parses every connector log from scratch. Your budget/alert
+settings, dashboard layout, and pricing cache are left untouched — only the
+ingested data is rebuilt. Use this if the dashboard's numbers look wrong and
+you want a clean re-read of the underlying logs. To wipe everything
+(including settings) before uninstalling, use **Mallard: Prepare for
+Uninstall** instead.
 
 ## Mallard: Show Detected Log Path
 

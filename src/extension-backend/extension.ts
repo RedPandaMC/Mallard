@@ -176,21 +176,23 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
     await usage.refresh();
   });
 
+  // Renamed from "Clear All Data": that framing was misleading since it
+  // immediately re-ingested afterward, and it duplicated the full wipe
+  // mallard.prepareUninstall already does (which correctly does NOT
+  // re-ingest, since it's meant to leave nothing behind before uninstall).
+  // This command now only rebuilds the ingested-data tables, leaving user
+  // settings/layout/pricing cache/restrictions untouched.
   reg('mallard.clearData', async () => {
     const ok = await vscode.window.showWarningMessage(
-      'Clear all Mallard data? This wipes recorded usage, your budget and alert ' +
-        'settings, the saved dashboard layout, the cached pricing manifest, and ' +
-        'any active restriction. It cannot be undone. Run this before ' +
-        'uninstalling to leave nothing behind.',
+      'Rebuild ingested data? This wipes recorded usage and re-parses every ' +
+        'connector log from scratch. Your budget/alert settings, dashboard ' +
+        'layout, and pricing cache are left untouched. Use this if the ' +
+        'ingested data looks wrong and you want a clean re-read of the logs.',
       { modal: true },
-      'Clear everything',
+      'Rebuild',
     );
-    if (ok === 'Clear everything') {
+    if (ok === 'Rebuild') {
       await store.clear();
-      await userConfig.reset();
-      await layout.reset();
-      await pricing.clearCache();
-      await restriction.clearAll();
       await usage.refresh();
     }
   });

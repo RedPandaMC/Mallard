@@ -57,7 +57,7 @@
       },
       {
         "command": "mallard.clearData",
-        "title": "Clear All Data",
+        "title": "Rebuild Ingested Data (Re-ingest From Scratch)",
         "category": "Mallard"
       },
       {

@@ -425,6 +425,7 @@ function mountDashboard(root: HTMLElement): void {
 
       // Sankey depends on links + dimension lists (no chartData slot).
       const sankeyKey = JSON.stringify([snapshot.sankeyLinks, snapshot.allModels, snapshot.allSurfaces]);
+      sections['sankey']!.classList.toggle('wv-no-data', snapshot.sankeyLinks.length === 0);
       if (sankeyKey !== prevSankeyKey) {
         sankey.render((c) => c.update(snapshot));
         prevSankeyKey = sankeyKey;
