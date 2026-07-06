@@ -50,10 +50,10 @@ export interface MallardTheme {
   highContrast: boolean;
 }
 
-/** Read a duotone token, resolving the back-compat var chain to a concrete
- *  colour. getComputedStyle resolves color-mix()/var() to rgb() for us. */
+/** Read the analogous series ramp, resolving the --w-series-* var chain to
+ *  concrete colours. getComputedStyle resolves color-mix()/var() for us. */
 function seriesColors(): string[] {
-  const fallback = ['#ff453a', '#d6d6d6', '#9a9a9a', '#6e6e6e', '#b7b7b7', '#4f4f4f'];
+  const fallback = ['#ff453a', '#fb8460', '#f8b181', '#f7d2a1', '#f8e9bf', '#faf7db'];
   return fallback.map((fb, i) => cssVar(`--w-series-${i + 1}`, fb));
 }
 
@@ -68,8 +68,9 @@ export function readTheme(): MallardTheme {
     tooltipBg: cssVar('--vscode-editorHoverWidget-background', '#2d2d2d'),
     // IBM Plex Mono technical labels (bundled); falls back to the editor mono.
     labelFont: cssVar('--w-label-font', "'IBM Plex Mono', monospace"),
-    // Strict duotone: red accent first, then a grayscale ramp derived from the
-    // theme foreground, so charts read black-and-white with a single accent.
+    // Analogous ramp: red accent first, then red-toward-amber steps that
+    // vary lightness/chroma rather than hue family (colour-blind safe —
+    // never relies on red-vs-green discrimination).
     series: seriesColors(),
     accent: cssVar('--w-accent', '#ff453a'),
     sevOk: cssVar('--w-sev-ok', '#9e9e9e'),

@@ -5,12 +5,12 @@ All commands are available from the Command Palette (`Ctrl+Shift+P` or
 
 ## Mallard: Open Dashboard
 
-ID `mallard.openDashboard`. Opens or focuses the dashboard in an editor tab, the
-same view shown in the activity-bar sidebar (and reachable via its pop-out
-button). The dashboard shows:
+ID `mallard.openDashboard`. Opens or focuses the dashboard in an editor tab.
+The activity-bar sidebar (opened via its pop-out button) shows a segmented
+spend gauge and a ranked model list; the editor-tab dashboard shows the
+detailed charts:
 
 - KPI cards: today, month-to-date, projected month-end, top model
-- A spend gauge: credits used against your included allowance
 - A 30-day bar chart with a projected-pace line
 - A model breakdown (top eight by credits)
 - A flow chart of model to surface
@@ -25,13 +25,15 @@ ID `mallard.refresh`. Re-scans discovered log files and recomputes the dashboard
 You rarely need this: Mallard watches the log files and updates within a second or
 two of new entries. Use it after switching machines or if a view looks stale.
 
-## Mallard: Clear All Data
+## Mallard: Rebuild Ingested Data (Re-ingest From Scratch)
 
-ID `mallard.clearData`. Asks for confirmation, then wipes everything Mallard
-stores: recorded usage events, your budget and alert settings, the saved
-dashboard layout, and the cached pricing manifest. Run it to start fresh or
-before uninstalling, since VS Code keeps an extension's storage after removal.
-Cleared data cannot be recovered.
+ID `mallard.clearData`. Asks for confirmation, then wipes recorded usage
+events and re-parses every connector log from scratch. Your budget/alert
+settings, dashboard layout, and pricing cache are left untouched — only the
+ingested data is rebuilt. Use this if the dashboard's numbers look wrong and
+you want a clean re-read of the underlying logs. To wipe everything
+(including settings) before uninstalling, use **Mallard: Prepare for
+Uninstall** instead.
 
 ## Mallard: Show Detected Log Path
 
@@ -39,6 +41,23 @@ ID `mallard.showLogPath`. Lists the log directories Mallard is watching (Copilot
 and Claude Code) and how many files it found. Useful when the dashboard shows
 the empty state. If Copilot's path is wrong, set `mallard.copilotLogPath`;
 Claude Code's log directory is auto-detected and has no override setting.
+
+## Mallard: Enable Copilot Usage Tracking
+
+ID `mallard.enableCopilotTelemetry`. Points Copilot's OpenTelemetry file
+exporter at a file Mallard reads, so local Copilot usage is tracked without
+needing to sign in to GitHub. Prompts to reload the window afterward. Also
+reachable from the empty-state CTA and, on first run with both Copilot and
+Claude Code installed, from the onboarding flow.
+
+## Mallard: Show Onboarding
+
+ID `mallard.showOnboarding`. Re-runs the first-run setup flow: if both
+Copilot and Claude Code are installed, asks which to track
+(`mallard.enabledConnectors`); if Copilot is included and its OTel exporter
+isn't enabled yet, offers to enable it (same as **Enable Copilot Usage
+Tracking**). Runs automatically once on first activation; each step can be
+dismissed (Escape) to stop the flow without changing anything further.
 
 ## Mallard: Export Monthly Report
 

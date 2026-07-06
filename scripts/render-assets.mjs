@@ -4,7 +4,7 @@
 //
 // Rasterisation uses @resvg/resvg-js.
 import { Resvg } from '@resvg/resvg-js';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -94,5 +94,19 @@ function ico(pngs) {
   return Buffer.concat([head, ...entries, ...pngs.map((p) => p.data)]);
 }
 out('docs/public/favicon.ico', ico([16, 32, 48].map((size) => ({ size, data: render(iconSvg, { width: size }) }))));
+
+// =========================================================================
+// 3. README banners — rendered from the committed SVG sources at 2x for
+//    retina, with a transparent background (render() already defaults to
+//    rgba(0,0,0,0)). The README's <img> fallback (used by renderers that
+//    strip <picture>/<source>, notably the VS Code Marketplace listing)
+//    always shows the light variant, so it must never bake in an opaque
+//    white matte — that reads as a white box on a dark surrounding page.
+// =========================================================================
+console.log('readme banners');
+for (const variant of ['light', 'dark']) {
+  const svg = readFileSync(r(`media/brand/readme-banner-${variant}.svg`), 'utf8');
+  out(`media/brand/readme-banner-${variant}.png`, render(svg, { width: 960 }));
+}
 
 console.log('done.');

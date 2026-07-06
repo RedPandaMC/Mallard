@@ -31,12 +31,14 @@ export class SidebarView implements vscode.WebviewViewProvider {
     webviewView.webview.html = this.buildHtml(webviewView.webview);
 
     webviewView.webview.onDidReceiveMessage(
-      (msg: { type: string }) => {
+      (msg: { type: string; model?: string }) => {
         if (msg.type === 'ready') {
           const s = this.usage.current;
           if (s) void webviewView.webview.postMessage({ type: 'snapshot', payload: s });
         } else if (msg.type === 'openDashboard') {
           void vscode.commands.executeCommand('mallard.openDashboard');
+        } else if (msg.type === 'toggleModelFilter' && typeof msg.model === 'string') {
+          void this.toggleModelFilter(msg.model);
         }
       },
       null,
@@ -47,6 +49,9 @@ export class SidebarView implements vscode.WebviewViewProvider {
       this.usage.onDidChangeSnapshot((s) => {
         void webviewView.webview.postMessage({ type: 'snapshot', payload: s });
       }),
+      this.usage.onAlertFired(({ message }) => {
+        void webviewView.webview.postMessage({ type: 'alertFired', message });
+      }),
     );
 
     // Open the dashboard when the user clicks the activity-bar icon,
@@ -56,6 +61,22 @@ export class SidebarView implements vscode.WebviewViewProvider {
       if (Date.now() - this.activatedAt < SidebarView.STARTUP_GUARD_MS) return;
       void vscode.commands.executeCommand('mallard.openDashboard');
     }, null, this.disposables);
+  }
+
+  /**
+   * Toggles a model in/out of the shared filter's model list — dual-
+   * connected with the main webview's model dropdown, since both read and
+   * write the same UsageService filter and both re-render from the
+   * resulting snapshot's `filter.models`.
+   */
+  private async toggleModelFilter(model: string): Promise<void> {
+    const current = new Set(this.usage.current?.filter.models ?? []);
+    if (current.has(model)) current.delete(model);
+    else current.add(model);
+    const filter = { ...(this.usage.current?.filter ?? {}) };
+    if (current.size > 0) filter.models = [...current];
+    else delete filter.models;
+    await this.usage.setFilter(filter);
   }
 
   private buildHtml(webview: vscode.Webview): string {
@@ -161,23 +182,33 @@ export class SidebarView implements vscode.WebviewViewProvider {
       font-weight: 600;
       color: var(--sb-sev, var(--vscode-descriptionForeground));
     }
-    .sb-bar-track {
-      height: 4px;
-      border-radius: 2px;
-      background: var(--vscode-panel-border, rgba(128,128,128,.2));
-      overflow: hidden;
+    /* Segmented gauge — mirrors the dashboard's SpendGauge visual language
+       (a row of small bars lighting up left to right) at a size that fits
+       the narrow sidebar. Scale runs to 120% so overage is still visible. */
+    .sb-gauge-segments {
+      display: flex;
+      gap: 1px;
+      height: 10px;
       margin-bottom: 4px;
     }
-    .sb-bar-fill {
-      height: 100%;
-      border-radius: 2px;
-      background: var(--sb-sev, #e5231b);
-      transition: width 0.3s ease;
+    .sb-gauge-seg {
+      flex: 1;
+      border-radius: 1px;
+      background: var(--vscode-panel-border, rgba(128,128,128,.2));
     }
+    .sb-gauge-seg--on { background: var(--sb-sev, #e5231b); }
     .sb-budget-sub {
       font-size: 10px;
       color: var(--vscode-descriptionForeground);
     }
+    /* Brief highlight on the budget section the moment an alert fires —
+       distinct from the passive severity coloring above, which only
+       reflects the latest percentage. */
+    @keyframes sb-alert-pulse {
+      0%, 100% { background: transparent; }
+      30% { background: color-mix(in srgb, var(--sb-sev, #e5231b) 18%, transparent); }
+    }
+    .sb-section--pulse { animation: sb-alert-pulse 1.4s ease; border-radius: 4px; }
     .sb-divider {
       height: 1px;
       background: var(--vscode-panel-border, rgba(128,128,128,.15));
@@ -191,8 +222,17 @@ export class SidebarView implements vscode.WebviewViewProvider {
       gap: 6px;
       align-items: center;
       padding: 4px 12px;
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      border-radius: 3px;
     }
     .sb-model-row:hover { background: var(--vscode-list-hoverBackground); }
+    .sb-model-row--selected {
+      background: var(--vscode-list-activeSelectionBackground, rgba(229,35,27,0.12));
+      outline: 1px solid var(--vscode-focusBorder, #e5231b);
+      outline-offset: -1px;
+    }
     .sb-model-info { min-width: 0; }
     .sb-model-name {
       font-size: 12px;
@@ -261,11 +301,20 @@ export class SidebarView implements vscode.WebviewViewProvider {
       if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
       return String(Math.round(n));
     }
-    function fmtMoney(usd) {
-      if (usd >= 100) return '$' + usd.toFixed(0);
-      if (usd >= 1)   return '$' + usd.toFixed(2);
-      return '$' + usd.toFixed(3);
+    function fmtMoney(amount, currency) {
+      const digits = amount >= 100 ? 0 : amount >= 1 ? 2 : 3;
+      try {
+        return new Intl.NumberFormat(undefined, {
+          style: 'currency', currency: currency || 'USD',
+          minimumFractionDigits: digits, maximumFractionDigits: digits,
+        }).format(amount);
+      } catch {
+        return (currency || 'USD') + ' ' + amount.toFixed(digits);
+      }
     }
+
+    const SEGMENTS = 20;
+    const SCALE_MAX = 120;
 
     function render(snap) {
       const budget = snap.budget;
@@ -275,58 +324,71 @@ export class SidebarView implements vscode.WebviewViewProvider {
         : null;
       const sev = pct == null ? '' : pct >= 100 ? 'sb--err' : pct >= 80 ? 'sb--warn' : '';
       const mtdCost = snap.budget?.mtdCost ?? 0;
+      const currency = snap.currency || 'USD';
       const models = snap.topModels ?? [];
       const maxCr = models[0]?.credits ?? 1;
 
       let html = '';
 
       // Budget
-      html += '<div class="sb-section">';
+      html += '<div class="sb-section" id="budget-section">';
       html += '<div class="sb-section-label">Budget</div>';
       if (hasBudget) {
+        const lit = Math.round((Math.min(pct, SCALE_MAX) / SCALE_MAX) * SEGMENTS);
+        let segs = '';
+        for (let i = 0; i < SEGMENTS; i++) {
+          segs += '<div class="sb-gauge-seg' + (i < lit ? ' sb-gauge-seg--on' : '') + '"></div>';
+        }
         html += '<div class="sb-budget-numbers ' + sev + '">';
-        html += '<span class="sb-budget-spend">' + fmtMoney(mtdCost) + '</span>';
-        html += '<span class="sb-budget-cap">/ ' + fmtMoney(budget.monthlyBudget) + '</span>';
+        html += '<span class="sb-budget-spend">' + fmtMoney(mtdCost, currency) + '</span>';
+        html += '<span class="sb-budget-cap">/ ' + fmtMoney(budget.monthlyBudget, currency) + '</span>';
         html += '<span class="sb-budget-pct">' + pct + '%</span>';
         html += '</div>';
-        html += '<div class="sb-bar-track ' + sev + '">';
-        html += '<div class="sb-bar-fill" style="width:' + Math.min(100, pct) + '%"></div>';
-        html += '</div>';
-        html += '<div class="sb-budget-sub">today ' + fmtMoney(snap.today.cost) + '</div>';
+        html += '<div class="sb-gauge-segments ' + sev + '">' + segs + '</div>';
+        html += '<div class="sb-budget-sub">today ' + fmtMoney(snap.today.cost, currency) + '</div>';
       } else {
         html += '<div class="sb-budget-numbers">';
-        html += '<span class="sb-budget-spend">' + fmtMoney(mtdCost) + '</span>';
+        html += '<span class="sb-budget-spend">' + fmtMoney(mtdCost, currency) + '</span>';
         html += '<span class="sb-budget-cap">this month</span>';
         html += '</div>';
-        html += '<div class="sb-budget-sub">today ' + fmtMoney(snap.today.cost) + '</div>';
+        html += '<div class="sb-budget-sub">today ' + fmtMoney(snap.today.cost, currency) + '</div>';
       }
       html += '</div>';
 
-      // Models
+      // Models — clickable, dual-connected with the main dashboard's model
+      // filter dropdown (both read/write the same UsageService filter).
       if (models.length > 0) {
+        const selected = new Set(snap.filter && snap.filter.models ? snap.filter.models : []);
         html += '<div class="sb-divider"></div>';
         html += '<div class="sb-section">';
         html += '<div class="sb-section-label">By model</div>';
         html += '</div>';
         for (let i = 0; i < Math.min(models.length, 8); i++) {
           const m = models[i];
+          const isSelected = selected.has(m.key);
           const w = Math.round((m.credits / maxCr) * 100);
           const barOpacities = ['1', '.72', '.50', '.35', '.24', '.16'];
           const barStyle = i === 0
             ? 'background:#e5231b'
             : 'background:var(--vscode-foreground);opacity:' + (barOpacities[i] ?? '.16');
-          html += '<div class="sb-model-row">';
+          html += '<button type="button" class="sb-model-row' + (isSelected ? ' sb-model-row--selected' : '')
+            + '" data-model="' + escHtml(m.key) + '" aria-pressed="' + isSelected + '">';
           html += '<div class="sb-model-info">';
           html += '<div class="sb-model-name">' + escHtml(m.key) + '</div>';
           html += '<div class="sb-model-bar-track">';
           html += '<div class="sb-model-bar-fill" style="width:' + w + '%;' + barStyle + '"></div>';
           html += '</div></div>';
           html += '<div class="sb-model-credits">' + fmt(m.credits) + ' cr</div>';
-          html += '</div>';
+          html += '</button>';
         }
       }
 
       document.getElementById('body').innerHTML = html;
+      document.querySelectorAll('.sb-model-row').forEach((row) => {
+        row.addEventListener('click', () => {
+          vscode.postMessage({ type: 'toggleModelFilter', model: row.dataset.model });
+        });
+      });
     }
 
     function escHtml(s) {
@@ -339,7 +401,18 @@ export class SidebarView implements vscode.WebviewViewProvider {
       if (!e.origin.startsWith('vscode-webview://')) return;
       const msg = e.data;
       if (msg.type === 'snapshot') render(msg.payload);
+      else if (msg.type === 'alertFired') pulseBudgetSection();
     });
+
+    function pulseBudgetSection() {
+      const el = document.getElementById('budget-section');
+      if (!el) return;
+      el.classList.remove('sb-section--pulse');
+      // Force reflow so re-adding the class restarts the animation even if
+      // a previous pulse is still running.
+      void el.offsetWidth;
+      el.classList.add('sb-section--pulse');
+    }
 
     vscode.postMessage({ type: 'ready' });
   </script>

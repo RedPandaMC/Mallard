@@ -1,8 +1,11 @@
 /**
  * Thin strip below the KPI cards showing GitHub billing verification status.
  *
- * - signed-out  → "Sign in to verify spend" link
+ * - signed-out  → light "Not verified" text pointing at the header's sign-in
+ *                 button (the primary CTA lives in the header now, so this
+ *                 doesn't duplicate a full button)
  * - signed-in   → "✓ Verified by GitHub · $X.XX actual"
+ * - error       → the reason, plus a "Set PAT" action when a PAT is required
  * - divergence  → yellow warning when local estimate differs from API by >10%
  */
 import { AuthStatus, UsageSnapshot } from '../../extension-backend/domain/types';
@@ -20,11 +23,36 @@ export function mountGitHubBillingStrip(el: HTMLElement): GitHubBillingStripHand
       const status: AuthStatus = s.authStatus;
 
       if (status === 'signed-out') {
-        const btn = document.createElement('button');
-        btn.className = 'wv-gh-cta';
-        btn.innerHTML = '<i class="codicon codicon-account"></i> Sign in to verify spend';
-        btn.addEventListener('click', () => post({ type: 'command', id: 'signIn' }));
-        el.appendChild(btn);
+        const note = document.createElement('span');
+        note.className = 'wv-gh-unverified';
+        note.textContent = 'Spend not verified — sign in to GitHub from the header for an authoritative total.';
+        el.appendChild(note);
+        return;
+      }
+
+      if (status === 'error') {
+        const row = document.createElement('div');
+        row.className = 'wv-gh-error';
+        const icon = document.createElement('i');
+        icon.className = 'codicon codicon-warning';
+        icon.setAttribute('aria-hidden', 'true');
+        row.appendChild(icon);
+        row.append(' ' + (s.authError ?? 'GitHub sign-in failed.'));
+
+        if (s.authError?.includes('Personal Access Token')) {
+          const patBtn = document.createElement('button');
+          patBtn.className = 'wv-btn wv-btn--sm';
+          patBtn.textContent = 'Set PAT';
+          patBtn.addEventListener('click', () => post({ type: 'command', id: 'setGitHubPat' }));
+          row.appendChild(patBtn);
+        } else {
+          const retryBtn = document.createElement('button');
+          retryBtn.className = 'wv-btn wv-btn--sm';
+          retryBtn.textContent = 'Retry';
+          retryBtn.addEventListener('click', () => post({ type: 'command', id: 'signIn' }));
+          row.appendChild(retryBtn);
+        }
+        el.appendChild(row);
         return;
       }
 

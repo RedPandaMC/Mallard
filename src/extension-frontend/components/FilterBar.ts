@@ -98,7 +98,10 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
       </div>
     </div>
     <div class="wv-surface-chips" id="surface-chips" hidden role="group" aria-label="Surface"></div>
-    <div class="wv-source-chips" id="source-chips" hidden role="group" aria-label="Source"></div>`;
+    <div class="wv-chip-group" id="source-chip-group" hidden>
+      <span class="wv-chip-group-label">Source</span>
+      <div class="wv-source-chips" id="source-chips" role="group" aria-label="Source"></div>
+    </div>`;
 
   let activePreset: DatePreset = state().datePreset;
   let activeModels: string[] = [];
@@ -270,7 +273,10 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
   }
 
   const surfaceChips = el.querySelector<HTMLElement>('#surface-chips')!;
+  const sourceChipGroup = el.querySelector<HTMLElement>('#source-chip-group')!;
   const sourceChips = el.querySelector<HTMLElement>('#source-chips')!;
+
+  const SOURCE_LABELS: Record<string, string> = { copilot: 'Copilot', 'claude-code': 'Claude Code' };
 
   function updateSurfaceUI() {
     surfaceChips.querySelectorAll<HTMLElement>('[data-surface]').forEach((c) => {
@@ -357,17 +363,21 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
         activeSurface = null;
       }
 
-      // Show the source filter only when both Copilot and Claude Code are present.
+      // The source group is always visible once at least one connector has
+      // produced data, so it's always clear which connector Mallard is
+      // ingesting from — not just when there happen to be several to
+      // choose between.
       const hasCopilot = s.allSources.some((src) => COPILOT_SOURCES.includes(src));
       const hasClaudeCode = s.allSources.includes('claude-code');
+      sourceChips.innerHTML = '';
+
       if (hasCopilot && hasClaudeCode) {
-        sourceChips.hidden = false;
-        sourceChips.innerHTML = '';
+        sourceChipGroup.hidden = false;
 
         const sourceOptions: Array<{ group: string; label: string; sources: SourceKind[] }> = [
           { group: '__all__', label: 'All', sources: [] },
-          { group: 'copilot', label: 'Copilot', sources: COPILOT_SOURCES },
-          { group: 'claude-code', label: 'Claude Code', sources: ['claude-code'] },
+          { group: 'copilot', label: SOURCE_LABELS.copilot!, sources: COPILOT_SOURCES },
+          { group: 'claude-code', label: SOURCE_LABELS['claude-code']!, sources: ['claude-code'] },
         ];
         for (const opt of sourceOptions) {
           const chip = document.createElement('button');
@@ -383,8 +393,18 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
           sourceChips.appendChild(chip);
         }
         updateSourceUI();
+      } else if (hasCopilot || hasClaudeCode) {
+        // Only one connector is producing data — show a single
+        // informational chip naming it instead of hiding the row, so the
+        // active connector is never a mystery.
+        sourceChipGroup.hidden = false;
+        activeSources = [];
+        const chip = document.createElement('span');
+        chip.className = 'wv-source-chip wv-source-chip--info';
+        chip.textContent = hasCopilot ? SOURCE_LABELS.copilot! : SOURCE_LABELS['claude-code']!;
+        sourceChips.appendChild(chip);
       } else {
-        sourceChips.hidden = true;
+        sourceChipGroup.hidden = true;
         activeSources = [];
       }
     },

@@ -70,6 +70,8 @@ describe('charts — mount + update without throwing', () => {
       const handle = mount(el);
       assert.doesNotThrow(() => handle.update(snapshot));
       assert.doesNotThrow(() => handle.resize());
+      assert.doesNotThrow(() => handle.reinit());
+      assert.doesNotThrow(() => handle.update(snapshot));
       el.remove();
     });
 

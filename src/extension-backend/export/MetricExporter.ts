@@ -116,12 +116,17 @@ export class MetricExporter {
 
 /** No-op exporter used when metric export is not configured. Eliminates optional chaining. */
 export class NullMetricExporter extends MetricExporter {
+  // Never actually invoked — export()/dispose() below are both overridden as
+  // no-ops, so the base MetricExporter machinery that would call these never
+  // runs. They exist only to satisfy MetricExporter's constructor signature.
+  /* c8 ignore start */
   private static readonly nullProtocol: MetricProtocol = {
     async send() {
       return { ok: true };
     },
     dispose() {},
   };
+  /* c8 ignore stop */
   private static readonly nullSerializer: MetricSerializer = {
     topic: '',
     serialize: () => ({}),

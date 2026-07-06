@@ -10,6 +10,7 @@ import { ChartComponent } from './ChartComponent';
 export interface DailyBarsHandle {
   update(snapshot: UsageSnapshot): void;
   resize(): void;
+  reinit(): void;
 }
 
 class DailyBarsChart extends ChartComponent {

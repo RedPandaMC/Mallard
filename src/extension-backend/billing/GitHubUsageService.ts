@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Fetches authoritative Copilot usage data from the GitHub API.
  *
@@ -101,6 +102,10 @@ export class GitHubUsageService implements IBillingProvider {
   /** Trigger an interactive sign-in prompt (no-op if using PAT auth). */
   async signIn(): Promise<void> {
     await this.session.getToken(true);
+  }
+
+  async needsPat(): Promise<boolean> {
+    return this.session.needsPat();
   }
 
   /** Fetch quota + billing data. Returns cached result if fresh enough. */

@@ -1,9 +1,9 @@
 /**
  * Model → surface Sankey chart.
  *
- * Only rendered when ≥2 models and ≥2 surfaces are present in the current
- * filtered data. Lazy init is handled by lazyChart() in main.ts — no internal
- * IntersectionObserver needed here.
+ * Rendered whenever there's at least one flow link — a single model/surface
+ * still produces a valid (if simple) flow diagram. Lazy init is handled by
+ * lazyChart() in main.ts — no internal IntersectionObserver needed here.
  */
 import type { TooltipComponentOption } from './echarts';
 import { UsageSnapshot } from '../../extension-backend/domain/types';
@@ -13,6 +13,7 @@ import { ChartComponent } from './ChartComponent';
 export interface SankeyHandle {
   update(snapshot: UsageSnapshot): void;
   resize(): void;
+  reinit(): void;
 }
 
 function shortName(id: string): string {
@@ -25,7 +26,7 @@ class SankeyChart extends ChartComponent {
   protected notMerge = false;
 
   protected hasData(s: UsageSnapshot): boolean {
-    return s.allModels.length >= 2 && s.allSurfaces.length >= 2 && s.sankeyLinks.length > 0;
+    return s.sankeyLinks.length > 0;
   }
 
   protected onHide(): void { this.el.style.display = 'none'; }

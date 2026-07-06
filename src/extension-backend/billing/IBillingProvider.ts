@@ -16,6 +16,14 @@ export interface IAuthProvider extends vscode.Disposable {
   /** Org slug resolved for the given scope, or undefined. */
   getOrg(scope?: vscode.WorkspaceFolder): string | undefined;
 
+  /**
+   * True when auth is pinned to a PAT (githubBilling.mode === 'pat') and no
+   * PAT is stored yet — in this mode getToken() never falls through to
+   * interactive OAuth, so a "Sign in" click would otherwise be a silent
+   * no-op with no indication a PAT is required instead.
+   */
+  needsPat(): Promise<boolean>;
+
   readonly onDidChange: vscode.Event<void>;
 }
 
@@ -37,4 +45,7 @@ export interface IBillingProvider extends vscode.Disposable {
 
   /** Trigger an interactive sign-in flow. No-op for providers that don't need auth. */
   signIn?(): Promise<void>;
+
+  /** See IAuthProvider.needsPat — providers with no PAT concept omit this. */
+  needsPat?(): Promise<boolean>;
 }

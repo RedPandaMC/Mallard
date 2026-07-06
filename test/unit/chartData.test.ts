@@ -188,10 +188,10 @@ describe('buildCategoryBreakdownData', () => {
 });
 
 describe('buildHeatmapData', () => {
-  it('returns 12 weeks of cells', () => {
+  it('defaults to a full year (52 weeks) of cells', () => {
     const now = startOf(Date.now(), 'day');
     const data = buildHeatmapData([], now);
-    assert.strictEqual(data.cells.length, 12 * 7 + 1); // inclusive range
+    assert.strictEqual(data.cells.length, 52 * 7 + 1); // inclusive range
     assert.strictEqual(data.max, 0);
   });
 
@@ -202,11 +202,46 @@ describe('buildHeatmapData', () => {
     const dayAggs = aggregateBy([makeEvent({ ts: targetDay, credits: 7 })], 'day');
     const data = buildHeatmapData(dayAggs, now);
 
-    const targetIso = new Date(targetDay).toISOString().slice(0, 10);
-    const cell = data.cells.find((c) => c.date === targetIso);
+    const dt = new Date(targetDay);
+    const targetLocal = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    const cell = data.cells.find((c) => c.date === targetLocal);
     assert.ok(cell, 'expected cell for target day');
     assert.strictEqual(cell!.value, 7);
     assert.strictEqual(data.max, 7);
+  });
+
+  it('labels cells using local calendar dates, not UTC (regression)', () => {
+    // In timezones ahead of UTC, local midnight is still the previous UTC
+    // day — a naive toISOString().slice(0,10) would mislabel every cell one
+    // day earlier. Force a UTC+2 zone to catch that regression.
+    const originalTz = process.env.TZ;
+    process.env.TZ = 'Europe/Amsterdam';
+    try {
+      const now = startOf(Date.now(), 'day');
+      const targetDay = now - 3 * DAY_MS;
+      const dayAggs = aggregateBy([makeEvent({ ts: targetDay, credits: 9 })], 'day');
+      const data = buildHeatmapData(dayAggs, now);
+
+      const dt = new Date(targetDay);
+      const targetLocal = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      const targetUtc = new Date(targetDay).toISOString().slice(0, 10);
+
+      const cell = data.cells.find((c) => c.date === targetLocal);
+      assert.ok(cell, 'expected cell keyed by local calendar date');
+      assert.strictEqual(cell!.value, 9);
+      assert.notStrictEqual(
+        targetLocal,
+        targetUtc,
+        'test is only meaningful when local and UTC dates actually differ',
+      );
+      assert.ok(
+        !data.cells.some((c) => c.date === targetUtc && c.value === 9),
+        'value must not be mislabeled under the UTC date',
+      );
+    } finally {
+      if (originalTz === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTz;
+    }
   });
 });
 

@@ -8,6 +8,7 @@ thresholds are not settings; you edit them in the dashboard and they are stored 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `mallard.currency` | `string` | `"USD"` | Display currency for all cost amounts (e.g. `EUR`, `GBP`, `JPY`). Exchange rates are fetched daily from Frankfurter. Exports always use USD. |
+| `mallard.enabledConnectors` | `("copilot" \| "claude-code")[]` | both | Which connectors Mallard ingests from. Set automatically by the onboarding flow when both Copilot and Claude Code are installed. Changing it requires reloading the window. |
 | `mallard.copilotLogPath` | `string` | `""` | Override the log directory. Blank means auto-detect via `vscode.env.logUri`. |
 | `mallard.pricingManifestUrl` | `string` | `""` | Override the pricing manifest URL. Blank means use the built-in URL. |
 | `mallard.palette` | `"swiss" \| "theme"` | `"swiss"` | Dashboard chart palette. `swiss` is the fixed duotone; `theme` derives the accent from your VS Code theme. Both keep the duotone structure and are checked for accessibility. |

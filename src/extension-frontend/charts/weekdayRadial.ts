@@ -13,6 +13,7 @@ import { ChartComponent } from './ChartComponent';
 export interface WeekdayRadialHandle {
   update(snapshot: UsageSnapshot): void;
   resize(): void;
+  reinit(): void;
 }
 
 // Display order: Mon=0 … Sun=6 (i.e. rotate stored Sun=0 array by one position right)

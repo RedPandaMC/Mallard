@@ -34,6 +34,15 @@ describe('messaging — isHostBoundMsg', () => {
     assert.equal(isHostBoundMsg({ type: 'command', id: 'formatHardDrive' }), false);
   });
 
+  it('requires a 3-letter currency code for setCurrency', () => {
+    assert.equal(isHostBoundMsg({ type: 'setCurrency', value: 'EUR' }), true);
+    assert.equal(isHostBoundMsg({ type: 'setCurrency', value: 'eur' }), true);
+    assert.equal(isHostBoundMsg({ type: 'setCurrency', value: 'EU' }), false);
+    assert.equal(isHostBoundMsg({ type: 'setCurrency', value: 'EURO' }), false);
+    assert.equal(isHostBoundMsg({ type: 'setCurrency', value: '1,2,3' }), false);
+    assert.equal(isHostBoundMsg({ type: 'setCurrency' }), false);
+  });
+
   it('rejects non-objects, missing types, and unknown types', () => {
     assert.equal(isHostBoundMsg(null), false);
     assert.equal(isHostBoundMsg('ready'), false);

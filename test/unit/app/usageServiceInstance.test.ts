@@ -161,6 +161,24 @@ describe('UsageService — start/refresh/fireAlerts/scheduleTimer', () => {
     assert.equal(signedIn, true);
     svc.dispose();
   });
+
+  it('signInGitHub surfaces a PAT-required error instead of silently no-oping', async () => {
+    let signInCalled = false;
+    const mockBilling: IBillingProvider = {
+      name: 'mock',
+      fetch: () => okAsync({ quota: null, items: [], fetchedAt: Date.now(), totalNetAmount: 0 }),
+      signIn: async () => { signInCalled = true; },
+      needsPat: async () => true,
+      onDidChange: () => ({ dispose() {} }),
+      dispose() {},
+    };
+    const svc = new UsageService(makeReader(), pricing, ingest, userConfig, currency, mockBilling);
+    await svc.signInGitHub();
+    assert.equal(signInCalled, false, 'must not attempt OAuth when a PAT is required');
+    assert.equal(svc.current?.authStatus, 'error');
+    assert.match(svc.current?.authError ?? '', /Personal Access Token/);
+    svc.dispose();
+  });
 });
 
 describe('UsageService — GitHub billing + alert rule notify', () => {
@@ -251,9 +269,12 @@ describe('UsageService — GitHub billing + alert rule notify', () => {
       },
     };
     const svc = new UsageService(makeReader(data), pricing, ingest, userConfig, currency, undefined, undefined, host);
+    const fired: string[] = [];
+    svc.onAlertFired(({ message }) => fired.push(message));
     await svc.start();
     await new Promise((r) => setTimeout(r, 100));
     assert.ok(warnings.some((w) => w.includes('Credits exceeded')), 'alert warning fired');
+    assert.ok(fired.some((m) => m.includes('Credits exceeded')), 'onAlertFired fired for UI surfaces (e.g. sidebar gauge pulse)');
     svc.dispose();
   });
 });

@@ -42,7 +42,6 @@ import { mountFilterBar } from './components/FilterBar';
 import { mountGitHubBillingStrip } from './components/GitHubBillingStrip';
 import { mountStatusBanner } from './components/StatusBanner';
 import { mountEmptyState } from './components/EmptyState';
-import { mountSpendGauge } from './components/SpendGauge';
 import { mountAlertConfigPanel } from './components/AlertConfigPanel';
 import { mountRestrictionBanner } from './components/RestrictionBanner';
 import { mountCurrencySelector } from './components/CurrencySelector';
@@ -60,6 +59,9 @@ function applyForcedScheme(scheme: 'light' | 'dark' | null): void {
   if (scheme) document.body.setAttribute('data-force-scheme', scheme);
 }
 
+/** Rerender closures for every mounted chart, registered once by mountDashboard. */
+let rerenderAllChartsForTheme: (() => void) | null = null;
+
 applyTheme();
 mountDashboard(document.getElementById('app')!);
 
@@ -67,7 +69,16 @@ mountDashboard(document.getElementById('app')!);
 
 onMessage((msg) => {
   if (msg.type === 'snapshot') {
-    setState({ snapshot: msg.payload });
+    // The sidebar can change the model filter too (dual-connected model
+    // list) — pull its models back into local filter state so the filter
+    // bar's dropdown reflects a change made from the sidebar.
+    const incomingModels = msg.payload.filter.models ?? [];
+    const localModels = state().filter.models ?? [];
+    const modelsChanged = incomingModels.join(',') !== localModels.join(',');
+    const filter = { ...state().filter };
+    if (incomingModels.length > 0) filter.models = incomingModels;
+    else delete filter.models;
+    setState(modelsChanged ? { snapshot: msg.payload, filter } : { snapshot: msg.payload });
   } else if (msg.type === 'config') {
     setState({ config: msg.value });
   } else if (msg.type === 'layout') {
@@ -77,11 +88,31 @@ onMessage((msg) => {
   } else if (msg.type === 'theme') {
     applyPalette(msg.palette, msg.kind);
     applyTheme();
-    if (state().snapshot) setState({ snapshot: state().snapshot });
+    // Only the very first theme message seeds the forced-scheme toggle (so
+    // it starts in sync with VS Code); afterwards the toggle is a manual
+    // override the user controls independently of the editor theme.
+    if (state().forcedScheme === null) {
+      const initial = msg.kind === 'light' || msg.kind === 'high-contrast-light' ? 'light' : 'dark';
+      setState({ forcedScheme: initial });
+      applyForcedScheme(initial);
+      updateThemeToggleUI(initial);
+    }
+    rerenderAllChartsForTheme?.();
   }
 });
 
 post({ type: 'ready' });
+
+function updateThemeToggleUI(scheme: 'light' | 'dark'): void {
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  btn.setAttribute('aria-pressed', String(scheme === 'dark'));
+  const label = scheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  btn.setAttribute('aria-label', label);
+  btn.setAttribute('title', label);
+  const icon = btn.querySelector('i');
+  if (icon) icon.className = `codicon ${scheme === 'dark' ? 'codicon-color-mode' : 'codicon-lightbulb'}`;
+}
 
 // ── Full dashboard ──────────────────────────────────────────────────────────
 
@@ -116,6 +147,10 @@ function mountDashboard(root: HTMLElement): void {
           </div>
         </div>
         <div class="wv-header-right">
+          <button class="wv-gh-header-btn" id="gh-header-signin" hidden>
+            <i class="codicon codicon-github" aria-hidden="true"></i>
+            <span id="gh-header-label">Sign in</span>
+          </button>
           <div id="currency-selector" class="wv-currency-wrap"></div>
           <button class="wv-icon-btn" id="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle light/dark mode">
             <i class="codicon codicon-color-mode"></i>
@@ -127,33 +162,32 @@ function mountDashboard(root: HTMLElement): void {
       <div id="content" hidden>
         <div id="kpi-cards"></div>
         <div id="gh-billing-strip"></div>
-        <div class="wv-gauge-row">
-          <div id="spend-gauge"></div>
-          <div id="restriction-banner"></div>
-        </div>
+        <!-- The live spend gauge lives in the sidebar now (see SidebarView) —
+             keeping one copy avoids two out-of-sync budget readouts. -->
+        <div id="restriction-banner"></div>
         <div id="filter-bar"></div>
         <div id="alert-config"></div>
         <div class="wv-analysis-bar">
           <span class="wv-analysis-title">Analysis</span>
           <span class="wv-analysis-actions">
-            <button class="wv-btn wv-btn--sm" id="clear-focus" hidden>
-              <i class="codicon codicon-close"></i> Clear model focus
-            </button>
             <button class="wv-btn wv-btn--sm" id="layout-save" hidden>
               <i class="codicon codicon-save"></i> Save to config
             </button>
             <button class="wv-btn wv-btn--sm" id="layout-reset" hidden>
               <i class="codicon codicon-discard"></i> Reset layout
             </button>
-            <button class="wv-btn wv-btn--sm" id="layout-edit" aria-pressed="false">
-              <i class="codicon codicon-edit"></i> Edit layout
+            <button class="wv-btn wv-btn--sm" id="layout-resize" aria-pressed="false">
+              <i class="codicon codicon-arrow-both"></i> Resize
+            </button>
+            <button class="wv-btn wv-btn--sm" id="layout-move" aria-pressed="false">
+              <i class="codicon codicon-move"></i> Move
             </button>
           </span>
         </div>
         <div class="wv-section-label">More views</div>
         <div class="wv-charts-grid" id="charts-grid">
           ${panelHtml('daily', 'codicon-graph', 'Daily usage (last 30 days)', 'chart-daily', 'Daily usage bar chart')}
-          ${panelHtml('heatmap', 'codicon-calendar', 'Activity (last 12 weeks)', 'chart-heatmap', 'Activity heatmap', 'heatmap')}
+          ${panelHtml('heatmap', 'codicon-calendar', 'Activity (past year)', 'chart-heatmap', 'Activity heatmap', 'heatmap')}
           ${panelHtml('models', 'codicon-symbol-method', 'By model', 'chart-models', 'Usage by model', 'mini')}
           ${panelHtml('sankey', 'codicon-type-hierarchy-sub', 'Flow breakdown', 'chart-sankey', 'Model to surface flow', 'mini')}
           ${panelHtml('category', 'codicon-pie-chart', 'Spend by cost type', 'chart-category', 'Spend by cost type', 'mini')}
@@ -170,19 +204,42 @@ function mountDashboard(root: HTMLElement): void {
   const emptyState = mountEmptyState(document.getElementById('empty-state')!);
   const kpis = mountKpiCards(document.getElementById('kpi-cards')!);
   const ghStrip = mountGitHubBillingStrip(document.getElementById('gh-billing-strip')!);
-  const gauge = mountSpendGauge(document.getElementById('spend-gauge')!);
+  const ghHeaderBtn = document.getElementById('gh-header-signin')!;
+  const ghHeaderLabel = document.getElementById('gh-header-label')!;
+  ghHeaderBtn.addEventListener('click', () => post({ type: 'command', id: 'signIn' }));
+  function updateGhHeaderButton(snapshot: import('../extension-backend/domain/types').UsageSnapshot): void {
+    ghHeaderBtn.hidden = false;
+    ghHeaderBtn.classList.remove('wv-gh-header-btn--ok', 'wv-gh-header-btn--err');
+    if (snapshot.authStatus === 'signed-in') {
+      ghHeaderLabel.textContent = 'Connected';
+      ghHeaderBtn.classList.add('wv-gh-header-btn--ok');
+      ghHeaderBtn.title = 'Signed in to GitHub — spend verified';
+    } else if (snapshot.authStatus === 'error') {
+      ghHeaderLabel.textContent = 'GitHub error';
+      ghHeaderBtn.classList.add('wv-gh-header-btn--err');
+      ghHeaderBtn.title = snapshot.authError ?? 'GitHub sign-in failed — click to retry';
+    } else {
+      ghHeaderLabel.textContent = 'Sign in';
+      ghHeaderBtn.title = 'Sign in to GitHub to verify actual Copilot spend';
+    }
+  }
   const currencySelector = mountCurrencySelector(
     document.getElementById('currency-selector')!,
-    (code) => setState({ selectedCurrency: code }),
+    (code) => post({ type: 'setCurrency', value: code }),
   );
 
-  // Theme toggle: cycles null → light → dark → null
+  // Theme toggle: strict binary flip between light and dark (no "follow
+  // VS Code" middle state — that state is only used to seed the initial
+  // value from the 'theme' message, see updateThemeToggleUI above).
   const themeToggleBtn = document.getElementById('theme-toggle')!;
   themeToggleBtn.addEventListener('click', () => {
-    const current = state().forcedScheme;
-    const next = current === null ? 'light' : current === 'light' ? 'dark' : null;
+    const current = state().forcedScheme ?? 'dark';
+    const next = current === 'light' ? 'dark' : 'light';
     setState({ forcedScheme: next });
     applyForcedScheme(next);
+    updateThemeToggleUI(next);
+    applyTheme();
+    rerenderAllChartsForTheme?.();
   });
   const dailyEl = document.getElementById('chart-daily')!;
   const heatmapEl = document.getElementById('chart-heatmap')!;
@@ -198,11 +255,12 @@ function mountDashboard(root: HTMLElement): void {
   const heatmap = lazyChart(heatmapEl, () => mountHeatmap(heatmapEl));
   const models = lazyChart(modelsEl, () =>
     mountModelBreakdown(modelsEl, (label) => {
-      const current = new Set(state().focusedModels);
+      // The model filter dropdown (FilterBar) is the single source of truth
+      // for "focus" — a bar click toggles the same filter.models list the
+      // dropdown reads and writes, so both stay in sync automatically.
+      const current = new Set(state().filter.models ?? []);
       if (current.has(label)) current.delete(label);
       else current.add(label);
-      const focusedModels: ReadonlySet<string> = current;
-      setState({ focusedModels });
       const newFilter = { ...state().filter };
       if (current.size > 0) newFilter.models = [...current];
       else delete newFilter.models;
@@ -243,6 +301,17 @@ function mountDashboard(root: HTMLElement): void {
     hourly.resize();
   };
 
+  rerenderAllChartsForTheme = () => {
+    daily.rerenderForTheme();
+    heatmap.rerenderForTheme();
+    models.rerenderForTheme();
+    sankey.rerenderForTheme();
+    category.rerenderForTheme();
+    cumulative.rerenderForTheme();
+    weekday.rerenderForTheme();
+    hourly.rerenderForTheme();
+  };
+
   // Dynamic scaling + docking: the layout manager reorders, resizes (span), and
   // shows/hides panels; every change is persisted via setLayout.
   const layoutMgr = mountLayout(document.getElementById('charts-grid')!, sections, (next) => {
@@ -251,20 +320,28 @@ function mountDashboard(root: HTMLElement): void {
   });
   layoutMgr.apply(state().layout);
 
-  let editing = false;
-  const editBtn = document.getElementById('layout-edit')!;
+  // Resize and move are independent, mutually exclusive modes — entering
+  // one exits the other (only one interaction is active on the grid at a
+  // time, so resize handles and drag-to-reorder never compete).
+  let mode: 'none' | 'resize' | 'move' = 'none';
+  const resizeBtn = document.getElementById('layout-resize')!;
+  const moveBtn = document.getElementById('layout-move')!;
   const resetBtn = document.getElementById('layout-reset')!;
   const saveBtn = document.getElementById('layout-save')!;
-  const clearFocusBtn = document.getElementById('clear-focus')!;
 
-  editBtn.addEventListener('click', () => {
-    editing = !editing;
-    layoutMgr.setEditMode(editing);
-    editBtn.setAttribute('aria-pressed', String(editing));
+  function setMode(next: 'none' | 'resize' | 'move'): void {
+    mode = mode === next ? 'none' : next;
+    layoutMgr.setMode(mode);
+    resizeBtn.setAttribute('aria-pressed', String(mode === 'resize'));
+    moveBtn.setAttribute('aria-pressed', String(mode === 'move'));
+    const editing = mode !== 'none';
     resetBtn.hidden = !editing;
     saveBtn.hidden = !editing;
     requestAnimationFrame(resizeAll);
-  });
+  }
+
+  resizeBtn.addEventListener('click', () => setMode('resize'));
+  moveBtn.addEventListener('click', () => setMode('move'));
 
   resetBtn.addEventListener('click', () => {
     post({ type: 'setLayout', value: DEFAULT_DASHBOARD_LAYOUT });
@@ -282,20 +359,11 @@ function mountDashboard(root: HTMLElement): void {
     post({ type: 'setConfig', value: { dashboard: { panels } } });
   });
 
-  clearFocusBtn.addEventListener('click', () => {
-    setState({ focusedModels: new Set<string>() });
-    const newFilter = { ...state().filter };
-    delete newFilter.models;
-    setState({ filter: newFilter });
-    post({ type: 'setFilter', value: newFilter });
-  });
-
-  // Ctrl/Cmd+Shift+E toggles edit mode.
+  // Ctrl/Cmd+Shift+E toggles resize mode, Ctrl/Cmd+Shift+M toggles move mode.
   document.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'E') {
-      e.preventDefault();
-      editBtn.click();
-    }
+    if (!(e.metaKey || e.ctrlKey) || !e.shiftKey) return;
+    if (e.key === 'E') { e.preventDefault(); resizeBtn.click(); }
+    else if (e.key === 'M') { e.preventDefault(); moveBtn.click(); }
   });
 
   alertConfig.update(state().config);
@@ -316,7 +384,7 @@ function mountDashboard(root: HTMLElement): void {
   let prevDailyBars: DailyBarsData | undefined;
   let prevHeatmap: HeatmapData | undefined;
   let prevModelBreakdown: ModelBreakdownData | undefined;
-  let prevFocusedModels: ReadonlySet<string> | undefined;
+  let prevFocusedModelsKey: string | undefined;
   let prevSankeyKey: string | undefined;
   let prevCategory: CategoryBreakdownData | undefined;
   let prevHourly: HourlyTimelineData | undefined;
@@ -334,9 +402,10 @@ function mountDashboard(root: HTMLElement): void {
     const cols = Math.min(4, Math.max(1, s.config.dashboard?.columns ?? 2));
     chartsGrid.style.setProperty('--wv-cols', String(cols));
 
-    // Model spotlight state.
-    chartsGrid.dataset.focused = s.focusedModels.size > 0 ? 'true' : '';
-    clearFocusBtn.hidden = s.focusedModels.size === 0;
+    // Model spotlight state — derived from the filter bar's model dropdown
+    // (the single source of truth for "focus"), not separate state.
+    const focusedModelsList = s.filter.models ?? [];
+    chartsGrid.dataset.focused = focusedModelsList.length > 0 ? 'true' : '';
 
     if (!s.snapshot) return;
     const isEmpty = s.snapshot.status.kind === 'empty';
@@ -356,8 +425,8 @@ function mountDashboard(root: HTMLElement): void {
       const metric = s.metric;
       kpis.update(snapshot, metric);
       ghStrip.update(snapshot);
-      gauge.update(snapshot.budget, snapshot.currency);
-      currencySelector.update(snapshot.fxRates, s.selectedCurrency);
+      updateGhHeaderButton(snapshot);
+      currencySelector.update(snapshot.fxRates, snapshot.currency);
 
       // dailyBars drives both the bar chart and the cumulative area view.
       if (dailyBarsChanged(prevDailyBars, snapshot.chartData.dailyBars)) {
@@ -376,16 +445,18 @@ function mountDashboard(root: HTMLElement): void {
         prevHeatmap = snapshot.chartData.heatmap;
       }
 
-      const focusedDirty = s.focusedModels !== prevFocusedModels;
+      const focusedModelsKey = focusedModelsList.join(',');
+      const focusedDirty = focusedModelsKey !== prevFocusedModelsKey;
       if (modelBreakdownChanged(prevModelBreakdown, snapshot.chartData.modelBreakdown) || metric !== prevMetric || focusedDirty) {
-        const fm = s.focusedModels;
+        const fm = new Set(focusedModelsList);
         models.render((c) => { c.setFocused(fm); c.update(snapshot, metric); });
         prevModelBreakdown = snapshot.chartData.modelBreakdown;
-        prevFocusedModels = s.focusedModels;
+        prevFocusedModelsKey = focusedModelsKey;
       }
 
       // Sankey depends on links + dimension lists (no chartData slot).
       const sankeyKey = JSON.stringify([snapshot.sankeyLinks, snapshot.allModels, snapshot.allSurfaces]);
+      sections['sankey']!.classList.toggle('wv-no-data', snapshot.sankeyLinks.length === 0);
       if (sankeyKey !== prevSankeyKey) {
         sankey.render((c) => c.update(snapshot));
         prevSankeyKey = sankeyKey;
@@ -428,7 +499,7 @@ function updateSrDescriptions(snapshot: import('../extension-backend/domain/type
   setSrDesc(
     'chart-heatmap',
     heatmap.max > 0
-      ? `Activity heatmap, last 12 weeks. Max daily usage: ${formatCredits(heatmap.max)} cr.`
+      ? `Activity heatmap, past year. Max daily usage: ${formatCredits(heatmap.max)} cr.`
       : 'Activity heatmap. No usage data.',
   );
 

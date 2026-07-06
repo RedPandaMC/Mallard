@@ -50,7 +50,6 @@ Every chart in `charts/` extends the shared `ChartComponent` base class (`charts
 
 - `KpiCards.ts`: today / month-to-date / projected / top-model cards
 - `FilterBar.ts`: date-range presets, metric toggle, model and surface filters
-- `SpendGauge.ts`: budget-vs-spend radial gauge
 - `StatusBanner.ts`: ingest status (loading / ok / empty / error)
 - `RestrictionBanner.ts`: active Copilot restriction state
 - `GitHubBillingStrip.ts`: GitHub billing reconciliation summary

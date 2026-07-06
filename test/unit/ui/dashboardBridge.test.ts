@@ -132,11 +132,30 @@ describe('dashboardBridge — message routing', () => {
       h.send({ type: 'command', id: 'disableExtension' });
       h.send({ type: 'command', id: 'signIn' });
       h.send({ type: 'command', id: 'enableCopilotTelemetry' });
+      h.send({ type: 'command', id: 'setGitHubPat' });
       await new Promise((r) => setImmediate(r));
-      assert.deepEqual(executed, ['mallard.openDashboard', 'mallard.disableExtension', 'mallard.enableCopilotTelemetry']);
+      assert.deepEqual(executed, ['mallard.openDashboard', 'mallard.disableExtension', 'mallard.enableCopilotTelemetry', 'mallard.setGitHubPat']);
       assert.equal(h.calls.signIn!.length, 1);
     } finally {
       cmd.executeCommand = originalExec;
+    }
+  });
+
+  it('writes setCurrency to the mallard.currency setting', async () => {
+    const ws = vscode.workspace as Mutable<typeof vscode.workspace>;
+    const originalGetConfig = ws.getConfiguration;
+    const updates: unknown[][] = [];
+    ws.getConfiguration = (() => ({
+      get: (_key: string, fallback: unknown) => fallback,
+      update: (...a: unknown[]) => { updates.push(a); return Promise.resolve(); },
+    })) as never;
+    try {
+      const h = makeHarness();
+      h.send({ type: 'setCurrency', value: 'eur' });
+      await new Promise((r) => setImmediate(r));
+      assert.deepEqual(updates[0], ['currency', 'EUR', vscode.ConfigurationTarget.Global]);
+    } finally {
+      ws.getConfiguration = originalGetConfig;
     }
   });
 

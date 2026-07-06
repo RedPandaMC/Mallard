@@ -27,7 +27,8 @@ import { matchesFilter } from './aggregate';
 import { bucketKey, DAY_MS, startOf } from '../util/time';
 
 const DAILY_BARS_WINDOW = 30;
-const HEATMAP_WEEKS = 12;
+// A full year, GitHub-contribution-graph style (schema caps this at 52).
+const HEATMAP_WEEKS = 52;
 
 function shortModelName(id: string): string {
   return id.replace(/^(models\/|openai\/|anthropic\/|google\/)/, '').slice(0, 32);
@@ -133,7 +134,8 @@ export function buildHeatmapData(dayAggregates: UsageAggregate[], now: number, w
   for (let i = days; i >= 0; i--) {
     const d = startOf(today - i * DAY_MS + DAY_MS / 2, 'day');
     const value = byStart.get(d) ?? 0;
-    const date = new Date(d).toISOString().slice(0, 10);
+    const dt = new Date(d);
+    const date = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
     cells.push({ date, value });
     if (value > max) max = value;
   }

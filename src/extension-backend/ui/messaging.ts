@@ -11,7 +11,7 @@ import {
   UserConfig,
 } from '../domain/types';
 
-export type CommandId = 'openDashboard' | 'signIn' | 'disableExtension' | 'enableCopilotTelemetry';
+export type CommandId = 'openDashboard' | 'signIn' | 'disableExtension' | 'enableCopilotTelemetry' | 'setGitHubPat';
 
 /** Active editor theme kind, mirrored to the webview so it can derive an
  *  accessible accent (the webview also sees VS Code's body theme class). */
@@ -32,9 +32,10 @@ export type HostBoundMsg =
   | { type: 'setLayout'; value: DashboardLayout }
   | { type: 'openConfig' }
   | { type: 'command'; id: CommandId }
-  | { type: 'restrictSnooze'; minutes: number };
+  | { type: 'restrictSnooze'; minutes: number }
+  | { type: 'setCurrency'; value: string };
 
-const COMMAND_IDS: CommandId[] = ['openDashboard', 'signIn', 'disableExtension', 'enableCopilotTelemetry'];
+const COMMAND_IDS: CommandId[] = ['openDashboard', 'signIn', 'disableExtension', 'enableCopilotTelemetry', 'setGitHubPat'];
 
 function isObject(m: unknown): m is Record<string, unknown> {
   return typeof m === 'object' && m !== null;
@@ -56,6 +57,8 @@ export function isHostBoundMsg(m: unknown): m is HostBoundMsg {
       return typeof m.minutes === 'number' && m.minutes > 0 && m.minutes <= 60 * 24 * 7;
     case 'command':
       return COMMAND_IDS.includes(m.id as CommandId);
+    case 'setCurrency':
+      return typeof m.value === 'string' && /^[A-Za-z]{3}$/.test(m.value);
     default:
       return false;
   }

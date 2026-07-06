@@ -1,12 +1,11 @@
 import { strict as assert } from 'assert';
 import { buildSnapshot } from '../../../src/extension-backend/domain/snapshot';
 import { makeEvent } from '../helpers';
-import type { UsageSnapshot, Metric, BudgetState, RestrictionState, AuthStatus } from '../../../src/extension-backend/domain/types';
+import type { UsageSnapshot, Metric, RestrictionState, AuthStatus } from '../../../src/extension-backend/domain/types';
 import { DEFAULT_USER_CONFIG } from '../../../src/extension-backend/domain/types';
 import { mountKpiCards } from '../../../src/extension-frontend/components/KpiCards';
 import { mountFilterBar } from '../../../src/extension-frontend/components/FilterBar';
 import { mountGitHubBillingStrip } from '../../../src/extension-frontend/components/GitHubBillingStrip';
-import { mountSpendGauge } from '../../../src/extension-frontend/components/SpendGauge';
 import { mountRestrictionBanner } from '../../../src/extension-frontend/components/RestrictionBanner';
 import { mountStatusBanner } from '../../../src/extension-frontend/components/StatusBanner';
 import { mountEmptyState } from '../../../src/extension-frontend/components/EmptyState';
@@ -23,11 +22,6 @@ function makeSnapshot(credits = 100): UsageSnapshot {
     },
   );
 }
-
-const BUDGET: BudgetState = {
-  monthly: 50, includedCredits: 300, usedCredits: 12.5, usedCost: 0.5,
-  percentOfBudget: 25, percentOfIncluded: 4, projectedOverage: null, pace: 'on-track',
-};
 
 describe('components — mount + update DOM', () => {
   const snapshot = makeSnapshot(100);
@@ -51,6 +45,43 @@ describe('components — mount + update DOM', () => {
     el.remove();
   });
 
+  it('FilterBar shows a single informational source chip when only one connector has data', () => {
+    const now = Date.now();
+    const single = buildSnapshot(
+      [makeEvent({ ts: now - 1000, modelId: 'claude-sonnet-4', source: 'claude-code', credits: 10, cost: 0.4 })],
+      {
+        now, currency: 'USD', pricePerCredit: 0.04, monthlyBudget: 50, includedCredits: 300,
+        filter: {}, source: 'local', status: { kind: 'ok' }, authStatus: 'signed-out',
+      },
+    );
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const h = mountFilterBar(el);
+    h.update(single, 'cost' as Metric);
+    const group = el.querySelector('#source-chip-group') as HTMLElement;
+    assert.equal(group.hidden, false, 'source chip group visible for a single connector');
+    const info = el.querySelectorAll('.wv-source-chip--info');
+    assert.equal(info.length, 1);
+    assert.equal(info[0]!.textContent, 'Claude Code');
+    assert.equal(el.querySelectorAll('[data-source-group]').length, 0, 'no interactive chips for one source');
+    el.remove();
+  });
+
+  it('FilterBar hides the source chip group when no source has data yet', () => {
+    const now = Date.now();
+    const empty = buildSnapshot([], {
+      now, currency: 'USD', pricePerCredit: 0.04, monthlyBudget: 50, includedCredits: 300,
+      filter: {}, source: 'local', status: { kind: 'empty' }, authStatus: 'signed-out',
+    });
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const h = mountFilterBar(el);
+    h.update(empty, 'cost' as Metric);
+    const group = el.querySelector('#source-chip-group') as HTMLElement;
+    assert.equal(group.hidden, true);
+    el.remove();
+  });
+
   it('GitHubBillingStrip renders nothing when signed out, content when signed in', () => {
     const el = document.createElement('div');
     document.body.appendChild(el);
@@ -58,15 +89,6 @@ describe('components — mount + update DOM', () => {
     h.update(snapshot); // signed-out
     const signedIn = { ...snapshot, authStatus: 'signed-in' as AuthStatus, githubBilling: { quota: null, items: [], fetchedAt: Date.now(), totalNetAmount: 0 } };
     h.update(signedIn);
-    el.remove();
-  });
-
-  it('SpendGauge renders a gauge and updates with budget + currency', () => {
-    const el = document.createElement('div');
-    document.body.appendChild(el);
-    const h = mountSpendGauge(el);
-    h.update(BUDGET, 'USD');
-    assert.ok(el.children.length > 0);
     el.remove();
   });
 

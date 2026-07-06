@@ -19,6 +19,25 @@ globalThis.Node = dom.window.Node;
 globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
 globalThis.requestAnimationFrame = (cb) => setTimeout(cb, 0);
 globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
+// jsdom doesn't implement matchMedia; stub it so prefers-reduced-motion/
+// prefers-color-scheme checks in frontend code don't throw under test.
+const matchMediaStub = (query) => ({
+  matches: false,
+  media: query,
+  addEventListener() {},
+  removeEventListener() {},
+  addListener() {},
+  removeListener() {},
+  dispatchEvent() { return false; },
+});
+globalThis.matchMedia = matchMediaStub;
+// jsdom implements PointerEvent but not Element.setPointerCapture/
+// releasePointerCapture/hasPointerCapture; stub them as no-ops so pointer-
+// drag handlers (e.g. layout.ts's resize handles) don't throw under test.
+for (const name of ['setPointerCapture', 'releasePointerCapture', 'hasPointerCapture']) {
+  dom.window.HTMLElement.prototype[name] = function () { return false; };
+}
+dom.window.matchMedia = matchMediaStub;
 globalThis.MutationObserver = dom.window.MutationObserver;
 globalThis.CustomEvent = dom.window.CustomEvent;
 globalThis.Event = dom.window.Event;

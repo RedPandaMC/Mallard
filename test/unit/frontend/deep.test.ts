@@ -13,7 +13,6 @@ import { mountWeekdayRadial } from '../../../src/extension-frontend/charts/weekd
 import { mountKpiCards } from '../../../src/extension-frontend/components/KpiCards';
 import { mountFilterBar } from '../../../src/extension-frontend/components/FilterBar';
 import { mountStatusBanner } from '../../../src/extension-frontend/components/StatusBanner';
-import { mountSpendGauge } from '../../../src/extension-frontend/components/SpendGauge';
 import { mountCurrencySelector } from '../../../src/extension-frontend/components/CurrencySelector';
 import { mountRestrictionBanner } from '../../../src/extension-frontend/components/RestrictionBanner';
 
@@ -180,15 +179,6 @@ describe('components — DOM events + deeper updates', () => {
     h.update({ ...richSnapshot(), status: { kind: 'degraded', reason: 'Connector error' } });
     h.update({ ...richSnapshot(), status: { kind: 'empty', reason: 'No logs' } });
     h.update({ ...richSnapshot(), status: { kind: 'loading', reason: 'Reading…' } });
-    el.remove();
-  });
-
-  it('SpendGauge renders over-budget and no-budget states', () => {
-    const el = document.createElement('div');
-    document.body.appendChild(el);
-    const h = mountSpendGauge(el);
-    h.update({ monthly: null, includedCredits: 0, usedCredits: 0, usedCost: 0, percentOfBudget: 0, percentOfIncluded: 0, projectedOverage: null, pace: 'no-budget' }, 'USD');
-    h.update({ monthly: 10, includedCredits: 300, usedCredits: 500, usedCost: 20, percentOfBudget: 200, percentOfIncluded: 166, projectedOverage: 10, pace: 'over' }, 'USD');
     el.remove();
   });
 

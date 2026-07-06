@@ -20,6 +20,8 @@ const EXPECTED_COMMANDS = [
   'mallard.setGitHubPat',
   'mallard.simulateRestriction',
   'mallard.disableExtension',
+  'mallard.enableCopilotTelemetry',
+  'mallard.showOnboarding',
 ];
 
 describe('Mallard extension (integration)', () => {
@@ -67,8 +69,10 @@ describe('Mallard extension (integration)', () => {
     const props = ext.packageJSON.contributes.configuration.properties as Record<string, unknown>;
     assert.deepStrictEqual(Object.keys(props).sort(), [
       'mallard.copilotLogPath',
+      'mallard.copilotOtelPath',
       'mallard.currency',
       'mallard.dataRetentionDays',
+      'mallard.enabledConnectors',
       'mallard.export.transport',
       'mallard.githubBilling.org',
       'mallard.mqtt.auth',

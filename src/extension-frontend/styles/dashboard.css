@@ -12,15 +12,22 @@ body {
   line-height: 1.5;
 }
 
-#app { min-height: 100vh; }
+#app { min-height: 100vh; width: 100%; }
 
 .wv-dashboard {
-  max-width: 1280px;
+  /* Fill the actual webview/panel width rather than capping at a fixed
+     desktop-ish size — 1280px left large dead margins on wide pop-out
+     panels and ultrawide monitors. 1800px is only a ceiling for
+     absurdly wide panels so chart rows don't stretch into unreadable
+     single lines; nearly every real window width is used in full. */
+  max-width: 1800px;
+  width: 100%;
   margin: 0 auto;
-  padding: var(--w-s4) var(--w-s6) var(--w-s8);
+  padding: var(--w-s4) clamp(var(--w-s3), 3vw, var(--w-s6)) var(--w-s8);
   display: flex;
   flex-direction: column;
   gap: var(--w-s4);
+  box-sizing: border-box;
 }
 
 #content {
@@ -91,6 +98,25 @@ body {
   background: var(--w-bg-hover);
   border-color: var(--w-action);
 }
+
+/* GitHub sign-in — lives in the header so it's visible from any dashboard
+   state (empty state, KPI view, etc.), not just the billing strip. */
+.wv-gh-header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--w-s1);
+  padding: 3px var(--w-s2);
+  font-size: 11px;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--w-border);
+  border-radius: var(--w-r1);
+  color: var(--w-fg-muted);
+  cursor: pointer;
+}
+.wv-gh-header-btn:hover { color: var(--w-fg); background: var(--w-bg-hover); border-color: var(--w-action); }
+.wv-gh-header-btn--ok { color: var(--w-status-ok); border-color: color-mix(in srgb, var(--w-status-ok) 40%, var(--w-border)); }
+.wv-gh-header-btn--err { color: var(--w-status-warn); border-color: color-mix(in srgb, var(--w-status-warn) 50%, var(--w-border)); }
 
 .wv-brand-name {
   font-family: var(--w-font-display);
@@ -250,9 +276,9 @@ body {
   padding: var(--w-s1) var(--w-s2);
   font: inherit;
   font-size: 11px;
-  color: var(--vscode-dropdown-foreground, var(--w-fg));
-  background: var(--vscode-dropdown-background, var(--w-bg-card));
-  border: 1px solid var(--vscode-dropdown-border, var(--w-border));
+  color: var(--w-fg);
+  background: var(--w-bg-card);
+  border: 1px solid var(--w-border);
   border-radius: var(--w-r1);
 }
 
@@ -280,7 +306,7 @@ body {
   top: calc(100% + 4px);
   left: 0;
   min-width: 220px;
-  background: var(--vscode-quickInputList-focusBackground, var(--w-bg-card));
+  background: var(--w-bg-card);
   border: 1px solid var(--w-border);
   border-radius: var(--w-r2);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
@@ -345,6 +371,45 @@ body {
   box-shadow: 2px 2px 0 color-mix(in srgb, var(--w-action) 45%, transparent);
 }
 .wv-surface-chip[aria-pressed='true']::before { background: var(--w-action-fg); }
+
+/* Source chips — always visible once any connector has data, so it's
+   always clear which one Mallard is ingesting from. */
+.wv-chip-group {
+  display: flex;
+  align-items: center;
+  gap: var(--w-s2);
+  padding: var(--w-s1) 0;
+}
+.wv-chip-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--w-fg-muted);
+}
+.wv-source-chips { display: flex; gap: var(--w-s1); flex-wrap: wrap; }
+.wv-source-chip {
+  padding: 2px var(--w-s2);
+  font-size: 11px;
+  border: 1px solid var(--w-border);
+  border-radius: 9999px;
+  color: var(--w-fg-muted);
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.wv-source-chip:hover { color: var(--w-fg); border-color: var(--w-action); }
+.wv-source-chip[aria-pressed='true'] {
+  background: var(--w-action);
+  color: var(--w-action-fg);
+  border-color: var(--w-action);
+}
+/* The single-connector informational chip is a <span>, not a button — it
+   names the active connector but isn't a toggle (there's nothing to filter
+   between with only one source). */
+.wv-source-chip--info {
+  cursor: default;
+  color: var(--w-fg);
+  border-style: dashed;
+}
 
 /* ─────────────────────────────────────────
    Empty state
@@ -579,128 +644,8 @@ body {
   color: var(--w-fg-muted);
 }
 
-/* ─────────────────────────────────────────
-   Spend Gauge
-───────────────────────────────────────── */
-.wv-gauge-section {
-  --sev: var(--w-sev-ok);
-  background: var(--w-bg-card);
-  border: 1px solid var(--w-border);
-  border-radius: var(--w-r2);
-  padding: var(--w-s4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--w-s3);
-}
-
-.wv-gauge-section[data-severity='warn'] { --sev: var(--w-sev-warn); }
-.wv-gauge-section[data-severity='err']  { --sev: var(--w-sev-over); }
-
-.wv-gauge-header {
-  display: flex;
-  align-items: center;
-  gap: var(--w-s3);
-}
-
-.wv-gauge-label {
-  font-family: var(--w-label-font);
-  font-size: 10px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--w-fg-muted);
-  flex-shrink: 0;
-}
-
-/* outlined severity word (instrument legend style) */
-.wv-gauge-badge {
-  font-family: var(--w-label-font);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--sev);
-  margin-left: auto;
-}
-
-/* big Archivo percentage, coloured by severity */
-.wv-gauge-readout {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-}
-
-.wv-gauge-pct {
-  font-family: var(--w-font-display);
-  font-weight: 800;
-  font-size: 46px;
-  line-height: 0.85;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-  color: var(--sev);
-}
-
-.wv-gauge-pct-sign {
-  font-family: var(--w-font-display);
-  font-weight: 700;
-  font-size: 20px;
-  color: var(--sev);
-}
-
-/* 30-segment bar gauge (scale runs to 120% so overage is visible) */
-.wv-gauge-segments {
-  display: flex;
-  gap: 2px;
-  height: 22px;
-}
-
-.wv-gauge-seg {
-  flex: 1;
-  border-radius: 1px;
-  background: color-mix(in srgb, var(--w-fg) 10%, transparent);
-}
-
-.wv-gauge-seg--on {
-  transform-origin: bottom;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .wv-gauge-seg--on {
-    animation: wv-seg-rise 0.5s ease both;
-  }
-}
-
-@keyframes wv-seg-rise {
-  from { transform: scaleY(0); opacity: 0; }
-  to   { transform: scaleY(1); opacity: 1; }
-}
-
-.wv-gauge-scale {
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--w-label-font);
-  font-size: 10px;
-  color: var(--w-fg-muted);
-}
-
-.wv-gauge-sub {
-  font-size: 11px;
-  color: var(--w-fg-muted);
-}
-
-/* ─────────────────────────────────────────
-   Gauge row (gauge + restriction banners side by side)
-───────────────────────────────────────── */
-.wv-gauge-row {
-  display: grid;
-  grid-template-columns: minmax(260px, 320px) 1fr;
-  gap: var(--w-s4);
-  align-items: start;
-}
-
-@media (max-width: 700px) {
-  .wv-gauge-row { grid-template-columns: 1fr; }
-}
+/* Spend gauge lives in the sidebar now (SidebarView) — its .sb-* styles
+   are inline in that separate webview's HTML, not this stylesheet. */
 
 /* ─────────────────────────────────────────
    Section label (e.g. "More views")
@@ -790,6 +735,91 @@ body {
 .wv-chart-body.mini { height: var(--w-chart-mini); }
 .wv-chart-body.heatmap { height: 120px; }
 
+/* ─────────────────────────────────────────
+   Day-activity heatmap — GitHub contribution-graph style
+───────────────────────────────────────── */
+.wv-heatmap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--w-s1);
+  height: 100%;
+  min-height: 0;
+}
+.wv-heatmap-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wv-heatmap-months {
+  display: grid;
+  grid-auto-flow: column;
+  height: 12px;
+  flex-shrink: 0;
+}
+.wv-heatmap-month-label {
+  font-size: 9px;
+  font-family: var(--w-label-font);
+  color: var(--w-fg-muted);
+  white-space: nowrap;
+}
+.wv-heatmap-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 3px;
+}
+.wv-heatmap-weekday-labels {
+  display: grid;
+  grid-template-rows: repeat(7, 1fr);
+  flex-shrink: 0;
+}
+.wv-heatmap-weekday-labels span {
+  font-size: 9px;
+  font-family: var(--w-label-font);
+  color: var(--w-fg-muted);
+  display: flex;
+  align-items: center;
+  padding-right: 2px;
+}
+.wv-heatmap-grid {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  flex: 1;
+  min-height: 0;
+}
+.wv-heatmap-cell {
+  width: 100%;
+  height: 100%;
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 2px;
+  background: var(--w-bg-hover);
+}
+.wv-heatmap-cell--1 { background: var(--w-series-6); }
+.wv-heatmap-cell--2 { background: var(--w-series-4); }
+.wv-heatmap-cell--3 { background: var(--w-series-2); }
+.wv-heatmap-cell--4 { background: var(--w-accent); }
+.wv-heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  color: var(--w-fg-muted);
+  flex-shrink: 0;
+}
+.wv-heatmap-legend-swatch {
+  width: 9px;
+  height: 9px;
+  min-width: 9px;
+  min-height: 9px;
+  flex-shrink: 0;
+}
+
 /* Analysis grid: column count driven by --wv-cols (set from config.dashboard.columns). */
 .wv-charts-grid {
   display: grid;
@@ -840,7 +870,10 @@ body {
   background: var(--w-bg-hover);
   border-bottom: 1px solid var(--w-border);
 }
+/* The drag handle only does anything in move mode — de-emphasize it (and
+   drop the grab cursor) while resize mode is active instead. */
 .wv-panel-handle { cursor: grab; color: var(--w-fg-muted); }
+.wv-charts-grid[data-layout-mode='resize'] .wv-panel-handle { cursor: default; opacity: 0.35; }
 .wv-panel-btn {
   display: inline-flex;
   align-items: center;
@@ -853,16 +886,52 @@ body {
 }
 .wv-panel-btn:hover { color: var(--w-fg); background: var(--w-bg-card); }
 .wv-chart-section.wv-dragging { opacity: 0.6; }
-.wv-chart-section.wv-hidden-panel .wv-panel-btn[data-act='hide'] { color: var(--vscode-foreground); opacity: 0.45; }
+.wv-chart-section.wv-hidden-panel .wv-panel-btn[data-act='hide'] { color: var(--w-fg); opacity: 0.45; }
 
-/* Drop-target highlight during drag. */
+/* Drop-target highlight during drag (move mode only). */
 .wv-chart-section.wv-drop-target {
   outline: 2px solid var(--w-accent) !important;
   background: color-mix(in srgb, var(--w-accent) 8%, var(--w-bg-card));
 }
 
-/* Brief opacity flash on span/size toggle to confirm the change. */
+/* Brief opacity flash on resize to confirm the change. */
 .wv-chart-section.wv-resizing { opacity: 0.7; }
+
+/* Resize handles — only interactive (and visible) in resize mode, so they
+   never compete with move mode's native drag-and-drop on the same panel. */
+.wv-resize-handle { display: none; }
+.wv-charts-grid[data-layout-mode='resize'] .wv-resize-handle {
+  display: block;
+  position: absolute;
+  background: transparent;
+  z-index: 5;
+}
+.wv-charts-grid[data-layout-mode='resize'] .wv-resize-handle:hover,
+.wv-charts-grid[data-layout-mode='resize'] .wv-resize-handle:focus-visible {
+  background: color-mix(in srgb, var(--w-accent) 35%, transparent);
+}
+.wv-resize-handle--right {
+  top: 0;
+  right: 0;
+  bottom: 12px;
+  width: 6px;
+  cursor: ew-resize;
+}
+.wv-resize-handle--bottom {
+  left: 0;
+  right: 12px;
+  bottom: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
+.wv-resize-handle--corner {
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
+  border-radius: var(--w-r1) 0 0 0;
+}
 
 /* ─────────────────────────────────────────
    Per-panel height tiers (compact / normal / tall)
@@ -909,21 +978,21 @@ body {
 /* ─────────────────────────────────────────
    GitHub billing strip
 ───────────────────────────────────────── */
-.wv-gh-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  background: transparent;
-  border: 1px solid var(--w-border);
-  border-radius: var(--w-r1);
-  color: var(--vscode-descriptionForeground);
+.wv-gh-unverified {
+  display: inline-block;
+  padding: 4px 0;
   font-size: 11px;
-  cursor: pointer;
-  opacity: 0.8;
-  transition: opacity 0.1s;
+  color: var(--w-fg-muted);
 }
-.wv-gh-cta:hover { opacity: 1; }
+
+.wv-gh-error {
+  display: flex;
+  align-items: center;
+  gap: var(--w-s2);
+  padding: 4px 0;
+  font-size: 11px;
+  color: var(--w-status-warn);
+}
 
 .wv-gh-verified {
   display: flex;
@@ -936,22 +1005,22 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--vscode-charts-green, #81C784);
+  color: var(--w-status-ok);
   font-weight: 600;
 }
-.wv-gh-amount { color: var(--vscode-foreground); }
-.wv-gh-reset  { color: var(--vscode-descriptionForeground); margin-left: auto; }
+.wv-gh-amount { color: var(--w-fg); }
+.wv-gh-reset  { color: var(--w-fg-muted); margin-left: auto; }
 
 .wv-gh-divergence {
   display: flex;
   align-items: flex-start;
   gap: 6px;
   padding: 6px 10px;
-  background: color-mix(in srgb, var(--vscode-charts-orange, #FFB74D) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--vscode-charts-orange, #FFB74D) 40%, transparent);
+  background: color-mix(in srgb, var(--w-status-warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--w-status-warn) 40%, transparent);
   border-radius: var(--w-r1);
   font-size: 11px;
-  color: var(--vscode-foreground);
+  color: var(--w-fg);
   margin-top: var(--w-s2);
 }
 
@@ -1020,9 +1089,9 @@ body {
   width: 96px;
   padding: 2px 6px;
   font: inherit;
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, var(--w-border));
+  color: var(--w-input-fg);
+  background: var(--w-input-bg);
+  border: 1px solid var(--w-input-border);
   border-radius: var(--w-r1);
 }
 

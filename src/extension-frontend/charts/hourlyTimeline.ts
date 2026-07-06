@@ -12,6 +12,7 @@ import { ChartComponent } from './ChartComponent';
 export interface HourlyTimelineHandle {
   update(snapshot: UsageSnapshot): void;
   resize(): void;
+  reinit(): void;
 }
 
 class HourlyTimelineChart extends ChartComponent {

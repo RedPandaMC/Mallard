@@ -48,12 +48,19 @@ export class UsageService implements vscode.Disposable {
   private readonly _onDidChange = new vscode.EventEmitter<UsageSnapshot>();
   readonly onDidChangeSnapshot = this._onDidChange.event;
 
+  /** Fires once per alert/rule notification actually shown — lets UI
+   *  surfaces (the sidebar gauge) react to the moment an alert fires,
+   *  not just passively reflect the latest snapshot percentage. */
+  private readonly _onAlertFired = new vscode.EventEmitter<{ message: string }>();
+  readonly onAlertFired = this._onAlertFired.event;
+
   private snapshot?: UsageSnapshot;
   private filter: Filter = {};
   private readonly timer = new IntervalManager();
   private readonly alertFired = new Map<string, number>();
   private readonly history: SnapshotSample[] = [];
   private authStatus: AuthStatus = 'signed-out';
+  private authError: string | undefined = undefined;
   private githubBilling: GitHubBillingData | undefined = undefined;
   private readonly subs: vscode.Disposable[] = [];
   private readonly exporter: MetricExporter;
@@ -126,6 +133,17 @@ export class UsageService implements vscode.Disposable {
 
   async signInGitHub(): Promise<void> {
     if (!this.github) return;
+    if (await this.github.needsPat?.()) {
+      // githubBilling.mode is "pat" with no PAT stored yet — getToken()
+      // never falls through to interactive OAuth in this mode, so calling
+      // signIn() here would be a silent no-op. Surface it instead.
+      this.authStatus = 'error';
+      this.authError =
+        'A GitHub Personal Access Token is required (githubBilling.mode is "pat"). ' +
+        'Run "Mallard: Set GitHub Personal Access Token" from the Command Palette.';
+      await this.compute();
+      return;
+    }
     await this.github.signIn?.();
     await this.refreshGitHub();
   }
@@ -135,10 +153,12 @@ export class UsageService implements vscode.Disposable {
     const result = await this.github.fetch();
     if (result.isOk()) {
       this.authStatus = 'signed-in';
+      this.authError = undefined;
       this.githubBilling = result.value;
     } else {
       const msg = result.error.message;
       this.authStatus = msg.includes('Not signed in') ? 'signed-out' : 'error';
+      this.authError = this.authStatus === 'error' ? msg : undefined;
       this.githubBilling = undefined;
     }
     await this.compute();
@@ -310,6 +330,7 @@ export class UsageService implements vscode.Disposable {
       estimatedEventCount: data.estimatedEventCount,
       ...opt('currentBranch', branch),
       ...opt('githubBilling', this.githubBilling),
+      ...opt('authError', this.authError),
     };
   }
 
@@ -324,6 +345,7 @@ export class UsageService implements vscode.Disposable {
     for (const a of alerts) {
       void this.host.showWarningMessage(a.message);
       this.alertFired.set(a.key, now);
+      this._onAlertFired.fire({ message: a.message });
     }
 
     const ruleResults = evaluateAlertRules({
@@ -338,7 +360,10 @@ export class UsageService implements vscode.Disposable {
       now,
     });
     for (const r of ruleResults) {
-      if (shouldNotify(r.rule)) void this.host.showWarningMessage(r.message);
+      if (shouldNotify(r.rule)) {
+        void this.host.showWarningMessage(r.message);
+        this._onAlertFired.fire({ message: r.message });
+      }
     }
   }
 
@@ -352,6 +377,7 @@ export class UsageService implements vscode.Disposable {
     this.timer[Symbol.dispose]();
     this.ingest.dispose();
     this._onDidChange.dispose();
+    this._onAlertFired.dispose();
     this.subs.forEach((d) => d.dispose());
     this.github?.dispose();
   }

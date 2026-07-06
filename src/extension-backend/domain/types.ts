@@ -584,6 +584,8 @@ export interface UsageSnapshot {
   chartData: ChartData;
   /** GitHub auth state for the billing integration panel. */
   authStatus: AuthStatus;
+  /** Human-readable detail when authStatus is 'error' (e.g. a PAT is required). */
+  authError?: string;
   /** Authoritative billing data from the GitHub API, when signed in. */
   githubBilling?: GitHubBillingData;
   /** Currently active git branch, when detectable. */

@@ -57,7 +57,7 @@
       },
       {
         "command": "mallard.clearData",
-        "title": "Clear All Data",
+        "title": "Rebuild Ingested Data (Re-ingest From Scratch)",
         "category": "Mallard"
       },
       {
@@ -106,6 +106,12 @@
         "title": "Enable Copilot Usage Tracking",
         "category": "Mallard",
         "icon": "$(broadcast)"
+      },
+      {
+        "command": "mallard.showOnboarding",
+        "title": "Show Onboarding",
+        "category": "Mallard",
+        "icon": "$(rocket)"
       },
       {
         "command": "mallard.setMqttPassword",
@@ -169,6 +175,12 @@
           "type": "string",
           "default": "USD",
           "description": "Display currency for all cost amounts in the dashboard and status bar (e.g. USD, EUR, GBP, JPY, AUD, CAD). Exchange rates are fetched daily from Frankfurter. MQTT and webhook metric exports always use USD regardless of this setting."
+        },
+        "mallard.enabledConnectors": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["copilot", "claude-code"] },
+          "default": ["copilot", "claude-code"],
+          "description": "Which usage connectors Mallard ingests from. Set automatically by the onboarding flow when both Copilot and Claude Code are installed (Mallard: Show Onboarding to re-run it). Changing this setting requires reloading the window."
         },
         "mallard.copilotLogPath": {
           "type": "string",

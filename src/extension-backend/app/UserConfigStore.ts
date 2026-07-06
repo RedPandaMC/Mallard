@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Budget and alert configuration, stored as a hand-editable JSON file in the
  * extension's storage directory. The file is the source of truth: the dashboard

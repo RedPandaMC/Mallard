@@ -5,13 +5,12 @@ import { DEFAULT_USER_CONFIG } from '../../../src/extension-backend/domain/types
 describe('frontend/store — state mutations + subscriptions', () => {
   beforeEach(() => {
     // Reset to defaults since the store is a singleton shared across all tests
-    setState({ metric: 'cost', selectedCurrency: 'USD', filter: {}, focusedModels: new Set() });
+    setState({ metric: 'cost', filter: {} });
   });
 
   it('starts with default state', () => {
     const s = state();
     assert.equal(s.metric, 'cost');
-    assert.equal(s.selectedCurrency, 'USD');
     assert.equal(s.snapshot, null);
     assert.deepEqual(s.config, DEFAULT_USER_CONFIG);
   });
@@ -19,17 +18,16 @@ describe('frontend/store — state mutations + subscriptions', () => {
   it('setState merges a patch and notifies subscribers', () => {
     let changes = 0;
     const unsub = subscribe(() => changes++);
-    setState({ metric: 'credits', selectedCurrency: 'EUR' });
+    setState({ metric: 'credits' });
     assert.equal(state().metric, 'credits');
-    assert.equal(state().selectedCurrency, 'EUR');
     assert.ok(changes >= 1);
     unsub();
   });
 
-  it('setState with focusedModels accepts a Set', () => {
-    setState({ focusedModels: new Set(['gpt-4o']) });
-    assert.ok(state().focusedModels.has('gpt-4o'));
-    setState({ focusedModels: new Set() });
+  it('setState with filter.models accepts a model list', () => {
+    setState({ filter: { models: ['gpt-4o'] } });
+    assert.deepEqual(state().filter.models, ['gpt-4o']);
+    setState({ filter: {} });
   });
 
   it('store.getState() returns the live state', () => {

@@ -374,7 +374,7 @@
           "type": "integer",
           "minimum": 4,
           "maximum": 52,
-          "default": 12,
+          "default": 52,
           "description": "Number of weeks shown in the activity heatmap."
         },
         "topN": {

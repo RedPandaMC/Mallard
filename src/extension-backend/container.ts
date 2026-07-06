@@ -73,12 +73,14 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     new WorkspaceFolderMatcher(() => vscode.workspace.workspaceFolders),
   );
 
-  const ingest = new IngestService(
-    new ConnectorRegistry()
-      .register(copilot)
-      .register(claudeCode)
-      .build(),
+  const enabledConnectors = new Set(
+    vscode.workspace.getConfiguration('mallard').get<string[]>('enabledConnectors')
+      ?? ['copilot', 'claude-code'],
   );
+  const registry = new ConnectorRegistry();
+  if (enabledConnectors.has('copilot')) registry.register(copilot);
+  if (enabledConnectors.has('claude-code')) registry.register(claudeCode);
+  const ingest = new IngestService(registry.build());
 
   const githubSession = new GitHubSession(context.secrets);
   const github = new GitHubUsageService(githubSession);
@@ -106,8 +108,13 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const restriction = new RestrictionEngine(storageDir);
 
   // Generic gate that nudges the user to enable any connector prerequisite
-  // (e.g. Copilot's OTel exporter) and re-refreshes once applied.
-  const setupGate = new ConnectorSetupGate(context, [copilot, claudeCode], () => void usage.refresh());
+  // (e.g. Copilot's OTel exporter) and re-refreshes once applied. Scoped to
+  // only the enabled connectors — no point nudging Copilot OTel setup for a
+  // connector the user opted out of via mallard.enabledConnectors.
+  const activeConnectors = [copilot, claudeCode].filter((c) =>
+    enabledConnectors.has(c === copilot ? 'copilot' : 'claude-code'),
+  );
+  const setupGate = new ConnectorSetupGate(context, activeConnectors, () => void usage.refresh());
 
   context.subscriptions.push(
     usage.onDidChangeSnapshot((snapshot) => {

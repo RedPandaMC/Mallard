@@ -21,12 +21,13 @@ export interface AppState {
   filter: Filter;
   datePreset: DatePreset;
   restriction: RestrictionState;
-  /** ISO 4217 currency code the user has selected for display. Defaults to USD. */
-  selectedCurrency: string;
-  /** Whether the dashboard is forced into light or dark mode (null = follow VS Code). */
+  /**
+   * Whether the dashboard is forced into light or dark mode. The toggle
+   * itself is strictly binary (light/dark) — `null` is only a transient
+   * "not yet initialized" sentinel used once, at startup, to seed the
+   * initial value from VS Code's active theme kind.
+   */
   forcedScheme: 'light' | 'dark' | null;
-  /** Model keys currently spotlighted — other panels dim when this is non-empty. */
-  focusedModels: ReadonlySet<string>;
 }
 
 export const store = createStore<AppState>()(
@@ -39,9 +40,7 @@ export const store = createStore<AppState>()(
       filter: {},
       datePreset: 'month',
       restriction: DEFAULT_RESTRICTION_STATE,
-      selectedCurrency: 'USD',
       forcedScheme: null,
-      focusedModels: new Set<string>(),
     }),
   ),
 );
