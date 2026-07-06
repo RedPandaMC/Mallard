@@ -13,6 +13,7 @@ import { ChartComponent } from './ChartComponent';
 export interface SankeyHandle {
   update(snapshot: UsageSnapshot): void;
   resize(): void;
+  reinit(): void;
 }
 
 function shortName(id: string): string {

@@ -60,6 +60,9 @@ function applyForcedScheme(scheme: 'light' | 'dark' | null): void {
   if (scheme) document.body.setAttribute('data-force-scheme', scheme);
 }
 
+/** Rerender closures for every mounted chart, registered once by mountDashboard. */
+let rerenderAllChartsForTheme: (() => void) | null = null;
+
 applyTheme();
 mountDashboard(document.getElementById('app')!);
 
@@ -77,11 +80,31 @@ onMessage((msg) => {
   } else if (msg.type === 'theme') {
     applyPalette(msg.palette, msg.kind);
     applyTheme();
-    if (state().snapshot) setState({ snapshot: state().snapshot });
+    // Only the very first theme message seeds the forced-scheme toggle (so
+    // it starts in sync with VS Code); afterwards the toggle is a manual
+    // override the user controls independently of the editor theme.
+    if (state().forcedScheme === null) {
+      const initial = msg.kind === 'light' || msg.kind === 'high-contrast-light' ? 'light' : 'dark';
+      setState({ forcedScheme: initial });
+      applyForcedScheme(initial);
+      updateThemeToggleUI(initial);
+    }
+    rerenderAllChartsForTheme?.();
   }
 });
 
 post({ type: 'ready' });
+
+function updateThemeToggleUI(scheme: 'light' | 'dark'): void {
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  btn.setAttribute('aria-pressed', String(scheme === 'dark'));
+  const label = scheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  btn.setAttribute('aria-label', label);
+  btn.setAttribute('title', label);
+  const icon = btn.querySelector('i');
+  if (icon) icon.className = `codicon ${scheme === 'dark' ? 'codicon-color-mode' : 'codicon-lightbulb'}`;
+}
 
 // ── Full dashboard ──────────────────────────────────────────────────────────
 
@@ -176,13 +199,18 @@ function mountDashboard(root: HTMLElement): void {
     (code) => setState({ selectedCurrency: code }),
   );
 
-  // Theme toggle: cycles null → light → dark → null
+  // Theme toggle: strict binary flip between light and dark (no "follow
+  // VS Code" middle state — that state is only used to seed the initial
+  // value from the 'theme' message, see updateThemeToggleUI above).
   const themeToggleBtn = document.getElementById('theme-toggle')!;
   themeToggleBtn.addEventListener('click', () => {
-    const current = state().forcedScheme;
-    const next = current === null ? 'light' : current === 'light' ? 'dark' : null;
+    const current = state().forcedScheme ?? 'dark';
+    const next = current === 'light' ? 'dark' : 'light';
     setState({ forcedScheme: next });
     applyForcedScheme(next);
+    updateThemeToggleUI(next);
+    applyTheme();
+    rerenderAllChartsForTheme?.();
   });
   const dailyEl = document.getElementById('chart-daily')!;
   const heatmapEl = document.getElementById('chart-heatmap')!;
@@ -241,6 +269,17 @@ function mountDashboard(root: HTMLElement): void {
     cumulative.resize();
     weekday.resize();
     hourly.resize();
+  };
+
+  rerenderAllChartsForTheme = () => {
+    daily.rerenderForTheme();
+    heatmap.rerenderForTheme();
+    models.rerenderForTheme();
+    sankey.rerenderForTheme();
+    category.rerenderForTheme();
+    cumulative.rerenderForTheme();
+    weekday.rerenderForTheme();
+    hourly.rerenderForTheme();
   };
 
   // Dynamic scaling + docking: the layout manager reorders, resizes (span), and

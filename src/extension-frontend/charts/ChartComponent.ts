@@ -10,7 +10,7 @@ type EChartsInstance = ReturnType<typeof initChart>;
  * the notMerge/lazyUpdate defaults uniformly.
  */
 export abstract class ChartComponent {
-  protected readonly chart: EChartsInstance;
+  protected chart: EChartsInstance;
   protected readonly el: HTMLElement;
 
   /** Override to false in subclasses that accumulate series across updates. */
@@ -45,5 +45,19 @@ export abstract class ChartComponent {
 
   resize(): void {
     this.chart.resize();
+  }
+
+  /**
+   * Dispose and recreate the underlying ECharts instance so it picks up the
+   * theme most recently registered by applyTheme(). ECharts snapshots the
+   * theme object by reference at init() time — re-registering a theme name
+   * has no effect on instances created before the re-registration, so a
+   * plain setOption() after a light/dark switch would leave chrome (axis
+   * lines, background, tooltip) stuck on the old theme. Callers must
+   * re-render (call update()) immediately after this to repaint.
+   */
+  reinit(): void {
+    this.chart.dispose();
+    this.chart = initChart(this.el);
   }
 }

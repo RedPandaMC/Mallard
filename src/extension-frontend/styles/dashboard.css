@@ -250,9 +250,9 @@ body {
   padding: var(--w-s1) var(--w-s2);
   font: inherit;
   font-size: 11px;
-  color: var(--vscode-dropdown-foreground, var(--w-fg));
-  background: var(--vscode-dropdown-background, var(--w-bg-card));
-  border: 1px solid var(--vscode-dropdown-border, var(--w-border));
+  color: var(--w-fg);
+  background: var(--w-bg-card);
+  border: 1px solid var(--w-border);
   border-radius: var(--w-r1);
 }
 
@@ -280,7 +280,7 @@ body {
   top: calc(100% + 4px);
   left: 0;
   min-width: 220px;
-  background: var(--vscode-quickInputList-focusBackground, var(--w-bg-card));
+  background: var(--w-bg-card);
   border: 1px solid var(--w-border);
   border-radius: var(--w-r2);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
@@ -853,7 +853,7 @@ body {
 }
 .wv-panel-btn:hover { color: var(--w-fg); background: var(--w-bg-card); }
 .wv-chart-section.wv-dragging { opacity: 0.6; }
-.wv-chart-section.wv-hidden-panel .wv-panel-btn[data-act='hide'] { color: var(--vscode-foreground); opacity: 0.45; }
+.wv-chart-section.wv-hidden-panel .wv-panel-btn[data-act='hide'] { color: var(--w-fg); opacity: 0.45; }
 
 /* Drop-target highlight during drag. */
 .wv-chart-section.wv-drop-target {
@@ -917,7 +917,7 @@ body {
   background: transparent;
   border: 1px solid var(--w-border);
   border-radius: var(--w-r1);
-  color: var(--vscode-descriptionForeground);
+  color: var(--w-fg-muted);
   font-size: 11px;
   cursor: pointer;
   opacity: 0.8;
@@ -936,22 +936,22 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--vscode-charts-green, #81C784);
+  color: var(--w-status-ok);
   font-weight: 600;
 }
-.wv-gh-amount { color: var(--vscode-foreground); }
-.wv-gh-reset  { color: var(--vscode-descriptionForeground); margin-left: auto; }
+.wv-gh-amount { color: var(--w-fg); }
+.wv-gh-reset  { color: var(--w-fg-muted); margin-left: auto; }
 
 .wv-gh-divergence {
   display: flex;
   align-items: flex-start;
   gap: 6px;
   padding: 6px 10px;
-  background: color-mix(in srgb, var(--vscode-charts-orange, #FFB74D) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--vscode-charts-orange, #FFB74D) 40%, transparent);
+  background: color-mix(in srgb, var(--w-status-warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--w-status-warn) 40%, transparent);
   border-radius: var(--w-r1);
   font-size: 11px;
-  color: var(--vscode-foreground);
+  color: var(--w-fg);
   margin-top: var(--w-s2);
 }
 
@@ -1020,9 +1020,9 @@ body {
   width: 96px;
   padding: 2px 6px;
   font: inherit;
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, var(--w-border));
+  color: var(--w-input-fg);
+  background: var(--w-input-bg);
+  border: 1px solid var(--w-input-border);
   border-radius: var(--w-r1);
 }
 

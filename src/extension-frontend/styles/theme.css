@@ -86,6 +86,13 @@
   --w-sev-warn: #ff8a80;
   --w-sev-over: var(--w-accent);
 
+  /* Semantic status colors (verified/success, divergence/warning) — kept
+     distinct from the duotone data palette since these are one-off status
+     badges, not chart series. Still theme-reactive: overridden per forced
+     scheme below so they stay legible under a manual light/dark override. */
+  --w-status-ok: var(--vscode-charts-green, #4caf50);
+  --w-status-warn: var(--vscode-charts-orange, #ffb74d);
+
   /* ── Back-compat aliases: old instrument token names → duotone values,
      so dashboard.css/components reskin without renaming every reference. */
   --w-action: var(--w-accent);
@@ -157,6 +164,8 @@ body[data-force-scheme='light'] {
   --w-tooltip-fg: #ffffff;
   --w-accent: #e5231b;
   --w-sev-warn: #f2766e;
+  --w-status-ok: #2e7d32;
+  --w-status-warn: #e65100;
 }
 
 body[data-force-scheme='dark'] {
@@ -173,4 +182,6 @@ body[data-force-scheme='dark'] {
   --w-tooltip-fg: #1e1e1e;
   --w-accent: #ff453a;
   --w-sev-warn: #f2766e;
+  --w-status-ok: #81c784;
+  --w-status-warn: #ffb74d;
 }

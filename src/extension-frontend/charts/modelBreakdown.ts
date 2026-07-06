@@ -7,10 +7,12 @@ import type { TooltipComponentOption } from './echarts';
 import { Metric, UsageSnapshot } from '../../extension-backend/domain/types';
 import { formatCredits, formatMoney, formatTokens } from '../../extension-backend/domain/format';
 import { ChartComponent } from './ChartComponent';
+import { readTheme } from '../theme';
 
 export interface ModelBreakdownHandle {
   update(snapshot: UsageSnapshot, metric?: Metric): void;
   resize(): void;
+  reinit(): void;
   setFocused(models: ReadonlySet<string>): void;
 }
 
@@ -54,6 +56,7 @@ class ModelBreakdownChart extends ChartComponent {
     }
 
     const showGhost = metric === 'cost';
+    const dimmedFg = readTheme().muted;
     const reversedLabels = [...labels].reverse();
     const reversedValues = [...values].reverse();
     const reversedCheapest = [...cheapestEquivalentCosts].reverse();
@@ -113,7 +116,7 @@ class ModelBreakdownChart extends ChartComponent {
         axisLabel: {
           fontSize: 11,
           color: (value: string) =>
-            focused.size > 0 && !focused.has(value) ? 'rgba(128,128,128,0.4)' : undefined,
+            focused.size > 0 && !focused.has(value) ? dimmedFg : undefined,
         },
       },
       series: [mainSeries, ...ghostSeries],

@@ -20,6 +20,7 @@ const LABELS: Record<string, string> = {
 export interface CategoryBreakdownHandle {
   update(snapshot: UsageSnapshot): void;
   resize(): void;
+  reinit(): void;
 }
 
 class CategoryBreakdownChart extends ChartComponent {

@@ -387,12 +387,13 @@ describe('MetricExporter (real class) — flushQueue', () => {
     const dir = await makeTmpDir();
     const queue = new ExportQueue(dir);
     queue.enqueue('t', { n: 1 });
-    let exporter!: MetricExporter;
+    const holder: { exporter?: MetricExporter } = {};
     const protocol: MetricProtocol = {
-      async send() { exporter.dispose(); return { ok: true }; },
+      async send() { holder.exporter?.dispose(); return { ok: true }; },
       dispose() {},
     };
-    exporter = new MetricExporter(protocol, fakeSerializer(), queue);
+    const exporter = new MetricExporter(protocol, fakeSerializer(), queue);
+    holder.exporter = exporter;
     await exporter.export(makeSnapshot());
     assert.equal(queue.peekAll().length, 1, 'entry left intact when disposed mid-flush');
     await fs.rm(dir, { recursive: true });

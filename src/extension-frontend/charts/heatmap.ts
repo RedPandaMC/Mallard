@@ -12,6 +12,7 @@ import { ChartComponent } from './ChartComponent';
 export interface HeatmapHandle {
   update(snapshot: UsageSnapshot): void;
   resize(): void;
+  reinit(): void;
 }
 
 class HeatmapChart extends ChartComponent {

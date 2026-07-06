@@ -12,6 +12,7 @@ import { ChartComponent } from './ChartComponent';
 export interface CumulativeAreaHandle {
   update(snapshot: UsageSnapshot): void;
   resize(): void;
+  reinit(): void;
 }
 
 class CumulativeAreaChart extends ChartComponent {
