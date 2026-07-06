@@ -10,12 +10,20 @@ import {
   DashboardLayout,
   DashboardPanelLayout,
   DEFAULT_DASHBOARD_LAYOUT,
+  MAX_PANEL_SPAN,
   PanelSize,
 } from './types';
 
 const VALID_SIZES = new Set<PanelSize>(['compact', 'normal', 'tall']);
 function validSize(s: unknown): PanelSize | undefined {
   return VALID_SIZES.has(s as PanelSize) ? (s as PanelSize) : undefined;
+}
+
+/** Clamp a stored span to a valid integer in [1, MAX_PANEL_SPAN]. */
+function validSpan(s: unknown): number {
+  const n = Math.round(Number(s));
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(MAX_PANEL_SPAN, Math.max(1, n));
 }
 
 /**
@@ -32,7 +40,7 @@ export function normalizeLayout(stored?: DashboardLayout): DashboardLayout {
   for (const p of stored ?? []) {
     if (!p || !known.has(p.id) || seen.has(p.id)) continue;
     seen.add(p.id);
-    out.push({ id: p.id, span: p.span === 2 ? 2 : 1, hidden: Boolean(p.hidden), size: validSize(p.size) ?? 'normal' });
+    out.push({ id: p.id, span: validSpan(p.span), hidden: Boolean(p.hidden), size: validSize(p.size) ?? 'normal' });
   }
   for (const def of DEFAULT_DASHBOARD_LAYOUT) {
     if (!seen.has(def.id)) out.push({ ...def });
@@ -41,14 +49,14 @@ export function normalizeLayout(stored?: DashboardLayout): DashboardLayout {
 }
 
 /**
- * Parse a CSS grid-column shorthand like "span 2" into a span integer (1 or 2).
- * Anything that doesn't match "span N" defaults to 1.
+ * Parse a CSS grid-column shorthand like "span 3" into a span integer in
+ * [1, MAX_PANEL_SPAN]. Anything that doesn't match "span N" defaults to 1.
  */
-export function gridColumnToSpan(gridColumn: string | undefined): 1 | 2 {
+export function gridColumnToSpan(gridColumn: string | undefined): number {
   if (!gridColumn) return 1;
   const m = /^span\s+(\d+)$/i.exec(gridColumn.trim());
   if (!m) return 1;
-  return parseInt(m[1]!, 10) >= 2 ? 2 : 1;
+  return validSpan(parseInt(m[1]!, 10));
 }
 
 /**

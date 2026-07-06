@@ -544,8 +544,11 @@ body {
   border-color: var(--w-action);
 }
 
-/* edit-layout toggle reads as a lit instrument button when active */
-#layout-edit[aria-pressed='true'] {
+/* Resize/Move layout toggles read as a lit instrument button when active.
+   (The single #layout-edit button was split into #layout-resize and
+   #layout-move; this rule must target both or neither ever highlights.) */
+#layout-resize[aria-pressed='true'],
+#layout-move[aria-pressed='true'] {
   background: var(--w-action);
   color: var(--w-action-fg);
   border-color: var(--w-action);
@@ -828,8 +831,10 @@ body {
   align-items: start;
 }
 
-.wv-chart-section[data-span='2'] { grid-column: span 2; }
 .wv-chart-section[data-span='1'] { grid-column: span 1; }
+.wv-chart-section[data-span='2'] { grid-column: span 2; }
+.wv-chart-section[data-span='3'] { grid-column: span 3; }
+.wv-chart-section[data-span='4'] { grid-column: span 4; }
 
 /* Panels with no data never render. */
 .wv-chart-section.wv-no-data { display: none !important; }
@@ -968,8 +973,8 @@ body {
 @media (max-width: 700px) {
   .wv-dashboard { padding: var(--w-s3) var(--w-s3) var(--w-s6); gap: var(--w-s3); }
   .wv-charts-grid { grid-template-columns: 1fr; }
-  .wv-chart-section[data-span='1'],
-  .wv-chart-section[data-span='2'] { grid-column: span 1; }
+  /* Single column on narrow screens — every panel spans the one column. */
+  .wv-chart-section { grid-column: span 1 !important; }
   .wv-kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .wv-header { flex-wrap: wrap; }
   .wv-filter-bar { flex-wrap: wrap; }

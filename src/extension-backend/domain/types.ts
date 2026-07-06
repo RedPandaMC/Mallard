@@ -316,14 +316,18 @@ export type PaletteMode = 'swiss' | 'theme';
 
 /**
  * Persisted dashboard layout. Each analysis panel has a position (array order),
- * a width span (1 = half, 2 = full, in the two-column grid), and a visibility
- * flag. Edited in the dashboard's edit mode and stored in globalState.
+ * a width span (number of grid columns it occupies, 1..MAX_PANEL_SPAN, clamped
+ * at render time to the configured column count), and a visibility flag. Edited
+ * in the dashboard's edit mode and stored in globalState.
  */
 export type PanelSize = 'compact' | 'normal' | 'tall';
 
+/** Widest a panel may span — matches the maximum configurable column count. */
+export const MAX_PANEL_SPAN = 4;
+
 export interface DashboardPanelLayout {
   id: string;
-  span: 1 | 2;
+  span: number;
   hidden: boolean;
   size?: PanelSize;
 }

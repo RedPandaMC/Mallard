@@ -115,6 +115,11 @@ class ModelBreakdownChart extends ChartComponent {
         data: reversedLabels,
         axisLabel: {
           fontSize: 11,
+          // Truncate long model ids to fit the label column instead of letting
+          // them overflow into the bars; the full name stays in the tooltip.
+          width: 104,
+          overflow: 'truncate',
+          ellipsis: '…',
           color: (value: string) =>
             focused.size > 0 && !focused.has(value) ? dimmedFg : undefined,
         },

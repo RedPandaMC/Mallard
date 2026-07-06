@@ -215,14 +215,18 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
   function updateModelLabel() {
     if (activeModels.length === 0) {
       modelLabel.textContent = 'All models';
+      modelLabel.removeAttribute('title');
     } else if (activeModels.length === 1) {
-      modelLabel.textContent = activeModels[0]!.slice(0, 24);
+      const full = activeModels[0]!;
+      modelLabel.textContent = full.length > 24 ? `${full.slice(0, 23)}…` : full;
+      modelLabel.title = full; // full name on hover, since the label truncates
     } else {
       modelLabel.textContent = `${activeModels.length} models`;
+      modelLabel.title = activeModels.join(', ');
     }
   }
 
-  function rebuildModelDropdown(allModels: string[]) {
+  function rebuildModelDropdown(allModels: string[], focusModel?: string) {
     modelDropdown.innerHTML = '';
 
     const allOpt = document.createElement('div');
@@ -240,7 +244,7 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
     allOpt.addEventListener('click', () => {
       activeModels = [];
       updateModelLabel();
-      rebuildModelDropdown(allModels);
+      rebuildModelDropdown(allModels, '__all__');
       dispatchFilter();
     });
     modelDropdown.appendChild(allOpt);
@@ -257,7 +261,9 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
       icon.className = `codicon codicon-${activeModels.includes(m) ? 'check' : 'blank'}`;
       icon.setAttribute('aria-hidden', 'true');
       opt.appendChild(icon);
-      opt.append(` ${m.replace(/^(models\/|gpt-|claude-|gemini-)/, '').slice(0, 30)}`);
+      const display = m.replace(/^(models\/|gpt-|claude-|gemini-)/, '');
+      opt.append(` ${display.length > 30 ? `${display.slice(0, 29)}…` : display}`);
+      opt.title = m; // full model id on hover — the visible label truncates
       opt.addEventListener('click', () => {
         if (activeModels.includes(m)) {
           activeModels = activeModels.filter((x) => x !== m);
@@ -265,11 +271,20 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
           activeModels = [...activeModels, m];
         }
         updateModelLabel();
-        rebuildModelDropdown(allModels);
+        rebuildModelDropdown(allModels, m);
         dispatchFilter();
       });
       modelDropdown.appendChild(opt);
     });
+
+    // Rebuilding wipes innerHTML, which drops keyboard focus to <body> and
+    // breaks arrow-key navigation. Restore focus to the option for the same
+    // model so the user can keep toggling with the keyboard.
+    if (focusModel !== undefined) {
+      for (const o of modelDropdown.querySelectorAll<HTMLElement>('[role="option"]')) {
+        if (o.dataset.model === focusModel) { o.focus(); break; }
+      }
+    }
   }
 
   const surfaceChips = el.querySelector<HTMLElement>('#surface-chips')!;
