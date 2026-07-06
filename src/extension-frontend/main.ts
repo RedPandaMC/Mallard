@@ -196,7 +196,7 @@ function mountDashboard(root: HTMLElement): void {
   const gauge = mountSpendGauge(document.getElementById('spend-gauge')!);
   const currencySelector = mountCurrencySelector(
     document.getElementById('currency-selector')!,
-    (code) => setState({ selectedCurrency: code }),
+    (code) => post({ type: 'setCurrency', value: code }),
   );
 
   // Theme toggle: strict binary flip between light and dark (no "follow
@@ -396,7 +396,7 @@ function mountDashboard(root: HTMLElement): void {
       kpis.update(snapshot, metric);
       ghStrip.update(snapshot);
       gauge.update(snapshot.budget, snapshot.currency);
-      currencySelector.update(snapshot.fxRates, s.selectedCurrency);
+      currencySelector.update(snapshot.fxRates, snapshot.currency);
 
       // dailyBars drives both the bar chart and the cumulative area view.
       if (dailyBarsChanged(prevDailyBars, snapshot.chartData.dailyBars)) {

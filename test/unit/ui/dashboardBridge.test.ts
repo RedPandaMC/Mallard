@@ -140,6 +140,24 @@ describe('dashboardBridge — message routing', () => {
     }
   });
 
+  it('writes setCurrency to the mallard.currency setting', async () => {
+    const ws = vscode.workspace as Mutable<typeof vscode.workspace>;
+    const originalGetConfig = ws.getConfiguration;
+    const updates: unknown[][] = [];
+    ws.getConfiguration = (() => ({
+      get: (_key: string, fallback: unknown) => fallback,
+      update: (...a: unknown[]) => { updates.push(a); return Promise.resolve(); },
+    })) as never;
+    try {
+      const h = makeHarness();
+      h.send({ type: 'setCurrency', value: 'eur' });
+      await new Promise((r) => setImmediate(r));
+      assert.deepEqual(updates[0], ['currency', 'EUR', vscode.ConfigurationTarget.Global]);
+    } finally {
+      ws.getConfiguration = originalGetConfig;
+    }
+  });
+
   it('opens the config file for openConfig', async () => {
     const opened: unknown[] = [];
     const originalShow = win.showTextDocument;

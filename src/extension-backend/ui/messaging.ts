@@ -32,7 +32,8 @@ export type HostBoundMsg =
   | { type: 'setLayout'; value: DashboardLayout }
   | { type: 'openConfig' }
   | { type: 'command'; id: CommandId }
-  | { type: 'restrictSnooze'; minutes: number };
+  | { type: 'restrictSnooze'; minutes: number }
+  | { type: 'setCurrency'; value: string };
 
 const COMMAND_IDS: CommandId[] = ['openDashboard', 'signIn', 'disableExtension', 'enableCopilotTelemetry'];
 
@@ -56,6 +57,8 @@ export function isHostBoundMsg(m: unknown): m is HostBoundMsg {
       return typeof m.minutes === 'number' && m.minutes > 0 && m.minutes <= 60 * 24 * 7;
     case 'command':
       return COMMAND_IDS.includes(m.id as CommandId);
+    case 'setCurrency':
+      return typeof m.value === 'string' && /^[A-Za-z]{3}$/.test(m.value);
     default:
       return false;
   }

@@ -21,8 +21,6 @@ export interface AppState {
   filter: Filter;
   datePreset: DatePreset;
   restriction: RestrictionState;
-  /** ISO 4217 currency code the user has selected for display. Defaults to USD. */
-  selectedCurrency: string;
   /**
    * Whether the dashboard is forced into light or dark mode. The toggle
    * itself is strictly binary (light/dark) — `null` is only a transient
@@ -44,7 +42,6 @@ export const store = createStore<AppState>()(
       filter: {},
       datePreset: 'month',
       restriction: DEFAULT_RESTRICTION_STATE,
-      selectedCurrency: 'USD',
       forcedScheme: null,
       focusedModels: new Set<string>(),
     }),

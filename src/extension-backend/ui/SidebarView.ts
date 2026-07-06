@@ -261,10 +261,16 @@ export class SidebarView implements vscode.WebviewViewProvider {
       if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
       return String(Math.round(n));
     }
-    function fmtMoney(usd) {
-      if (usd >= 100) return '$' + usd.toFixed(0);
-      if (usd >= 1)   return '$' + usd.toFixed(2);
-      return '$' + usd.toFixed(3);
+    function fmtMoney(amount, currency) {
+      const digits = amount >= 100 ? 0 : amount >= 1 ? 2 : 3;
+      try {
+        return new Intl.NumberFormat(undefined, {
+          style: 'currency', currency: currency || 'USD',
+          minimumFractionDigits: digits, maximumFractionDigits: digits,
+        }).format(amount);
+      } catch {
+        return (currency || 'USD') + ' ' + amount.toFixed(digits);
+      }
     }
 
     function render(snap) {
@@ -275,6 +281,7 @@ export class SidebarView implements vscode.WebviewViewProvider {
         : null;
       const sev = pct == null ? '' : pct >= 100 ? 'sb--err' : pct >= 80 ? 'sb--warn' : '';
       const mtdCost = snap.budget?.mtdCost ?? 0;
+      const currency = snap.currency || 'USD';
       const models = snap.topModels ?? [];
       const maxCr = models[0]?.credits ?? 1;
 
@@ -285,20 +292,20 @@ export class SidebarView implements vscode.WebviewViewProvider {
       html += '<div class="sb-section-label">Budget</div>';
       if (hasBudget) {
         html += '<div class="sb-budget-numbers ' + sev + '">';
-        html += '<span class="sb-budget-spend">' + fmtMoney(mtdCost) + '</span>';
-        html += '<span class="sb-budget-cap">/ ' + fmtMoney(budget.monthlyBudget) + '</span>';
+        html += '<span class="sb-budget-spend">' + fmtMoney(mtdCost, currency) + '</span>';
+        html += '<span class="sb-budget-cap">/ ' + fmtMoney(budget.monthlyBudget, currency) + '</span>';
         html += '<span class="sb-budget-pct">' + pct + '%</span>';
         html += '</div>';
         html += '<div class="sb-bar-track ' + sev + '">';
         html += '<div class="sb-bar-fill" style="width:' + Math.min(100, pct) + '%"></div>';
         html += '</div>';
-        html += '<div class="sb-budget-sub">today ' + fmtMoney(snap.today.cost) + '</div>';
+        html += '<div class="sb-budget-sub">today ' + fmtMoney(snap.today.cost, currency) + '</div>';
       } else {
         html += '<div class="sb-budget-numbers">';
-        html += '<span class="sb-budget-spend">' + fmtMoney(mtdCost) + '</span>';
+        html += '<span class="sb-budget-spend">' + fmtMoney(mtdCost, currency) + '</span>';
         html += '<span class="sb-budget-cap">this month</span>';
         html += '</div>';
-        html += '<div class="sb-budget-sub">today ' + fmtMoney(snap.today.cost) + '</div>';
+        html += '<div class="sb-budget-sub">today ' + fmtMoney(snap.today.cost, currency) + '</div>';
       }
       html += '</div>';
 
