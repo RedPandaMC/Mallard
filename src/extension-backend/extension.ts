@@ -15,6 +15,7 @@ import { SidebarView } from './ui/SidebarView';
 import { cleanupGlobalState, cleanupStorage } from './app/Lifecycle';
 import { formatCredits } from './domain/format';
 import { severityFor } from './domain/budget';
+import { runOnboardingIfNeeded, showOnboarding } from './onboarding';
 
 let _context: vscode.ExtensionContext | undefined;
 
@@ -117,6 +118,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   await usage.start();
+  // Runs before setupGate.start() so onboarding gets first crack at asking
+  // about Copilot OTel setup — it suppresses the gate's own automatic nudge
+  // for the same requirement so the two mechanisms don't both prompt.
+  await runOnboardingIfNeeded(context, container.setupGate);
   container.setupGate.start();
 
   if (vscode.env.remoteName && !context.globalState.get<boolean>('mallard.remoteCopilotWarned')) {
@@ -161,6 +166,10 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
 
   reg('mallard.enableCopilotTelemetry', async () => {
     await setupGate.run('copilot-otel');
+  });
+
+  reg('mallard.showOnboarding', async () => {
+    await showOnboarding(context, setupGate);
   });
 
   reg('mallard.openDashboard', () => {

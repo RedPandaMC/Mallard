@@ -143,6 +143,15 @@ describe('ConnectorSetupGate', () => {
     await gate.run('does-not-exist'); // must not throw
   });
 
+  it('suppressNudge() marks a requirement nudged without showing anything, so check() skips it', async () => {
+    let shown = 0;
+    win.showInformationMessage = (async () => { shown++; return undefined; }) as never;
+    const gate = new ConnectorSetupGate(fakeContext(), [connectorWith([fakeReq({ id: 'a' })])], () => {});
+    await gate.suppressNudge('a');
+    await gate.check();
+    assert.equal(shown, 0, 'nudge already suppressed — check() must not show it');
+  });
+
   it('pending() lists only unsatisfied requirements', () => {
     const gate = new ConnectorSetupGate(
       fakeContext(),

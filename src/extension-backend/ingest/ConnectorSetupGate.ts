@@ -66,6 +66,16 @@ export class ConnectorSetupGate implements vscode.Disposable {
     return this.requirements.filter((r) => !r.isSatisfied());
   }
 
+  /**
+   * Marks a requirement as already nudged, without showing anything —
+   * used by onboarding, which asks about the same requirement as one of
+   * its own steps. Without this, the automatic one-time nudge in check()
+   * would ask again the first time it runs after onboarding does.
+   */
+  async suppressNudge(id: string): Promise<void> {
+    await this.context.globalState.update(`mallard.setupNudge.${id}`, true);
+  }
+
   dispose(): void {
     this.disposables.forEach((d) => d.dispose());
   }
