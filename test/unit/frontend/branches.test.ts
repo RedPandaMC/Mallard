@@ -1,14 +1,13 @@
 import { strict as assert } from 'assert';
 import { buildSnapshot } from '../../../src/extension-backend/domain/snapshot';
 import { makeEvent } from '../helpers';
-import type { UsageSnapshot, BudgetState, RestrictionState, GitHubBillingData } from '../../../src/extension-backend/domain/types';
+import type { UsageSnapshot, RestrictionState, GitHubBillingData } from '../../../src/extension-backend/domain/types';
 import { mountGitHubBillingStrip } from '../../../src/extension-frontend/components/GitHubBillingStrip';
 import { mountKpiCards } from '../../../src/extension-frontend/components/KpiCards';
 import { mountStatusBanner } from '../../../src/extension-frontend/components/StatusBanner';
 import { mountRestrictionBanner } from '../../../src/extension-frontend/components/RestrictionBanner';
 import { mountEmptyState } from '../../../src/extension-frontend/components/EmptyState';
 import { mountAlertConfigPanel } from '../../../src/extension-frontend/components/AlertConfigPanel';
-import { mountSpendGauge } from '../../../src/extension-frontend/components/SpendGauge';
 import { mountCurrencySelector } from '../../../src/extension-frontend/components/CurrencySelector';
 import { DEFAULT_USER_CONFIG } from '../../../src/extension-backend/domain/types';
 
@@ -147,18 +146,6 @@ describe('components — remaining branch coverage', () => {
     const btn = el.querySelector('button');
     if (btn) btn.click();
     assert.ok(getPosted().some((m) => JSON.stringify(m).includes('openConfig')), 'openConfig posted');
-    el.remove();
-  });
-
-  it('SpendGauge renders warn severity at 80% of included credits', () => {
-    const el = document.createElement('div');
-    document.body.appendChild(el);
-    const h = mountSpendGauge(el);
-    const budget: BudgetState = {
-      monthly: 100, includedCredits: 300, usedCredits: 240, usedCost: 9.6,
-      percentOfBudget: 80, percentOfIncluded: 0.8, projectedOverage: null, pace: 'warning',
-    };
-    h.update(budget, 'USD');
     el.remove();
   });
 

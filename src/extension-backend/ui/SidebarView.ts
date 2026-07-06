@@ -49,6 +49,9 @@ export class SidebarView implements vscode.WebviewViewProvider {
       this.usage.onDidChangeSnapshot((s) => {
         void webviewView.webview.postMessage({ type: 'snapshot', payload: s });
       }),
+      this.usage.onAlertFired(({ message }) => {
+        void webviewView.webview.postMessage({ type: 'alertFired', message });
+      }),
     );
 
     // Open the dashboard when the user clicks the activity-bar icon,
@@ -179,23 +182,33 @@ export class SidebarView implements vscode.WebviewViewProvider {
       font-weight: 600;
       color: var(--sb-sev, var(--vscode-descriptionForeground));
     }
-    .sb-bar-track {
-      height: 4px;
-      border-radius: 2px;
-      background: var(--vscode-panel-border, rgba(128,128,128,.2));
-      overflow: hidden;
+    /* Segmented gauge — mirrors the dashboard's SpendGauge visual language
+       (a row of small bars lighting up left to right) at a size that fits
+       the narrow sidebar. Scale runs to 120% so overage is still visible. */
+    .sb-gauge-segments {
+      display: flex;
+      gap: 1px;
+      height: 10px;
       margin-bottom: 4px;
     }
-    .sb-bar-fill {
-      height: 100%;
-      border-radius: 2px;
-      background: var(--sb-sev, #e5231b);
-      transition: width 0.3s ease;
+    .sb-gauge-seg {
+      flex: 1;
+      border-radius: 1px;
+      background: var(--vscode-panel-border, rgba(128,128,128,.2));
     }
+    .sb-gauge-seg--on { background: var(--sb-sev, #e5231b); }
     .sb-budget-sub {
       font-size: 10px;
       color: var(--vscode-descriptionForeground);
     }
+    /* Brief highlight on the budget section the moment an alert fires —
+       distinct from the passive severity coloring above, which only
+       reflects the latest percentage. */
+    @keyframes sb-alert-pulse {
+      0%, 100% { background: transparent; }
+      30% { background: color-mix(in srgb, var(--sb-sev, #e5231b) 18%, transparent); }
+    }
+    .sb-section--pulse { animation: sb-alert-pulse 1.4s ease; border-radius: 4px; }
     .sb-divider {
       height: 1px;
       background: var(--vscode-panel-border, rgba(128,128,128,.15));
@@ -300,6 +313,9 @@ export class SidebarView implements vscode.WebviewViewProvider {
       }
     }
 
+    const SEGMENTS = 20;
+    const SCALE_MAX = 120;
+
     function render(snap) {
       const budget = snap.budget;
       const hasBudget = budget && budget.monthlyBudget > 0;
@@ -315,17 +331,20 @@ export class SidebarView implements vscode.WebviewViewProvider {
       let html = '';
 
       // Budget
-      html += '<div class="sb-section">';
+      html += '<div class="sb-section" id="budget-section">';
       html += '<div class="sb-section-label">Budget</div>';
       if (hasBudget) {
+        const lit = Math.round((Math.min(pct, SCALE_MAX) / SCALE_MAX) * SEGMENTS);
+        let segs = '';
+        for (let i = 0; i < SEGMENTS; i++) {
+          segs += '<div class="sb-gauge-seg' + (i < lit ? ' sb-gauge-seg--on' : '') + '"></div>';
+        }
         html += '<div class="sb-budget-numbers ' + sev + '">';
         html += '<span class="sb-budget-spend">' + fmtMoney(mtdCost, currency) + '</span>';
         html += '<span class="sb-budget-cap">/ ' + fmtMoney(budget.monthlyBudget, currency) + '</span>';
         html += '<span class="sb-budget-pct">' + pct + '%</span>';
         html += '</div>';
-        html += '<div class="sb-bar-track ' + sev + '">';
-        html += '<div class="sb-bar-fill" style="width:' + Math.min(100, pct) + '%"></div>';
-        html += '</div>';
+        html += '<div class="sb-gauge-segments ' + sev + '">' + segs + '</div>';
         html += '<div class="sb-budget-sub">today ' + fmtMoney(snap.today.cost, currency) + '</div>';
       } else {
         html += '<div class="sb-budget-numbers">';
@@ -382,7 +401,18 @@ export class SidebarView implements vscode.WebviewViewProvider {
       if (!e.origin.startsWith('vscode-webview://')) return;
       const msg = e.data;
       if (msg.type === 'snapshot') render(msg.payload);
+      else if (msg.type === 'alertFired') pulseBudgetSection();
     });
+
+    function pulseBudgetSection() {
+      const el = document.getElementById('budget-section');
+      if (!el) return;
+      el.classList.remove('sb-section--pulse');
+      // Force reflow so re-adding the class restarts the animation even if
+      // a previous pulse is still running.
+      void el.offsetWidth;
+      el.classList.add('sb-section--pulse');
+    }
 
     vscode.postMessage({ type: 'ready' });
   </script>

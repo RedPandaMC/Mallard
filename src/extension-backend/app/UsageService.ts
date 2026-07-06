@@ -48,6 +48,12 @@ export class UsageService implements vscode.Disposable {
   private readonly _onDidChange = new vscode.EventEmitter<UsageSnapshot>();
   readonly onDidChangeSnapshot = this._onDidChange.event;
 
+  /** Fires once per alert/rule notification actually shown — lets UI
+   *  surfaces (the sidebar gauge) react to the moment an alert fires,
+   *  not just passively reflect the latest snapshot percentage. */
+  private readonly _onAlertFired = new vscode.EventEmitter<{ message: string }>();
+  readonly onAlertFired = this._onAlertFired.event;
+
   private snapshot?: UsageSnapshot;
   private filter: Filter = {};
   private readonly timer = new IntervalManager();
@@ -339,6 +345,7 @@ export class UsageService implements vscode.Disposable {
     for (const a of alerts) {
       void this.host.showWarningMessage(a.message);
       this.alertFired.set(a.key, now);
+      this._onAlertFired.fire({ message: a.message });
     }
 
     const ruleResults = evaluateAlertRules({
@@ -353,7 +360,10 @@ export class UsageService implements vscode.Disposable {
       now,
     });
     for (const r of ruleResults) {
-      if (shouldNotify(r.rule)) void this.host.showWarningMessage(r.message);
+      if (shouldNotify(r.rule)) {
+        void this.host.showWarningMessage(r.message);
+        this._onAlertFired.fire({ message: r.message });
+      }
     }
   }
 
@@ -367,6 +377,7 @@ export class UsageService implements vscode.Disposable {
     this.timer[Symbol.dispose]();
     this.ingest.dispose();
     this._onDidChange.dispose();
+    this._onAlertFired.dispose();
     this.subs.forEach((d) => d.dispose());
     this.github?.dispose();
   }

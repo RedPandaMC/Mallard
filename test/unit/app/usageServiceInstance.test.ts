@@ -269,9 +269,12 @@ describe('UsageService — GitHub billing + alert rule notify', () => {
       },
     };
     const svc = new UsageService(makeReader(data), pricing, ingest, userConfig, currency, undefined, undefined, host);
+    const fired: string[] = [];
+    svc.onAlertFired(({ message }) => fired.push(message));
     await svc.start();
     await new Promise((r) => setTimeout(r, 100));
     assert.ok(warnings.some((w) => w.includes('Credits exceeded')), 'alert warning fired');
+    assert.ok(fired.some((m) => m.includes('Credits exceeded')), 'onAlertFired fired for UI surfaces (e.g. sidebar gauge pulse)');
     svc.dispose();
   });
 });

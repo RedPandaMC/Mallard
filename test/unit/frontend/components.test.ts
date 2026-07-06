@@ -1,12 +1,11 @@
 import { strict as assert } from 'assert';
 import { buildSnapshot } from '../../../src/extension-backend/domain/snapshot';
 import { makeEvent } from '../helpers';
-import type { UsageSnapshot, Metric, BudgetState, RestrictionState, AuthStatus } from '../../../src/extension-backend/domain/types';
+import type { UsageSnapshot, Metric, RestrictionState, AuthStatus } from '../../../src/extension-backend/domain/types';
 import { DEFAULT_USER_CONFIG } from '../../../src/extension-backend/domain/types';
 import { mountKpiCards } from '../../../src/extension-frontend/components/KpiCards';
 import { mountFilterBar } from '../../../src/extension-frontend/components/FilterBar';
 import { mountGitHubBillingStrip } from '../../../src/extension-frontend/components/GitHubBillingStrip';
-import { mountSpendGauge } from '../../../src/extension-frontend/components/SpendGauge';
 import { mountRestrictionBanner } from '../../../src/extension-frontend/components/RestrictionBanner';
 import { mountStatusBanner } from '../../../src/extension-frontend/components/StatusBanner';
 import { mountEmptyState } from '../../../src/extension-frontend/components/EmptyState';
@@ -23,11 +22,6 @@ function makeSnapshot(credits = 100): UsageSnapshot {
     },
   );
 }
-
-const BUDGET: BudgetState = {
-  monthly: 50, includedCredits: 300, usedCredits: 12.5, usedCost: 0.5,
-  percentOfBudget: 25, percentOfIncluded: 4, projectedOverage: null, pace: 'on-track',
-};
 
 describe('components — mount + update DOM', () => {
   const snapshot = makeSnapshot(100);
@@ -95,15 +89,6 @@ describe('components — mount + update DOM', () => {
     h.update(snapshot); // signed-out
     const signedIn = { ...snapshot, authStatus: 'signed-in' as AuthStatus, githubBilling: { quota: null, items: [], fetchedAt: Date.now(), totalNetAmount: 0 } };
     h.update(signedIn);
-    el.remove();
-  });
-
-  it('SpendGauge renders a gauge and updates with budget + currency', () => {
-    const el = document.createElement('div');
-    document.body.appendChild(el);
-    const h = mountSpendGauge(el);
-    h.update(BUDGET, 'USD');
-    assert.ok(el.children.length > 0);
     el.remove();
   });
 

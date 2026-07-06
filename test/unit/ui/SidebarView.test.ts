@@ -14,11 +14,13 @@ function emitter<T>() {
 function makeHarness(initialFilter: Filter = {}) {
   let filter = initialFilter;
   const setFilterCalls: Filter[] = [];
+  const alertEmitter = emitter<{ message: string }>();
   const usage = {
     get current(): { filter: Filter } | undefined {
       return { filter };
     },
     onDidChangeSnapshot: emitter<UsageSnapshot>().event,
+    onAlertFired: alertEmitter.event,
     async setFilter(f: Filter): Promise<void> {
       setFilterCalls.push(f);
       filter = f;
@@ -53,6 +55,7 @@ function makeHarness(initialFilter: Filter = {}) {
     posted,
     setFilterCalls,
     getFilter: () => filter,
+    fireAlert: (message: string) => alertEmitter.fire({ message }),
   };
 }
 
@@ -85,5 +88,13 @@ describe('SidebarView — toggleModelFilter', () => {
     h.send({ type: 'toggleModelFilter', model: 42 });
     await new Promise((r) => setImmediate(r));
     assert.equal(h.setFilterCalls.length, 0);
+  });
+});
+
+describe('SidebarView — alert-driven gauge', () => {
+  it('relays onAlertFired to the webview as an alertFired message', () => {
+    const h = makeHarness({});
+    h.fireAlert('Over budget!');
+    assert.deepEqual(h.posted, [{ type: 'alertFired', message: 'Over budget!' }]);
   });
 });
