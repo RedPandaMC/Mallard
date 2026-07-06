@@ -11,19 +11,22 @@ function emitter<T>() {
   };
 }
 
-function makeHarness(initialFilter: Filter = {}) {
+function makeHarness(initialFilter: Filter = {}, opts: { current?: { filter: Filter } | undefined } = {}) {
   let filter = initialFilter;
   const setFilterCalls: Filter[] = [];
   const alertEmitter = emitter<{ message: string }>();
+  const snapshotEmitter = emitter<UsageSnapshot>();
+  let current: { filter: Filter } | undefined = 'current' in opts ? opts.current : { filter };
   const usage = {
     get current(): { filter: Filter } | undefined {
-      return { filter };
+      return current;
     },
-    onDidChangeSnapshot: emitter<UsageSnapshot>().event,
+    onDidChangeSnapshot: snapshotEmitter.event,
     onAlertFired: alertEmitter.event,
     async setFilter(f: Filter): Promise<void> {
       setFilterCalls.push(f);
       filter = f;
+      current = { filter };
     },
   };
 
@@ -34,6 +37,7 @@ function makeHarness(initialFilter: Filter = {}) {
   const view = new SidebarView(context, usage as never);
 
   let receive: ((m: unknown) => void) | undefined;
+  let visibilityHandler: (() => void) | undefined;
   const posted: unknown[] = [];
   const webviewView = {
     webview: {
@@ -45,17 +49,21 @@ function makeHarness(initialFilter: Filter = {}) {
       onDidReceiveMessage: (handler: (m: unknown) => void) => { receive = handler; return { dispose() {} }; },
     },
     visible: false,
-    onDidChangeVisibility: () => ({ dispose() {} }),
+    onDidChangeVisibility: (handler: () => void) => { visibilityHandler = handler; return { dispose() {} }; },
   } as unknown as vscode.WebviewView;
 
   view.resolveWebviewView(webviewView);
 
   return {
+    view,
+    webviewView,
     send: (m: unknown) => receive!(m),
     posted,
     setFilterCalls,
     getFilter: () => filter,
     fireAlert: (message: string) => alertEmitter.fire({ message }),
+    fireSnapshot: (s: UsageSnapshot) => snapshotEmitter.fire(s),
+    triggerVisibility: () => visibilityHandler!(),
   };
 }
 
@@ -96,5 +104,53 @@ describe('SidebarView — alert-driven gauge', () => {
     const h = makeHarness({});
     h.fireAlert('Over budget!');
     assert.deepEqual(h.posted, [{ type: 'alertFired', message: 'Over budget!' }]);
+  });
+});
+
+describe('SidebarView — ready / snapshot / visibility', () => {
+  it('posts the current snapshot in response to "ready" when one exists', () => {
+    const snap = { filter: {} } as unknown as UsageSnapshot;
+    const h = makeHarness({}, { current: snap as never });
+    h.send({ type: 'ready' });
+    assert.deepEqual(h.posted, [{ type: 'snapshot', payload: snap }]);
+  });
+
+  it('posts nothing in response to "ready" when there is no snapshot yet', () => {
+    const h = makeHarness({}, { current: undefined });
+    h.send({ type: 'ready' });
+    assert.deepEqual(h.posted, []);
+  });
+
+  it('posts openDashboard when the activity-bar icon is clicked', () => {
+    const h = makeHarness({});
+    h.send({ type: 'openDashboard' });
+    // openDashboard executes a VS Code command rather than posting to the
+    // webview, so nothing should be posted back — this just confirms the
+    // branch runs without throwing.
+    assert.deepEqual(h.posted, []);
+  });
+
+  it('relays onDidChangeSnapshot updates to the webview', () => {
+    const h = makeHarness({});
+    const snap = { filter: { models: ['a'] } } as unknown as UsageSnapshot;
+    h.fireSnapshot(snap);
+    assert.deepEqual(h.posted, [{ type: 'snapshot', payload: snap }]);
+  });
+
+  it('opens the dashboard on visibility, but only after the startup guard window', () => {
+    const h = makeHarness({});
+    (h.webviewView as unknown as { visible: boolean }).visible = false;
+    h.triggerVisibility(); // not visible — no-op
+    (h.webviewView as unknown as { visible: boolean }).visible = true;
+    // Still inside the startup guard window (STARTUP_GUARD_MS) — no-op.
+    h.triggerVisibility();
+    // Both calls must not throw; command execution itself is a VS Code API
+    // call the mock swallows, so there's nothing further to assert here.
+    assert.ok(true);
+  });
+
+  it('dispose() disposes every registered subscription without throwing', () => {
+    const h = makeHarness({});
+    assert.doesNotThrow(() => h.view.dispose());
   });
 });

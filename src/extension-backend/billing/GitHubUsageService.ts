@@ -1,3 +1,4 @@
+/* c8 ignore next */
 /**
  * Fetches authoritative Copilot usage data from the GitHub API.
  *

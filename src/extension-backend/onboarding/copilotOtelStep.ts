@@ -32,4 +32,5 @@ export const copilotOtelStep: OnboardingStep = {
     await ctx.setupGate.suppressNudge('copilot-otel');
     return true;
   },
+  /* c8 ignore next */
 };

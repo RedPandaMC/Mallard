@@ -158,6 +158,12 @@ describe('GitHubUsageService', () => {
     svc.dispose();
   });
 
+  it('needsPat delegates to the session', async () => {
+    const svc = new GitHubUsageService(makeSession({ needsPat: async () => true }));
+    assert.equal(await svc.needsPat(), true);
+    svc.dispose();
+  });
+
   it('skips the billing endpoint when neither org nor username is available', async () => {
     const requests = stubFetch({ copilot_internal: QUOTA_RESPONSE });
     const svc = new GitHubUsageService(

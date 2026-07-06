@@ -31,6 +31,12 @@ const matchMediaStub = (query) => ({
   dispatchEvent() { return false; },
 });
 globalThis.matchMedia = matchMediaStub;
+// jsdom implements PointerEvent but not Element.setPointerCapture/
+// releasePointerCapture/hasPointerCapture; stub them as no-ops so pointer-
+// drag handlers (e.g. layout.ts's resize handles) don't throw under test.
+for (const name of ['setPointerCapture', 'releasePointerCapture', 'hasPointerCapture']) {
+  dom.window.HTMLElement.prototype[name] = function () { return false; };
+}
 dom.window.matchMedia = matchMediaStub;
 globalThis.MutationObserver = dom.window.MutationObserver;
 globalThis.CustomEvent = dom.window.CustomEvent;

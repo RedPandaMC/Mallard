@@ -46,6 +46,45 @@ describe('components — remaining branch coverage', () => {
     el.remove();
   });
 
+  it('GitHubBillingStrip shows a generic error with a Retry action that posts signIn', () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const h = mountGitHubBillingStrip(el);
+    const snap = makeSnapshot(100);
+    h.update({ ...snap, authStatus: 'error', authError: 'Network timeout' });
+    assert.ok(el.textContent!.includes('Network timeout'));
+    const btn = el.querySelector('button')!;
+    assert.equal(btn.textContent, 'Retry');
+    clearPosted();
+    btn.click();
+    assert.ok(getPosted().some((m) => JSON.stringify(m).includes('signIn')));
+    el.remove();
+  });
+
+  it('GitHubBillingStrip shows a Set PAT action when the error requires a Personal Access Token', () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const h = mountGitHubBillingStrip(el);
+    const snap = makeSnapshot(100);
+    h.update({ ...snap, authStatus: 'error', authError: 'A GitHub Personal Access Token is required.' });
+    const btn = el.querySelector('button')!;
+    assert.equal(btn.textContent, 'Set PAT');
+    clearPosted();
+    btn.click();
+    assert.ok(getPosted().some((m) => JSON.stringify(m).includes('setGitHubPat')));
+    el.remove();
+  });
+
+  it('GitHubBillingStrip falls back to a generic error message when authError is undefined', () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const h = mountGitHubBillingStrip(el);
+    const snap = makeSnapshot(100);
+    h.update({ ...snap, authStatus: 'error' });
+    assert.ok(el.textContent!.includes('GitHub sign-in failed.'));
+    el.remove();
+  });
+
   it('GitHubBillingStrip renders quota with null resetDate', () => {
     const el = document.createElement('div');
     document.body.appendChild(el);

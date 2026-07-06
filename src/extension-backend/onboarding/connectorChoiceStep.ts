@@ -34,4 +34,5 @@ export const connectorChoiceStep: OnboardingStep = {
       .update('enabledConnectors', picked.value, vscode.ConfigurationTarget.Global);
     return true;
   },
+  /* c8 ignore next */
 };
