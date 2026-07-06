@@ -356,6 +356,17 @@ describe('MetricExporter (real class) — flushQueue', () => {
     exporter.dispose();
   });
 
+  it('a retryable failure on the fresh send enqueues the payload (no backlog to flush)', async () => {
+    const dir = await makeTmpDir();
+    const queue = new ExportQueue(dir);
+    const protocol = fakeProtocol([{ ok: false, retryable: true }]);
+    const exporter = new MetricExporter(protocol, fakeSerializer(), queue);
+    await exporter.export(makeSnapshot());
+    assert.equal(queue.peekAll().length, 1, 'fresh send queued after a retryable failure');
+    exporter.dispose();
+    await fs.rm(dir, { recursive: true });
+  });
+
   it('dequeues on ok and stops (enqueuing the new payload) on a retryable entry', async () => {
     const dir = await makeTmpDir();
     const queue = new ExportQueue(dir);
