@@ -1,55 +1,72 @@
 import { strict as assert } from 'assert';
-import { FanoutProtocol } from '../../src/extension-backend/export/ExporterFactory';
-import type { MetricProtocol, SendResult } from '../../src/extension-backend/export/MetricExporter';
+import { promises as fs } from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import {
+  FanoutMetricExporter,
+  MetricExporter,
+  type MetricProtocol,
+  type MetricSerializer,
+  type SendResult,
+} from '../../src/extension-backend/export/MetricExporter';
+import { ExportQueue } from '../../src/extension-backend/export/ExportQueue';
+import type { UsageSnapshot } from '../../src/extension-backend/domain/types';
 import { webhookTargetSlots, SECRET_KEYS } from '../../src/extension-backend/app/credentials';
 
-function proto(result: SendResult) {
-  const calls: Array<{ topic: string; payload: Record<string, unknown> }> = [];
-  const p: MetricProtocol & { calls: typeof calls; disposed: boolean } = {
+function proto() {
+  const calls: Array<Record<string, unknown>> = [];
+  let result: SendResult = { ok: true };
+  const p: MetricProtocol & { calls: typeof calls; setResult(r: SendResult): void; disposed: boolean } = {
     calls,
     disposed: false,
-    async send(topic, payload) {
-      calls.push({ topic, payload });
-      return result;
-    },
+    setResult(r) { result = r; },
+    async send(_topic, payload) { calls.push(payload); return result; },
     dispose() { this.disposed = true; },
   };
   return p;
 }
 
-describe('FanoutProtocol — multi-server webhook export', () => {
-  const payload = { schema_version: 3 };
+/** Serializer returning a fresh, distinct payload per export() call. */
+function serializerFor(payloads: Array<Record<string, unknown>>): MetricSerializer {
+  let i = 0;
+  return { topic: 't', serialize: () => payloads[i++]! };
+}
 
-  it('sends the same payload to every target and reports ok when all succeed', async () => {
-    const a = proto({ ok: true });
-    const b = proto({ ok: true });
-    const fanout = new FanoutProtocol([a, b]);
-    const result = await fanout.send('t', payload);
-    assert.deepEqual(result, { ok: true });
-    assert.equal(a.calls.length, 1);
-    assert.equal(b.calls.length, 1);
-    assert.deepEqual(a.calls[0], { topic: 't', payload });
+async function tmpDir(): Promise<string> {
+  return fs.mkdtemp(path.join(os.tmpdir(), 'mallard-fanout-'));
+}
+
+describe('FanoutMetricExporter — per-target queues', () => {
+  const snap = {} as UsageSnapshot;
+
+  it('re-delivers only to the failed target, never re-sending to one that succeeded', async () => {
+    const dir = await tmpDir();
+    const a = proto();
+    const b = proto();
+    const ea = new MetricExporter(a, serializerFor([{ n: 1 }, { n: 2 }]), new ExportQueue(dir, 'a.json'));
+    const eb = new MetricExporter(b, serializerFor([{ n: 1 }, { n: 2 }]), new ExportQueue(dir, 'b.json'));
+    const fanout = new FanoutMetricExporter([ea, eb]);
+
+    // First export: A succeeds, B is temporarily down (retryable) → queued for B only.
+    b.setResult({ ok: false, retryable: true });
+    await fanout.export(snap);
+
+    // Second export: B recovers.
+    b.setResult({ ok: true });
+    await fanout.export(snap);
+
+    // A saw payload 1 exactly once (no double-delivery) and payload 2 once.
+    assert.deepEqual(a.calls, [{ n: 1 }, { n: 2 }]);
+    // B retried the queued payload 1, then sent payload 2.
+    assert.deepEqual(b.calls, [{ n: 1 }, { n: 1 }, { n: 2 }]);
   });
 
-  it('is retryable when the only failures are retryable (e.g. one server down)', async () => {
-    const ok = proto({ ok: true });
-    const down = proto({ ok: false, retryable: true });
-    const result = await new FanoutProtocol([ok, down]).send('t', payload);
-    assert.deepEqual(result, { ok: false, retryable: true });
-  });
-
-  it('is fatal when any target fails fatally (bad credential must not spin the queue)', async () => {
-    const ok = proto({ ok: true });
-    const retriable = proto({ ok: false, retryable: true });
-    const fatal = proto({ ok: false, retryable: false });
-    const result = await new FanoutProtocol([ok, retriable, fatal]).send('t', payload);
-    assert.deepEqual(result, { ok: false, retryable: false });
-  });
-
-  it('dispose() disposes every wrapped protocol', () => {
-    const a = proto({ ok: true });
-    const b = proto({ ok: true });
-    new FanoutProtocol([a, b]).dispose();
+  it('dispose() disposes every child exporter', () => {
+    const a = proto();
+    const b = proto();
+    const ea = new MetricExporter(a, serializerFor([]));
+    const eb = new MetricExporter(b, serializerFor([]));
+    new FanoutMetricExporter([ea, eb]).dispose();
     assert.equal(a.disposed, true);
     assert.equal(b.disposed, true);
   });

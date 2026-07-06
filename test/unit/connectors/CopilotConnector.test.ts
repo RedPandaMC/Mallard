@@ -101,6 +101,24 @@ describe('CopilotConnector.mapRow()', () => {
     assert.equal(result.completionTokens, 50);
   });
 
+  it('gives two same-model/timestamp spans distinct ids via span id', () => {
+    const connector = makeConnector();
+    const ts = '2026-01-15T10:00:00.000Z';
+    const a = connector.mapRow({ timestamp: ts, span_id: 'span-a', attributes: baseAttrs }, makeCtx());
+    const b = connector.mapRow({ timestamp: ts, span_id: 'span-b', attributes: baseAttrs }, makeCtx());
+    assert.ok(a && b);
+    assert.notEqual(a.id, b.id, 'distinct span ids must yield distinct ids');
+  });
+
+  it('reuses the same id for the same span id (re-ingest dedups)', () => {
+    const connector = makeConnector();
+    const row = { timestamp: '2026-01-15T10:00:00.000Z', span_id: 'span-x', attributes: baseAttrs };
+    const first = connector.mapRow(row, makeCtx());
+    const second = connector.mapRow(row, makeCtx());
+    assert.ok(first && second);
+    assert.equal(first.id, second.id);
+  });
+
   it('uses row.time as fallback when timestamp is absent', () => {
     const connector = makeConnector();
     const time = '2026-01-15T10:00:00.000Z';

@@ -5,9 +5,9 @@ import { SECRET_KEYS, targetSecretKey, type SecretKey } from '../app/credentials
 import {
   createMqttProtocol,
   createWebhookProtocol,
-  FanoutProtocol,
 } from './ExporterFactory';
 import {
+  FanoutMetricExporter,
   MetricExporter,
   NullMetricExporter,
   type MetricProtocol,
@@ -38,28 +38,38 @@ export class AuthProvider {
 
     if (!transport) return new NullMetricExporter();
 
-    const queue = new ExportQueue(context.globalStorageUri.fsPath);
+    const dir = context.globalStorageUri.fsPath;
+    // (protocol, queueFile) pairs — each target gets its OWN persisted queue so a
+    // partial outage re-delivers only to the target that failed (no double-send).
+    const built: Array<{ protocol: MetricProtocol; queueFile: string }> = [];
+    const queueFileFor = (name: string | undefined): string =>
+      name === undefined
+        ? 'export-queue.json'
+        : `export-queue-${name.replace(/[^a-z0-9._-]/gi, '_')}.json`;
 
-    const protocols: MetricProtocol[] = [];
     if (transport === 'webhook') {
       const primary = await this.buildWebhookProtocol(cfg.server.url, undefined);
-      if (primary) protocols.push(primary);
+      if (primary) built.push({ protocol: primary, queueFile: queueFileFor(undefined) });
       for (const target of this.exportCfg.webhookTargets ?? []) {
         const p = await this.buildWebhookProtocol(target.url, target.name);
-        if (p) protocols.push(p);
+        if (p) built.push({ protocol: p, queueFile: queueFileFor(target.name) });
       }
     } else if (transport === 'mqtt') {
       const primary = await this.buildMqttProtocol(cfg.mqtt.url || cfg.server.url, undefined);
-      if (primary) protocols.push(primary);
+      if (primary) built.push({ protocol: primary, queueFile: queueFileFor(undefined) });
       for (const target of this.exportCfg.mqttTargets ?? []) {
         const p = await this.buildMqttProtocol(target.url, target.name);
-        if (p) protocols.push(p);
+        if (p) built.push({ protocol: p, queueFile: queueFileFor(target.name) });
       }
     }
 
-    if (protocols.length === 0) return new NullMetricExporter();
-    const protocol = protocols.length === 1 ? protocols[0]! : new FanoutProtocol(protocols);
-    return new MetricExporter(protocol, new MetricPayloadSerializer(), queue);
+    if (built.length === 0) return new NullMetricExporter();
+
+    const serializer = new MetricPayloadSerializer();
+    const exporters = built.map(
+      (b) => new MetricExporter(b.protocol, serializer, new ExportQueue(dir, b.queueFile)),
+    );
+    return exporters.length === 1 ? exporters[0]! : new FanoutMetricExporter(exporters);
   }
 
   /** Per-target SecretStorage key: base key for the primary, `key:name` for named targets. */

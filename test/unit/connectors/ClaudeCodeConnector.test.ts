@@ -87,18 +87,17 @@ describe('ClaudeCodeConnector — folder attribution', () => {
     return new ClaudeCodeConnector(pricing, meta, fileReader, matcher);
   }
 
-  it('mapRow() uses folder name as repo when sessionId hash matches a folder', () => {
-    const fsPath = '/home/user/myproject';
-    // compute hash the same way as matchFolderHash:
-    // encodeURIComponent(fsPath).replace(/%/g, '').toLowerCase()
-    const hash = encodeURIComponent(fsPath).replace(/%/g, '').toLowerCase();
-    const connector = makeFolderConnector([{ name: 'myproject', fsPath }]);
+  const UUID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
+
+  it('mapRow() uses folder name as repo when the session cwd is inside a folder', () => {
+    const connector = makeFolderConnector([{ name: 'myproject', fsPath: '/home/user/myproject' }]);
     const result = connector.mapRow(
       {
         type: 'assistant',
         message: { model: 'claude-sonnet-4', usage: { input_tokens: 10, output_tokens: 5 } },
         timestamp: '2026-01-15T10:00:00.000Z',
-        sessionId: hash,
+        sessionId: UUID,
+        cwd: '/home/user/myproject/src',
       },
       makeCtx(),
     );
@@ -106,14 +105,34 @@ describe('ClaudeCodeConnector — folder attribution', () => {
     assert.equal(result.repo, 'myproject');
   });
 
-  it('mapRow() falls back to ctx.repo when sessionId does not match any folder', () => {
+  it('mapRow() picks the most specific folder for nested multi-root workspaces', () => {
+    const connector = makeFolderConnector([
+      { name: 'outer', fsPath: '/home/user/outer' },
+      { name: 'inner', fsPath: '/home/user/outer/inner' },
+    ]);
+    const result = connector.mapRow(
+      {
+        type: 'assistant',
+        message: { model: 'claude-sonnet-4', usage: { input_tokens: 10, output_tokens: 5 } },
+        timestamp: '2026-01-15T10:00:00.000Z',
+        sessionId: UUID,
+        cwd: '/home/user/outer/inner/pkg',
+      },
+      makeCtx(),
+    );
+    assert.ok(result);
+    assert.equal(result.repo, 'inner');
+  });
+
+  it('mapRow() falls back to ctx.repo when the cwd is outside every folder', () => {
     const connector = makeFolderConnector([{ name: 'myproject', fsPath: '/home/user/myproject' }]);
     const result = connector.mapRow(
       {
         type: 'assistant',
         message: { model: 'claude-sonnet-4', usage: { input_tokens: 10, output_tokens: 5 } },
         timestamp: '2026-01-15T10:00:00.000Z',
-        sessionId: 'no-match-at-all',
+        sessionId: UUID,
+        cwd: '/home/user/other',
       },
       makeCtx({ repo: 'ctx-repo' }),
     );
@@ -121,13 +140,14 @@ describe('ClaudeCodeConnector — folder attribution', () => {
     assert.equal(result.repo, 'ctx-repo');
   });
 
-  it('mapRow() skips folder matching when sessionId is absent', () => {
+  it('mapRow() skips folder matching when cwd is absent', () => {
     const connector = makeFolderConnector([{ name: 'myproject', fsPath: '/tmp/x' }]);
     const result = connector.mapRow(
       {
         type: 'assistant',
         message: { model: 'claude-sonnet-4', usage: { input_tokens: 10, output_tokens: 5 } },
         timestamp: '2026-01-15T10:00:00.000Z',
+        sessionId: UUID,
       },
       makeCtx({ repo: 'fallback' }),
     );
@@ -146,7 +166,8 @@ describe('ClaudeCodeConnector — folder attribution', () => {
         type: 'assistant',
         message: { model: 'claude-sonnet-4', usage: { input_tokens: 10, output_tokens: 5 } },
         timestamp: '2026-01-15T10:00:00.000Z',
-        sessionId: 'abc123',
+        sessionId: UUID,
+        cwd: '/home/user/myproject',
       },
       makeCtx({ repo: 'fallback' }),
     );
@@ -187,6 +208,32 @@ describe('ClaudeCodeConnector.mapRow()', () => {
     assert.equal(result.source, 'claude-code');
     assert.equal(result.promptTokens, 100);
     assert.equal(result.completionTokens, 50);
+  });
+
+  it('gives two same-session/model/ms turns distinct ids via uuid', () => {
+    const connector = makeConnector();
+    const sessionId = 'abcd1234-0000-0000-0000-000000000000';
+    const a = connector.mapRow(makeLine({ sessionId, uuid: 'uuid-a' }), makeCtx());
+    const b = connector.mapRow(makeLine({ sessionId, uuid: 'uuid-b' }), makeCtx());
+    assert.ok(a && b);
+    assert.notEqual(a.id, b.id, 'distinct uuids must yield distinct ids');
+  });
+
+  it('reuses the same id for the same uuid (re-ingest dedups)', () => {
+    const connector = makeConnector();
+    const line = makeLine({ sessionId: 'abcd1234', uuid: 'stable-uuid' });
+    const first = connector.mapRow(line, makeCtx());
+    const second = connector.mapRow(line, makeCtx());
+    assert.ok(first && second);
+    assert.equal(first.id, second.id);
+  });
+
+  it('falls back to requestId when uuid is absent', () => {
+    const connector = makeConnector();
+    const a = connector.mapRow(makeLine({ requestId: 'req-1' }), makeCtx());
+    const b = connector.mapRow(makeLine({ requestId: 'req-2' }), makeCtx());
+    assert.ok(a && b);
+    assert.notEqual(a.id, b.id);
   });
 
   it('uses top-level usage when usage is not inside message', () => {

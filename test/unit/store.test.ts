@@ -28,6 +28,20 @@ describe('EventStore', () => {
     reloaded.dispose();
   });
 
+  it('populates fact_daily_usage for historical (backfilled) events, not just today', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    // An event dated 30 days ago — the shape of a backfill of old sessions.
+    const histTs = startOf(Date.now(), 'day') - 30 * DAY_MS + 12 * 3_600_000;
+    await store.writer.insert([makeEvent({ id: 'hist', ts: histTs, credits: 7 })]);
+
+    const facts = await store.reader.queryFacts();
+    const histFact = facts.find((f) => f.credits === 7);
+    assert.ok(histFact, 'historical day should have a fact row without waiting for compact()');
+    assert.strictEqual(histFact!.eventCount, 1);
+    store.dispose();
+  });
+
   it('dedupes by id within and across appends', async () => {
     const dir = await tmpDir();
     const store = await EventStore.open(dir);

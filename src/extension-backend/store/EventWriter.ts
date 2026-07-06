@@ -50,8 +50,17 @@ export class EventWriter implements IEventWriter {
     const total = await readRows(this.conn, COUNT_EVENTS_SQL, (r) => Number(r['c']));
     /* c8 ignore next */
     if ((total[0] ?? 0) > MAX_RAW_EVENTS) await this.compact();
-    const todayStart = startOf(Date.now(), 'day');
-    await this.refreshFacts(todayStart, todayStart + DAY_MS);
+    // Refresh facts over the actual day-span of the inserted records, not just
+    // today. Ingesting historical logs (a backfill of older sessions) writes
+    // rows dated in the past; refreshing only today's window left those days'
+    // fact_daily_usage empty until compact() eventually ran a full rebuild.
+    let minTs = records[0]!.ts;
+    let maxTs = records[0]!.ts;
+    for (const r of records) {
+      if (r.ts < minTs) minTs = r.ts;
+      if (r.ts > maxTs) maxTs = r.ts;
+    }
+    await this.refreshFacts(startOf(minTs, 'day'), startOf(maxTs, 'day') + DAY_MS);
     await this.conn.run(this.refreshSnapSQL);
     return inserted;
   }
