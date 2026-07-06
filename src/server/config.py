@@ -32,6 +32,13 @@ class Settings(BaseSettings):
 
     # Rate limiting
     rate_limit: str = Field("60/minute", description="Per-key rate limit (slowapi format)")
+    # When set, the post-auth per-credential limiter is backed by Redis so the
+    # limit holds across all replicas (the in-process limiter multiplies the
+    # effective limit by the replica count and resets on restart). Empty falls
+    # back to the in-process limiter (single-node / local dev only).
+    redis_url: str = Field(
+        "", description="Redis URL for the shared per-credential rate limiter (e.g. redis://redis:6379/0)"
+    )
 
     # Logging
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
@@ -41,6 +48,10 @@ class Settings(BaseSettings):
     # MQTT (optional — embedded broker started when mqtt_enabled = true)
     mqtt_enabled: bool = Field(False, description="Start the embedded MQTT broker on mqtt_port")
     mqtt_port: int = Field(8083, description="WebSocket MQTT port (internal; proxied by Caddy/Ingress)")
+    mqtt_topic_prefix: str = Field(
+        "mallard/",
+        description="Only MQTT messages on topics under this prefix are ingested (topic scoping)",
+    )
     mqtt_password: str = Field(
         "",
         description=(

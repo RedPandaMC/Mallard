@@ -148,6 +148,12 @@ class CredentialVerifier(ABC):
         Empty list = signature checking disabled."""
         ...
 
+    async def healthcheck(self) -> bool:
+        """True when the credential store is reachable. Static verifiers have no
+        remote dependency, so the default is always True; remote verifiers
+        override this to probe the secret manager."""
+        return True
+
 
 def _match_mqtt_password(candidate: str, stored_hash: str | None) -> bool:
     if not stored_hash:
@@ -329,6 +335,15 @@ class RemoteCredentialVerifier(CredentialVerifier, ABC):
     async def get_webhook_hmac_secrets(self) -> list[str]:
         store = await self._get_store()
         return store.webhook_hmac_secrets
+
+    async def healthcheck(self) -> bool:
+        # Reachable if we can serve a store (fresh fetch or warm cache).
+        try:
+            await self._get_store()
+            return True
+        except Exception as exc:
+            logger.warning("secret manager healthcheck failed: %s", exc)
+            return False
 
 
 def _build_store(

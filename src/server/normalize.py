@@ -177,7 +177,14 @@ def normalize_unknown(raw: dict[str, Any]) -> NormalizedMetric:
 
     active_models_raw = raw.get("active_models")
     if isinstance(active_models_raw, list):
-        active_models = active_models_raw
+        # Keep only string entries: a non-string element (e.g. a number from a
+        # malformed client) would otherwise crash ",".join(active_models) in
+        # influx.py and surface as a misleading retryable 503. Consistent with
+        # the tolerant-reader contract (never raise), the original list is kept
+        # in `extra` when anything was dropped so nothing is silently lost.
+        active_models = [m for m in active_models_raw if isinstance(m, str)]
+        if len(active_models) != len(active_models_raw):
+            extra["active_models"] = active_models_raw
     else:
         active_models = []
         if active_models_raw is not None:

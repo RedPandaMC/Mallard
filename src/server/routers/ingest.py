@@ -198,7 +198,7 @@ async def ingest(
 
     limiter = getattr(request.app.state, "label_limiter", None)
     if limiter is not None:
-        retry_after = limiter.check(source)
+        retry_after = await limiter.check(source)
         if retry_after is not None:
             return JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -259,7 +259,7 @@ async def ingest(
     settings = request.app.state.settings
 
     try:
-        write_payload(
+        await write_payload(
             write_api=write_api,
             bucket=settings.influx_bucket,
             org=settings.influx_org,

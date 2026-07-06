@@ -304,6 +304,24 @@ class TestIngestAuthentication:
         assert response.status_code == 202
 
 
+class TestMalformedActiveModels:
+    def test_non_string_active_models_does_not_500_or_503(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """A v3 payload whose active_models holds non-strings falls back to the
+        tolerant path; the bad elements are filtered so the write succeeds
+        instead of crashing ",".join() into a misleading 503."""
+        payload = {**valid_payload, "active_models": [1, 2]}
+        with patch("server.routers.ingest.write_payload") as write_mock:
+            response = client.post(
+                "/api/v1/ingest",
+                json=payload,
+                headers={"X-API-Key": "test-key-valid"},
+            )
+        assert response.status_code == 202
+        assert write_mock.call_count == 1
+
+
 class TestIngestValidation:
     """The ingest endpoint is a tolerant reader: a well-formed payload that
     names a schema_version is accepted even with fields missing, wrongly
@@ -568,10 +586,10 @@ class TestPerCredentialRateLimit:
     def test_label_exceeding_limit_gets_429_with_retry_after(
         self, client: TestClient, valid_payload: dict
     ) -> None:
-        from server.rate_limit import SlidingWindowLimiter
+        from server.rate_limit import InProcessRateLimiter, SlidingWindowLimiter
 
         original = client.app.state.label_limiter
-        client.app.state.label_limiter = SlidingWindowLimiter(2, 60)
+        client.app.state.label_limiter = InProcessRateLimiter(SlidingWindowLimiter(2, 60))
         try:
             for _ in range(2):
                 ok = client.post(
@@ -594,10 +612,10 @@ class TestPerCredentialRateLimit:
         self, client: TestClient, valid_payload: dict
     ) -> None:
         """Exhausting one credential's budget must not block another's."""
-        from server.rate_limit import SlidingWindowLimiter
+        from server.rate_limit import InProcessRateLimiter, SlidingWindowLimiter
 
         original = client.app.state.label_limiter
-        client.app.state.label_limiter = SlidingWindowLimiter(1, 60)
+        client.app.state.label_limiter = InProcessRateLimiter(SlidingWindowLimiter(1, 60))
         try:
             first = client.post(
                 "/api/v1/ingest",
