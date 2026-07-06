@@ -28,8 +28,6 @@ export interface AppState {
    * initial value from VS Code's active theme kind.
    */
   forcedScheme: 'light' | 'dark' | null;
-  /** Model keys currently spotlighted — other panels dim when this is non-empty. */
-  focusedModels: ReadonlySet<string>;
 }
 
 export const store = createStore<AppState>()(
@@ -43,7 +41,6 @@ export const store = createStore<AppState>()(
       datePreset: 'month',
       restriction: DEFAULT_RESTRICTION_STATE,
       forcedScheme: null,
-      focusedModels: new Set<string>(),
     }),
   ),
 );

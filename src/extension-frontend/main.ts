@@ -70,7 +70,16 @@ mountDashboard(document.getElementById('app')!);
 
 onMessage((msg) => {
   if (msg.type === 'snapshot') {
-    setState({ snapshot: msg.payload });
+    // The sidebar can change the model filter too (dual-connected model
+    // list) — pull its models back into local filter state so the filter
+    // bar's dropdown reflects a change made from the sidebar.
+    const incomingModels = msg.payload.filter.models ?? [];
+    const localModels = state().filter.models ?? [];
+    const modelsChanged = incomingModels.join(',') !== localModels.join(',');
+    const filter = { ...state().filter };
+    if (incomingModels.length > 0) filter.models = incomingModels;
+    else delete filter.models;
+    setState(modelsChanged ? { snapshot: msg.payload, filter } : { snapshot: msg.payload });
   } else if (msg.type === 'config') {
     setState({ config: msg.value });
   } else if (msg.type === 'layout') {
@@ -159,9 +168,6 @@ function mountDashboard(root: HTMLElement): void {
         <div class="wv-analysis-bar">
           <span class="wv-analysis-title">Analysis</span>
           <span class="wv-analysis-actions">
-            <button class="wv-btn wv-btn--sm" id="clear-focus" hidden>
-              <i class="codicon codicon-close"></i> Clear model focus
-            </button>
             <button class="wv-btn wv-btn--sm" id="layout-save" hidden>
               <i class="codicon codicon-save"></i> Save to config
             </button>
@@ -226,11 +232,12 @@ function mountDashboard(root: HTMLElement): void {
   const heatmap = lazyChart(heatmapEl, () => mountHeatmap(heatmapEl));
   const models = lazyChart(modelsEl, () =>
     mountModelBreakdown(modelsEl, (label) => {
-      const current = new Set(state().focusedModels);
+      // The model filter dropdown (FilterBar) is the single source of truth
+      // for "focus" — a bar click toggles the same filter.models list the
+      // dropdown reads and writes, so both stay in sync automatically.
+      const current = new Set(state().filter.models ?? []);
       if (current.has(label)) current.delete(label);
       else current.add(label);
-      const focusedModels: ReadonlySet<string> = current;
-      setState({ focusedModels });
       const newFilter = { ...state().filter };
       if (current.size > 0) newFilter.models = [...current];
       else delete newFilter.models;
@@ -294,7 +301,6 @@ function mountDashboard(root: HTMLElement): void {
   const editBtn = document.getElementById('layout-edit')!;
   const resetBtn = document.getElementById('layout-reset')!;
   const saveBtn = document.getElementById('layout-save')!;
-  const clearFocusBtn = document.getElementById('clear-focus')!;
 
   editBtn.addEventListener('click', () => {
     editing = !editing;
@@ -319,14 +325,6 @@ function mountDashboard(root: HTMLElement): void {
       ...(p.size && p.size !== 'normal' ? { size: p.size } : {}),
     }));
     post({ type: 'setConfig', value: { dashboard: { panels } } });
-  });
-
-  clearFocusBtn.addEventListener('click', () => {
-    setState({ focusedModels: new Set<string>() });
-    const newFilter = { ...state().filter };
-    delete newFilter.models;
-    setState({ filter: newFilter });
-    post({ type: 'setFilter', value: newFilter });
   });
 
   // Ctrl/Cmd+Shift+E toggles edit mode.
@@ -355,7 +353,7 @@ function mountDashboard(root: HTMLElement): void {
   let prevDailyBars: DailyBarsData | undefined;
   let prevHeatmap: HeatmapData | undefined;
   let prevModelBreakdown: ModelBreakdownData | undefined;
-  let prevFocusedModels: ReadonlySet<string> | undefined;
+  let prevFocusedModelsKey: string | undefined;
   let prevSankeyKey: string | undefined;
   let prevCategory: CategoryBreakdownData | undefined;
   let prevHourly: HourlyTimelineData | undefined;
@@ -373,9 +371,10 @@ function mountDashboard(root: HTMLElement): void {
     const cols = Math.min(4, Math.max(1, s.config.dashboard?.columns ?? 2));
     chartsGrid.style.setProperty('--wv-cols', String(cols));
 
-    // Model spotlight state.
-    chartsGrid.dataset.focused = s.focusedModels.size > 0 ? 'true' : '';
-    clearFocusBtn.hidden = s.focusedModels.size === 0;
+    // Model spotlight state — derived from the filter bar's model dropdown
+    // (the single source of truth for "focus"), not separate state.
+    const focusedModelsList = s.filter.models ?? [];
+    chartsGrid.dataset.focused = focusedModelsList.length > 0 ? 'true' : '';
 
     if (!s.snapshot) return;
     const isEmpty = s.snapshot.status.kind === 'empty';
@@ -415,12 +414,13 @@ function mountDashboard(root: HTMLElement): void {
         prevHeatmap = snapshot.chartData.heatmap;
       }
 
-      const focusedDirty = s.focusedModels !== prevFocusedModels;
+      const focusedModelsKey = focusedModelsList.join(',');
+      const focusedDirty = focusedModelsKey !== prevFocusedModelsKey;
       if (modelBreakdownChanged(prevModelBreakdown, snapshot.chartData.modelBreakdown) || metric !== prevMetric || focusedDirty) {
-        const fm = s.focusedModels;
+        const fm = new Set(focusedModelsList);
         models.render((c) => { c.setFocused(fm); c.update(snapshot, metric); });
         prevModelBreakdown = snapshot.chartData.modelBreakdown;
-        prevFocusedModels = s.focusedModels;
+        prevFocusedModelsKey = focusedModelsKey;
       }
 
       // Sankey depends on links + dimension lists (no chartData slot).

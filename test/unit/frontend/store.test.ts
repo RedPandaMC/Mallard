@@ -5,7 +5,7 @@ import { DEFAULT_USER_CONFIG } from '../../../src/extension-backend/domain/types
 describe('frontend/store — state mutations + subscriptions', () => {
   beforeEach(() => {
     // Reset to defaults since the store is a singleton shared across all tests
-    setState({ metric: 'cost', filter: {}, focusedModels: new Set() });
+    setState({ metric: 'cost', filter: {} });
   });
 
   it('starts with default state', () => {
@@ -24,10 +24,10 @@ describe('frontend/store — state mutations + subscriptions', () => {
     unsub();
   });
 
-  it('setState with focusedModels accepts a Set', () => {
-    setState({ focusedModels: new Set(['gpt-4o']) });
-    assert.ok(state().focusedModels.has('gpt-4o'));
-    setState({ focusedModels: new Set() });
+  it('setState with filter.models accepts a model list', () => {
+    setState({ filter: { models: ['gpt-4o'] } });
+    assert.deepEqual(state().filter.models, ['gpt-4o']);
+    setState({ filter: {} });
   });
 
   it('store.getState() returns the live state', () => {

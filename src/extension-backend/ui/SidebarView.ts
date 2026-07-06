@@ -31,12 +31,14 @@ export class SidebarView implements vscode.WebviewViewProvider {
     webviewView.webview.html = this.buildHtml(webviewView.webview);
 
     webviewView.webview.onDidReceiveMessage(
-      (msg: { type: string }) => {
+      (msg: { type: string; model?: string }) => {
         if (msg.type === 'ready') {
           const s = this.usage.current;
           if (s) void webviewView.webview.postMessage({ type: 'snapshot', payload: s });
         } else if (msg.type === 'openDashboard') {
           void vscode.commands.executeCommand('mallard.openDashboard');
+        } else if (msg.type === 'toggleModelFilter' && typeof msg.model === 'string') {
+          void this.toggleModelFilter(msg.model);
         }
       },
       null,
@@ -56,6 +58,22 @@ export class SidebarView implements vscode.WebviewViewProvider {
       if (Date.now() - this.activatedAt < SidebarView.STARTUP_GUARD_MS) return;
       void vscode.commands.executeCommand('mallard.openDashboard');
     }, null, this.disposables);
+  }
+
+  /**
+   * Toggles a model in/out of the shared filter's model list — dual-
+   * connected with the main webview's model dropdown, since both read and
+   * write the same UsageService filter and both re-render from the
+   * resulting snapshot's `filter.models`.
+   */
+  private async toggleModelFilter(model: string): Promise<void> {
+    const current = new Set(this.usage.current?.filter.models ?? []);
+    if (current.has(model)) current.delete(model);
+    else current.add(model);
+    const filter = { ...(this.usage.current?.filter ?? {}) };
+    if (current.size > 0) filter.models = [...current];
+    else delete filter.models;
+    await this.usage.setFilter(filter);
   }
 
   private buildHtml(webview: vscode.Webview): string {
@@ -191,8 +209,17 @@ export class SidebarView implements vscode.WebviewViewProvider {
       gap: 6px;
       align-items: center;
       padding: 4px 12px;
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      border-radius: 3px;
     }
     .sb-model-row:hover { background: var(--vscode-list-hoverBackground); }
+    .sb-model-row--selected {
+      background: var(--vscode-list-activeSelectionBackground, rgba(229,35,27,0.12));
+      outline: 1px solid var(--vscode-focusBorder, #e5231b);
+      outline-offset: -1px;
+    }
     .sb-model-info { min-width: 0; }
     .sb-model-name {
       font-size: 12px;
@@ -309,31 +336,40 @@ export class SidebarView implements vscode.WebviewViewProvider {
       }
       html += '</div>';
 
-      // Models
+      // Models — clickable, dual-connected with the main dashboard's model
+      // filter dropdown (both read/write the same UsageService filter).
       if (models.length > 0) {
+        const selected = new Set(snap.filter && snap.filter.models ? snap.filter.models : []);
         html += '<div class="sb-divider"></div>';
         html += '<div class="sb-section">';
         html += '<div class="sb-section-label">By model</div>';
         html += '</div>';
         for (let i = 0; i < Math.min(models.length, 8); i++) {
           const m = models[i];
+          const isSelected = selected.has(m.key);
           const w = Math.round((m.credits / maxCr) * 100);
           const barOpacities = ['1', '.72', '.50', '.35', '.24', '.16'];
           const barStyle = i === 0
             ? 'background:#e5231b'
             : 'background:var(--vscode-foreground);opacity:' + (barOpacities[i] ?? '.16');
-          html += '<div class="sb-model-row">';
+          html += '<button type="button" class="sb-model-row' + (isSelected ? ' sb-model-row--selected' : '')
+            + '" data-model="' + escHtml(m.key) + '" aria-pressed="' + isSelected + '">';
           html += '<div class="sb-model-info">';
           html += '<div class="sb-model-name">' + escHtml(m.key) + '</div>';
           html += '<div class="sb-model-bar-track">';
           html += '<div class="sb-model-bar-fill" style="width:' + w + '%;' + barStyle + '"></div>';
           html += '</div></div>';
           html += '<div class="sb-model-credits">' + fmt(m.credits) + ' cr</div>';
-          html += '</div>';
+          html += '</button>';
         }
       }
 
       document.getElementById('body').innerHTML = html;
+      document.querySelectorAll('.sb-model-row').forEach((row) => {
+        row.addEventListener('click', () => {
+          vscode.postMessage({ type: 'toggleModelFilter', model: row.dataset.model });
+        });
+      });
     }
 
     function escHtml(s) {
