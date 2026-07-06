@@ -855,6 +855,91 @@ body {
 .wv-chart-body.mini { height: var(--w-chart-mini); }
 .wv-chart-body.heatmap { height: 120px; }
 
+/* ─────────────────────────────────────────
+   Day-activity heatmap — GitHub contribution-graph style
+───────────────────────────────────────── */
+.wv-heatmap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--w-s1);
+  height: 100%;
+  min-height: 0;
+}
+.wv-heatmap-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wv-heatmap-months {
+  display: grid;
+  grid-auto-flow: column;
+  height: 12px;
+  flex-shrink: 0;
+}
+.wv-heatmap-month-label {
+  font-size: 9px;
+  font-family: var(--w-label-font);
+  color: var(--w-fg-muted);
+  white-space: nowrap;
+}
+.wv-heatmap-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 3px;
+}
+.wv-heatmap-weekday-labels {
+  display: grid;
+  grid-template-rows: repeat(7, 1fr);
+  flex-shrink: 0;
+}
+.wv-heatmap-weekday-labels span {
+  font-size: 9px;
+  font-family: var(--w-label-font);
+  color: var(--w-fg-muted);
+  display: flex;
+  align-items: center;
+  padding-right: 2px;
+}
+.wv-heatmap-grid {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  flex: 1;
+  min-height: 0;
+}
+.wv-heatmap-cell {
+  width: 100%;
+  height: 100%;
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 2px;
+  background: var(--w-bg-hover);
+}
+.wv-heatmap-cell--1 { background: var(--w-series-6); }
+.wv-heatmap-cell--2 { background: var(--w-series-4); }
+.wv-heatmap-cell--3 { background: var(--w-series-2); }
+.wv-heatmap-cell--4 { background: var(--w-accent); }
+.wv-heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  color: var(--w-fg-muted);
+  flex-shrink: 0;
+}
+.wv-heatmap-legend-swatch {
+  width: 9px;
+  height: 9px;
+  min-width: 9px;
+  min-height: 9px;
+  flex-shrink: 0;
+}
+
 /* Analysis grid: column count driven by --wv-cols (set from config.dashboard.columns). */
 .wv-charts-grid {
   display: grid;

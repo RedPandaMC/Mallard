@@ -27,7 +27,8 @@ import { matchesFilter } from './aggregate';
 import { bucketKey, DAY_MS, startOf } from '../util/time';
 
 const DAILY_BARS_WINDOW = 30;
-const HEATMAP_WEEKS = 12;
+// A full year, GitHub-contribution-graph style (schema caps this at 52).
+const HEATMAP_WEEKS = 52;
 
 function shortModelName(id: string): string {
   return id.replace(/^(models\/|openai\/|anthropic\/|google\/)/, '').slice(0, 32);

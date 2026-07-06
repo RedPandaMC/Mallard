@@ -188,10 +188,10 @@ describe('buildCategoryBreakdownData', () => {
 });
 
 describe('buildHeatmapData', () => {
-  it('returns 12 weeks of cells', () => {
+  it('defaults to a full year (52 weeks) of cells', () => {
     const now = startOf(Date.now(), 'day');
     const data = buildHeatmapData([], now);
-    assert.strictEqual(data.cells.length, 12 * 7 + 1); // inclusive range
+    assert.strictEqual(data.cells.length, 52 * 7 + 1); // inclusive range
     assert.strictEqual(data.max, 0);
   });
 

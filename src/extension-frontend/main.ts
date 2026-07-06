@@ -186,7 +186,7 @@ function mountDashboard(root: HTMLElement): void {
         <div class="wv-section-label">More views</div>
         <div class="wv-charts-grid" id="charts-grid">
           ${panelHtml('daily', 'codicon-graph', 'Daily usage (last 30 days)', 'chart-daily', 'Daily usage bar chart')}
-          ${panelHtml('heatmap', 'codicon-calendar', 'Activity (last 12 weeks)', 'chart-heatmap', 'Activity heatmap', 'heatmap')}
+          ${panelHtml('heatmap', 'codicon-calendar', 'Activity (past year)', 'chart-heatmap', 'Activity heatmap', 'heatmap')}
           ${panelHtml('models', 'codicon-symbol-method', 'By model', 'chart-models', 'Usage by model', 'mini')}
           ${panelHtml('sankey', 'codicon-type-hierarchy-sub', 'Flow breakdown', 'chart-sankey', 'Model to surface flow', 'mini')}
           ${panelHtml('category', 'codicon-pie-chart', 'Spend by cost type', 'chart-category', 'Spend by cost type', 'mini')}
@@ -492,7 +492,7 @@ function updateSrDescriptions(snapshot: import('../extension-backend/domain/type
   setSrDesc(
     'chart-heatmap',
     heatmap.max > 0
-      ? `Activity heatmap, last 12 weeks. Max daily usage: ${formatCredits(heatmap.max)} cr.`
+      ? `Activity heatmap, past year. Max daily usage: ${formatCredits(heatmap.max)} cr.`
       : 'Activity heatmap. No usage data.',
   );
 
