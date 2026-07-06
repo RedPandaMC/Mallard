@@ -46,6 +46,12 @@ export class GitHubSession implements IAuthProvider {
     return { token: session.accessToken, username: session.account.label };
   }
 
+  async needsPat(): Promise<boolean> {
+    if (this.billingConfig?.mode !== 'pat') return false;
+    const stored = await this.secrets?.get(SECRET_KEYS.githubPat);
+    return !stored;
+  }
+
   /**
    * Org slug resolved for the given scope.
    * Workspace-scoped org (from VS Code settings) takes priority over user-level config.

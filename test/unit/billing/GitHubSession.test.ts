@@ -68,6 +68,35 @@ describe('GitHubSession — token resolution order', () => {
   });
 });
 
+describe('GitHubSession — needsPat()', () => {
+  it('is false when mode is not "pat"', async () => {
+    const s = new GitHubSession(makeSecrets());
+    s.configure({ mode: 'vscode-session' });
+    assert.equal(await s.needsPat(), false);
+    s.dispose();
+  });
+
+  it('is false when mode is unset', async () => {
+    const s = new GitHubSession(makeSecrets());
+    assert.equal(await s.needsPat(), false);
+    s.dispose();
+  });
+
+  it('is true when mode is "pat" and no PAT is stored', async () => {
+    const s = new GitHubSession(makeSecrets());
+    s.configure({ mode: 'pat' });
+    assert.equal(await s.needsPat(), true);
+    s.dispose();
+  });
+
+  it('is false when mode is "pat" and a PAT is stored', async () => {
+    const s = new GitHubSession(makeSecrets({ [SECRET_KEYS.githubPat]: 'stored-pat' }));
+    s.configure({ mode: 'pat' });
+    assert.equal(await s.needsPat(), false);
+    s.dispose();
+  });
+});
+
 describe('GitHubSession — onDidChangeSession listener', () => {
   let sessionListener: ((e: { provider: { id: string } }) => void) | undefined;
   const auth2 = vscode.authentication as Mutable<typeof vscode.authentication>;

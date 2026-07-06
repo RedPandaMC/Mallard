@@ -23,7 +23,7 @@ export function mountEmptyState(el: HTMLElement): EmptyStateHandle {
           <i class="codicon codicon-refresh"></i> Refresh
         </button>
         <button class="wv-btn" id="empty-signin">
-          <i class="codicon codicon-account"></i> Sign in to verify spend
+          <i class="codicon codicon-github"></i> Sign in to verify spend
         </button>
         <button class="wv-btn" id="empty-enable-copilot">
           <i class="codicon codicon-broadcast"></i> Enable Copilot tracking

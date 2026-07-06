@@ -103,6 +103,10 @@ export class GitHubUsageService implements IBillingProvider {
     await this.session.getToken(true);
   }
 
+  async needsPat(): Promise<boolean> {
+    return this.session.needsPat();
+  }
+
   /** Fetch quota + billing data. Returns cached result if fresh enough. */
   fetch(scope?: vscode.WorkspaceFolder): ResultAsync<GitHubBillingData, Error> {
     return ResultAsync.fromPromise(this._fetch(scope), (e) =>

@@ -92,6 +92,25 @@ body {
   border-color: var(--w-action);
 }
 
+/* GitHub sign-in — lives in the header so it's visible from any dashboard
+   state (empty state, KPI view, etc.), not just the billing strip. */
+.wv-gh-header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--w-s1);
+  padding: 3px var(--w-s2);
+  font-size: 11px;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--w-border);
+  border-radius: var(--w-r1);
+  color: var(--w-fg-muted);
+  cursor: pointer;
+}
+.wv-gh-header-btn:hover { color: var(--w-fg); background: var(--w-bg-hover); border-color: var(--w-action); }
+.wv-gh-header-btn--ok { color: var(--w-status-ok); border-color: color-mix(in srgb, var(--w-status-ok) 40%, var(--w-border)); }
+.wv-gh-header-btn--err { color: var(--w-status-warn); border-color: color-mix(in srgb, var(--w-status-warn) 50%, var(--w-border)); }
+
 .wv-brand-name {
   font-family: var(--w-font-display);
   font-size: 22px;
@@ -948,21 +967,21 @@ body {
 /* ─────────────────────────────────────────
    GitHub billing strip
 ───────────────────────────────────────── */
-.wv-gh-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  background: transparent;
-  border: 1px solid var(--w-border);
-  border-radius: var(--w-r1);
-  color: var(--w-fg-muted);
+.wv-gh-unverified {
+  display: inline-block;
+  padding: 4px 0;
   font-size: 11px;
-  cursor: pointer;
-  opacity: 0.8;
-  transition: opacity 0.1s;
+  color: var(--w-fg-muted);
 }
-.wv-gh-cta:hover { opacity: 1; }
+
+.wv-gh-error {
+  display: flex;
+  align-items: center;
+  gap: var(--w-s2);
+  padding: 4px 0;
+  font-size: 11px;
+  color: var(--w-status-warn);
+}
 
 .wv-gh-verified {
   display: flex;

@@ -76,6 +76,8 @@ export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vsc
           void vscode.commands.executeCommand('mallard.disableExtension');
         } else if (raw.id === 'enableCopilotTelemetry') {
           void vscode.commands.executeCommand('mallard.enableCopilotTelemetry');
+        } else if (raw.id === 'setGitHubPat') {
+          void vscode.commands.executeCommand('mallard.setGitHubPat');
         }
         break;
       case 'restrictSnooze':

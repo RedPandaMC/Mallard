@@ -148,6 +148,10 @@ function mountDashboard(root: HTMLElement): void {
           </div>
         </div>
         <div class="wv-header-right">
+          <button class="wv-gh-header-btn" id="gh-header-signin" hidden>
+            <i class="codicon codicon-github" aria-hidden="true"></i>
+            <span id="gh-header-label">Sign in</span>
+          </button>
           <div id="currency-selector" class="wv-currency-wrap"></div>
           <button class="wv-icon-btn" id="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle light/dark mode">
             <i class="codicon codicon-color-mode"></i>
@@ -199,6 +203,25 @@ function mountDashboard(root: HTMLElement): void {
   const emptyState = mountEmptyState(document.getElementById('empty-state')!);
   const kpis = mountKpiCards(document.getElementById('kpi-cards')!);
   const ghStrip = mountGitHubBillingStrip(document.getElementById('gh-billing-strip')!);
+  const ghHeaderBtn = document.getElementById('gh-header-signin')!;
+  const ghHeaderLabel = document.getElementById('gh-header-label')!;
+  ghHeaderBtn.addEventListener('click', () => post({ type: 'command', id: 'signIn' }));
+  function updateGhHeaderButton(snapshot: import('../extension-backend/domain/types').UsageSnapshot): void {
+    ghHeaderBtn.hidden = false;
+    ghHeaderBtn.classList.remove('wv-gh-header-btn--ok', 'wv-gh-header-btn--err');
+    if (snapshot.authStatus === 'signed-in') {
+      ghHeaderLabel.textContent = 'Connected';
+      ghHeaderBtn.classList.add('wv-gh-header-btn--ok');
+      ghHeaderBtn.title = 'Signed in to GitHub — spend verified';
+    } else if (snapshot.authStatus === 'error') {
+      ghHeaderLabel.textContent = 'GitHub error';
+      ghHeaderBtn.classList.add('wv-gh-header-btn--err');
+      ghHeaderBtn.title = snapshot.authError ?? 'GitHub sign-in failed — click to retry';
+    } else {
+      ghHeaderLabel.textContent = 'Sign in';
+      ghHeaderBtn.title = 'Sign in to GitHub to verify actual Copilot spend';
+    }
+  }
   const gauge = mountSpendGauge(document.getElementById('spend-gauge')!);
   const currencySelector = mountCurrencySelector(
     document.getElementById('currency-selector')!,
@@ -394,6 +417,7 @@ function mountDashboard(root: HTMLElement): void {
       const metric = s.metric;
       kpis.update(snapshot, metric);
       ghStrip.update(snapshot);
+      updateGhHeaderButton(snapshot);
       gauge.update(snapshot.budget, snapshot.currency);
       currencySelector.update(snapshot.fxRates, snapshot.currency);
 
