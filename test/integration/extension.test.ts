@@ -69,6 +69,7 @@ describe('Mallard extension (integration)', () => {
     const props = ext.packageJSON.contributes.configuration.properties as Record<string, unknown>;
     assert.deepStrictEqual(Object.keys(props).sort(), [
       'mallard.copilotLogPath',
+      'mallard.copilotOtelPath',
       'mallard.currency',
       'mallard.dataRetentionDays',
       'mallard.enabledConnectors',
