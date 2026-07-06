@@ -990,7 +990,10 @@ body {
   background: var(--w-bg-hover);
   border-bottom: 1px solid var(--w-border);
 }
+/* The drag handle only does anything in move mode — de-emphasize it (and
+   drop the grab cursor) while resize mode is active instead. */
 .wv-panel-handle { cursor: grab; color: var(--w-fg-muted); }
+.wv-charts-grid[data-layout-mode='resize'] .wv-panel-handle { cursor: default; opacity: 0.35; }
 .wv-panel-btn {
   display: inline-flex;
   align-items: center;
@@ -1005,14 +1008,50 @@ body {
 .wv-chart-section.wv-dragging { opacity: 0.6; }
 .wv-chart-section.wv-hidden-panel .wv-panel-btn[data-act='hide'] { color: var(--w-fg); opacity: 0.45; }
 
-/* Drop-target highlight during drag. */
+/* Drop-target highlight during drag (move mode only). */
 .wv-chart-section.wv-drop-target {
   outline: 2px solid var(--w-accent) !important;
   background: color-mix(in srgb, var(--w-accent) 8%, var(--w-bg-card));
 }
 
-/* Brief opacity flash on span/size toggle to confirm the change. */
+/* Brief opacity flash on resize to confirm the change. */
 .wv-chart-section.wv-resizing { opacity: 0.7; }
+
+/* Resize handles — only interactive (and visible) in resize mode, so they
+   never compete with move mode's native drag-and-drop on the same panel. */
+.wv-resize-handle { display: none; }
+.wv-charts-grid[data-layout-mode='resize'] .wv-resize-handle {
+  display: block;
+  position: absolute;
+  background: transparent;
+  z-index: 5;
+}
+.wv-charts-grid[data-layout-mode='resize'] .wv-resize-handle:hover,
+.wv-charts-grid[data-layout-mode='resize'] .wv-resize-handle:focus-visible {
+  background: color-mix(in srgb, var(--w-accent) 35%, transparent);
+}
+.wv-resize-handle--right {
+  top: 0;
+  right: 0;
+  bottom: 12px;
+  width: 6px;
+  cursor: ew-resize;
+}
+.wv-resize-handle--bottom {
+  left: 0;
+  right: 12px;
+  bottom: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
+.wv-resize-handle--corner {
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
+  border-radius: var(--w-r1) 0 0 0;
+}
 
 /* ─────────────────────────────────────────
    Per-panel height tiers (compact / normal / tall)

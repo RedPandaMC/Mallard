@@ -178,8 +178,11 @@ function mountDashboard(root: HTMLElement): void {
             <button class="wv-btn wv-btn--sm" id="layout-reset" hidden>
               <i class="codicon codicon-discard"></i> Reset layout
             </button>
-            <button class="wv-btn wv-btn--sm" id="layout-edit" aria-pressed="false">
-              <i class="codicon codicon-edit"></i> Edit layout
+            <button class="wv-btn wv-btn--sm" id="layout-resize" aria-pressed="false">
+              <i class="codicon codicon-arrow-both"></i> Resize
+            </button>
+            <button class="wv-btn wv-btn--sm" id="layout-move" aria-pressed="false">
+              <i class="codicon codicon-move"></i> Move
             </button>
           </span>
         </div>
@@ -320,19 +323,28 @@ function mountDashboard(root: HTMLElement): void {
   });
   layoutMgr.apply(state().layout);
 
-  let editing = false;
-  const editBtn = document.getElementById('layout-edit')!;
+  // Resize and move are independent, mutually exclusive modes — entering
+  // one exits the other (only one interaction is active on the grid at a
+  // time, so resize handles and drag-to-reorder never compete).
+  let mode: 'none' | 'resize' | 'move' = 'none';
+  const resizeBtn = document.getElementById('layout-resize')!;
+  const moveBtn = document.getElementById('layout-move')!;
   const resetBtn = document.getElementById('layout-reset')!;
   const saveBtn = document.getElementById('layout-save')!;
 
-  editBtn.addEventListener('click', () => {
-    editing = !editing;
-    layoutMgr.setEditMode(editing);
-    editBtn.setAttribute('aria-pressed', String(editing));
+  function setMode(next: 'none' | 'resize' | 'move'): void {
+    mode = mode === next ? 'none' : next;
+    layoutMgr.setMode(mode);
+    resizeBtn.setAttribute('aria-pressed', String(mode === 'resize'));
+    moveBtn.setAttribute('aria-pressed', String(mode === 'move'));
+    const editing = mode !== 'none';
     resetBtn.hidden = !editing;
     saveBtn.hidden = !editing;
     requestAnimationFrame(resizeAll);
-  });
+  }
+
+  resizeBtn.addEventListener('click', () => setMode('resize'));
+  moveBtn.addEventListener('click', () => setMode('move'));
 
   resetBtn.addEventListener('click', () => {
     post({ type: 'setLayout', value: DEFAULT_DASHBOARD_LAYOUT });
@@ -350,12 +362,11 @@ function mountDashboard(root: HTMLElement): void {
     post({ type: 'setConfig', value: { dashboard: { panels } } });
   });
 
-  // Ctrl/Cmd+Shift+E toggles edit mode.
+  // Ctrl/Cmd+Shift+E toggles resize mode, Ctrl/Cmd+Shift+M toggles move mode.
   document.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'E') {
-      e.preventDefault();
-      editBtn.click();
-    }
+    if (!(e.metaKey || e.ctrlKey) || !e.shiftKey) return;
+    if (e.key === 'E') { e.preventDefault(); resizeBtn.click(); }
+    else if (e.key === 'M') { e.preventDefault(); moveBtn.click(); }
   });
 
   alertConfig.update(state().config);

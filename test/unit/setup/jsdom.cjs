@@ -19,6 +19,19 @@ globalThis.Node = dom.window.Node;
 globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
 globalThis.requestAnimationFrame = (cb) => setTimeout(cb, 0);
 globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
+// jsdom doesn't implement matchMedia; stub it so prefers-reduced-motion/
+// prefers-color-scheme checks in frontend code don't throw under test.
+const matchMediaStub = (query) => ({
+  matches: false,
+  media: query,
+  addEventListener() {},
+  removeEventListener() {},
+  addListener() {},
+  removeListener() {},
+  dispatchEvent() { return false; },
+});
+globalThis.matchMedia = matchMediaStub;
+dom.window.matchMedia = matchMediaStub;
 globalThis.MutationObserver = dom.window.MutationObserver;
 globalThis.CustomEvent = dom.window.CustomEvent;
 globalThis.Event = dom.window.Event;
