@@ -19,9 +19,12 @@ import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 import httpx
+import jwt
+from jwt import PyJWKClient
 
 from .auth import _lookup_label
 
@@ -49,12 +52,34 @@ class VerifiedIdentity:
     label: str
 
 
+@dataclass(frozen=True)
+class JwtConfig:
+    """JWT verification material. Symmetric (HS*) via `hmac_secret`, or asymmetric
+    (RS*/ES*/PS*) via a PEM `public_key` or a `jwks_url`. `labels` maps the value of
+    `label_claim` (default 'sub') to a source label; an unmapped value uses the claim
+    value itself. Empty material → JWT disabled (`enabled` is False)."""
+
+    hmac_secret: str = ""
+    public_key: str = ""            # PEM (RS/ES/PS)
+    jwks_url: str = ""
+    algorithms: tuple[str, ...] = ()
+    issuer: str = ""
+    audience: str = ""
+    label_claim: str = "sub"
+    labels: dict[str, str] = field(default_factory=dict)  # claim-value → label
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.hmac_secret or self.public_key or self.jwks_url)
+
+
 @dataclass
 class CredentialStore:
     api_keys: dict[str, str] = field(default_factory=dict)     # sha256(key) → label
     cert_labels: dict[str, str] = field(default_factory=dict)  # cn → label
     mqtt_password_hash: str | None = None                      # sha256 of the shared password
     webhook_hmac_secrets: list[str] = field(default_factory=list)  # plain values (needed for HMAC)
+    jwt: JwtConfig = field(default_factory=JwtConfig)
     fetched_at: float = field(default_factory=time.monotonic)
 
     @staticmethod
@@ -109,6 +134,12 @@ class CredentialVerifier(ABC):
     async def verify_mqtt_password(self, password: str) -> bool: ...
 
     @abstractmethod
+    async def verify_jwt(self, token: str) -> VerifiedIdentity | None:
+        """Verify a signed JWT bearer token. Returns None when JWT auth is not
+        configured or the token is invalid/expired."""
+        ...
+
+    @abstractmethod
     async def lookup_cert_label(self, cn: str) -> str | None: ...
 
     @abstractmethod
@@ -122,6 +153,108 @@ def _match_mqtt_password(candidate: str, stored_hash: str | None) -> bool:
     if not stored_hash:
         return False
     return hmac.compare_digest(_sha256(candidate), stored_hash)
+
+
+# ── JWT ───────────────────────────────────────────────────────────────────────
+
+_ASYMMETRIC_PREFIXES = ("RS", "ES", "PS")
+
+# Secret-manager KV keys carrying JWT config. OpenBao uses these names verbatim;
+# Infisical uses their upper-cased form (matching API_KEYS / CERT_LABELS / …).
+_JWT_KV_KEYS = (
+    "jwt_hmac_secret",
+    "jwt_public_key",
+    "jwt_jwks_url",
+    "jwt_algorithms",
+    "jwt_issuer",
+    "jwt_audience",
+    "jwt_label_claim",
+    "jwt_labels",
+)
+
+
+def _jwt_config_from(raw: dict[str, str]) -> JwtConfig:
+    """Build a JwtConfig from a flat KV mapping (secret-manager blob or env).
+
+    Keys: jwt_hmac_secret, jwt_public_key, jwt_jwks_url, jwt_algorithms (CSV),
+    jwt_issuer, jwt_audience, jwt_label_claim, jwt_labels ('label:claimvalue,...').
+    """
+    algorithms = tuple(
+        a.strip() for a in raw.get("jwt_algorithms", "").split(",") if a.strip()
+    )
+    return JwtConfig(
+        hmac_secret=raw.get("jwt_hmac_secret", "").strip(),
+        public_key=raw.get("jwt_public_key", "").strip(),
+        jwks_url=raw.get("jwt_jwks_url", "").strip(),
+        algorithms=algorithms,
+        issuer=raw.get("jwt_issuer", "").strip(),
+        audience=raw.get("jwt_audience", "").strip(),
+        label_claim=raw.get("jwt_label_claim", "").strip() or "sub",
+        # Reuse the cert-label parser: same 'label:value' shape (value = claim value).
+        labels=CredentialStore.parse_cert_labels(raw.get("jwt_labels", "")),
+    )
+
+
+@lru_cache(maxsize=16)
+def _jwks_client(url: str) -> PyJWKClient:
+    """Cache one PyJWKClient per JWKS URL so signing keys are fetched/cached once."""
+    return PyJWKClient(url, cache_keys=True)
+
+
+async def _resolve_jwt_key(token: str, cfg: JwtConfig) -> tuple[object, list[str]]:
+    """Resolve the verification key and the *allowed* algorithm list.
+
+    Algorithms are derived from the configured key material — never from the
+    token header — to prevent an algorithm-confusion attack (an attacker signing
+    an HS256 token using the RSA public key as the HMAC secret). HS* is only
+    permitted when a symmetric secret is the sole configured material.
+    """
+    if cfg.public_key or cfg.jwks_url:
+        algs = [a for a in cfg.algorithms if a.startswith(_ASYMMETRIC_PREFIXES)] or [
+            "RS256",
+            "ES256",
+        ]
+        if cfg.jwks_url:
+            signing_key = await asyncio.to_thread(
+                _jwks_client(cfg.jwks_url).get_signing_key_from_jwt, token
+            )
+            return signing_key.key, algs
+        return cfg.public_key, algs
+    algs = [a for a in cfg.algorithms if a.startswith("HS")] or ["HS256"]
+    return cfg.hmac_secret, algs
+
+
+async def _verify_jwt(token: str, cfg: JwtConfig) -> VerifiedIdentity | None:
+    """Verify a JWT and return the source identity, or None if JWT auth is
+    disabled or the token is invalid/expired."""
+    if not cfg.enabled:
+        return None
+    try:
+        key, algorithms = await _resolve_jwt_key(token, cfg)
+        options: dict[str, object] = {"require": ["exp"]}
+        decode_kwargs: dict[str, object] = {"algorithms": algorithms, "options": options}
+        if cfg.issuer:
+            decode_kwargs["issuer"] = cfg.issuer
+        if cfg.audience:
+            decode_kwargs["audience"] = cfg.audience
+        else:
+            options["verify_aud"] = False
+        claims = jwt.decode(token, key, **decode_kwargs)  # type: ignore[arg-type]
+    except jwt.PyJWTError as exc:
+        logger.info("JWT verification failed: %s", exc)
+        return None
+    claim_value = str(claims.get(cfg.label_claim, "")).strip()
+    if not claim_value:
+        return None
+    label = cfg.labels.get(claim_value)
+    if label is None:
+        label = claim_value if _LABEL_RE.match(claim_value) else "unknown"
+    return VerifiedIdentity(label)
+
+
+def _looks_like_jwt(token: str) -> bool:
+    """A compact JWS has three dot-separated base64url segments."""
+    return token.count(".") == 2 and all(token.split("."))
 
 
 # ── Static (env vars, no I/O) ─────────────────────────────────────────────────
@@ -138,6 +271,9 @@ class StaticCredentialVerifier(CredentialVerifier):
     async def verify_mqtt_password(self, password: str) -> bool:
         stored = self._settings.mqtt_password
         return _match_mqtt_password(password, _sha256(stored) if stored else None)
+
+    async def verify_jwt(self, token: str) -> VerifiedIdentity | None:
+        return await _verify_jwt(token, self._settings.parsed_jwt)
 
     async def lookup_cert_label(self, cn: str) -> str | None:
         return self._settings.parsed_cert_labels.get(cn)
@@ -182,6 +318,10 @@ class RemoteCredentialVerifier(CredentialVerifier, ABC):
         store = await self._get_store()
         return _match_mqtt_password(password, store.mqtt_password_hash)
 
+    async def verify_jwt(self, token: str) -> VerifiedIdentity | None:
+        store = await self._get_store()
+        return await _verify_jwt(token, store.jwt)
+
     async def lookup_cert_label(self, cn: str) -> str | None:
         store = await self._get_store()
         return store.cert_labels.get(cn)
@@ -196,12 +336,14 @@ def _build_store(
     cert_labels_raw: str,
     mqtt_password: str,
     webhook_hmac_secrets_raw: str = "",
+    jwt_raw: dict[str, str] | None = None,
 ) -> CredentialStore:
     return CredentialStore(
         api_keys=CredentialStore.parse_labeled(api_keys_raw),
         cert_labels=CredentialStore.parse_cert_labels(cert_labels_raw),
         mqtt_password_hash=_sha256(mqtt_password) if mqtt_password else None,
         webhook_hmac_secrets=CredentialStore.parse_secret_list(webhook_hmac_secrets_raw),
+        jwt=_jwt_config_from(jwt_raw or {}),
     )
 
 
@@ -231,6 +373,7 @@ class InfisicalCredentialVerifier(RemoteCredentialVerifier):
             kv.get("CERT_LABELS", ""),
             kv.get("MQTT_PASSWORD", ""),
             kv.get("WEBHOOK_HMAC_SECRETS", ""),
+            jwt_raw={low: kv.get(low.upper(), "") for low in _JWT_KV_KEYS},
         )
 
 
@@ -255,6 +398,7 @@ class OpenBaoCredentialVerifier(RemoteCredentialVerifier):
             data.get("cert_labels", ""),
             data.get("mqtt_password", ""),
             data.get("webhook_hmac_secrets", ""),
+            jwt_raw={low: data.get(low, "") for low in _JWT_KV_KEYS},
         )
 
 

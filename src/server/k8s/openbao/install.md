@@ -42,12 +42,26 @@ chmod +x server/k8s/openbao/approle-setup.sh
 #   api_keys      "label:secret" pairs — the label becomes the InfluxDB source tag
 #   mqtt_password single shared broker password (all MQTT ingest is source='mqtt')
 #   cert_labels   optional "label:cn" pairs mapping mTLS cert CNs to source labels
+#   jwt_*         optional JWT bearer auth (any subset; presence of key material enables it):
+#                   jwt_hmac_secret  HS* shared secret   OR
+#                   jwt_public_key   PEM for RS*/ES*/PS*  OR  jwt_jwks_url  JWKS endpoint
+#                   jwt_algorithms   CSV (default HS256, or RS256/ES256 when asymmetric)
+#                   jwt_issuer/jwt_audience  enforced when set
+#                   jwt_label_claim  claim used for the source label (default "sub")
+#                   jwt_labels       "label:claimValue" pairs (unmapped → claim value)
 bao kv put secret/mallard/server \
   api_keys="team-alpha:key-abc123,team-beta:key-def456" \
   mqtt_password="shared-broker-password" \
   cert_labels="ci:build-agent-01" \
+  jwt_jwks_url="https://idp.example.com/.well-known/jwks.json" \
+  jwt_issuer="https://idp.example.com/" \
+  jwt_labels="ci:ci-bot" \
   influx_token="your-influx-token"
 ```
+
+> All `jwt_*` keys live in the same `secret/data/mallard/*` path, which the
+> `policy-mallard.hcl` policy already grants `read` on — no policy change needed
+> to add JWT auth.
 
 `approle-setup.sh` prints a client token at the end. Store it in the `mallard-openbao-secrets` Secret (see `secrets.yaml.example`):
 

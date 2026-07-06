@@ -128,6 +128,23 @@ def hmac_client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) 
     )
 
 
+JWT_HMAC_SECRET = "jwt-signing-secret-for-tests"
+
+
+@pytest.fixture()
+def jwt_client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> TestClient:
+    """Client with HS256 JWT bearer auth enabled; 'ci-bot' claim maps to label 'ci'."""
+    yield from _build_client(
+        monkeypatch,
+        mock_influx_client,
+        {
+            "JWT_HMAC_SECRET": JWT_HMAC_SECRET,
+            "JWT_ALGORITHMS": "HS256",
+            "JWT_LABELS": "ci:ci-bot",
+        },
+    )
+
+
 @pytest.fixture()
 def valid_payload() -> dict:
     return {
