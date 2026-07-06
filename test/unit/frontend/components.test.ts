@@ -51,6 +51,43 @@ describe('components — mount + update DOM', () => {
     el.remove();
   });
 
+  it('FilterBar shows a single informational source chip when only one connector has data', () => {
+    const now = Date.now();
+    const single = buildSnapshot(
+      [makeEvent({ ts: now - 1000, modelId: 'claude-sonnet-4', source: 'claude-code', credits: 10, cost: 0.4 })],
+      {
+        now, currency: 'USD', pricePerCredit: 0.04, monthlyBudget: 50, includedCredits: 300,
+        filter: {}, source: 'local', status: { kind: 'ok' }, authStatus: 'signed-out',
+      },
+    );
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const h = mountFilterBar(el);
+    h.update(single, 'cost' as Metric);
+    const group = el.querySelector('#source-chip-group') as HTMLElement;
+    assert.equal(group.hidden, false, 'source chip group visible for a single connector');
+    const info = el.querySelectorAll('.wv-source-chip--info');
+    assert.equal(info.length, 1);
+    assert.equal(info[0]!.textContent, 'Claude Code');
+    assert.equal(el.querySelectorAll('[data-source-group]').length, 0, 'no interactive chips for one source');
+    el.remove();
+  });
+
+  it('FilterBar hides the source chip group when no source has data yet', () => {
+    const now = Date.now();
+    const empty = buildSnapshot([], {
+      now, currency: 'USD', pricePerCredit: 0.04, monthlyBudget: 50, includedCredits: 300,
+      filter: {}, source: 'local', status: { kind: 'empty' }, authStatus: 'signed-out',
+    });
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const h = mountFilterBar(el);
+    h.update(empty, 'cost' as Metric);
+    const group = el.querySelector('#source-chip-group') as HTMLElement;
+    assert.equal(group.hidden, true);
+    el.remove();
+  });
+
   it('GitHubBillingStrip renders nothing when signed out, content when signed in', () => {
     const el = document.createElement('div');
     document.body.appendChild(el);

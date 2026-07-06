@@ -346,6 +346,45 @@ body {
 }
 .wv-surface-chip[aria-pressed='true']::before { background: var(--w-action-fg); }
 
+/* Source chips — always visible once any connector has data, so it's
+   always clear which one Mallard is ingesting from. */
+.wv-chip-group {
+  display: flex;
+  align-items: center;
+  gap: var(--w-s2);
+  padding: var(--w-s1) 0;
+}
+.wv-chip-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--w-fg-muted);
+}
+.wv-source-chips { display: flex; gap: var(--w-s1); flex-wrap: wrap; }
+.wv-source-chip {
+  padding: 2px var(--w-s2);
+  font-size: 11px;
+  border: 1px solid var(--w-border);
+  border-radius: 9999px;
+  color: var(--w-fg-muted);
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.wv-source-chip:hover { color: var(--w-fg); border-color: var(--w-action); }
+.wv-source-chip[aria-pressed='true'] {
+  background: var(--w-action);
+  color: var(--w-action-fg);
+  border-color: var(--w-action);
+}
+/* The single-connector informational chip is a <span>, not a button — it
+   names the active connector but isn't a toggle (there's nothing to filter
+   between with only one source). */
+.wv-source-chip--info {
+  cursor: default;
+  color: var(--w-fg);
+  border-style: dashed;
+}
+
 /* ─────────────────────────────────────────
    Empty state
 ───────────────────────────────────────── */
