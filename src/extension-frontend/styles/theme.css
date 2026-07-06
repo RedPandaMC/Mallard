@@ -54,32 +54,37 @@
   --w-chart-main: 260px;
   --w-chart-mini: 200px;
 
-  /* ── Swiss duotone data layer ──────────────────────────────────────
+  /* ── Analogous data layer ──────────────────────────────────────────
      Surfaces stay theme-native (derived from --vscode-* above). The data
-     layer is strict DUOTONE: one red accent plus a grayscale ramp derived
-     from --vscode-foreground, so charts read as black-and-white with a
-     single accent and adapt to any editor theme. Severity ramps gray → red
-     (no third hue), which is inherently colour-blind safe. */
+     layer used to be strict duotone (accent + grayscale) — dimmed/unfocused
+     series just read as flat gray, which didn't feel intentional. Replaced
+     with an analogous ramp that walks the accent's red hue toward amber,
+     varying lightness/chroma rather than switching hue families, so it
+     never leans on red-vs-green discrimination (the most common form of
+     colour blindness) — validated against a protanopia/deuteranopia/
+     tritanopia simulation. Dark-mode values live here; body.vscode-light
+     and the forced-scheme overrides below supply the light-mode ramp. */
 
   /* Swiss red accent — fixed hue (dark default; lighter on dark themes,
      deeper on light themes — switched by VS Code's body theme class below). */
   --w-accent: #ff453a;
   --w-accent-fg: #ffffff;
 
-  /* Grayscale ramp from the theme foreground (adapts to any theme). */
+  /* Grayscale ramp from the theme foreground (adapts to any theme) — used
+     for UI chrome (--w-sev-ok), not for chart series. */
   --w-gray-1: color-mix(in srgb, var(--w-fg) 86%, transparent);
   --w-gray-2: color-mix(in srgb, var(--w-fg) 62%, transparent);
   --w-gray-3: color-mix(in srgb, var(--w-fg) 44%, transparent);
   --w-gray-4: color-mix(in srgb, var(--w-fg) 30%, transparent);
   --w-gray-5: color-mix(in srgb, var(--w-fg) 20%, transparent);
 
-  /* Duotone series: accent first, then grayscale steps. */
+  /* Analogous series ramp: accent first, then red → amber steps. */
   --w-series-1: var(--w-accent);
-  --w-series-2: var(--w-gray-1);
-  --w-series-3: var(--w-gray-2);
-  --w-series-4: var(--w-gray-3);
-  --w-series-5: var(--w-gray-4);
-  --w-series-6: var(--w-gray-5);
+  --w-series-2: #fb8460;
+  --w-series-3: #f8b181;
+  --w-series-4: #f7d2a1;
+  --w-series-5: #f8e9bf;
+  --w-series-6: #faf7db;
 
   /* Severity ramps gray → red (warn is a muted coral; switched per theme). */
   --w-sev-ok: var(--w-gray-2);
@@ -135,6 +140,14 @@ body.vscode-light,
 body.vscode-high-contrast-light {
   --w-accent: #e5231b;
   --w-sev-warn: #f2766e;
+  /* Light-surface analogous ramp: kept in a narrower lightness band than
+     the dark-mode ramp so every step stays legible against a white/near-
+     white card background instead of fading past readable contrast. */
+  --w-series-2: #cb3a15;
+  --w-series-3: #d06425;
+  --w-series-4: #cd893c;
+  --w-series-5: #c5a459;
+  --w-series-6: #bfb573;
 }
 
 /* High-contrast themes: lean on VS Code's contrast borders so every plate,
@@ -166,6 +179,11 @@ body[data-force-scheme='light'] {
   --w-sev-warn: #f2766e;
   --w-status-ok: #2e7d32;
   --w-status-warn: #e65100;
+  --w-series-2: #cb3a15;
+  --w-series-3: #d06425;
+  --w-series-4: #cd893c;
+  --w-series-5: #c5a459;
+  --w-series-6: #bfb573;
 }
 
 body[data-force-scheme='dark'] {
@@ -184,4 +202,9 @@ body[data-force-scheme='dark'] {
   --w-sev-warn: #f2766e;
   --w-status-ok: #81c784;
   --w-status-warn: #ffb74d;
+  --w-series-2: #fb8460;
+  --w-series-3: #f8b181;
+  --w-series-4: #f7d2a1;
+  --w-series-5: #f8e9bf;
+  --w-series-6: #faf7db;
 }
