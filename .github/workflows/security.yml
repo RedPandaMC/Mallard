@@ -60,7 +60,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Run Trivy (filesystem / IaC)
-        uses: aquasecurity/trivy-action@df678dbccf677bc6937338d569ba0da18964a8cc # master, pinned — was a floating branch ref
+        uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # master, pinned — was a floating branch ref
         with:
           scan-type: fs
           scan-ref: "."
@@ -143,7 +143,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy (image)
-        uses: aquasecurity/trivy-action@df678dbccf677bc6937338d569ba0da18964a8cc # master, pinned — was a floating branch ref
+        uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # master, pinned — was a floating branch ref
         with:
           scan-type: image
           image-ref: ghcr.io/redpandamc/mallard-server:latest
