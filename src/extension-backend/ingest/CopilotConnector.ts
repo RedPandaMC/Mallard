@@ -109,7 +109,13 @@ export class CopilotConnector extends BaseFileConnector {
       pick(attrs, ['gen_ai.operation.surface', 'surface', 'gen_ai.operation.name']) ?? row['name'];
 
     const fileKey = typeof row['filename'] === 'string' ? fileKeyOf(row['filename']) : 'cp';
-    const rowKey  = `${fileKey}:${ts}:${String(model)}`;
+    // An OTel span carries a unique span id; use it so multiple completions to
+    // the same model within one reported timestamp (coarse exporter clocks) don't
+    // collapse onto one composite id and get dropped by INSERT OR IGNORE. The
+    // span id is stable in the source, so re-ingest still dedups to one row.
+    const spanId =
+      pick(row, ['span_id', 'spanId', 'spanID']) ?? pick(attrs, ['span_id', 'spanId', 'spanID']);
+    const rowKey = spanId ? `${fileKey}:${String(spanId)}` : `${fileKey}:${ts}:${String(model)}`;
 
     return {
       id:     `local:${rowKey}`,

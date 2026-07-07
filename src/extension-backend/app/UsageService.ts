@@ -16,6 +16,7 @@ import {
   COST_CATEGORIES,
   Filter,
   GitHubBillingData,
+  SnapshotSource,
   SourceKind,
   Surface,
   SURFACES,
@@ -172,7 +173,9 @@ export class UsageService implements vscode.Disposable {
 
     const branch = activeBranch();
 
-    const displayCurrency = readConfig().currency;
+    // Currency is authoritative in UserConfigStore; fall back to the VS Code
+    // setting (which defaults to USD) only when the dashboard hasn't set one.
+    const displayCurrency = userConfig.currency ?? readConfig().currency;
     const fxRates = this.currency.currentRates();
     const fxRate = displayCurrency !== 'USD' ? (fxRates[displayCurrency] ?? 1) : 1;
 
@@ -298,10 +301,12 @@ export class UsageService implements vscode.Disposable {
     const rangeEnd   = (data.daily[data.daily.length - 1]?.dayStart ?? now) + DAY_MS;
 
     const hasData = data.totals.all.eventCount > 0;
-    // Snapshot-level source kind: 'local' (Copilot log telemetry) when any
-    // event came from it; otherwise the data is purely LM/API-derived ('lm').
-    // With no data at all, 'local' is the neutral default the UI expects.
-    const source: SourceKind = allSources.includes('local') ? 'local' : (hasData ? 'lm' : 'local');
+    // Snapshot-level provenance derived from the data: 'mixed' when more than one
+    // event source is present, the single source when there's exactly one, else
+    // 'lm' as the neutral default. (The old ternary collapsed any multi-connector
+    // mix to 'local' and mapped the no-data case to 'local' arbitrarily.)
+    const source: SnapshotSource =
+      allSources.length > 1 ? 'mixed' : (allSources[0] ?? 'lm');
 
     return {
       generatedAt:   now,

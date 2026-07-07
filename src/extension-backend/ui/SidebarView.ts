@@ -7,6 +7,7 @@
 import * as vscode from 'vscode';
 import { UsageService } from '../app/UsageService';
 import { getNonce } from '../util/nonce';
+import { isHostBoundMsg, WebviewBoundMsg } from './messaging';
 
 export class SidebarView implements vscode.WebviewViewProvider {
   static readonly viewType = 'mallard.sidebar';
@@ -30,15 +31,32 @@ export class SidebarView implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this.buildHtml(webviewView.webview);
 
+    // Typed, validated outbound envelope — same discriminated union the main
+    // dashboard bridge uses, so a snapshot-shape change is a compile error here
+    // instead of silently posting a malformed message.
+    const post = (msg: WebviewBoundMsg): void => {
+      void webviewView.webview.postMessage(msg);
+    };
+
     webviewView.webview.onDidReceiveMessage(
-      (msg: { type: string; model?: string }) => {
-        if (msg.type === 'ready') {
-          const s = this.usage.current;
-          if (s) void webviewView.webview.postMessage({ type: 'snapshot', payload: s });
-        } else if (msg.type === 'openDashboard') {
-          void vscode.commands.executeCommand('mallard.openDashboard');
-        } else if (msg.type === 'toggleModelFilter' && typeof msg.model === 'string') {
-          void this.toggleModelFilter(msg.model);
+      (raw: unknown) => {
+        if (!isHostBoundMsg(raw)) return; // reject unvalidated/unknown messages
+        switch (raw.type) {
+          case 'ready': {
+            const s = this.usage.current;
+            if (s) post({ type: 'snapshot', payload: s });
+            break;
+          }
+          case 'command':
+            if (raw.id === 'openDashboard') {
+              void vscode.commands.executeCommand('mallard.openDashboard');
+            }
+            break;
+          case 'toggleModelFilter':
+            void this.toggleModelFilter(raw.model);
+            break;
+          default:
+            break; // other host-bound messages aren't used by the sidebar
         }
       },
       null,
@@ -46,12 +64,8 @@ export class SidebarView implements vscode.WebviewViewProvider {
     );
 
     this.disposables.push(
-      this.usage.onDidChangeSnapshot((s) => {
-        void webviewView.webview.postMessage({ type: 'snapshot', payload: s });
-      }),
-      this.usage.onAlertFired(({ message }) => {
-        void webviewView.webview.postMessage({ type: 'alertFired', message });
-      }),
+      this.usage.onDidChangeSnapshot((s) => post({ type: 'snapshot', payload: s })),
+      this.usage.onAlertFired(({ message }) => post({ type: 'alertFired', message })),
     );
 
     // Open the dashboard when the user clicks the activity-bar icon,
@@ -294,7 +308,7 @@ export class SidebarView implements vscode.WebviewViewProvider {
     const vscode = acquireVsCodeApi();
 
     document.getElementById('open-btn').addEventListener('click', () => {
-      vscode.postMessage({ type: 'openDashboard' });
+      vscode.postMessage({ type: 'command', id: 'openDashboard' });
     });
 
     function fmt(n) {

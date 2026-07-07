@@ -17,9 +17,10 @@ export interface SankeyHandle {
 }
 
 function shortName(id: string): string {
-  return id
-    .replace(/^(models\/|openai\/|anthropic\/|google\/)/, '')
-    .slice(0, 26);
+  const trimmed = id.replace(/^(models\/|openai\/|anthropic\/|google\/)/, '');
+  // Append an ellipsis when truncated so two long names that share a 26-char
+  // prefix are visibly distinguishable as "cut off" rather than looking equal.
+  return trimmed.length > 26 ? `${trimmed.slice(0, 25)}…` : trimmed;
 }
 
 class SankeyChart extends ChartComponent {

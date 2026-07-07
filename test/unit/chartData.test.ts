@@ -7,6 +7,7 @@ import {
   buildHeatmapData,
   buildHourlyTimelineData,
   buildModelBreakdownData,
+  buildWeekdayTotals,
 } from '../../src/extension-backend/domain/chartData';
 import { PricingManifest } from '../../src/extension-backend/domain/pricing';
 import { BudgetState, Forecast, TopEntry } from '../../src/extension-backend/domain/types';
@@ -33,6 +34,25 @@ const INSUF_FORECAST: Forecast = {
   basis: 'insufficient-data',
   asOf: 0,
 };
+
+describe('buildWeekdayTotals', () => {
+  // Noon UTC keeps the local date on the same calendar day for every timezone
+  // (|offset| < 14h), so these assertions are tz-independent.
+  it('anchors index 0 on Sunday (epoch day 0 was a Thursday)', () => {
+    // 2021-01-03 is a Sunday, 2021-01-04 a Monday, 2021-01-09 a Saturday.
+    const sun = Date.UTC(2021, 0, 3, 12);
+    const mon = Date.UTC(2021, 0, 4, 12);
+    const sat = Date.UTC(2021, 0, 9, 12);
+    const totals = buildWeekdayTotals([
+      makeEvent({ ts: sun, credits: 1 }),
+      makeEvent({ ts: mon, credits: 2 }),
+      makeEvent({ ts: sat, credits: 3 }),
+    ]);
+    assert.equal(totals[0], 1, 'Sunday → index 0');
+    assert.equal(totals[1], 2, 'Monday → index 1');
+    assert.equal(totals[6], 3, 'Saturday → index 6');
+  });
+});
 
 describe('buildDailyBarsData', () => {
   it('returns 30 points for any input', () => {

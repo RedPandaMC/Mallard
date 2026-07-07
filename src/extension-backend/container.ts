@@ -45,11 +45,11 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const storageDir = context.globalStorageUri.fsPath;
 
   const pricing = new PricingService(storageDir, bundledManifest, cfg.pricingManifestUrl || '');
-  await pricing.load();
-  pricing.startDailyRefresh();
-
   const currency = new CurrencyService(storageDir);
-  await currency.load();
+  // Independent (pricing feed vs FX feed) — load their local caches in parallel
+  // rather than awaiting one after the other. Neither blocks on the network now.
+  await Promise.all([pricing.load(), currency.load()]);
+  pricing.startDailyRefresh();
   currency.startDailyRefresh();
 
   const store = await EventStore.open(storageDir, cfg.dataRetentionDays);
@@ -77,9 +77,13 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     vscode.workspace.getConfiguration('mallard').get<string[]>('enabledConnectors')
       ?? ['copilot', 'claude-code'],
   );
+  // Every connector exposes a canonical `.id`; enable/label off that so adding a
+  // new usage source is one entry in this list, not four hardcoded id checks.
+  const allConnectors = [copilot, claudeCode];
   const registry = new ConnectorRegistry();
-  if (enabledConnectors.has('copilot')) registry.register(copilot);
-  if (enabledConnectors.has('claude-code')) registry.register(claudeCode);
+  for (const c of allConnectors) {
+    if (enabledConnectors.has(c.id)) registry.register(c);
+  }
   const ingest = new IngestService(registry.build());
 
   const githubSession = new GitHubSession(context.secrets);
@@ -105,15 +109,16 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   ).createExporter();
 
   const usage = new UsageService(store.reader, pricing, ingest, userConfig, currency, github, exporter);
+  // When the background FX refresh lands real rates, recompute so the dashboard
+  // updates from the USD-only default it started with.
+  currency.onRatesUpdated = () => void usage.refresh();
   const restriction = new RestrictionEngine(storageDir);
 
   // Generic gate that nudges the user to enable any connector prerequisite
   // (e.g. Copilot's OTel exporter) and re-refreshes once applied. Scoped to
   // only the enabled connectors — no point nudging Copilot OTel setup for a
   // connector the user opted out of via mallard.enabledConnectors.
-  const activeConnectors = [copilot, claudeCode].filter((c) =>
-    enabledConnectors.has(c === copilot ? 'copilot' : 'claude-code'),
-  );
+  const activeConnectors = allConnectors.filter((c) => enabledConnectors.has(c.id));
   const setupGate = new ConnectorSetupGate(context, activeConnectors, () => void usage.refresh());
 
   context.subscriptions.push(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -49,14 +49,20 @@ def _patch_env_and_settings(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture()
 def mock_write_api() -> MagicMock:
-    return MagicMock()
+    # The async write API: write() is awaited by write_payload().
+    api = MagicMock()
+    api.write = AsyncMock(return_value=True)
+    return api
 
 
 @pytest.fixture()
 def mock_influx_client(mock_write_api: MagicMock) -> MagicMock:
+    # InfluxDBClientAsync: write_api() is sync and returns the async write API;
+    # ping()/close() are awaited.
     client = MagicMock()
     client.write_api.return_value = mock_write_api
-    client.ping.return_value = True
+    client.ping = AsyncMock(return_value=True)
+    client.close = AsyncMock()
     return client
 
 
@@ -78,7 +84,7 @@ def _build_client(
     with (
         patch("server.influx.make_client", return_value=mock_influx_client),
         patch(
-            "server.influx.InfluxDBClient",
+            "server.influx.InfluxDBClientAsync",
             return_value=mock_influx_client,
         ),
     ):
@@ -125,6 +131,23 @@ def hmac_client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) 
         monkeypatch,
         mock_influx_client,
         {"WEBHOOK_HMAC_SECRETS": ",".join(HMAC_SECRETS)},
+    )
+
+
+JWT_HMAC_SECRET = "jwt-signing-secret-for-tests"
+
+
+@pytest.fixture()
+def jwt_client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -> TestClient:
+    """Client with HS256 JWT bearer auth enabled; 'ci-bot' claim maps to label 'ci'."""
+    yield from _build_client(
+        monkeypatch,
+        mock_influx_client,
+        {
+            "JWT_HMAC_SECRET": JWT_HMAC_SECRET,
+            "JWT_ALGORITHMS": "HS256",
+            "JWT_LABELS": "ci:ci-bot",
+        },
     )
 
 

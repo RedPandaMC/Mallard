@@ -7,14 +7,14 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from influxdb_client import InfluxDBClient, Point, WritePrecision
-from influxdb_client.client.write_api import SYNCHRONOUS
+from influxdb_client import Point, WritePrecision
+from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 
 from .config import Settings
 from .normalize import NormalizedMetric
 
 if TYPE_CHECKING:
-    from influxdb_client.client.write_api import WriteApi
+    from influxdb_client.client.write_api_async import WriteApiAsync
 
 logger = logging.getLogger(__name__)
 
@@ -47,23 +47,30 @@ def _field_key(prefix: str, key: str) -> str:
     return f"{prefix}_{safe}"
 
 
-def make_client(settings: Settings) -> InfluxDBClient:
-    """Create and return an InfluxDB v2 client configured from *settings*."""
-    return InfluxDBClient(
+def make_client(settings: Settings) -> InfluxDBClientAsync:
+    """Create and return an async InfluxDB v2 client configured from *settings*.
+
+    The async client keeps blocking network I/O off the event loop, so a slow
+    InfluxDB can't stall concurrent ingest requests, health checks, or the MQTT
+    handler. Must be constructed inside a running event loop (its aiohttp session
+    is created eagerly) — call it from the FastAPI lifespan, not module scope.
+    """
+    return InfluxDBClientAsync(
         url=settings.influx_url,
         token=settings.influx_token,
         org=settings.influx_org,
     )
 
 
-def write_payload(
-    write_api: "WriteApi",
+async def write_payload(
+    write_api: "WriteApiAsync",
     bucket: str,
     org: str,
     metric: NormalizedMetric,
     source: str = "unknown",
 ) -> None:
-    """Convert a normalized metric to an InfluxDB Point and write it synchronously.
+    """Convert a normalized metric to an InfluxDB Point and write it (awaiting the
+    async write API so the event loop is never blocked on the network).
 
     `connector` becomes its own tag so a single instance running multiple
     connectors (e.g. Copilot and Claude Code) can be split apart in Grafana.
@@ -115,13 +122,13 @@ def write_payload(
         metric.instance_id,
         metric.ts_ms,
     )
-    write_api.write(bucket=bucket, org=org, record=point)
+    await write_api.write(bucket=bucket, org=org, record=point)
 
 
-async def ping_influx(client: InfluxDBClient) -> bool:
+async def ping_influx(client: InfluxDBClientAsync) -> bool:
     """Return True if InfluxDB responds to a ping."""
     try:
-        return client.ping()
+        return await client.ping()
     except Exception as exc:
         logger.warning("InfluxDB ping failed: %s", exc)
         return False

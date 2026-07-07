@@ -117,7 +117,10 @@ export function buildWeekdayTotals(events: readonly UsageEvent[], filter?: Filte
   for (const e of events) {
     if (!matchesFilter(e, filter)) continue;
     const day = Math.floor((e.ts + tzOffsetMs) / DAY_MS);
-    totals[day % 7]! += e.credits;
+    // Epoch day 0 (1970-01-01) was a Thursday, so `day % 7 === 0` is Thursday,
+    // not Sunday. Shift by +4 to anchor index 0 on Sunday, matching the SQL
+    // dayofweek() path (0=Sun … 6=Sat).
+    totals[(day + 4) % 7]! += e.credits;
   }
   return totals;
 }

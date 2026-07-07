@@ -8,7 +8,6 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
-from influxdb_client.client.write_api import SYNCHRONOUS
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -17,7 +16,7 @@ from .config import get_settings
 from .credential_verifier import create_verifier
 from .influx import make_client
 from .mqtt import run_mqtt_broker
-from .rate_limit import SlidingWindowLimiter
+from .rate_limit import InProcessRateLimiter, create_rate_limiter
 from .routers import health as health_router
 from .routers import ingest as ingest_router
 
@@ -49,20 +48,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("Starting Mallard ingest server (InfluxDB: %s)", settings.influx_url)
 
+    import asyncio
+
     influx_client = make_client(settings)
-    write_api = influx_client.write_api(write_options=SYNCHRONOUS)
+    write_api = influx_client.write_api()
     verifier = create_verifier(settings)
+
+    # Post-auth per-credential limiter (the slowapi middleware above is per-IP).
+    # Redis-backed in production so the limit holds across replicas; in-process
+    # fallback for single-node/dev needs periodic pruning of expired keys.
+    label_limiter = await create_rate_limiter(settings)
 
     # Stash on app.state so routers can access them via request.app.state
     app.state.settings = settings
     app.state.influx_client = influx_client
     app.state.write_api = write_api
     app.state.verifier = verifier
-    # Post-auth per-credential limiter (the slowapi middleware above is per-IP)
-    app.state.label_limiter = SlidingWindowLimiter.from_string(settings.rate_limit)
+    app.state.label_limiter = label_limiter
+
+    cleanup_task: asyncio.Task | None = None
+    if isinstance(label_limiter, InProcessRateLimiter):
+        cleanup_task = asyncio.create_task(_prune_limiter(label_limiter, settings))
 
     if settings.mqtt_enabled:
-        import asyncio
         mqtt_task = asyncio.create_task(run_mqtt_broker(settings, write_api, verifier))
         app.state.mqtt_task = mqtt_task
         logger.info("MQTT broker started on port %d", settings.mqtt_port)
@@ -72,8 +80,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Shutting down — closing InfluxDB client")
     if settings.mqtt_enabled and hasattr(app.state, "mqtt_task"):
         app.state.mqtt_task.cancel()
-    write_api.close()
-    influx_client.close()
+    if cleanup_task is not None:
+        cleanup_task.cancel()
+    await label_limiter.aclose()
+    await influx_client.close()
+
+
+async def _prune_limiter(limiter: InProcessRateLimiter, settings) -> None:
+    """Periodically evict expired keys from the in-process limiter so its map
+    doesn't grow unbounded. (The Redis backend uses per-key TTLs instead.)"""
+    import asyncio
+
+    interval = 300.0
+    try:
+        while True:
+            await asyncio.sleep(interval)
+            limiter.cleanup()
+    except asyncio.CancelledError:  # pragma: no cover - shutdown path
+        pass
 
 
 def create_app() -> FastAPI:

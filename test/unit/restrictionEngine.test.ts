@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { RestrictionEngine } from '../../src/extension-backend/domain/restriction/engine';
-import { buildSnapshot } from '../../src/extension-backend/domain/snapshot';
+import { buildSnapshot } from './snapshotFixture';
 import { makeEvent } from './helpers';
 import type { AlertRule, RestrictionState } from '../../src/extension-backend/domain/types';
 

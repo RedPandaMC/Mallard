@@ -43,10 +43,17 @@ describe('messaging — isHostBoundMsg', () => {
     assert.equal(isHostBoundMsg({ type: 'setCurrency' }), false);
   });
 
+  it('requires a non-empty model for toggleModelFilter', () => {
+    assert.equal(isHostBoundMsg({ type: 'toggleModelFilter', model: 'gpt-4o' }), true);
+    assert.equal(isHostBoundMsg({ type: 'toggleModelFilter', model: '' }), false);
+    assert.equal(isHostBoundMsg({ type: 'toggleModelFilter' }), false);
+  });
+
   it('rejects non-objects, missing types, and unknown types', () => {
     assert.equal(isHostBoundMsg(null), false);
     assert.equal(isHostBoundMsg('ready'), false);
     assert.equal(isHostBoundMsg({}), false);
+    assert.equal(isHostBoundMsg({ type: 42 }), false); // non-string type
     assert.equal(isHostBoundMsg({ type: 'sudo' }), false);
   });
 });
@@ -60,7 +67,10 @@ describe('messaging — isWebviewBoundMsg', () => {
     assert.equal(isWebviewBoundMsg({ type: 'layout', value: [] }), true);
     assert.equal(isWebviewBoundMsg({ type: 'layout', value: {} }), false);
     assert.equal(isWebviewBoundMsg({ type: 'restriction', value: {} }), true);
+    assert.equal(isWebviewBoundMsg({ type: 'alertFired', message: 'over budget' }), true);
+    assert.equal(isWebviewBoundMsg({ type: 'alertFired' }), false);
     assert.equal(isWebviewBoundMsg({ type: 'telemetry' }), false);
+    assert.equal(isWebviewBoundMsg({ type: 42 }), false); // non-string type
     assert.equal(isWebviewBoundMsg(undefined), false);
   });
 });

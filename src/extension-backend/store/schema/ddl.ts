@@ -216,59 +216,6 @@ export const CREATE_SQL = `
   ALTER TABLE fact_daily_usage ADD COLUMN IF NOT EXISTS cost_cache_write  DOUBLE DEFAULT 0;
   ALTER TABLE fact_daily_usage ADD COLUMN IF NOT EXISTS cost_thinking     DOUBLE DEFAULT 0;
   ALTER TABLE fact_daily_usage ADD COLUMN IF NOT EXISTS cost_tool         DOUBLE DEFAULT 0;
-
-  -- ── Snapshot cache ───────────────────────────────────────────────────────────
-  CREATE TABLE IF NOT EXISTS snap_totals (
-    period      VARCHAR PRIMARY KEY,
-    credits     DOUBLE  NOT NULL DEFAULT 0,
-    cost        DOUBLE  NOT NULL DEFAULT 0,
-    tokens      BIGINT  NOT NULL DEFAULT 0,
-    event_count INTEGER NOT NULL DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS snap_daily (
-    day_start   BIGINT  PRIMARY KEY,
-    credits     DOUBLE  NOT NULL DEFAULT 0,
-    cost        DOUBLE  NOT NULL DEFAULT 0,
-    tokens      BIGINT  NOT NULL DEFAULT 0,
-    event_count INTEGER NOT NULL DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS snap_models (
-    modelId VARCHAR PRIMARY KEY,
-    credits DOUBLE  NOT NULL DEFAULT 0,
-    cost    DOUBLE  NOT NULL DEFAULT 0,
-    tokens  BIGINT  NOT NULL DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS snap_repos (
-    repo    VARCHAR PRIMARY KEY,
-    credits DOUBLE  NOT NULL DEFAULT 0,
-    cost    DOUBLE  NOT NULL DEFAULT 0,
-    tokens  BIGINT  NOT NULL DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS snap_hourly (
-    hour_local  INTEGER PRIMARY KEY,
-    credits     DOUBLE  NOT NULL DEFAULT 0,
-    event_count INTEGER NOT NULL DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS snap_categories (
-    category VARCHAR PRIMARY KEY,
-    cost     DOUBLE  NOT NULL DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS snap_sankey (
-    model   VARCHAR NOT NULL,
-    surface VARCHAR NOT NULL,
-    count   INTEGER NOT NULL DEFAULT 0,
-    credits DOUBLE  NOT NULL DEFAULT 0,
-    PRIMARY KEY (model, surface)
-  );
-  CREATE TABLE IF NOT EXISTS snap_dim_models   (name VARCHAR PRIMARY KEY);
-  CREATE TABLE IF NOT EXISTS snap_dim_surfaces (name VARCHAR PRIMARY KEY);
-  CREATE TABLE IF NOT EXISTS snap_dim_sources  (name VARCHAR PRIMARY KEY);
-  CREATE TABLE IF NOT EXISTS snap_dim_repos    (name VARCHAR PRIMARY KEY);
-  CREATE TABLE IF NOT EXISTS snap_weekday (
-    weekday     INTEGER PRIMARY KEY,
-    credits     DOUBLE  NOT NULL DEFAULT 0,
-    event_count INTEGER NOT NULL DEFAULT 0
-  );
 `;
 
 // ── DML: staging merge ────────────────────────────────────────────────────────

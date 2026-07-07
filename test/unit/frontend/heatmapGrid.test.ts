@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { buildSnapshot } from '../../../src/extension-backend/domain/snapshot';
+import { buildSnapshot } from '../snapshotFixture';
 import { makeEvent } from '../helpers';
 import { mountHeatmap } from '../../../src/extension-frontend/charts/heatmap';
 

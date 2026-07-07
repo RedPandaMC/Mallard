@@ -13,7 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
-from ..credential_verifier import CredentialVerifier
+from ..credential_verifier import CredentialVerifier, _looks_like_jwt
 from ..deps import get_verifier
 from ..influx import write_payload
 from ..normalize import InvalidIngestPayload, normalize_payload
@@ -102,24 +102,45 @@ async def _resolve_source(request: Request, verifier: CredentialVerifier) -> str
 
     Auth precedence:
       1. mTLS client cert — CN forwarded as SSL_CLIENT_S_DN_CN by the ingress,
-         which has already verified the cert. The CN maps through the optional
-         CERT_LABELS store; unmapped CNs use the CN itself as the source.
+         but ONLY trusted when SSL_CLIENT_VERIFY == "SUCCESS". The ingress uses
+         verify-client "optional", so it forwards the DN even for an unverified
+         (self-signed) cert; without the verify gate any client could present a
+         self-signed cert with a CN of their choice and be authenticated as it.
+         The CN maps through the optional CERT_LABELS store; unmapped CNs use
+         the CN itself as the source.
       2. X-API-Key header.
       3. Authorization: Bearer <token> (token treated as API key value).
 
     Raises 401 for missing/invalid credentials and 503 when the credential
     store is unreachable (remote secret manager down with no warm cache).
     """
-    cert_cn = _extract_cert_cn(request.headers.get("SSL_CLIENT_S_DN_CN", ""))
+    # Only honour the forwarded client-cert identity when the proxy actually
+    # verified the cert against the trusted CA. An empty/missing verify header
+    # (bespoke proxy that forwards the DN without a verify status) is treated as
+    # unverified — fail closed.
+    cert_verified = request.headers.get("SSL_CLIENT_VERIFY", "") == "SUCCESS"
+    cert_cn = (
+        _extract_cert_cn(request.headers.get("SSL_CLIENT_S_DN_CN", ""))
+        if cert_verified
+        else ""
+    )
+
+    bearer = _extract_bearer(request.headers.get("Authorization", ""))
 
     try:
         if cert_cn:
             label = await verifier.lookup_cert_label(cert_cn)
             return label if label is not None else cert_cn
 
-        api_key = request.headers.get("X-API-Key") or _extract_bearer(
-            request.headers.get("Authorization", "")
-        )
+        # A Bearer token that looks like a JWT is verified as one first (signature
+        # + exp); if JWT auth isn't configured, verify_jwt returns None and we fall
+        # through to treating the token as an API-key value (backward compatible).
+        if bearer and _looks_like_jwt(bearer):
+            jwt_identity = await verifier.verify_jwt(bearer)
+            if jwt_identity is not None:
+                return jwt_identity.label
+
+        api_key = request.headers.get("X-API-Key") or bearer
         if not api_key:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -177,7 +198,7 @@ async def ingest(
 
     limiter = getattr(request.app.state, "label_limiter", None)
     if limiter is not None:
-        retry_after = limiter.check(source)
+        retry_after = await limiter.check(source)
         if retry_after is not None:
             return JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -238,7 +259,7 @@ async def ingest(
     settings = request.app.state.settings
 
     try:
-        write_payload(
+        await write_payload(
             write_api=write_api,
             bucket=settings.influx_bucket,
             org=settings.influx_org,

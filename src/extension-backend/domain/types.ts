@@ -11,6 +11,11 @@ export const GRANULARITIES: readonly Granularity[] = ['day', 'week', 'month'];
 /** Where a usage event came from (kept broad for backward-compat with stored events). */
 export type SourceKind = 'lm' | 'local' | 'github' | 'claude-code';
 
+/** Snapshot-level provenance summary: a single event source, or 'mixed' when the
+ *  snapshot aggregates more than one. Distinct from the per-event SourceKind so
+ *  'mixed' never leaks into the event source filter. */
+export type SnapshotSource = SourceKind | 'mixed';
+
 /** Which Copilot surface produced the event. */
 export type Surface = 'chat' | 'inline' | 'agent' | 'edit' | 'unknown';
 export const SURFACES = new Set<Surface>(['chat', 'inline', 'agent', 'edit', 'unknown']);
@@ -214,6 +219,9 @@ export interface UserConfig {
   githubBilling?: GitHubBillingConfig;
   /** Dashboard display preferences (chart windows, top-N). */
   display?: DisplayPrefs;
+  /** Display currency (ISO code, e.g. "EUR"). Dashboard-editable, so it lives
+   *  here in UserConfigStore rather than VS Code settings. */
+  currency?: string;
   /** Metric export extras beyond the mallard.* settings. */
   export?: ExportConfig;
 }
@@ -316,14 +324,18 @@ export type PaletteMode = 'swiss' | 'theme';
 
 /**
  * Persisted dashboard layout. Each analysis panel has a position (array order),
- * a width span (1 = half, 2 = full, in the two-column grid), and a visibility
- * flag. Edited in the dashboard's edit mode and stored in globalState.
+ * a width span (number of grid columns it occupies, 1..MAX_PANEL_SPAN, clamped
+ * at render time to the configured column count), and a visibility flag. Edited
+ * in the dashboard's edit mode and stored in globalState.
  */
 export type PanelSize = 'compact' | 'normal' | 'tall';
 
+/** Widest a panel may span — matches the maximum configurable column count. */
+export const MAX_PANEL_SPAN = 4;
+
 export interface DashboardPanelLayout {
   id: string;
-  span: 1 | 2;
+  span: number;
   hidden: boolean;
   size?: PanelSize;
 }
@@ -554,7 +566,7 @@ export interface ChartData {
 /** The single object every piece of UI consumes. */
 export interface UsageSnapshot {
   generatedAt: number;
-  source: SourceKind;
+  source: SnapshotSource;
   /** True when only the current day's bar changed since the previous snapshot. */
   isIncremental: boolean;
   status: ProviderStatus;

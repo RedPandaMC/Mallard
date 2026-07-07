@@ -1,6 +1,5 @@
 import { strict as assert } from 'assert';
 import {
-  aggregateAll,
   aggregateBy,
   distinctModels,
   distinctRepos,
@@ -59,9 +58,10 @@ describe('aggregate', () => {
   });
 
   it('produces day, week, month granularities', () => {
-    const all = aggregateAll(events);
-    assert.deepEqual(Object.keys(all).sort(), ['day', 'month', 'week']);
-    assert.equal(all.month[0]!.credits, 6);
+    for (const g of ['day', 'week', 'month'] as const) {
+      assert.ok(aggregateBy(events, g).length > 0, `${g} buckets`);
+    }
+    assert.equal(aggregateBy(events, 'month')[0]!.credits, 6);
   });
 
   it('applies a model filter', () => {
@@ -211,20 +211,16 @@ describe('aggregate', () => {
     assert.deepEqual(sources, ['local']);
   });
 
-  it('aggregateAll with a filter excludes non-matching events', () => {
-    const all = aggregateAll(events, { models: ['gpt-4o'] });
-    // claude-sonnet-4 event should be filtered out — only gpt-4o's credits remain
-    const totalCredits = Object.values(all)
-      .flat()
-      .reduce((sum, a) => sum + a.credits, 0);
-    // gpt-4o has 2 + 3 = 5 credits across 3 granularities → 5 * 3 = 15
-    assert.equal(totalCredits, 5 * 3);
+  it('aggregateBy with a filter excludes non-matching events across granularities', () => {
+    for (const g of ['day', 'week', 'month'] as const) {
+      const credits = aggregateBy(events, g, { models: ['gpt-4o'] }).reduce((s, a) => s + a.credits, 0);
+      assert.equal(credits, 5, `${g}: only gpt-4o's 2 + 3 credits remain`);
+    }
   });
 
-  it('aggregateAll returns empty buckets when all events are filtered out', () => {
-    const all = aggregateAll(events, { models: ['o3-does-not-exist'] });
-    assert.deepEqual(all.day, []);
-    assert.deepEqual(all.week, []);
-    assert.deepEqual(all.month, []);
+  it('aggregateBy returns empty buckets when all events are filtered out', () => {
+    for (const g of ['day', 'week', 'month'] as const) {
+      assert.deepEqual(aggregateBy(events, g, { models: ['o3-does-not-exist'] }), []);
+    }
   });
 });

@@ -84,9 +84,11 @@ export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vsc
         await restriction.snooze(raw.minutes);
         break;
       case 'setCurrency':
-        await vscode.workspace
-          .getConfiguration('mallard')
-          .update('currency', raw.value.toUpperCase(), vscode.ConfigurationTarget.Global);
+        // Currency is dashboard-editable, so it's persisted in UserConfigStore
+        // (the authoritative store for dashboard config) rather than VS Code
+        // settings. Writing here fires userConfig.onDidChange, which recomputes
+        // the snapshot immediately — the old settings.json write could lag.
+        await userConfig.set({ currency: (raw.value || 'USD').trim().toUpperCase() || 'USD' });
         break;
     }
   };

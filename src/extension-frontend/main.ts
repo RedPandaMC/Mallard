@@ -55,8 +55,13 @@ function setSrDesc(bodyId: string, text: string): void {
 }
 
 function applyForcedScheme(scheme: 'light' | 'dark' | null): void {
-  document.body.removeAttribute('data-force-scheme');
-  if (scheme) document.body.setAttribute('data-force-scheme', scheme);
+  // Set on the root (html) element, not body: theme.ts reads the forced-scheme
+  // custom properties off getComputedStyle(document.documentElement), so a
+  // body-level attribute would recolour the DOM but leave the charts on the
+  // live editor theme.
+  const root = document.documentElement;
+  root.removeAttribute('data-force-scheme');
+  if (scheme) root.setAttribute('data-force-scheme', scheme);
 }
 
 /** Rerender closures for every mounted chart, registered once by mountDashboard. */

@@ -71,6 +71,11 @@ class HeatmapGrid implements HeatmapHandle {
     monthRow.className = 'wv-heatmap-months';
     monthRow.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
     let lastMonth = -1;
+    // Suppress a month label that would sit within a few columns of the previous
+    // one (a short month at a narrow panel width), so adjacent labels like
+    // "Feb"/"Mar" can't visually overlap.
+    const MIN_LABEL_GAP_COLS = 3;
+    let lastLabelCol = -MIN_LABEL_GAP_COLS;
 
     cells.forEach((c, i) => {
       const pos = firstWeekday + i;
@@ -80,11 +85,14 @@ class HeatmapGrid implements HeatmapHandle {
 
       if (date.getMonth() !== lastMonth) {
         lastMonth = date.getMonth();
-        const label = document.createElement('span');
-        label.className = 'wv-heatmap-month-label';
-        label.style.gridColumnStart = String(col + 1);
-        label.textContent = MONTH_NAMES[lastMonth] ?? '';
-        monthRow.appendChild(label);
+        if (col - lastLabelCol >= MIN_LABEL_GAP_COLS) {
+          lastLabelCol = col;
+          const label = document.createElement('span');
+          label.className = 'wv-heatmap-month-label';
+          label.style.gridColumnStart = String(col + 1);
+          label.textContent = MONTH_NAMES[lastMonth] ?? '';
+          monthRow.appendChild(label);
+        }
       }
 
       const cell = document.createElement('div');

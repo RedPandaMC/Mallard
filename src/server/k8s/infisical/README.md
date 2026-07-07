@@ -37,9 +37,13 @@ Labels drive the `source` tag in InfluxDB so analytics can filter by team/person
 
 | Secret key | Example value | Notes |
 |---|---|---|
-| `API_KEYS` | `team-alpha:key-abc123,team-beta:key-def456` | `label:secret` pairs; Bearer tokens verify against the same store |
+| `API_KEYS` | `team-alpha:key-abc123,team-beta:key-def456` | `label:secret` pairs; a Bearer token that isn't a JWT verifies against this store |
 | `MQTT_PASSWORD` | `shared-broker-password` | single shared password; all MQTT ingest is tagged `source='mqtt'` |
 | `CERT_LABELS` | `ci:build-agent-01` | optional `label:cn` pairs for mTLS certs; unmapped CNs fall back to the CN |
+| `JWT_HMAC_SECRET` *or* `JWT_PUBLIC_KEY` *or* `JWT_JWKS_URL` | `https://idp.example.com/.well-known/jwks.json` | optional JWT bearer auth; presence of any enables it (HS* secret, PEM public key, or JWKS URL) |
+| `JWT_ALGORITHMS` | `RS256,ES256` | optional CSV; defaults to `HS256`, or `RS256,ES256` when asymmetric material is set |
+| `JWT_ISSUER` / `JWT_AUDIENCE` | `https://idp.example.com/` | optional; enforced (`iss`/`aud`) when set |
+| `JWT_LABEL_CLAIM` / `JWT_LABELS` | `sub` / `ci:ci-bot` | claim used for the source label (default `sub`); `label:claimValue` pairs map it, unmapped → claim value |
 | `INFLUX_TOKEN` | `your-influx-token` | |
 
 ## Credential rotation

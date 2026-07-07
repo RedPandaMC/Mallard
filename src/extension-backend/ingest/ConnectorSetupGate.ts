@@ -37,20 +37,34 @@ export class ConnectorSetupGate implements vscode.Disposable {
       if (req.isSatisfied()) continue;
       const nudgeKey = `mallard.setupNudge.${req.id}`;
       if (this.context.globalState.get<boolean>(nudgeKey)) continue;
-      await this.context.globalState.update(nudgeKey, true);
+
       const choice = await vscode.window.showInformationMessage(req.detail, 'Enable', 'Not now');
-      if (choice === 'Enable') await this.run(req.id);
+      if (choice === 'Enable') {
+        // Only suppress future nudges once the requirement was ACTUALLY applied.
+        // A failed apply (or the write below failing) previously left the flag
+        // set — permanently silencing the nudge while the prerequisite stayed
+        // unsatisfied, so the connector's data never showed up and the user was
+        // never prompted again.
+        const applied = await this.run(req.id);
+        if (applied) await this.suppressNudge(req.id);
+      } else {
+        // Explicit "Not now" / dismissed: it was shown once, don't nag again.
+        await this.suppressNudge(req.id);
+      }
     }
   }
 
-  /** Apply a requirement by id (invoked by the command / empty-state CTA). */
-  async run(id: string): Promise<void> {
+  /**
+   * Apply a requirement by id (invoked by the command / empty-state CTA).
+   * Returns true when the requirement was applied successfully.
+   */
+  async run(id: string): Promise<boolean> {
     const req = this.requirements.find((r) => r.id === id);
-    if (!req) return;
+    if (!req) return false;
     const result = await req.apply(this.context);
     if (!result.ok) {
       void vscode.window.showWarningMessage(result.message);
-      return;
+      return false;
     }
     this.onApplied();
     if (result.reloadHint) {
@@ -59,6 +73,7 @@ export class ConnectorSetupGate implements vscode.Disposable {
     } else {
       void vscode.window.showInformationMessage(result.message);
     }
+    return true;
   }
 
   /** Requirements not yet satisfied — for rendering empty-state CTAs. */

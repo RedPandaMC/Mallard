@@ -1,3 +1,11 @@
+# ⚠️  LAPTOP / DEV ONLY — NOT FOR PRODUCTION.
+# This overlay runs OpenBao in `-dev` mode: an in-memory store with a hardcoded
+# root token, and 8200 published to the host. On any restart it loses every
+# seeded secret (the server then 503s until openbao-init re-seeds), and the
+# unsealed store is reachable from the host. For a real deployment use
+# docker-compose.openbao.prod.yml (file/raft storage on a volume, no hardcoded
+# token, 8200 not published) or the in-cluster setup under k8s/openbao/.
+#
 # Pinned to 2.5.5 (the version actually observed running in this stack's own
 # CI logs — was previously :latest) rather than tracking upstream unattended.
 # Bump deliberately; check quay.io/openbao/openbao's tag list for the current

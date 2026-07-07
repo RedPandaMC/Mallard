@@ -140,6 +140,39 @@ export class NullMetricExporter extends MetricExporter {
   override dispose(): void {}
 }
 
+/**
+ * Fans one snapshot out to several independent MetricExporters — one per
+ * configured target, each with its own queue. Because every target retries from
+ * its own backlog, a partial outage (one target down while another is up)
+ * re-delivers only to the target that actually failed, and never re-delivers to
+ * a target that already succeeded. (The previous FanoutProtocol shared one
+ * queue across all targets, so any retry replayed the payload to every target,
+ * double-counting on non-idempotent receivers.)
+ */
+export class FanoutMetricExporter extends MetricExporter {
+  /* c8 ignore start */
+  private static readonly nullProtocol: MetricProtocol = {
+    async send() {
+      return { ok: true };
+    },
+    dispose() {},
+  };
+  private static readonly nullSerializer: MetricSerializer = { topic: '', serialize: () => ({}) };
+  /* c8 ignore stop */
+
+  constructor(private readonly children: readonly MetricExporter[]) {
+    super(FanoutMetricExporter.nullProtocol, FanoutMetricExporter.nullSerializer);
+  }
+
+  override async export(snapshot: UsageSnapshot): Promise<void> {
+    await Promise.all(this.children.map((c) => c.export(snapshot)));
+  }
+
+  override dispose(): void {
+    for (const c of this.children) c.dispose();
+  }
+}
+
 // ── MQTT protocol ─────────────────────────────────────────────────────────────
 
 export interface MqttProtocolOptions {

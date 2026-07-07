@@ -127,7 +127,7 @@ describe('UsageService — snapshot assembly (merged compute path)', () => {
     assert.deepEqual(s.sankeyLinks, [{ source: 'claude-sonnet-4-5', target: 'agent', value: 18 }]);
     assert.equal(s.totalEventCount, 12);
     assert.equal(s.estimatedEventCount, 9);
-    assert.equal(s.source, 'local'); // 'local' present in sources
+    assert.equal(s.source, 'mixed'); // two sources present (claude-code + local)
     assert.equal(s.chartData.hourlyTimeline.peakHour, 14);
     assert.equal(exported.length, 1, 'snapshot is handed to the exporter');
     svc.dispose();
@@ -142,12 +142,21 @@ describe('UsageService — snapshot assembly (merged compute path)', () => {
     svc.dispose();
   });
 
-  it("source is 'lm' when data exists without the local connector", async () => {
+  it('source reflects the single event source when only one is present', async () => {
     const data = fixtureData();
     data.dims.sources = ['claude-code'];
     const { svc } = makeService(data);
     await svc.setFilter({});
-    assert.equal(svc.current!.source, 'lm');
+    assert.equal(svc.current!.source, 'claude-code');
+    svc.dispose();
+  });
+
+  it("source is 'mixed' when more than one event source is present", async () => {
+    const data = fixtureData();
+    data.dims.sources = ['local', 'claude-code'];
+    const { svc } = makeService(data);
+    await svc.setFilter({});
+    assert.equal(svc.current!.source, 'mixed');
     svc.dispose();
   });
 });

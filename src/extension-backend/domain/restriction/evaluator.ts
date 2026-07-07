@@ -32,7 +32,13 @@ export function evaluateRestrictionState(
     if (r.active !== undefined && !evalCondition(r.active, ctx)) continue;
     if (!evalRule(r, ctx)) continue;
     matching.push(r);
-    if (r.restrict.reEnableWhen) canClear.push(r);
+    // A matching rule "can clear" only when its re-enable condition currently
+    // evaluates true — not merely when one is configured. Checking presence
+    // alone made the simulate() dry-run report every rule with a reEnableWhen as
+    // clearable regardless of whether that condition actually held.
+    if (r.restrict.reEnableWhen && evalCondition(r.restrict.reEnableWhen, ctx)) {
+      canClear.push(r);
+    }
   }
 
   void now;

@@ -18,7 +18,7 @@ import { join } from 'path';
 import { performance } from 'perf_hooks';
 
 import { EventStore } from '../../src/extension-backend/store/EventStore';
-import { buildSnapshot } from '../../src/extension-backend/domain/snapshot';
+import { buildSnapshot } from '../unit/snapshotFixture';
 import type { UsageEvent } from '../../src/extension-backend/domain/types';
 import type { RecordFilter } from '../../src/extension-backend/store/EventRepository';
 import { DAY_MS } from '../../src/extension-backend/util/time';

@@ -37,18 +37,34 @@ describe('normalizeLayout', () => {
     assert.equal(out.find((p) => p.id === 'daily')!.span, 2);
   });
 
-  it('coerces invalid span values to 1', () => {
-    const out = normalizeLayout([{ id: 'models', span: 5 as unknown as 1, hidden: false }]);
+  it('clamps an out-of-range span to the max (4)', () => {
+    const out = normalizeLayout([{ id: 'models', span: 99, hidden: false }]);
+    assert.equal(out.find((p) => p.id === 'models')!.span, 4);
+  });
+
+  it('coerces a non-numeric span to 1', () => {
+    const out = normalizeLayout([{ id: 'models', span: NaN as unknown as number, hidden: false }]);
     assert.equal(out.find((p) => p.id === 'models')!.span, 1);
+  });
+
+  it('keeps spans 3 and 4', () => {
+    const out = normalizeLayout([
+      { id: 'models', span: 3, hidden: false },
+      { id: 'sankey', span: 4, hidden: false },
+    ]);
+    assert.equal(out.find((p) => p.id === 'models')!.span, 3);
+    assert.equal(out.find((p) => p.id === 'sankey')!.span, 4);
   });
 });
 
 describe('gridColumnToSpan', () => {
   it('parses "span 2" as 2', () => assert.equal(gridColumnToSpan('span 2'), 2));
   it('parses "span 1" as 1', () => assert.equal(gridColumnToSpan('span 1'), 1));
+  it('parses "span 3" as 3', () => assert.equal(gridColumnToSpan('span 3'), 3));
+  it('parses "span 4" as 4', () => assert.equal(gridColumnToSpan('span 4'), 4));
   it('returns 1 for undefined', () => assert.equal(gridColumnToSpan(undefined), 1));
   it('returns 1 for unrecognised strings', () => assert.equal(gridColumnToSpan('auto'), 1));
-  it('treats any span >= 2 as 2', () => assert.equal(gridColumnToSpan('span 4'), 2));
+  it('clamps a span above the max to 4', () => assert.equal(gridColumnToSpan('span 9'), 4));
 });
 
 describe('mergeConfigLayout', () => {

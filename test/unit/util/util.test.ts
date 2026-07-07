@@ -1,7 +1,7 @@
 import { strict as assert } from 'assert';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { mkdtemp, rm, chmod, writeFile } from 'fs/promises';
+import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { IntervalManager } from '../../../src/extension-backend/util/IntervalManager';
 import { JsonFileStore } from '../../../src/extension-backend/util/JsonFileStore';
 import { opt } from '../../../src/extension-backend/util/lang';
@@ -32,12 +32,14 @@ describe('util/JsonFileStore', () => {
   it('write() failure is swallowed and logged (best-effort persist)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'mallard-jsonstore-'));
     try {
-      // Make the dir read-only so writeFileSync fails; the catch must swallow it.
-      await chmod(dir, 0o555);
-      const store = new JsonFileStore<{ a: number }>(dir, 'state.json');
-      store.write({ a: 1 }); // writeFileSync EACCES → swallowed, no throw
-      // Restore so cleanup can rm it.
-      await chmod(dir, 0o755);
+      // Route the write through a filename whose parent segment is a *file*, so
+      // writeFileSync fails with ENOTDIR — deterministic for any user (a chmod
+      // read-only dir is bypassed when the test runs as root, e.g. in some CI
+      // images). The constructor still mkdir's the real `dir`; only the write
+      // fails, and the catch must swallow it without throwing.
+      await writeFile(join(dir, 'blocker'), 'x');
+      const store = new JsonFileStore<{ a: number }>(dir, 'blocker/state.json');
+      store.write({ a: 1 }); // writeFileSync ENOTDIR → swallowed, no throw
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

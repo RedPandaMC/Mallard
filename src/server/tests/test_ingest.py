@@ -194,11 +194,11 @@ class TestIngestAuthentication:
         assert response.status_code == 401
 
     def test_cert_cn_header_bypasses_api_key(self, client: TestClient, valid_payload: dict) -> None:
-        """mTLS: ingress forwards SSL_CLIENT_S_DN_CN — no API key needed."""
+        """mTLS: ingress forwards a *verified* SSL_CLIENT_S_DN_CN — no API key needed."""
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
-            headers={"SSL_CLIENT_S_DN_CN": "team-alpha"},
+            headers={"SSL_CLIENT_S_DN_CN": "team-alpha", "SSL_CLIENT_VERIFY": "SUCCESS"},
         )
         assert response.status_code == 202
 
@@ -209,7 +209,40 @@ class TestIngestAuthentication:
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
-            headers={"SSL_CLIENT_S_DN_CN": "team-alpha", "X-API-Key": "wrong-key"},
+            headers={
+                "SSL_CLIENT_S_DN_CN": "team-alpha",
+                "SSL_CLIENT_VERIFY": "SUCCESS",
+                "X-API-Key": "wrong-key",
+            },
+        )
+        assert response.status_code == 202
+
+    def test_unverified_cert_cn_does_not_authenticate(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """SECURITY: a CN forwarded without SSL_CLIENT_VERIFY=SUCCESS (self-signed
+        cert under verify-client 'optional') must NOT authenticate — no fallback
+        API key means 401, not a bypass into the CN's identity."""
+        for verify in ("", "NONE", "FAILED:self signed certificate"):
+            response = client.post(
+                "/api/v1/ingest",
+                json=valid_payload,
+                headers={"SSL_CLIENT_S_DN_CN": "attacker-chosen-cn", "SSL_CLIENT_VERIFY": verify},
+            )
+            assert response.status_code == 401, verify
+
+    def test_unverified_cert_cn_falls_back_to_api_key(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """An unverified cert is ignored, but a valid API key still grants access."""
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={
+                "SSL_CLIENT_S_DN_CN": "attacker-chosen-cn",
+                "SSL_CLIENT_VERIFY": "FAILED",
+                "X-API-Key": "test-key-valid",
+            },
         )
         assert response.status_code == 202
 
@@ -269,6 +302,24 @@ class TestIngestAuthentication:
             headers={"SSL_CLIENT_S_DN_CN": long_cn, "X-API-Key": "test-key-valid"},
         )
         assert response.status_code == 202
+
+
+class TestMalformedActiveModels:
+    def test_non_string_active_models_does_not_500_or_503(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """A v3 payload whose active_models holds non-strings falls back to the
+        tolerant path; the bad elements are filtered so the write succeeds
+        instead of crashing ",".join() into a misleading 503."""
+        payload = {**valid_payload, "active_models": [1, 2]}
+        with patch("server.routers.ingest.write_payload") as write_mock:
+            response = client.post(
+                "/api/v1/ingest",
+                json=payload,
+                headers={"X-API-Key": "test-key-valid"},
+            )
+        assert response.status_code == 202
+        assert write_mock.call_count == 1
 
 
 class TestIngestValidation:
@@ -472,7 +523,7 @@ class TestCertLabelMapping:
             response = client.post(
                 "/api/v1/ingest",
                 json=valid_payload,
-                headers={"SSL_CLIENT_S_DN_CN": "machine-01"},
+                headers={"SSL_CLIENT_S_DN_CN": "machine-01", "SSL_CLIENT_VERIFY": "SUCCESS"},
             )
         assert response.status_code == 202
         assert write_mock.call_args.kwargs["source"] == "team-cert"
@@ -482,7 +533,7 @@ class TestCertLabelMapping:
             response = client.post(
                 "/api/v1/ingest",
                 json=valid_payload,
-                headers={"SSL_CLIENT_S_DN_CN": "unmapped-cn"},
+                headers={"SSL_CLIENT_S_DN_CN": "unmapped-cn", "SSL_CLIENT_VERIFY": "SUCCESS"},
             )
         assert response.status_code == 202
         assert write_mock.call_args.kwargs["source"] == "unmapped-cn"
@@ -524,7 +575,7 @@ class TestVerifierOutage:
             response = client.post(
                 "/api/v1/ingest",
                 json=valid_payload,
-                headers={"SSL_CLIENT_S_DN_CN": "machine-01"},
+                headers={"SSL_CLIENT_S_DN_CN": "machine-01", "SSL_CLIENT_VERIFY": "SUCCESS"},
             )
         finally:
             client.app.state.verifier = original
@@ -535,10 +586,10 @@ class TestPerCredentialRateLimit:
     def test_label_exceeding_limit_gets_429_with_retry_after(
         self, client: TestClient, valid_payload: dict
     ) -> None:
-        from server.rate_limit import SlidingWindowLimiter
+        from server.rate_limit import InProcessRateLimiter, SlidingWindowLimiter
 
         original = client.app.state.label_limiter
-        client.app.state.label_limiter = SlidingWindowLimiter(2, 60)
+        client.app.state.label_limiter = InProcessRateLimiter(SlidingWindowLimiter(2, 60))
         try:
             for _ in range(2):
                 ok = client.post(
@@ -561,10 +612,10 @@ class TestPerCredentialRateLimit:
         self, client: TestClient, valid_payload: dict
     ) -> None:
         """Exhausting one credential's budget must not block another's."""
-        from server.rate_limit import SlidingWindowLimiter
+        from server.rate_limit import InProcessRateLimiter, SlidingWindowLimiter
 
         original = client.app.state.label_limiter
-        client.app.state.label_limiter = SlidingWindowLimiter(1, 60)
+        client.app.state.label_limiter = InProcessRateLimiter(SlidingWindowLimiter(1, 60))
         try:
             first = client.post(
                 "/api/v1/ingest",
@@ -667,7 +718,7 @@ class TestExtractCertCn:
             response = client.post(
                 "/api/v1/ingest",
                 json=valid_payload,
-                headers={"SSL_CLIENT_S_DN_CN": "CN=machine-01,O=acme"},
+                headers={"SSL_CLIENT_S_DN_CN": "CN=machine-01,O=acme", "SSL_CLIENT_VERIFY": "SUCCESS"},
             )
         assert response.status_code == 202
         assert write_mock.call_args.kwargs["source"] == "team-cert"

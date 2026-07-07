@@ -177,6 +177,18 @@ class TestNormalizeUnknown:
         assert m.active_models == []
         assert m.extra["active_models"] == "not-a-list"
 
+    def test_active_models_non_string_elements_are_filtered(self) -> None:
+        # Non-string elements would crash ",".join() downstream; they must be
+        # dropped (and the original preserved in extra), never passed through.
+        m = normalize_unknown({"schema_version": 9, "active_models": ["gpt-4o", 1, None]})
+        assert m.active_models == ["gpt-4o"]
+        assert m.extra["active_models"] == ["gpt-4o", 1, None]
+
+    def test_active_models_all_strings_not_stashed(self) -> None:
+        m = normalize_unknown({"schema_version": 9, "active_models": ["a", "b"]})
+        assert m.active_models == ["a", "b"]
+        assert "active_models" not in m.extra
+
     def test_counter_maps_coerced_best_effort(self) -> None:
         m = normalize_unknown(
             {"schema_version": 9, "model_credits": {"a": 1, "b": "x"}, "surface_credits": "junk"}

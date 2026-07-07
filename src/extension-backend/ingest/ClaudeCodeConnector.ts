@@ -109,11 +109,25 @@ export class ClaudeCodeConnector extends BaseFileConnector {
 
     const sessionId  = typeof row['sessionId'] === 'string' ? row['sessionId'] : undefined;
     const sessionKey = sessionId ? sessionId.slice(-8) : 'cc';
-    const resolvedRepo = sessionId ? this.folderMatcher.resolve(sessionId) : undefined;
+    // Claude Code records the session's working directory per line; match that
+    // against the open workspace folders for per-repo attribution in multi-root
+    // workspaces. (sessionId is a random UUID and can't identify the folder.)
+    const cwd = typeof row['cwd'] === 'string' ? row['cwd'] : undefined;
+    const resolvedRepo = cwd ? this.folderMatcher.resolve(cwd) : undefined;
     const repo = resolvedRepo ?? ctx.repo;
 
+    // Claude Code writes a stable per-line `uuid` (fallback `requestId`). Using it
+    // disambiguates two assistant turns that share the same session/model/ms —
+    // without it those collide on the composite id and INSERT OR IGNORE silently
+    // drops the second, undercounting. The uuid is stable in the file, so
+    // re-ingesting the same line still dedups to one row.
+    const uniq =
+      (typeof row['uuid'] === 'string' && row['uuid']) ||
+      (typeof row['requestId'] === 'string' && row['requestId']) ||
+      '';
+
     return {
-      id:      `claude-code:${sessionKey}:${ts}:${model}`,
+      id:      `claude-code:${sessionKey}:${ts}:${model}${uniq ? `:${uniq}` : ''}`,
       ts,
       modelId: model,
       surface,

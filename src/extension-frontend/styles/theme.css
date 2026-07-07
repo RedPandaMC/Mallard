@@ -161,9 +161,12 @@ body.vscode-high-contrast-light {
 }
 
 /* Manual light/dark override — applied by the theme toggle button.
-   These override VS Code's body class so the dashboard can be pinned to
-   one scheme independent of the editor theme. */
-body[data-force-scheme='light'] {
+   Declared on :root (the html element) rather than body so the overridden
+   custom properties are visible on document.documentElement's computed style —
+   which is what theme.ts reads to build the ECharts theme. On body they would
+   only cascade DOWN to body's descendants, leaving the charts on the live
+   editor theme after a manual toggle. */
+:root[data-force-scheme='light'] {
   --w-bg: #ffffff;
   --w-bg-card: #f5f5f5;
   --w-fg: #1a1a1a;
@@ -186,7 +189,7 @@ body[data-force-scheme='light'] {
   --w-series-6: #bfb573;
 }
 
-body[data-force-scheme='dark'] {
+:root[data-force-scheme='dark'] {
   --w-bg: #1e1e1e;
   --w-bg-card: #252526;
   --w-fg: #d4d4d4;

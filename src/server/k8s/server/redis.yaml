@@ -1,0 +1,84 @@
+# Redis backing the shared per-credential rate limiter. A single replica is
+# sufficient: the limiter keys carry short TTLs, so a Redis restart only resets
+# in-flight rate windows (fail-open for a few seconds), never persisted data.
+# For a hardened setup, swap this for a managed Redis and point REDIS_URL at it.
+#
+# trivy:ignore:AVD-KSV-0040 -- the mallard namespace already declares a
+# ResourceQuota (k8s/resourcequota.yaml); Trivy can't see it when scanning this
+# file in isolation, so KSV-0040 is a false positive here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mallard-redis
+  namespace: mallard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mallard-redis
+  template:
+    metadata:
+      labels:
+        app: mallard-redis
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        # UID/GID > 10000 to avoid collision with host-defined users (KSV-0020/
+        # KSV-0021). redis has no persistence here (save "", appendonly no) and a
+        # read-only root fs, so it runs fine as any non-root uid.
+        runAsUser: 10001
+        runAsGroup: 10001
+      containers:
+        - name: redis
+          image: redis:7.4-alpine
+          imagePullPolicy: IfNotPresent
+          args:
+            # No persistence needed for ephemeral rate-limit windows.
+            - "--save"
+            - ""
+            - "--appendonly"
+            - "no"
+            - "--maxmemory"
+            - "128mb"
+            - "--maxmemory-policy"
+            - "allkeys-lru"
+          ports:
+            - containerPort: 6379
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "250m"
+              memory: "160Mi"
+---
+# trivy:ignore:AVD-KSV-0040 -- namespace ResourceQuota exists (see above).
+apiVersion: v1
+kind: Service
+metadata:
+  name: mallard-redis
+  namespace: mallard
+spec:
+  selector:
+    app: mallard-redis
+  ports:
+    - port: 6379
+      targetPort: 6379

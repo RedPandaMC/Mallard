@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -61,7 +61,8 @@ class TestMqttLifespan:
 
         mock_influx = MagicMock()
         mock_influx.write_api.return_value = MagicMock()
-        mock_influx.ping.return_value = True
+        mock_influx.ping = AsyncMock(return_value=True)
+        mock_influx.close = AsyncMock()
 
         async def _noop_mqtt(settings, write_api, verifier) -> None:
             try:

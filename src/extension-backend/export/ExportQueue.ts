@@ -31,8 +31,12 @@ export class ExportQueue {
   private entries: QueuedExport[];
   private readonly store: JsonFileStore<QueuedExport[]>;
 
-  constructor(storageDir: string) {
-    this.store = new JsonFileStore<QueuedExport[]>(storageDir, QUEUE_FILE);
+  /**
+   * @param queueFile persisted file name. Each fanout target gets its own queue
+   *   file so a partial outage only re-delivers to the target that failed.
+   */
+  constructor(storageDir: string, queueFile: string = QUEUE_FILE) {
+    this.store = new JsonFileStore<QueuedExport[]>(storageDir, queueFile);
     this.entries = this.readFromDisk();
   }
 

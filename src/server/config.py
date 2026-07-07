@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if TYPE_CHECKING:
+    from .credential_verifier import JwtConfig
 
 
 class Settings(BaseSettings):
@@ -29,6 +32,13 @@ class Settings(BaseSettings):
 
     # Rate limiting
     rate_limit: str = Field("60/minute", description="Per-key rate limit (slowapi format)")
+    # When set, the post-auth per-credential limiter is backed by Redis so the
+    # limit holds across all replicas (the in-process limiter multiplies the
+    # effective limit by the replica count and resets on restart). Empty falls
+    # back to the in-process limiter (single-node / local dev only).
+    redis_url: str = Field(
+        "", description="Redis URL for the shared per-credential rate limiter (e.g. redis://redis:6379/0)"
+    )
 
     # Logging
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
@@ -38,6 +48,10 @@ class Settings(BaseSettings):
     # MQTT (optional — embedded broker started when mqtt_enabled = true)
     mqtt_enabled: bool = Field(False, description="Start the embedded MQTT broker on mqtt_port")
     mqtt_port: int = Field(8083, description="WebSocket MQTT port (internal; proxied by Caddy/Ingress)")
+    mqtt_topic_prefix: str = Field(
+        "mallard/",
+        description="Only MQTT messages on topics under this prefix are ingested (topic scoping)",
+    )
     mqtt_password: str = Field(
         "",
         description=(
@@ -67,6 +81,19 @@ class Settings(BaseSettings):
             "production deployments store WEBHOOK_HMAC_SECRETS in the secret manager."
         ),
     )
+
+    # JWT bearer auth (optional). Verification material is normally stored in the
+    # secret manager; these env vars support StaticCredentialVerifier / tests.
+    # Symmetric (HS*) via jwt_hmac_secret, or asymmetric (RS*/ES*/PS*) via a PEM
+    # jwt_public_key or a jwt_jwks_url.
+    jwt_hmac_secret: str = Field("", description="HS* shared secret, static-mode only")
+    jwt_public_key: str = Field("", description="PEM public key for RS*/ES*/PS*, static-mode only")
+    jwt_jwks_url: str = Field("", description="JWKS endpoint for asymmetric keys, static-mode only")
+    jwt_algorithms: str = Field("", description="Comma-separated allowed algs (default HS256 or RS256/ES256)")
+    jwt_issuer: str = Field("", description="Required 'iss' claim (empty = not enforced)")
+    jwt_audience: str = Field("", description="Required 'aud' claim (empty = not enforced)")
+    jwt_label_claim: str = Field("sub", description="Claim used to derive the source label")
+    jwt_labels: str = Field("", description="Comma-separated 'label:claimValue' pairs")
 
     # Secret manager (required — every deployment must pick one; there is no
     # supported static/env-var-only production path)
@@ -133,6 +160,24 @@ class Settings(BaseSettings):
         from .credential_verifier import CredentialStore
 
         return CredentialStore.parse_secret_list(self.webhook_hmac_secrets)
+
+    @cached_property
+    def parsed_jwt(self) -> "JwtConfig":
+        """JWT verification config (computed once), static-mode only."""
+        from .credential_verifier import _jwt_config_from
+
+        return _jwt_config_from(
+            {
+                "jwt_hmac_secret": self.jwt_hmac_secret,
+                "jwt_public_key": self.jwt_public_key,
+                "jwt_jwks_url": self.jwt_jwks_url,
+                "jwt_algorithms": self.jwt_algorithms,
+                "jwt_issuer": self.jwt_issuer,
+                "jwt_audience": self.jwt_audience,
+                "jwt_label_claim": self.jwt_label_claim,
+                "jwt_labels": self.jwt_labels,
+            }
+        )
 
     @property
     def secret_manager_base_url(self) -> str:

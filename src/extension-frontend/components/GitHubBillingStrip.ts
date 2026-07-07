@@ -74,13 +74,16 @@ export function mountGitHubBillingStrip(el: HTMLElement): GitHubBillingStripHand
         row.appendChild(badge);
         row.appendChild(amount);
 
-        // Quota reset date
+        // Quota reset date — guard against an unparsable string so we never
+        // render the literal "Resets Invalid Date"; hide the field instead.
         if (quota?.resetDate) {
-          const reset = document.createElement('span');
-          reset.className = 'wv-gh-reset';
           const d = new Date(quota.resetDate);
-          reset.textContent = `Resets ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
-          row.appendChild(reset);
+          if (!Number.isNaN(d.getTime())) {
+            const reset = document.createElement('span');
+            reset.className = 'wv-gh-reset';
+            reset.textContent = `Resets ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+            row.appendChild(reset);
+          }
         }
 
         el.appendChild(row);

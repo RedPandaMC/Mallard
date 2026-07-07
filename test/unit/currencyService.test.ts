@@ -180,14 +180,19 @@ describe('CurrencyService', () => {
     }
   });
 
-  it('cold load (no cache) awaits the fetch so rates are ready immediately', async () => {
+  it('cold load (no cache) does not block on the fetch; rates arrive in the background', async () => {
     const dir = await tmpDir();
     const restore = stubHttps(() => ({ statusCode: 200, body: JSON.stringify({ rates: { EUR: 0.8 } }) }));
     try {
       const svc = new CurrencyService(dir);
+      let updated = false;
+      svc.onRatesUpdated = () => { updated = true; };
       await svc.load();
-      // No post-load setTimeout: the cold path awaits tryRefresh().
+      // load() returns immediately on USD-only; the refresh lands asynchronously.
+      assert.equal(svc.currentRates()['EUR'], undefined);
+      await new Promise((r) => setTimeout(r, 100));
       assert.equal(svc.currentRates()['EUR'], 0.8);
+      assert.equal(updated, true, 'onRatesUpdated fires when the background refresh changes rates');
       svc.dispose();
     } finally {
       restore();
@@ -205,6 +210,7 @@ describe('CurrencyService', () => {
     try {
       const svc = new CurrencyService(dir);
       await svc.load();
+      await new Promise((r) => setTimeout(r, 100)); // background refresh
       assert.equal(svc.currentRates()['GBP'], 0.79);
       svc.dispose();
     } finally {
@@ -221,6 +227,7 @@ describe('CurrencyService', () => {
     try {
       const svc = new CurrencyService(dir, logger as never);
       await svc.load();
+      await new Promise((r) => setTimeout(r, 100)); // background refresh
       assert.deepEqual(svc.currentRates(), { USD: 1 });
       assert.ok(debugs.some((m) => /redirect/i.test(m)), 'logs the redirect failure');
       svc.dispose();

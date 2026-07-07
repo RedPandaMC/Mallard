@@ -9,7 +9,7 @@
  * Only one mode is active at a time. Every change is sent back to the host
  * via onChange so it is stored permanently.
  */
-import { DashboardLayout, PanelSize } from '../extension-backend/domain/types';
+import { DashboardLayout, MAX_PANEL_SPAN, PanelSize } from '../extension-backend/domain/types';
 
 export type LayoutMode = 'none' | 'resize' | 'move';
 
@@ -46,6 +46,15 @@ function cssPx(name: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/** Current dashboard column count (from --wv-cols), clamped to [1, MAX_PANEL_SPAN]. */
+function columnCount(): number {
+  return Math.min(MAX_PANEL_SPAN, Math.max(1, Math.round(cssPx('--wv-cols', 2))));
+}
+
+function clampSpan(span: number, cols: number): number {
+  return Math.min(cols, Math.max(1, span));
+}
+
 export function mountLayout(
   grid: HTMLElement,
   panels: Record<string, HTMLElement>,
@@ -72,11 +81,13 @@ export function mountLayout(
     el.classList.toggle('wv-hidden-panel', p.hidden);
   }
 
-  function setWidth(id: string, span: 1 | 2): void {
+  function setWidth(id: string, span: number): void {
     const p = byId(id);
     const el = panels[id];
-    if (!p || !el || p.span === span) return;
-    p.span = span;
+    if (!p || !el) return;
+    const clamped = clampSpan(span, columnCount());
+    if (p.span === clamped) return;
+    p.span = clamped;
     applyOne(id);
     flash(el);
     emit();
@@ -95,7 +106,8 @@ export function mountLayout(
   function cycleWidth(id: string): void {
     const p = byId(id);
     if (!p) return;
-    setWidth(id, p.span === 2 ? 1 : 2);
+    // Cycle 1 → 2 → … → columns → 1.
+    setWidth(id, p.span >= columnCount() ? 1 : p.span + 1);
   }
 
   function cycleSize(id: string, dir: 1 | -1): void {
@@ -141,7 +153,8 @@ export function mountLayout(
       const startRect = el.getBoundingClientRect();
       const startX = e.clientX;
       const startY = e.clientY;
-      const oneColWidth = startRect.width / (byId(id)?.span === 2 ? 2 : 1);
+      const startSpan = byId(id)?.span ?? 1;
+      const oneColWidth = startRect.width / startSpan;
       const compactPx = cssPx('--wv-h-compact', 120);
       const normalPx = cssPx('--w-chart-main', 260);
       const tallPx = cssPx('--wv-h-tall', 455);
@@ -149,7 +162,8 @@ export function mountLayout(
       const onMove = (ev: PointerEvent) => {
         if (axis === 'x' || axis === 'both') {
           const desiredWidth = startRect.width + (ev.clientX - startX);
-          setWidth(id, desiredWidth > oneColWidth * 1.5 ? 2 : 1);
+          // Snap to the nearest whole column count, clamped to the grid width.
+          setWidth(id, Math.round(desiredWidth / oneColWidth));
         }
         if (axis === 'y' || axis === 'both') {
           const desiredHeight = startRect.height + (ev.clientY - startY);
@@ -177,7 +191,9 @@ export function mountLayout(
       if (mode !== 'resize') return;
       if ((axis === 'x' || axis === 'both') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
         e.preventDefault();
-        setWidth(id, e.key === 'ArrowRight' ? 2 : 1);
+        // Step width by one column, within [1, columns].
+        const p = byId(id);
+        if (p) setWidth(id, p.span + (e.key === 'ArrowRight' ? 1 : -1));
       } else if ((axis === 'y' || axis === 'both') && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         e.preventDefault();
         cycleSize(id, e.key === 'ArrowDown' ? 1 : -1);
