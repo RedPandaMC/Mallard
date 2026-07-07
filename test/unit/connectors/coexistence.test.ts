@@ -15,7 +15,7 @@ import type { ParseContext } from '../../../src/extension-backend/ingest/otelPar
 import type { PricingService } from '../../../src/extension-backend/pricing/PricingService';
 import type { IMetaStore as MetaStore } from '../../../src/extension-backend/store/MetaStore';
 import type { DuckDBFileReader } from '../../../src/extension-backend/store/DuckDBFileReader';
-import { buildSnapshot, SnapshotOptions } from '../../../src/extension-backend/domain/snapshot';
+import { buildSnapshot, SnapshotOptions } from '../snapshotFixture';
 
 const now = new Date('2026-01-15T10:00:00.000Z').getTime();
 const noopMatcher: IWorkspaceFolderMatcher = { resolve: () => undefined };

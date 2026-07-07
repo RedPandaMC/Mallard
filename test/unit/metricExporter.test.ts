@@ -20,7 +20,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { MetricPayloadSerializer } from '../../src/extension-backend/export/payload';
-import { buildSnapshot } from '../../src/extension-backend/domain/snapshot';
+import { buildSnapshot } from './snapshotFixture';
 import { makeEvent } from './helpers';
 import { ExportQueue } from '../../src/extension-backend/export/ExportQueue';
 import type { MetricProtocol, MetricSerializer, SendResult } from '../../src/extension-backend/export/MetricExporter';

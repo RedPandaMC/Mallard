@@ -7,7 +7,6 @@ import {
   Bucket,
   Filter,
   Granularity,
-  GRANULARITIES,
   SankeyLink,
   SourceKind,
   Surface,
@@ -76,53 +75,6 @@ export function aggregateBy(
     addTo(agg.byModel, entry.modelId, entry, tokenCount);
   }
   return [...map.values()].sort((a, b) => a.start - b.start);
-}
-
-export function aggregateAll(
-  events: readonly UsageEvent[],
-  filter?: Filter,
-): Record<Granularity, UsageAggregate[]> {
-  // Single pass: fill all three granularity maps at once so matchesFilter and
-  // tokensOf are called once per event instead of once per granularity.
-  const maps = GRANULARITIES.map(() => new Map<string, UsageAggregate>());
-
-  for (const entry of events) {
-    if (!matchesFilter(entry, filter)) continue;
-    const tokenCount = tokensOf(entry);
-    for (let gi = 0; gi < GRANULARITIES.length; gi++) {
-      const granularity = GRANULARITIES[gi]!;
-      const map = maps[gi]!;
-      const key = bucketKey(entry.ts, granularity);
-      let agg = map.get(key);
-      if (!agg) {
-        agg = {
-          granularity,
-          bucketKey: key,
-          start: startOf(entry.ts, granularity),
-          end: nextBucketStart(entry.ts, granularity),
-          credits: 0,
-          cost: 0,
-          tokens: 0,
-          byModel: {},
-          eventCount: 0,
-          estimated: false,
-        };
-        map.set(key, agg);
-      }
-      agg.credits += entry.credits;
-      agg.cost += entry.cost;
-      agg.tokens += tokenCount;
-      agg.eventCount += 1;
-      agg.estimated = agg.estimated || entry.estimated;
-      addTo(agg.byModel, entry.modelId, entry, tokenCount);
-    }
-  }
-
-  const out = {} as Record<Granularity, UsageAggregate[]>;
-  for (let gi = 0; gi < GRANULARITIES.length; gi++) {
-    out[GRANULARITIES[gi]!] = [...maps[gi]!.values()].sort((a, b) => a.start - b.start);
-  }
-  return out;
 }
 
 export function topBy(

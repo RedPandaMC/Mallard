@@ -5,7 +5,7 @@
 import * as assert from 'assert';
 import { makeEvent, makeStubVscodeHost } from './helpers';
 import { DEFAULT_USER_CONFIG } from '../../src/extension-backend/domain/types';
-import { buildSnapshot } from '../../src/extension-backend/domain/snapshot';
+import { buildSnapshot } from './snapshotFixture';
 
 function makeOpts(now: number) {
   return {

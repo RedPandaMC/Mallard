@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
 import { buildMetricPayload } from '../../src/extension-backend/export/payload';
-import { buildSnapshot, SnapshotOptions } from '../../src/extension-backend/domain/snapshot';
+import { buildSnapshot, SnapshotOptions } from './snapshotFixture';
 import { UsageSnapshot } from '../../src/extension-backend/domain/types';
 import { makeEvent } from './helpers';
 
