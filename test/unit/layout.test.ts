@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { gridColumnToSpan, mergeConfigLayout, normalizeLayout } from '../../src/extension-backend/domain/layout';
+import { configPanelsToLayout, gridColumnToSpan, layoutToConfigPanels, normalizeLayout } from '../../src/extension-backend/domain/layout';
 import { DASHBOARD_PANELS, DEFAULT_DASHBOARD_LAYOUT } from '../../src/extension-backend/domain/types';
 
 describe('normalizeLayout', () => {
@@ -67,63 +67,49 @@ describe('gridColumnToSpan', () => {
   it('clamps a span above the max to 4', () => assert.equal(gridColumnToSpan('span 9'), 4));
 });
 
-describe('mergeConfigLayout', () => {
-  const stored = DEFAULT_DASHBOARD_LAYOUT;
-
-  it('returns normalizeLayout when config has no panels', () => {
-    assert.deepEqual(mergeConfigLayout(undefined, stored), normalizeLayout(stored));
-    assert.deepEqual(mergeConfigLayout({}, stored), normalizeLayout(stored));
-    assert.deepEqual(mergeConfigLayout({ panels: [] }, stored), normalizeLayout(stored));
+describe('configPanelsToLayout / layoutToConfigPanels', () => {
+  it('returns the defaults for an empty or missing panels block', () => {
+    assert.deepEqual(configPanelsToLayout(undefined), DEFAULT_DASHBOARD_LAYOUT);
+    assert.deepEqual(configPanelsToLayout([]), DEFAULT_DASHBOARD_LAYOUT);
   });
 
-  it('config panel order takes precedence over stored order', () => {
-    const cfg = {
-      panels: [
-        { id: 'models', gridColumn: 'span 2' },
-        { id: 'daily', gridColumn: 'span 2' },
-      ],
-    };
-    const out = mergeConfigLayout(cfg, stored);
+  it('parses gridColumn spans and preserves order, hidden, and size', () => {
+    const out = configPanelsToLayout([
+      { id: 'models', gridColumn: 'span 2', hidden: true, size: 'tall' },
+      { id: 'daily', gridColumn: 'span 3' },
+    ]);
     assert.equal(out[0]!.id, 'models');
     assert.equal(out[0]!.span, 2);
+    assert.equal(out[0]!.hidden, true);
+    assert.equal(out[0]!.size, 'tall');
     assert.equal(out[1]!.id, 'daily');
+    assert.equal(out[1]!.span, 3);
   });
 
-  it('config hidden takes precedence over stored hidden', () => {
-    const cfg = { panels: [{ id: 'sankey', hidden: true }] };
-    const out = mergeConfigLayout(cfg, stored);
-    assert.equal(out.find((p) => p.id === 'sankey')!.hidden, true);
-  });
-
-  it('panels not in config keep their stored values and are appended after config panels', () => {
-    const cfg = { panels: [{ id: 'daily', gridColumn: 'span 2' }] };
-    const out = mergeConfigLayout(cfg, stored);
-    // all panels still present
+  it('drops unknown ids and duplicates, appending missing panels', () => {
+    const out = configPanelsToLayout([
+      { id: 'bogus' },
+      { id: 'daily', gridColumn: 'span 2' },
+      { id: 'daily', gridColumn: 'span 1' },
+    ]);
     assert.deepEqual([...out.map((p) => p.id)].sort(), [...DASHBOARD_PANELS].sort());
-    // daily is first (config order)
-    assert.equal(out[0]!.id, 'daily');
+    assert.equal(out.find((p) => p.id === 'daily')!.span, 2);
   });
 
-  it('drops unknown panel ids from config', () => {
-    const cfg = { panels: [{ id: 'bogus' }, { id: 'daily' }] };
-    const out = mergeConfigLayout(cfg, stored);
-    assert.equal(out.find((p) => p.id === 'bogus'), undefined);
-    assert.equal(out[0]!.id, 'daily');
+  it('round-trips a layout through the config.json shape', () => {
+    const layout = normalizeLayout([
+      { id: 'sankey', span: 4, hidden: true, size: 'compact' },
+      { id: 'daily', span: 2, hidden: false, size: 'normal' },
+    ]);
+    assert.deepEqual(configPanelsToLayout(layoutToConfigPanels(layout)), layout);
   });
 
-  it('deduplicates repeated panel ids in config', () => {
-    const cfg = { panels: [{ id: 'daily', gridColumn: 'span 1' }, { id: 'daily', gridColumn: 'span 2' }] };
-    const out = mergeConfigLayout(cfg, stored);
-    assert.equal(out.filter((p) => p.id === 'daily').length, 1);
-    assert.equal(out.find((p) => p.id === 'daily')!.span, 1); // first occurrence wins
-  });
-
-  it('falls back to defaultById when stored is empty', () => {
-    const cfg = { panels: [{ id: 'daily' }] };
-    const out = mergeConfigLayout(cfg, []); // empty stored
-    const daily = out.find((p) => p.id === 'daily');
-    assert.ok(daily !== undefined);
-    // span falls back to DEFAULT_DASHBOARD_LAYOUT default
-    assert.ok(daily!.span === 1 || daily!.span === 2);
+  it('omits default hidden/size values when serializing', () => {
+    const panels = layoutToConfigPanels(DEFAULT_DASHBOARD_LAYOUT);
+    for (const p of panels) {
+      assert.equal('hidden' in p, false);
+      assert.equal('size' in p, false);
+      assert.match(p.gridColumn!, /^span [1-4]$/);
+    }
   });
 });

@@ -19,7 +19,6 @@ describe('readConfig', () => {
   it('returns documented defaults when nothing is configured', () => {
     withSettings({});
     const cfg = readConfig();
-    assert.equal(cfg.currency, 'USD');
     assert.equal(cfg.copilotLogPath, '');
     assert.equal(cfg.palette, 'swiss');
     assert.equal(cfg.refreshIntervalMinutes, 10);
@@ -28,13 +27,6 @@ describe('readConfig', () => {
     assert.equal(cfg.webhook.auth, 'apiKey');
     assert.equal(cfg.mqtt.auth, 'password');
     assert.deepEqual(cfg.shared.certificate, { file: '', keyFile: '', caFile: '' });
-  });
-
-  it('normalises the currency (trim + uppercase, empty falls back to USD)', () => {
-    withSettings({ currency: '  eur ' });
-    assert.equal(readConfig().currency, 'EUR');
-    withSettings({ currency: '   ' });
-    assert.equal(readConfig().currency, 'USD');
   });
 
   it('clamps refreshIntervalMinutes to [1, 60] and dataRetentionDays to [30, 365]', () => {
@@ -83,7 +75,7 @@ describe('readConfig', () => {
   it('RELEVANT_CONFIG_KEYS lists every setting readConfig consumes', () => {
     // Guard against drift: each key read above must be watched for changes.
     for (const key of [
-      'mallard.currency', 'mallard.copilotLogPath', 'mallard.refreshIntervalMinutes',
+      'mallard.copilotLogPath', 'mallard.refreshIntervalMinutes',
       'mallard.dataRetentionDays', 'mallard.server.url', 'mallard.export.transport',
       'mallard.webhook.auth', 'mallard.mqtt.url', 'mallard.mqtt.auth', 'mallard.mqtt.username',
       'mallard.shared.certificate.file', 'mallard.shared.certificate.keyFile',

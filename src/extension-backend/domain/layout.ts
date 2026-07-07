@@ -4,7 +4,6 @@
  * shared and unit-tested.
  */
 import {
-  ConfigDashboard,
   ConfigPanelLayout,
   DASHBOARD_PANELS,
   DashboardLayout,
@@ -60,47 +59,29 @@ export function gridColumnToSpan(gridColumn: string | undefined): number {
 }
 
 /**
- * Merge a config-file `dashboard` block into a globalState layout.
- *
- * Priority: config-declared panels (order + sizing + hidden) take precedence.
- * Panels not mentioned in config fall back to the globalState layout, then to
- * DEFAULT_DASHBOARD_LAYOUT. Unknown panel ids in config are silently dropped.
+ * Convert the config.json `dashboard.panels` block into a DashboardLayout.
+ * Unknown ids and duplicates are dropped and missing panels appended by
+ * {@link normalizeLayout}, so a hand-edited file can never break the grid.
  */
-/* c8 ignore next */
-export function mergeConfigLayout(
-  config: ConfigDashboard | undefined,
-  stored: DashboardLayout,
-): DashboardLayout {
-  if (!config?.panels?.length) return normalizeLayout(stored);
+export function configPanelsToLayout(panels: ConfigPanelLayout[] | undefined): DashboardLayout {
+  const raw: DashboardPanelLayout[] = (panels ?? []).map((p) => ({
+    id: p.id,
+    span: p.gridColumn !== undefined ? gridColumnToSpan(p.gridColumn) : 1,
+    hidden: Boolean(p.hidden),
+    size: validSize(p.size) ?? 'normal',
+  }));
+  return normalizeLayout(raw);
+}
 
-  const known = new Set<string>(DASHBOARD_PANELS);
-  const seen = new Set<string>();
-  const storedById = new Map(stored.map((p) => [p.id, p]));
-  const defaultById = new Map(DEFAULT_DASHBOARD_LAYOUT.map((p) => [p.id, p]));
-  const out: DashboardPanelLayout[] = [];
-
-  const configPanels: ConfigPanelLayout[] = config.panels.filter((p) => known.has(p.id));
-
-  for (const cp of configPanels) {
-    if (seen.has(cp.id)) continue;
-    seen.add(cp.id);
-    const fallback = storedById.get(cp.id) ?? defaultById.get(cp.id);
-    out.push({
-      id: cp.id,
-      /* c8 ignore next */
-      span: cp.gridColumn !== undefined ? gridColumnToSpan(cp.gridColumn) : (fallback?.span ?? 1),
-      /* c8 ignore next */
-      hidden: cp.hidden !== undefined ? cp.hidden : (fallback?.hidden ?? false),
-      /* c8 ignore next */
-      size: validSize(cp.size) ?? fallback?.size ?? 'normal',
-    });
-  }
-
-  // Append panels not covered by config (globalState order, then defaults).
-  const remaining = normalizeLayout(stored).filter((p) => !seen.has(p.id));
-  for (const p of remaining) {
-    out.push(p);
-  }
-
-  return out;
+/**
+ * Serialize a DashboardLayout into the config.json `dashboard.panels` shape,
+ * omitting values that match the defaults so the file stays readable.
+ */
+export function layoutToConfigPanels(layout: DashboardLayout): ConfigPanelLayout[] {
+  return normalizeLayout(layout).map((p) => ({
+    id: p.id,
+    gridColumn: `span ${p.span}`,
+    ...(p.hidden ? { hidden: true } : {}),
+    ...(p.size && p.size !== 'normal' ? { size: p.size } : {}),
+  }));
 }

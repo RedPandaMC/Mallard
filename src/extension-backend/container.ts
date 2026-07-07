@@ -25,6 +25,8 @@ import { CurrencyService } from './pricing/CurrencyService';
 import { EventStore } from './store/EventStore';
 import { AuthProvider } from './export/AuthProvider';
 import { opt } from './util/lang';
+import { DashboardLayout } from './domain/types';
+import { layoutToConfigPanels, normalizeLayout } from './domain/layout';
 
 export interface Container {
   usage: UsageService;
@@ -89,7 +91,8 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const githubSession = new GitHubSession(context.secrets);
   const github = new GitHubUsageService(githubSession);
   const userConfig = new UserConfigStore(storageDir);
-  const layout = new LayoutStore(context.globalState);
+  await migrateLegacyStores(context, userConfig);
+  const layout = new LayoutStore(userConfig);
 
   // Deliver the config.json githubBilling block (mode/pat/org) and keep it
   // live on config changes — previously configure() was never called, so the
@@ -151,6 +154,44 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   );
 
   return { usage, store, userConfig, layout, pricing, restriction, ingest, setupGate };
+}
+
+/**
+ * One-time moves into config.json, the single user-config store:
+ * - the dashboard layout previously kept in globalState
+ * - the display currency previously kept in the (now removed) mallard.currency
+ *   VS Code setting
+ * Both run only when config.json doesn't already carry a value, then the
+ * legacy copy is cleared so this never runs again.
+ */
+async function migrateLegacyStores(
+  context: vscode.ExtensionContext,
+  userConfig: UserConfigStore,
+): Promise<void> {
+  const LEGACY_LAYOUT_KEY = 'mallard.dashboardLayout';
+  const legacyLayout = context.globalState.get<DashboardLayout>(LEGACY_LAYOUT_KEY);
+  if (legacyLayout) {
+    if (!userConfig.get().dashboard?.panels?.length) {
+      await userConfig.set({
+        dashboard: {
+          ...userConfig.get().dashboard,
+          panels: layoutToConfigPanels(normalizeLayout(legacyLayout)),
+        },
+      });
+    }
+    await context.globalState.update(LEGACY_LAYOUT_KEY, undefined);
+  }
+
+  if (!userConfig.get().currency) {
+    const legacyCurrency = vscode.workspace
+      .getConfiguration('mallard')
+      .get<string>('currency', '')
+      .trim()
+      .toUpperCase();
+    if (legacyCurrency && legacyCurrency !== 'USD') {
+      await userConfig.set({ currency: legacyCurrency });
+    }
+  }
 }
 
 async function loadBundledManifest(context: vscode.ExtensionContext): Promise<PricingManifest> {

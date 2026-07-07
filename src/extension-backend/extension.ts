@@ -15,6 +15,7 @@ import { SidebarView } from './ui/SidebarView';
 import { formatCredits } from './domain/format';
 import { severityFor } from './domain/budget';
 import { runOnboardingIfNeeded, showOnboarding } from './onboarding';
+import { FLAG_REMOTE_COPILOT_WARNED, getFlag, setFlag } from './app/EphemeralFlags';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   let container: import('./container').Container;
@@ -120,7 +121,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   await runOnboardingIfNeeded(context, container.setupGate);
   container.setupGate.start();
 
-  if (vscode.env.remoteName && !context.globalState.get<boolean>('mallard.remoteCopilotWarned')) {
+  if (vscode.env.remoteName && !getFlag(context.globalState, FLAG_REMOTE_COPILOT_WARNED)) {
     const d = usage.onDidChangeSnapshot(() => {
       d.dispose();
       if (ingest.getConnectorLogPaths('copilot').length === 0) {
@@ -137,7 +138,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             );
           }
           if (choice === "Don't show again") {
-            await context.globalState.update('mallard.remoteCopilotWarned', true);
+            await setFlag(context.globalState, FLAG_REMOTE_COPILOT_WARNED);
           }
         });
       }

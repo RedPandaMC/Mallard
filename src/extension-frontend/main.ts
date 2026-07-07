@@ -175,9 +175,6 @@ function mountDashboard(root: HTMLElement): void {
         <div class="wv-analysis-bar">
           <span class="wv-analysis-title">Analysis</span>
           <span class="wv-analysis-actions">
-            <button class="wv-btn wv-btn--sm" id="layout-save" hidden>
-              <i class="codicon codicon-save"></i> Save to config
-            </button>
             <button class="wv-btn wv-btn--sm" id="layout-reset" hidden>
               <i class="codicon codicon-discard"></i> Reset layout
             </button>
@@ -332,7 +329,6 @@ function mountDashboard(root: HTMLElement): void {
   const resizeBtn = document.getElementById('layout-resize')!;
   const moveBtn = document.getElementById('layout-move')!;
   const resetBtn = document.getElementById('layout-reset')!;
-  const saveBtn = document.getElementById('layout-save')!;
 
   function setMode(next: 'none' | 'resize' | 'move'): void {
     mode = mode === next ? 'none' : next;
@@ -341,27 +337,16 @@ function mountDashboard(root: HTMLElement): void {
     moveBtn.setAttribute('aria-pressed', String(mode === 'move'));
     const editing = mode !== 'none';
     resetBtn.hidden = !editing;
-    saveBtn.hidden = !editing;
     requestAnimationFrame(resizeAll);
   }
 
   resizeBtn.addEventListener('click', () => setMode('resize'));
   moveBtn.addEventListener('click', () => setMode('move'));
 
+  // Layout persists straight into config.json via setLayout, so resetting is
+  // just writing the default layout back.
   resetBtn.addEventListener('click', () => {
     post({ type: 'setLayout', value: DEFAULT_DASHBOARD_LAYOUT });
-    post({ type: 'setConfig', value: { dashboard: { panels: [] } } });
-  });
-
-  saveBtn.addEventListener('click', () => {
-    const layout = state().layout;
-    const panels = layout.map((p) => ({
-      id: p.id,
-      gridColumn: `span ${p.span}`,
-      ...(p.hidden ? { hidden: true } : {}),
-      ...(p.size && p.size !== 'normal' ? { size: p.size } : {}),
-    }));
-    post({ type: 'setConfig', value: { dashboard: { panels } } });
   });
 
   // Ctrl/Cmd+Shift+E toggles resize mode, Ctrl/Cmd+Shift+M toggles move mode.

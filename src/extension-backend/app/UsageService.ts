@@ -173,9 +173,9 @@ export class UsageService implements vscode.Disposable {
 
     const branch = activeBranch();
 
-    // Currency is authoritative in UserConfigStore; fall back to the VS Code
-    // setting (which defaults to USD) only when the dashboard hasn't set one.
-    const displayCurrency = userConfig.currency ?? readConfig().currency;
+    // Currency lives in config.json only (the old mallard.currency setting is
+    // migrated once in container.ts and no longer contributed).
+    const displayCurrency = userConfig.currency ?? 'USD';
     const fxRates = this.currency.currentRates();
     const fxRate = displayCurrency !== 'USD' ? (fxRates[displayCurrency] ?? 1) : 1;
 

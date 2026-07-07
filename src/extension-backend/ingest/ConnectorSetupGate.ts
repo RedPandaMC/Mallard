@@ -5,6 +5,7 @@
  * and adding a new prerequisite needs no new plumbing here.
  */
 import * as vscode from 'vscode';
+import { getFlag, setFlag, setupNudgeFlag } from '../app/EphemeralFlags';
 import type { LogConnector } from './LogConnector';
 import type { SetupRequirement } from './SetupRequirement';
 import { onSettingsChanged } from '../util/vscodeSettings';
@@ -35,8 +36,7 @@ export class ConnectorSetupGate implements vscode.Disposable {
   async check(): Promise<void> {
     for (const req of this.requirements) {
       if (req.isSatisfied()) continue;
-      const nudgeKey = `mallard.setupNudge.${req.id}`;
-      if (this.context.globalState.get<boolean>(nudgeKey)) continue;
+      if (getFlag(this.context.globalState, setupNudgeFlag(req.id))) continue;
 
       const choice = await vscode.window.showInformationMessage(req.detail, 'Enable', 'Not now');
       if (choice === 'Enable') {
@@ -88,7 +88,7 @@ export class ConnectorSetupGate implements vscode.Disposable {
    * would ask again the first time it runs after onboarding does.
    */
   async suppressNudge(id: string): Promise<void> {
-    await this.context.globalState.update(`mallard.setupNudge.${id}`, true);
+    await setFlag(this.context.globalState, setupNudgeFlag(id));
   }
 
   dispose(): void {
