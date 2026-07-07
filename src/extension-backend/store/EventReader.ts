@@ -99,17 +99,16 @@ type Categories = Partial<Record<CostCategory, number>>;
 // the old silent `.catch(default)` hid while corrupting the attribution.
 const _warnedEnumValues = new Set<string>();
 function coerceEnum<T extends string>(fallback: T, label: string) {
+  // Only invoked by zod's .catch when the stored value isn't a known enum member,
+  // i.e. genuine schema drift — always worth logging (once per distinct value).
   return (ctx: { input: unknown }): T => {
-    const value = ctx.input;
-    if (value !== undefined && value !== null) {
-      const key = `${label}:${String(value)}`;
-      if (!_warnedEnumValues.has(key)) {
-        _warnedEnumValues.add(key);
-        console.warn(
-          `[mallard:store] unknown ${label} value ${JSON.stringify(value)} in events; ` +
-            `coercing to '${fallback}'. The event schema may have drifted.`,
-        );
-      }
+    const key = `${label}:${String(ctx.input)}`;
+    if (!_warnedEnumValues.has(key)) {
+      _warnedEnumValues.add(key);
+      console.warn(
+        `[mallard:store] unknown ${label} value ${JSON.stringify(ctx.input)} in events; ` +
+          `coercing to '${fallback}'. The event schema may have drifted.`,
+      );
     }
     return fallback;
   };

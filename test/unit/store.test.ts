@@ -42,6 +42,41 @@ describe('EventStore', () => {
     store.dispose();
   });
 
+  it('coerces unknown source/surface enum values on read (schema drift)', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    // Insert rows with out-of-enum source/surface directly (bypassing the typed
+    // writer) to simulate a future connector writing values this reader doesn't
+    // know — two share a source so the warn-once path is exercised both ways.
+    const ins = (id: string, surface: string, source: string) =>
+      store.conn.run(
+        `INSERT INTO events (id, ts, modelId, surface, source, credits, cost, estimated) ` +
+          `VALUES ('${id}', 1000, 'gpt-4o', '${surface}', '${source}', 1, 0.04, false)`,
+      );
+    await ins('x1', 'weird-surface', 'mystery-source');
+    await ins('x2', 'chat', 'mystery-source'); // same source → warn-once "has" branch
+    const rows = await store.reader.find();
+    for (const r of rows) {
+      assert.equal(r.source, 'local', 'unknown source coerced to local');
+    }
+    assert.equal(rows.find((r) => r.id === 'x1')!.surface, 'unknown', 'unknown surface coerced');
+    store.dispose();
+  });
+
+  it('memoizes the no-filter snapshot until a write invalidates it', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    await store.writer.insert([makeEvent({ id: 'a', ts: 1000, credits: 1 })]);
+    const first = await store.reader.readSnapshotCache();
+    const cached = await store.reader.readSnapshotCache(); // cache hit — same version
+    assert.equal(first.totals.all.eventCount, 1);
+    assert.equal(cached.totals.all.eventCount, 1);
+    await store.writer.insert([makeEvent({ id: 'b', ts: 2000, credits: 1 })]); // bumps the token
+    const afterWrite = await store.reader.readSnapshotCache(); // cache miss — recompute
+    assert.equal(afterWrite.totals.all.eventCount, 2, 'invalidated after the write');
+    store.dispose();
+  });
+
   it('dedupes by id within and across appends', async () => {
     const dir = await tmpDir();
     const store = await EventStore.open(dir);

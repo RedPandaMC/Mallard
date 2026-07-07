@@ -140,6 +140,8 @@ describe('SidebarView — ready / snapshot / visibility', () => {
     const h = makeHarness({});
     h.send({ type: 'openDashboard' }); // legacy ad-hoc shape — no longer accepted
     h.send({ nonsense: true });
+    h.send({ type: 'refresh' }); // valid HostBoundMsg the sidebar doesn't handle → default branch
+    h.send({ type: 'command', id: 'signIn' }); // a command the sidebar ignores → command-else branch
     assert.deepEqual(h.posted, []);
     assert.equal(h.setFilterCalls.length, 0);
   });
