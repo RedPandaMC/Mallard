@@ -2,6 +2,10 @@
 # sufficient: the limiter keys carry short TTLs, so a Redis restart only resets
 # in-flight rate windows (fail-open for a few seconds), never persisted data.
 # For a hardened setup, swap this for a managed Redis and point REDIS_URL at it.
+#
+# trivy:ignore:AVD-KSV-0040 -- the mallard namespace already declares a
+# ResourceQuota (k8s/resourcequota.yaml); Trivy can't see it when scanning this
+# file in isolation, so KSV-0040 is a false positive here.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,8 +24,11 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
-        runAsUser: 999
-        runAsGroup: 999
+        # UID/GID > 10000 to avoid collision with host-defined users (KSV-0020/
+        # KSV-0021). redis has no persistence here (save "", appendonly no) and a
+        # read-only root fs, so it runs fine as any non-root uid.
+        runAsUser: 10001
+        runAsGroup: 10001
       containers:
         - name: redis
           image: redis:7.4-alpine
@@ -63,6 +70,7 @@ spec:
               cpu: "250m"
               memory: "160Mi"
 ---
+# trivy:ignore:AVD-KSV-0040 -- namespace ResourceQuota exists (see above).
 apiVersion: v1
 kind: Service
 metadata:
