@@ -121,13 +121,27 @@ describe('SidebarView — ready / snapshot / visibility', () => {
     assert.deepEqual(h.posted, []);
   });
 
-  it('posts openDashboard when the activity-bar icon is clicked', () => {
+  it('runs the openDashboard command for a typed command message', () => {
+    const cmds = vscode.commands as unknown as { executeCommand: (id: string) => void };
+    const original = cmds.executeCommand;
+    const executed: string[] = [];
+    cmds.executeCommand = ((id: string) => { executed.push(id); }) as never;
+    try {
+      const h = makeHarness({});
+      h.send({ type: 'command', id: 'openDashboard' });
+      assert.deepEqual(executed, ['mallard.openDashboard']);
+      assert.deepEqual(h.posted, []); // executes a command, posts nothing back
+    } finally {
+      cmds.executeCommand = original;
+    }
+  });
+
+  it('ignores an unvalidated/unknown message (untyped side-channel closed)', () => {
     const h = makeHarness({});
-    h.send({ type: 'openDashboard' });
-    // openDashboard executes a VS Code command rather than posting to the
-    // webview, so nothing should be posted back — this just confirms the
-    // branch runs without throwing.
+    h.send({ type: 'openDashboard' }); // legacy ad-hoc shape — no longer accepted
+    h.send({ nonsense: true });
     assert.deepEqual(h.posted, []);
+    assert.equal(h.setFilterCalls.length, 0);
   });
 
   it('relays onDidChangeSnapshot updates to the webview', () => {
