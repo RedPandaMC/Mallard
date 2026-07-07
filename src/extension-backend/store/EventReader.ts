@@ -105,12 +105,34 @@ export interface IEventReader extends IEventSnapshotReader {
 
 type Categories = Partial<Record<CostCategory, number>>;
 
+// Coerce an out-of-enum value to a default, but surface it (once per distinct
+// value) rather than swallowing it — an unknown source/surface is usually schema
+// drift (a new connector writing a value this reader doesn't recognise), which
+// the old silent `.catch(default)` hid while corrupting the attribution.
+const _warnedEnumValues = new Set<string>();
+function coerceEnum<T extends string>(fallback: T, label: string) {
+  return (ctx: { input: unknown }): T => {
+    const value = ctx.input;
+    if (value !== undefined && value !== null) {
+      const key = `${label}:${String(value)}`;
+      if (!_warnedEnumValues.has(key)) {
+        _warnedEnumValues.add(key);
+        console.warn(
+          `[mallard:store] unknown ${label} value ${JSON.stringify(value)} in events; ` +
+            `coercing to '${fallback}'. The event schema may have drifted.`,
+        );
+      }
+    }
+    return fallback;
+  };
+}
+
 const EventRow = z.object({
   id: z.string(),
   ts: z.union([z.number(), z.bigint()]).transform(Number),
   modelId: z.string(),
-  surface: z.enum(['chat', 'inline', 'agent', 'edit', 'unknown']).catch('unknown'),
-  source: z.enum(['lm', 'local', 'github', 'claude-code']).catch('local'),
+  surface: z.enum(['chat', 'inline', 'agent', 'edit', 'unknown']).catch(coerceEnum('unknown', 'surface')),
+  source: z.enum(['lm', 'local', 'github', 'claude-code']).catch(coerceEnum('local', 'source')),
   credits: z.number(),
   cost: z.number(),
   estimated: z.boolean().catch(true),

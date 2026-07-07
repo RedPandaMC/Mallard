@@ -141,22 +141,13 @@ describe('dashboardBridge — message routing', () => {
     }
   });
 
-  it('writes setCurrency to the mallard.currency setting', async () => {
-    const ws = vscode.workspace as Mutable<typeof vscode.workspace>;
-    const originalGetConfig = ws.getConfiguration;
-    const updates: unknown[][] = [];
-    ws.getConfiguration = (() => ({
-      get: (_key: string, fallback: unknown) => fallback,
-      update: (...a: unknown[]) => { updates.push(a); return Promise.resolve(); },
-    })) as never;
-    try {
-      const h = makeHarness();
-      h.send({ type: 'setCurrency', value: 'eur' });
-      await new Promise((r) => setImmediate(r));
-      assert.deepEqual(updates[0], ['currency', 'EUR', vscode.ConfigurationTarget.Global]);
-    } finally {
-      ws.getConfiguration = originalGetConfig;
-    }
+  it('writes setCurrency to UserConfigStore (uppercased), not VS Code settings', async () => {
+    const h = makeHarness();
+    h.send({ type: 'setCurrency', value: 'eur' });
+    await new Promise((r) => setImmediate(r));
+    // Persisted through userConfig.set so it shares the config store and its
+    // change event (immediate recompute), rather than settings.json.
+    assert.deepEqual(h.calls.setConfig!.at(-1), [{ currency: 'EUR' }]);
   });
 
   it('opens the config file for openConfig', async () => {

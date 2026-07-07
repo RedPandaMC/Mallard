@@ -77,9 +77,13 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     vscode.workspace.getConfiguration('mallard').get<string[]>('enabledConnectors')
       ?? ['copilot', 'claude-code'],
   );
+  // Every connector exposes a canonical `.id`; enable/label off that so adding a
+  // new usage source is one entry in this list, not four hardcoded id checks.
+  const allConnectors = [copilot, claudeCode];
   const registry = new ConnectorRegistry();
-  if (enabledConnectors.has('copilot')) registry.register(copilot);
-  if (enabledConnectors.has('claude-code')) registry.register(claudeCode);
+  for (const c of allConnectors) {
+    if (enabledConnectors.has(c.id)) registry.register(c);
+  }
   const ingest = new IngestService(registry.build());
 
   const githubSession = new GitHubSession(context.secrets);
@@ -111,9 +115,7 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   // (e.g. Copilot's OTel exporter) and re-refreshes once applied. Scoped to
   // only the enabled connectors — no point nudging Copilot OTel setup for a
   // connector the user opted out of via mallard.enabledConnectors.
-  const activeConnectors = [copilot, claudeCode].filter((c) =>
-    enabledConnectors.has(c === copilot ? 'copilot' : 'claude-code'),
-  );
+  const activeConnectors = allConnectors.filter((c) => enabledConnectors.has(c.id));
   const setupGate = new ConnectorSetupGate(context, activeConnectors, () => void usage.refresh());
 
   context.subscriptions.push(

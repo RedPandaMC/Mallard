@@ -98,6 +98,7 @@ const ConfigSchema = z
         topN: z.number().optional(),
       })
       .optional(),
+    currency: z.string().optional(),
     export: z
       .object({
         webhookTargets: z
