@@ -29,8 +29,11 @@ export class EventStore implements vscode.Disposable {
     retentionDays?: number,
   ) {
     this.meta       = new MetaStore(conn);
-    this.reader     = new EventReader(conn);
-    this.writer     = new EventWriter(conn, retentionDays);
+    // Shared token: the writer bumps it on every mutation so the reader's
+    // no-filter snapshot memo self-invalidates without a separate materialization.
+    const cacheToken = { version: 0 };
+    this.reader     = new EventReader(conn, cacheToken);
+    this.writer     = new EventWriter(conn, retentionDays, cacheToken);
     this.fileReader = new DuckDBFileReader(conn, this.writer);
   }
 

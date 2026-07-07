@@ -15,9 +15,9 @@ import {
   REFRESH_FACTS_INSERT_MODELS_SQL,
   REFRESH_FACTS_INSERT_REPOS_SQL,
   REFRESH_FACTS_SQL,
-  buildRefreshSnapSQL,
 } from './schema';
 import type { RecordFilter } from './EventRepository';
+import type { SnapshotCacheToken } from './EventReader';
 import { readRows, runPrepared } from './dbUtils';
 
 // ── Interface ─────────────────────────────────────────────────────────────────
@@ -33,15 +33,19 @@ export interface IEventWriter {
 // ── Implementation ────────────────────────────────────────────────────────────
 
 export class EventWriter implements IEventWriter {
-  private readonly refreshSnapSQL: string;
   private readonly retentionDays: number;
 
   constructor(
     private readonly conn: DuckDBConnection,
     retentionDays = RAW_WINDOW_DAYS,
+    private readonly cacheToken: SnapshotCacheToken = { version: 0 },
   ) {
     this.retentionDays = retentionDays;
-    this.refreshSnapSQL = buildRefreshSnapSQL(retentionDays);
+  }
+
+  /** Invalidate the reader's memoized no-filter snapshot after any mutation. */
+  private bumpCache(): void {
+    this.cacheToken.version++;
   }
 
   async insert(records: UsageEvent[]): Promise<number> {
@@ -61,7 +65,10 @@ export class EventWriter implements IEventWriter {
       if (r.ts > maxTs) maxTs = r.ts;
     }
     await this.refreshFacts(startOf(minTs, 'day'), startOf(maxTs, 'day') + DAY_MS);
-    await this.conn.run(this.refreshSnapSQL);
+    // No snap_* materialization to rebuild — the no-filter snapshot is computed
+    // on demand and memoized; just invalidate that memo. (Previously this ran a
+    // full DELETE+INSERT over all events on every debounced ingest tick.)
+    this.bumpCache();
     return inserted;
   }
 
@@ -105,6 +112,7 @@ export class EventWriter implements IEventWriter {
     const before = await this.countAll();
     await runPrepared(this.conn, `DELETE FROM events WHERE ${clauses.join(' AND ')}`, params);
     const after  = await this.countAll();
+    this.bumpCache();
     return before - after;
   }
 
@@ -125,11 +133,12 @@ export class EventWriter implements IEventWriter {
     await runPrepared(this.conn, COMPACT_ROLLUP_SQL, [cutoffBig]);
     await runPrepared(this.conn, COMPACT_DELETE_SQL, [cutoffBig]);
     await this.refreshFacts();
-    await this.conn.run(this.refreshSnapSQL);
+    this.bumpCache();
   }
 
   async clear(): Promise<void> {
     await this.conn.run(CLEAR_ALL_SQL);
+    this.bumpCache();
   }
 
   async setPrices(entries: ReadonlyArray<{ modelId: string; multiplier: number }>): Promise<void> {
@@ -143,6 +152,7 @@ export class EventWriter implements IEventWriter {
       stmt.bindDouble(2, e.multiplier);
       await stmt.run();
     }
+    this.bumpCache();
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────

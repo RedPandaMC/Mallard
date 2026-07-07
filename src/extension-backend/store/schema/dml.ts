@@ -71,15 +71,4 @@ export const CLEAR_ALL_SQL = `
   DELETE FROM dim_model;
   DELETE FROM dim_repo;
   DELETE FROM events_staging;
-  DELETE FROM snap_totals;
-  DELETE FROM snap_daily;
-  DELETE FROM snap_models;
-  DELETE FROM snap_repos;
-  DELETE FROM snap_hourly;
-  DELETE FROM snap_categories;
-  DELETE FROM snap_sankey;
-  DELETE FROM snap_dim_models;
-  DELETE FROM snap_dim_surfaces;
-  DELETE FROM snap_dim_sources;
-  DELETE FROM snap_dim_repos;
 `;
