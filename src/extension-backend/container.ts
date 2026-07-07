@@ -45,11 +45,11 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   const storageDir = context.globalStorageUri.fsPath;
 
   const pricing = new PricingService(storageDir, bundledManifest, cfg.pricingManifestUrl || '');
-  await pricing.load();
-  pricing.startDailyRefresh();
-
   const currency = new CurrencyService(storageDir);
-  await currency.load();
+  // Independent (pricing feed vs FX feed) — load their local caches in parallel
+  // rather than awaiting one after the other. Neither blocks on the network now.
+  await Promise.all([pricing.load(), currency.load()]);
+  pricing.startDailyRefresh();
   currency.startDailyRefresh();
 
   const store = await EventStore.open(storageDir, cfg.dataRetentionDays);
@@ -109,6 +109,9 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   ).createExporter();
 
   const usage = new UsageService(store.reader, pricing, ingest, userConfig, currency, github, exporter);
+  // When the background FX refresh lands real rates, recompute so the dashboard
+  // updates from the USD-only default it started with.
+  currency.onRatesUpdated = () => void usage.refresh();
   const restriction = new RestrictionEngine(storageDir);
 
   // Generic gate that nudges the user to enable any connector prerequisite
