@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { UsageService } from '../app/UsageService';
 import { UserConfigStore } from '../app/UserConfigStore';
 import { LayoutStore } from '../app/LayoutStore';
-import { RestrictionEngine } from '../domain/restriction/engine';
+import { RestrictionEngine } from '../app/RestrictionEngine';
 import { Filter } from '../domain/types';
 import { readConfig } from '../config';
 import { isHostBoundMsg, ThemeKind, WebviewBoundMsg } from './messaging';

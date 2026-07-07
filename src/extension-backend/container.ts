@@ -10,7 +10,7 @@ import { UserConfigStore } from './app/UserConfigStore';
 import { LayoutStore } from './app/LayoutStore';
 import { GitHubSession } from './billing/GitHubSession';
 import { GitHubUsageService } from './billing/GitHubUsageService';
-import { RestrictionEngine } from './domain/restriction/engine';
+import { RestrictionEngine } from './app/RestrictionEngine';
 import { PricingManifest } from './domain/pricing';
 import { initRepoAttribution } from './ingest/repoResolver';
 import { CopilotConnector } from './ingest/CopilotConnector';
