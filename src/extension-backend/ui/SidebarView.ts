@@ -64,7 +64,10 @@ export class SidebarView implements vscode.WebviewViewProvider {
     );
 
     this.disposables.push(
-      this.usage.onDidChangeSnapshot((s) => post({ type: 'snapshot', payload: s })),
+      this.usage.onDidChangeSnapshot(() => {
+        const s = this.usage.current;
+        if (s) post({ type: 'snapshot', payload: s });
+      }),
       this.usage.onAlertFired(({ message }) => post({ type: 'alertFired', message })),
     );
 
@@ -332,12 +335,12 @@ export class SidebarView implements vscode.WebviewViewProvider {
 
     function render(snap) {
       const budget = snap.budget;
-      const hasBudget = budget && budget.monthlyBudget > 0;
+      const hasBudget = budget && budget.monthly != null && budget.monthly > 0;
       const pct = hasBudget
-        ? Math.min(120, Math.round((budget.mtdCost / budget.monthlyBudget) * 100))
+        ? Math.min(120, Math.round((budget.usedCost / budget.monthly) * 100))
         : null;
       const sev = pct == null ? '' : pct >= 100 ? 'sb--err' : pct >= 80 ? 'sb--warn' : '';
-      const mtdCost = snap.budget?.mtdCost ?? 0;
+      const mtdCost = snap.budget?.usedCost ?? 0;
       const currency = snap.currency || 'USD';
       const models = snap.topModels ?? [];
       const maxCr = models[0]?.credits ?? 1;
@@ -355,7 +358,7 @@ export class SidebarView implements vscode.WebviewViewProvider {
         }
         html += '<div class="sb-budget-numbers ' + sev + '">';
         html += '<span class="sb-budget-spend">' + fmtMoney(mtdCost, currency) + '</span>';
-        html += '<span class="sb-budget-cap">/ ' + fmtMoney(budget.monthlyBudget, currency) + '</span>';
+        html += '<span class="sb-budget-cap">/ ' + fmtMoney(budget.monthly, currency) + '</span>';
         html += '<span class="sb-budget-pct">' + pct + '%</span>';
         html += '</div>';
         html += '<div class="sb-gauge-segments ' + sev + '">' + segs + '</div>';

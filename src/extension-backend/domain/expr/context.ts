@@ -3,7 +3,10 @@
  * Builds the rule evaluation context — a plain nested object that
  * evalCondition() and renderTemplate() walk via dot-path resolution.
  */
-import { UsageSnapshot } from '../types';
+import { BillingState, SnapshotCore, SnapshotDims } from '../types';
+
+/** Rules read summary + dimensions + billing — never chart data. */
+export type RuleSnapshot = SnapshotCore & SnapshotDims & BillingState;
 
 export interface HistorySample {
   ts: number;
@@ -11,7 +14,7 @@ export interface HistorySample {
 }
 
 export interface EvalBuildInput {
-  snapshot: UsageSnapshot | null;
+  snapshot: RuleSnapshot | null;
   /** History of past snapshots for velocity. May be empty. */
   history?: HistorySample[];
   /** User-defined variables from the rule document `vars` block. */

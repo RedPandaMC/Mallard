@@ -578,12 +578,16 @@ export interface ChartData {
   weekdayBreakdown: WeekdayData;
 }
 
-/** The single object every piece of UI consumes. */
-export interface UsageSnapshot {
+/**
+ * The snapshot is split into three facets so consumers can depend on only
+ * what they read: scalar summary (core), dimension breakdowns (dims), and
+ * GitHub billing/auth (billing — which updates on its own cadence, without a
+ * database recompute). The wire type the webview receives (UsageSnapshot) is
+ * still the flat intersection of all three plus render-ready chart data.
+ */
+export interface SnapshotCore {
   generatedAt: number;
   source: SnapshotSource;
-  /** True when only the current day's bar changed since the previous snapshot. */
-  isIncremental: boolean;
   status: ProviderStatus;
   currency: string;
   pricePerCredit: number;
@@ -593,8 +597,20 @@ export interface UsageSnapshot {
   range: { start: number; end: number };
   forecast: Forecast;
   budget: BudgetState;
-  topModels: TopEntry[];
   today: TodayTotals;
+  /** Currently active git branch, when detectable. */
+  currentBranch?: string;
+  /** Total credits attributed to the current branch in the visible window. */
+  currentBranchCredits: number;
+  /** Events in the snapshot window (drives export counters). */
+  totalEventCount?: number;
+  /** Events whose cost is estimated (log-derived) rather than authoritative. */
+  estimatedEventCount?: number;
+}
+
+/** Dimension breakdowns: per-model/repo/surface aggregates and filter options. */
+export interface SnapshotDims {
+  topModels: TopEntry[];
   /** All distinct model IDs in current data (for filter dropdown). */
   allModels: string[];
   /** All distinct surfaces in current data (for surface toggle). */
@@ -607,20 +623,39 @@ export interface UsageSnapshot {
   allRepos: string[];
   /** Per-repo spend, for workspace-aware attribution. */
   byRepo: TopEntry[];
-  /** Pre-computed, render-ready data for each chart — assembled on the host. */
-  chartData: ChartData;
-  /** GitHub auth state for the billing integration panel. */
+}
+
+/** GitHub auth + billing state; refreshed independently of usage data. */
+export interface BillingState {
   authStatus: AuthStatus;
   /** Human-readable detail when authStatus is 'error' (e.g. a PAT is required). */
   authError?: string;
   /** Authoritative billing data from the GitHub API, when signed in. */
   githubBilling?: GitHubBillingData;
-  /** Currently active git branch, when detectable. */
-  currentBranch?: string;
-  /** Total credits attributed to the current branch in the visible window. */
-  currentBranchCredits: number;
-  /** Events in the snapshot window (drives export counters). */
-  totalEventCount?: number;
-  /** Events whose cost is estimated (log-derived) rather than authoritative. */
-  estimatedEventCount?: number;
+}
+
+/**
+ * Everything buildChartData needs beyond core/dims — carried on the host-side
+ * SnapshotData so chart assembly can run lazily at the UI boundary instead of
+ * inside every recompute.
+ */
+export interface ChartInputs {
+  dayAggregates: UsageAggregate[];
+  categoryBreakdown: CategoryBreakdownData;
+  hourlyTimeline: HourlyTimelineData;
+  /** Credits per weekday, index 0=Sun … 6=Sat. */
+  weekday: number[];
+}
+
+/** Host-internal snapshot: all facets plus raw chart inputs, no render data. */
+export interface SnapshotData extends SnapshotCore, SnapshotDims, BillingState {
+  chartInputs: ChartInputs;
+}
+
+/** The single object the webview consumes (wire shape). */
+export interface UsageSnapshot extends SnapshotCore, SnapshotDims, BillingState {
+  /** True when only the current day's bar changed since the previous snapshot. */
+  isIncremental: boolean;
+  /** Pre-computed, render-ready data for each chart — assembled on the host. */
+  chartData: ChartData;
 }

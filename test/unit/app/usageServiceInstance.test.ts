@@ -207,6 +207,40 @@ describe('UsageService — GitHub billing + alert rule notify', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
+  it('billing-only updates re-emit without re-reading the store', async () => {
+    let reads = 0;
+    const reader: IEventSnapshotReader = {
+      readSnapshotCache: async () => { reads += 1; return EMPTY_DATA; },
+      readFilteredSnapshot: async () => { reads += 1; return EMPTY_DATA; },
+      creditsByBranch: async () => 0,
+    };
+    let fireBilling: () => void = () => {};
+    const mockBilling: IBillingProvider = {
+      name: 'mock',
+      fetch: () => okAsync({ quota: null, items: [], fetchedAt: Date.now(), totalNetAmount: 0 }),
+      onDidChange: (fn) => { fireBilling = fn; return { dispose() {} }; },
+      dispose() {},
+    };
+    const svc = new UsageService(reader, pricing, ingest, userConfig, currency, mockBilling);
+    await svc.start();
+    await new Promise((r) => setTimeout(r, 100));
+    const readsAfterStart = reads;
+    assert.ok(readsAfterStart > 0);
+
+    let snapshotEmits = 0;
+    let billingEmits = 0;
+    svc.onDidChangeSnapshot(() => { snapshotEmits += 1; });
+    svc.onDidChangeBilling(() => { billingEmits += 1; });
+    fireBilling();
+    await new Promise((r) => setTimeout(r, 100));
+
+    assert.equal(reads, readsAfterStart, 'a billing refresh must not hit DuckDB');
+    assert.equal(billingEmits, 1);
+    assert.equal(snapshotEmits, 1, 're-emits merged data so UI surfaces update');
+    assert.equal(svc.current?.authStatus, 'signed-in');
+    svc.dispose();
+  });
+
   it('refreshGitHub sets signed-out when the error is "Not signed in"', async () => {
     const mockBilling: IBillingProvider = {
       name: 'mock',

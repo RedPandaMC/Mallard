@@ -147,9 +147,11 @@ describe('SidebarView — ready / snapshot / visibility', () => {
   });
 
   it('relays onDidChangeSnapshot updates to the webview', () => {
-    const h = makeHarness({});
     const snap = { filter: { models: ['a'] } } as unknown as UsageSnapshot;
+    const h = makeHarness({}, { current: snap as never });
     h.fireSnapshot(snap);
+    // The event is the trigger; the posted payload is the composed
+    // usage.current wire snapshot.
     assert.deepEqual(h.posted, [{ type: 'snapshot', payload: snap }]);
   });
 

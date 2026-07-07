@@ -12,10 +12,10 @@ import { buildChartData } from '../domain/chartData';
 import { forecastMonth } from '../domain/forecast';
 import { isIncrementalUpdate } from '../domain/snapshot';
 import {
-  AuthStatus,
+  BillingState,
   COST_CATEGORIES,
   Filter,
-  GitHubBillingData,
+  SnapshotData,
   SnapshotSource,
   SourceKind,
   Surface,
@@ -46,8 +46,12 @@ function isEmptyFilter(f: Filter): boolean {
 }
 
 export class UsageService implements vscode.Disposable {
-  private readonly _onDidChange = new vscode.EventEmitter<UsageSnapshot>();
+  private readonly _onDidChange = new vscode.EventEmitter<SnapshotData>();
   readonly onDidChangeSnapshot = this._onDidChange.event;
+
+  /** Fires when GitHub auth/billing changes — no usage recompute involved. */
+  private readonly _onDidChangeBilling = new vscode.EventEmitter<BillingState>();
+  readonly onDidChangeBilling = this._onDidChangeBilling.event;
 
   /** Fires once per alert/rule notification actually shown — lets UI
    *  surfaces (the sidebar gauge) react to the moment an alert fires,
@@ -55,14 +59,16 @@ export class UsageService implements vscode.Disposable {
   private readonly _onAlertFired = new vscode.EventEmitter<{ message: string }>();
   readonly onAlertFired = this._onAlertFired.event;
 
-  private snapshot?: UsageSnapshot;
+  private data?: SnapshotData;
+  /** Composed wire snapshot, cached until the next data/billing change. */
+  private composed?: UsageSnapshot;
+  private prevComposed?: UsageSnapshot;
   private filter: Filter = {};
+  private lastComputeFiltered = false;
   private readonly timer = new IntervalManager();
   private readonly alertFired = new Map<string, number>();
   private readonly history: SnapshotSample[] = [];
-  private authStatus: AuthStatus = 'signed-out';
-  private authError: string | undefined = undefined;
-  private githubBilling: GitHubBillingData | undefined = undefined;
+  private billing: BillingState = { authStatus: 'signed-out' };
   private readonly subs: vscode.Disposable[] = [];
   private readonly exporter: MetricExporter;
 
@@ -83,8 +89,36 @@ export class UsageService implements vscode.Disposable {
     this.subs.push(userConfig.onDidChange(() => this.compute()));
   }
 
+  /**
+   * The full wire snapshot, composed lazily: chart data is only built when a
+   * consumer (webview bridge, report, exporter) actually asks for it, not on
+   * every recompute path.
+   */
   get current(): UsageSnapshot | undefined {
-    return this.snapshot;
+    if (!this.data) return undefined;
+    if (!this.composed) {
+      const { chartInputs, ...rest } = this.data;
+      const chartData = buildChartData(
+        chartInputs.dayAggregates,
+        rest.topModels,
+        rest.budget,
+        rest.forecast,
+        rest.generatedAt,
+        chartInputs.categoryBreakdown,
+        chartInputs.hourlyTimeline,
+        rest.pricePerCredit,
+        this.pricing.currentManifest,
+        chartInputs.weekday,
+        this.userConfig.get().display,
+      );
+      const next: UsageSnapshot = { ...rest, ...this.billing, chartData, isIncremental: false };
+      // Partial dashboard updates only make sense while filtering.
+      if (this.lastComputeFiltered) {
+        next.isIncremental = isIncrementalUpdate(this.prevComposed, next);
+      }
+      this.composed = next;
+    }
+    return this.composed;
   }
 
   getFilter(): Filter {
@@ -138,11 +172,13 @@ export class UsageService implements vscode.Disposable {
       // githubBilling.mode is "pat" with no PAT stored yet — getToken()
       // never falls through to interactive OAuth in this mode, so calling
       // signIn() here would be a silent no-op. Surface it instead.
-      this.authStatus = 'error';
-      this.authError =
-        'A GitHub Personal Access Token is required (githubBilling.mode is "pat"). ' +
-        'Run "Mallard: Set GitHub Personal Access Token" from the Command Palette.';
-      await this.compute();
+      this.billing = {
+        authStatus: 'error',
+        authError:
+          'A GitHub Personal Access Token is required (githubBilling.mode is "pat"). ' +
+          'Run "Mallard: Set GitHub Personal Access Token" from the Command Palette.',
+      };
+      await this.emitBillingChange();
       return;
     }
     await this.github.signIn?.();
@@ -153,16 +189,38 @@ export class UsageService implements vscode.Disposable {
     if (!this.github) return;
     const result = await this.github.fetch();
     if (result.isOk()) {
-      this.authStatus = 'signed-in';
-      this.authError = undefined;
-      this.githubBilling = result.value;
+      this.billing = { authStatus: 'signed-in', githubBilling: result.value };
     } else {
       const msg = result.error.message;
-      this.authStatus = msg.includes('Not signed in') ? 'signed-out' : 'error';
-      this.authError = this.authStatus === 'error' ? msg : undefined;
-      this.githubBilling = undefined;
+      const authStatus = msg.includes('Not signed in') ? ('signed-out' as const) : ('error' as const);
+      this.billing = {
+        authStatus,
+        ...(authStatus === 'error' ? { authError: msg } : {}),
+      };
     }
-    await this.compute();
+    await this.emitBillingChange();
+  }
+
+  /**
+   * Billing rides its own cadence: merge into the cached data and re-emit —
+   * no DuckDB read, no chart rebuild, no metric export. Before the first
+   * compute there is nothing to merge into, so fall back to a full compute
+   * (assembleSnapshot folds this.billing in).
+   */
+  private async emitBillingChange(): Promise<void> {
+    this.invalidateComposed();
+    if (this.data) {
+      this.data = { ...this.data, ...this.billing };
+      this._onDidChange.fire(this.data);
+    } else {
+      await this.compute();
+    }
+    this._onDidChangeBilling.fire(this.billing);
+  }
+
+  private invalidateComposed(): void {
+    if (this.composed) this.prevComposed = this.composed;
+    delete this.composed;
   }
 
   private async compute(): Promise<void> {
@@ -198,18 +256,21 @@ export class UsageService implements vscode.Disposable {
     const next = this.assembleSnapshot(data, {
       now, userConfig, branch, displayCurrency, fxRate, currentBranchCredits,
     });
-    if (filtered) next.isIncremental = isIncrementalUpdate(this.snapshot, next);
 
-    this.snapshot = next;
+    this.data = next;
+    this.lastComputeFiltered = filtered;
+    this.invalidateComposed();
     this.recordSample(now, next);
     this.fireAlerts(next, userConfig, now);
     this._onDidChange.fire(next);
     // intentionally not awaited — see ExportQueue; export() persists a durable
     // retry queue on failure, so a slow/unreachable endpoint never blocks the UI.
-    void this.exporter.export(next);
+    // Exports fire only on data recomputes, never on billing-only updates.
+    const composedForExport = this.current;
+    if (composedForExport) void this.exporter.export(composedForExport);
   }
 
-  /** Build a UsageSnapshot from the normalized data bundle (either read path). */
+  /** Build a SnapshotData from the normalized data bundle (either read path). */
   private assembleSnapshot(
     data: SnapshotSourceData,
     opts: {
@@ -220,7 +281,7 @@ export class UsageService implements vscode.Disposable {
       fxRate: number;
       currentBranchCredits: number;
     },
-  ): UsageSnapshot {
+  ): SnapshotData {
     const { now, userConfig, branch, displayCurrency, fxRate, currentBranchCredits } = opts;
 
     // ── Day aggregates (for forecast + chart) ──────────────────────────────
@@ -289,14 +350,6 @@ export class UsageService implements vscode.Disposable {
     const peakHour = maxHourCredits > 0 ? hourArr.indexOf(maxHourCredits) : null;
     const hourlyTimeline = { hours: hourArr, peakHour };
 
-    const chartData = buildChartData(
-      dayAggregates, topModels, budget, forecast, now,
-      categoryBreakdown, hourlyTimeline,
-      this.pricing.pricePerCredit * fxRate, this.pricing.currentManifest,
-      data.weekday,
-      userConfig.display,
-    );
-
     // ── Range from the daily extent ─────────────────────────────────────────
     const rangeStart = data.daily[0]?.dayStart ?? startOf(now - 29 * DAY_MS, 'day');
     const rangeEnd   = (data.daily[data.daily.length - 1]?.dayStart ?? now) + DAY_MS;
@@ -328,25 +381,24 @@ export class UsageService implements vscode.Disposable {
       sankeyLinks,
       allRepos,
       byRepo,
-      chartData,
-      authStatus:    this.authStatus,
-      isIncremental: false,
+      // Raw chart inputs travel on the data; render-ready chart data is
+      // composed lazily in `current` at the UI boundary.
+      chartInputs: { dayAggregates, categoryBreakdown, hourlyTimeline, weekday: data.weekday },
+      ...this.billing,
       currentBranchCredits,
       totalEventCount:     data.totals.all.eventCount,
       estimatedEventCount: data.estimatedEventCount,
       ...opt('currentBranch', branch),
-      ...opt('githubBilling', this.githubBilling),
-      ...opt('authError', this.authError),
     };
   }
 
-  private recordSample(now: number, s: UsageSnapshot): void {
+  private recordSample(now: number, s: SnapshotData): void {
     this.history.push({ ts: now, todayCredits: s.today.credits });
     const cutoff = now - HISTORY_WINDOW_MS;
     while (this.history.length > 0 && this.history[0]!.ts < cutoff) this.history.shift();
   }
 
-  private fireAlerts(s: UsageSnapshot, uc: ReturnType<UserConfigStore['get']>, now: number): void {
+  private fireAlerts(s: SnapshotData, uc: ReturnType<UserConfigStore['get']>, now: number): void {
     const alerts = evaluateAlerts(s, this.history, uc, this.alertFired, now);
     for (const a of alerts) {
       void this.host.showWarningMessage(a.message);
@@ -383,6 +435,7 @@ export class UsageService implements vscode.Disposable {
     this.timer[Symbol.dispose]();
     this.ingest.dispose();
     this._onDidChange.dispose();
+    this._onDidChangeBilling.dispose();
     this._onAlertFired.dispose();
     this.subs.forEach((d) => d.dispose());
     this.github?.dispose();
