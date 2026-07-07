@@ -12,7 +12,11 @@ export const CREATE_SQL = `
     estimated BOOLEAN NOT NULL DEFAULT TRUE,
     repo VARCHAR,
     costByCategory VARCHAR,
-    branch VARCHAR
+    branch VARCHAR,
+    -- How repo was determined: 'authoritative' (recorded in the source log,
+    -- e.g. Claude Code's cwd), 'heuristic' (active-editor guess at parse
+    -- time), or NULL when unattributed.
+    attribution VARCHAR
   );
   CREATE INDEX IF NOT EXISTS idx_ts ON events(ts);
   CREATE INDEX IF NOT EXISTS idx_model ON events(modelId);
@@ -23,6 +27,7 @@ export const CREATE_SQL = `
 
   CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR);
   ALTER TABLE events ADD COLUMN IF NOT EXISTS branch VARCHAR;
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS attribution VARCHAR;
 
   CREATE TABLE IF NOT EXISTS prices (
     modelId VARCHAR PRIMARY KEY,
@@ -36,14 +41,16 @@ export const CREATE_SQL = `
     credits DOUBLE NOT NULL, cost DOUBLE NOT NULL,
     promptTokens INTEGER, completionTokens INTEGER,
     estimated BOOLEAN NOT NULL DEFAULT TRUE,
-    repo VARCHAR, costByCategory VARCHAR, branch VARCHAR
+    repo VARCHAR, costByCategory VARCHAR, branch VARCHAR, attribution VARCHAR
   );
+  ALTER TABLE events_staging ADD COLUMN IF NOT EXISTS attribution VARCHAR;
 
   -- Normalization view: NULLs resolved, json cost categories extracted.
   CREATE OR REPLACE VIEW v_events AS
     SELECT
       id, ts, modelId, surface, source,
       repo,
+      attribution,
       COALESCE(repo, 'unattributed')   AS repo_label,
       credits, cost, estimated,
       COALESCE(promptTokens, 0)        AS prompt_tokens,
@@ -161,7 +168,10 @@ export const CREATE_SQL = `
       CAST(SUM(e.completion_tokens) AS INTEGER)                              AS completionTokens,
       true                                                                   AS estimated,
       NULL::VARCHAR                                                          AS costByCategory,
-      NULL::VARCHAR                                                          AS branch
+      NULL::VARCHAR                                                          AS branch,
+      -- 'heuristic' wins lexically over 'authoritative': a rolled-up day is
+      -- flagged heuristic when any contributing row was.
+      MAX(e.attribution)                                                     AS attribution
     FROM v_events e
     WHERE NOT e.is_rolled
     GROUP BY strftime(to_timestamp(e.ts / 1000.0)::TIMESTAMPTZ, '%Y-%m-%d'),

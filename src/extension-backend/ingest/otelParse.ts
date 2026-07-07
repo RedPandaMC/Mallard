@@ -11,6 +11,14 @@ export interface ParseContext {
   repo?: string;
   /** Git branch active at parse time. */
   branch?: string;
+  /**
+   * Events with ts at or after this are "live" and may take the heuristic
+   * repo/branch above. Absent on a first/backfill pass (no prior watermark) —
+   * then nothing is live and heuristic attribution is skipped entirely,
+   * because a backfilled row's usage happened before the current editor
+   * state existed. See BaseFileConnector.buildContext for the rule.
+   */
+  liveThresholdMs?: number;
   /** Stable per-file key so ids are unique across log files. */
   fileKey?: string;
   /**

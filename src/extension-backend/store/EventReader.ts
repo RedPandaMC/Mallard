@@ -39,7 +39,7 @@ export interface SnapshotSourceData {
   /** day_start = epoch ms of local midnight, DST-correct. */
   daily:      Array<{ dayStart: number; credits: number; cost: number; tokens: number; eventCount: number }>;
   models:     Array<{ modelId: string; credits: number; cost: number; tokens: number }>;
-  repos:      Array<{ repo: string; credits: number; cost: number; tokens: number }>;
+  repos:      Array<{ repo: string; credits: number; cost: number; tokens: number; heuristicShare: number }>;
   /** hour_local = 0-23 in session timezone (DST-correct). */
   hourly:     Array<{ hourLocal: number; credits: number }>;
   categories: Array<{ category: string; cost: number }>;
@@ -127,6 +127,7 @@ const EventRow = z.object({
   completionTokens: z.number().nullish(),
   repo: z.string().nullish(),
   branch: z.string().nullish(),
+  attribution: z.enum(['authoritative', 'heuristic']).nullish(),
   costByCategory: z.string().nullish(),
 });
 
@@ -160,6 +161,7 @@ function rowToEvent(row: Record<string, unknown>): UsageEvent | null {
     ...(r.completionTokens != null ? { completionTokens: r.completionTokens } : {}),
     ...(r.repo != null ? { repo: r.repo } : {}),
     ...(r.branch != null ? { branch: r.branch } : {}),
+    ...(r.attribution != null ? { attribution: r.attribution } : {}),
     ...(costByCategory !== undefined ? { costByCategory } : {}),
   };
 }
@@ -496,9 +498,12 @@ SELECT
     'credits DESC',
   )} AS top_models,
   ${listJson(
-    `'repo': repo, 'credits': credits, 'cost': cost, 'tokens': tokens`,
+    `'repo': repo, 'credits': credits, 'cost': cost, 'tokens': tokens, 'heuristic_share': heuristic_share`,
     `SELECT COALESCE(repo,'unattributed') AS repo, COALESCE(SUM(credits),0) AS credits,
-            COALESCE(SUM(cost),0) AS cost, ${tok} AS tokens
+            COALESCE(SUM(cost),0) AS cost, ${tok} AS tokens,
+            CASE WHEN COALESCE(SUM(cost),0) > 0
+                 THEN COALESCE(SUM(CASE WHEN attribution = 'heuristic' THEN cost ELSE 0 END),0) / SUM(cost)
+                 ELSE 0 END AS heuristic_share
      FROM f GROUP BY COALESCE(repo,'unattributed')`,
     'credits DESC',
   )} AS top_repos,
@@ -587,10 +592,11 @@ SELECT
         tokens:  Number(r['tokens']  ?? 0),
       })),
       repos: repoArr.map((r) => ({
-        repo:    String(r['repo']    ?? ''),
-        credits: Number(r['credits'] ?? 0),
-        cost:    Number(r['cost']    ?? 0),
-        tokens:  Number(r['tokens']  ?? 0),
+        repo:           String(r['repo']            ?? ''),
+        credits:        Number(r['credits']         ?? 0),
+        cost:           Number(r['cost']            ?? 0),
+        tokens:         Number(r['tokens']          ?? 0),
+        heuristicShare: Number(r['heuristic_share'] ?? 0),
       })),
       sankey: sankeyArr.map((r) => ({
         model:   String(r['model']   ?? ''),

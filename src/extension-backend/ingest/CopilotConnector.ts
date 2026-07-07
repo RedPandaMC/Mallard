@@ -117,6 +117,14 @@ export class CopilotConnector extends BaseFileConnector {
       pick(row, ['span_id', 'spanId', 'spanID']) ?? pick(attrs, ['span_id', 'spanId', 'spanID']);
     const rowKey = spanId ? `${fileKey}:${String(spanId)}` : `${fileKey}:${ts}:${String(model)}`;
 
+    // Copilot's OTel lines carry no workspace path, so repo/branch can only
+    // come from the active-editor heuristic — and only for live rows.
+    // Backfilled rows stay unattributed rather than being blamed on whatever
+    // repo happens to be focused at parse time.
+    const live = ctx.liveThresholdMs !== undefined && ts >= ctx.liveThresholdMs;
+    const repo = live ? ctx.repo : undefined;
+    const branch = live ? ctx.branch : undefined;
+
     return {
       id:     `local:${rowKey}`,
       ts,
@@ -128,8 +136,8 @@ export class CopilotConnector extends BaseFileConnector {
       credits,
       cost,
       estimated: true,
-      ...(ctx.repo   !== undefined ? { repo:   ctx.repo }   : {}),
-      ...(ctx.branch !== undefined ? { branch: ctx.branch } : {}),
+      ...(repo   !== undefined ? { repo, attribution: 'heuristic' as const } : {}),
+      ...(branch !== undefined ? { branch } : {}),
       ...(costByCategory !== undefined ? { costByCategory } : {}),
     };
   }

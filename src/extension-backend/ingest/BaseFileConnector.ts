@@ -13,6 +13,14 @@ import { defaultLogger, Logger } from '../util/logger';
 
 const DEBOUNCE_MS = 1_500;
 
+/**
+ * How far back an event timestamp may lag wall-clock and still count as
+ * "live" (eligible for heuristic active-editor repo/branch attribution).
+ * Guards against late-flushed old log lines being blamed on whatever repo is
+ * focused right now.
+ */
+export const LIVE_WINDOW_MS = 5 * 60_000;
+
 /** A discovered target is "empty" when it points at nothing on disk. */
 function isEmptyTarget(t: DiscoverResult): boolean {
   return 'kind' in t ? !t.dbPath : t.globs.length === 0;
@@ -90,7 +98,7 @@ export abstract class BaseFileConnector implements LogConnector {
   private async ingestOnce(target: DiscoverResult): Promise<void> {
     const sinceMs = await this.loadWatermark();
     const globs = 'kind' in target ? [] : target.globs;
-    const ctx = await this.buildContext(globs);
+    const ctx = await this.buildContext(globs, sinceMs);
     try {
       const mapRow = this.mapRow.bind(this) as RowMapper;
       const { inserted, maxEventTs } =
@@ -116,19 +124,27 @@ export abstract class BaseFileConnector implements LogConnector {
    * Build the ParseContext for an ingest run. Subclasses may override to add
    * connector-specific fields (e.g. surface detection for Claude Code).
    */
-  protected async buildContext(_globs: string[]): Promise<ParseContext> {
+  protected async buildContext(_globs: string[], watermarkMs: number | null = null): Promise<ParseContext> {
     const repo = currentRepo();
     const branch = activeBranch();
     const tokenPrices = this.pricing.tokenPrices;
+    const now = Date.now();
+    // Liveness rule: heuristic attribution only applies once this connector
+    // has a watermark (steady state — a fresh DB or post-clear re-ingest is a
+    // backfill even when timestamps are recent) AND the row's ts falls inside
+    // the recent window. Without a watermark liveThresholdMs stays unset and
+    // no row is live.
+    const liveThresholdMs = watermarkMs !== null ? now - LIVE_WINDOW_MS : undefined;
     return {
       pricePerCredit: this.pricing.pricePerCredit,
       manifest: this.pricing.currentManifest,
       ...(tokenPrices !== undefined ? { tokenPrices } : {}),
-      now: Date.now(),
+      now,
       /* c8 ignore next */
       ...(repo !== undefined ? { repo } : {}),
       /* c8 ignore next */
       ...(branch !== undefined ? { branch } : {}),
+      ...(liveThresholdMs !== undefined ? { liveThresholdMs } : {}),
     };
   }
 

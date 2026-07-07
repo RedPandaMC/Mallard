@@ -54,6 +54,9 @@ export type DatePreset = 'today' | '7d' | '30d' | 'month' | 'all';
  * A single normalized unit of Copilot usage. Costs are plain numbers in USD;
  * `credits` are normalized premium-request weights.
  */
+/** Provenance of an event's repo/branch attribution. */
+export type RepoAttribution = 'authoritative' | 'heuristic';
+
 export interface UsageEvent {
   id: string;
   ts: number; // epoch ms
@@ -72,6 +75,12 @@ export interface UsageEvent {
   repo?: string;
   /** Git branch active at parse time, when resolvable. */
   branch?: string;
+  /**
+   * How `repo` was determined: 'authoritative' when the source log records it
+   * (Claude Code's per-line cwd), 'heuristic' when it's the active-editor
+   * guess at parse time. Absent when the event is unattributed.
+   */
+  attribution?: RepoAttribution;
   /**
    * Per-category cost split. Optional + partial so the dimension is addable
    * without backfilling old rows; absent → treat the whole event as 'unknown'.
@@ -458,6 +467,12 @@ export interface TopEntry {
   credits: number;
   cost: number;
   tokens: number;
+  /**
+   * Fraction of this entry's cost attributed by the active-editor heuristic
+   * rather than recorded in the source log (0..1). Only set on per-repo
+   * entries; lets the UI badge approximate attributions with "\u2248".
+   */
+  heuristicShare?: number;
 }
 
 /** One directed edge in the model → surface Sankey chart. */

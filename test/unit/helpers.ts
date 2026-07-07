@@ -39,6 +39,7 @@ export function makeEvent(partial: Partial<UsageEvent> & { ts: number }): UsageE
     ...(partial.completionTokens !== undefined ? { completionTokens: partial.completionTokens } : {}),
     ...(partial.repo !== undefined ? { repo: partial.repo } : {}),
     ...(partial.branch !== undefined ? { branch: partial.branch } : {}),
+    ...(partial.attribution !== undefined ? { attribution: partial.attribution } : {}),
     ...(partial.costByCategory !== undefined ? { costByCategory: partial.costByCategory } : {}),
   };
 }

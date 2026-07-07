@@ -265,6 +265,7 @@ export class UsageService implements vscode.Disposable {
       credits: r.credits,
       cost:    r.cost * fxRate,
       tokens:  Number(r.tokens),
+      heuristicShare: r.heuristicShare,
     }));
 
     const sankeyLinks = data.sankey.map((s) => ({
