@@ -294,6 +294,326 @@
       ],
       "title": "Ingest by Schema Version (7d)",
       "type": "piechart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "id": 20,
+      "panels": [],
+      "title": "Where the money goes (edge-calculated labels)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 27
+      },
+      "id": 21,
+      "options": {
+        "orientation": "horizontal",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\" and r._field == \"credits\")\n  |> group(columns: [\"repo\"])\n  |> sum()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)\n  |> keep(columns: [\"repo\", \"_value\"])\n  |> yield(name: \"top_repos\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Top Repos by Credits (7d)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 27
+      },
+      "id": 22,
+      "options": {
+        "orientation": "horizontal",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\" and r._field == \"credits\")\n  |> filter(fn: (r) => r.branch != \"unknown\")\n  |> group(columns: [\"branch\"])\n  |> sum()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)\n  |> keep(columns: [\"branch\", \"_value\"])\n  |> yield(name: \"top_branches\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Top Branches by Credits (7d)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 27
+      },
+      "id": 23,
+      "options": {
+        "orientation": "horizontal",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\" and r._field == \"credits\")\n  |> filter(fn: (r) => r.language != \"unknown\")\n  |> group(columns: [\"language\"])\n  |> sum()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)\n  |> keep(columns: [\"language\", \"_value\"])\n  |> yield(name: \"top_languages\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Top Languages by Credits (7d) \u2014 heuristic",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 55,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "currencyUSD"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 35
+      },
+      "id": 24,
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\" and r._field == \"cost_usd\")\n  |> group(columns: [\"repo\"])\n  |> aggregateWindow(every: 6h, fn: sum, createEmpty: true)\n  |> fill(value: 0.0)\n  |> yield(name: \"repo_cost\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Spend by Repo over Time (7d, USD)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 55,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "currencyUSD"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "id": 25,
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\" and r._field == \"cost_usd\")\n  |> filter(fn: (r) => r.language != \"unknown\")\n  |> group(columns: [\"language\"])\n  |> aggregateWindow(every: 6h, fn: sum, createEmpty: true)\n  |> fill(value: 0.0)\n  |> yield(name: \"language_cost\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Spend by Language over Time (7d, USD) \u2014 heuristic",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 43
+      },
+      "id": 26,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\" and r._field == \"credits\")\n  |> map(fn: (r) => ({ r with attribution: if exists r.attribution then r.attribution else \"unattributed\" }))\n  |> group(columns: [\"attribution\"])\n  |> sum()\n  |> group()\n  |> keep(columns: [\"attribution\", \"_value\"])\n  |> yield(name: \"attribution_quality\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Attribution Quality (7d)",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 43
+      },
+      "id": 27,
+      "options": {
+        "orientation": "horizontal",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\" and r._field == \"credits\")\n  |> group(columns: [\"source\"])\n  |> sum()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)\n  |> keep(columns: [\"source\", \"_value\"])\n  |> yield(name: \"by_source\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Credits by Credential Label (7d)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 55,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 43
+      },
+      "id": 28,
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\" and r._field == \"credits\")\n  |> group(columns: [\"source\", \"repo\"])\n  |> aggregateWindow(every: 12h, fn: sum, createEmpty: true)\n  |> fill(value: 0.0)\n  |> yield(name: \"label_repo\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Credits by Label \u00d7 Repo (7d)",
+      "type": "timeseries"
     }
   ],
   "refresh": "5m",
@@ -312,5 +632,5 @@
   "timezone": "browser",
   "title": "Mallard Overview",
   "uid": "mallard-overview",
-  "version": 1
+  "version": 2
 }
