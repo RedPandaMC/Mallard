@@ -232,8 +232,8 @@ export class UsageService implements vscode.Disposable {
 
     const branch = activeBranch();
 
-    // Currency lives in config.json only (the old mallard.currency setting is
-    // migrated once in container.ts and no longer contributed).
+    // Currency lives in config.json only (set from the dashboard; the old
+    // mallard.currency setting is no longer contributed).
     const displayCurrency = userConfig.currency ?? 'USD';
     const fxRates = this.currency.currentRates();
     const fxRate = displayCurrency !== 'USD' ? (fxRates[displayCurrency] ?? 1) : 1;
