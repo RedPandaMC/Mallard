@@ -1,7 +1,6 @@
 /**
  * Dashboard layout access, backed by config.json's `dashboard.panels` block —
- * the single source of truth (the old globalState copy is migrated in
- * container.ts). Normalises against the current panel set so adding or
+ * the single source of truth. Normalises against the current panel set so adding or
  * removing a panel in a new version never breaks a saved layout.
  */
 import * as vscode from 'vscode';

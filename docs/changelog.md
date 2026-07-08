@@ -31,11 +31,10 @@
   of re-parsing everything. **Mallard: Prepare for Uninstall** remains the full
   wipe.
 - **One config store**: the dashboard layout moved from VS Code `globalState`
-  into `config.json`'s `dashboard.panels` block (migrated automatically), and the
-  now-redundant "Save to config" button was removed — every layout change saves
-  directly. The `mallard.currency` setting was removed; currency lives in
-  `config.json` and is set from the dashboard (an existing setting value is
-  copied over once on upgrade).
+  into `config.json`'s `dashboard.panels` block, and the now-redundant "Save to
+  config" button was removed — every layout change saves directly. The
+  `mallard.currency` setting was removed; currency lives in `config.json` and is
+  set from the dashboard.
 - **Billing on its own cadence**: a GitHub auth/billing refresh no longer forces
   a full usage recompute, chart rebuild, or metric export.
 - **Infisical support removed** from the server. It required its own Postgres +

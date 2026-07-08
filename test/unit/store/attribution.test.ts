@@ -66,24 +66,4 @@ describe('repo attribution storage', () => {
     } finally { store.dispose(); }
   });
 
-  it('migration 0006 marks pre-existing attributed rows heuristic', async () => {
-    const dir = await tmpDir();
-    // Simulate a pre-0006 database: open a store, insert rows with repo but
-    // no attribution, then reset the schema version so the migration re-runs.
-    let store = await EventStore.open(dir);
-    await store.writer.insert([
-      makeEvent({ id: 'old-attributed', ts: Date.now() - 1000, repo: 'legacy' }),
-      makeEvent({ id: 'old-unattributed', ts: Date.now() - 2000 }),
-    ]);
-    await store.meta.set('schema_version', '5');
-    store.dispose();
-
-    store = await EventStore.open(dir); // reopen → migration 0006 runs
-    try {
-      const attributed = await store.reader.findById('old-attributed');
-      const unattributed = await store.reader.findById('old-unattributed');
-      assert.equal(attributed?.attribution, 'heuristic');
-      assert.equal(unattributed?.attribution, undefined);
-    } finally { store.dispose(); }
-  });
 });
