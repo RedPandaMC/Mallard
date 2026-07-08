@@ -278,9 +278,7 @@ describe('StreamBatchSerializer', () => {
     assert.equal(events[0]!['credits'], 5);
     assert.equal(events[0]!['language'], 'typescript');
     assert.equal(events[0]!['connector'], 'local');
-    // Privacy: repo/branch never cross the wire.
-    assert.equal('repo' in events[0]!, false);
-    assert.equal('branch' in events[0]!, false);
+
   });
 });
 

@@ -21,6 +21,9 @@ def _event(**overrides) -> NormalizedEvent:
         estimated=True,
         event_id="local:f1:span-1",
         language="typescript",
+        repo="org/app",
+        branch="main",
+        attribution="heuristic",
         tokens={"prompt_tokens": 100},
         cost_by_category={"input": 0.12},
     )
@@ -74,13 +77,23 @@ class TestWritePayload:
         assert line.startswith("mallard_events,")
         for tag in ("source=team-a", "connector=local", "model=claude-sonnet-4-5",
                     "surface=agent", "language=typescript", "instance_id=abc123",
-                    "schema_version=1"):
+                    "schema_version=1", "repo=org/app", "branch=main",
+                    "attribution=heuristic"):
             assert tag in line, tag
 
     @pytest.mark.asyncio
     async def test_missing_language_tagged_unknown(self, write_api: AsyncMock) -> None:
         await write_payload(write_api, "b", "o", _batch([_event(language=None)]))
         assert "language=unknown" in _lines(write_api)[0]
+
+    @pytest.mark.asyncio
+    async def test_missing_repo_and_branch_get_neutral_tags(self, write_api: AsyncMock) -> None:
+        line_source = _batch([_event(repo=None, branch=None, attribution=None)])
+        await write_payload(write_api, "b", "o", line_source)
+        line = _lines(write_api)[0]
+        assert "repo=unattributed" in line
+        assert "branch=unknown" in line
+        assert "attribution=" not in line
 
     @pytest.mark.asyncio
     async def test_fields_carry_metrics_and_tokens(self, write_api: AsyncMock) -> None:

@@ -8,12 +8,13 @@
  * This is schema v1 of the streaming protocol — the earlier state-snapshot
  * payloads were deleted with it, there is exactly one wire version.
  *
- * Privacy: no repo names, branch names, or user identifiers are exported.
- * `instance_id` is a one-way SHA-256 hash of VS Code's machineId; event ids
- * embed only hashed file keys and span/uuid fragments. `language` is a
- * generic VS Code languageId (heuristically detected — directional).
+ * Repo, branch, and language are calculated on the edge and travel with
+ * each event; the server only aggregates them. Credential-label attribution
+ * (API key / cert CN / JWT claim) exists on the server alone. `instance_id`
+ * is a one-way SHA-256 hash of VS Code's machineId; event ids embed only
+ * hashed file keys and span/uuid fragments.
  */
-import type { SourceKind, UsageEvent } from '../domain/types';
+import type { RepoAttribution, SourceKind, UsageEvent } from '../domain/types';
 import type { MetricSerializer } from './MetricExporter';
 import { hashMachineId } from '../util/machineId';
 
@@ -40,6 +41,12 @@ export interface StreamEvent {
   cost_by_category?: Record<string, number>;
   /** Detected programming language (VS Code languageId) — heuristic, directional. */
   language?: string;
+  /** Repo this usage is attributed to (git slug or folder name), when resolvable. */
+  repo?: string;
+  /** Git branch active at parse time, when resolvable. */
+  branch?: string;
+  /** How repo was determined: 'authoritative' (from the log) or 'heuristic'. */
+  attribution?: RepoAttribution;
 }
 
 /** The wire payload: a batch of events from one ingest pass (chunked). */
@@ -76,6 +83,9 @@ export function toStreamEvent(e: UsageEvent): StreamEvent {
     ...(e.thinkingTokens !== undefined ? { thinking_tokens: e.thinkingTokens } : {}),
     ...(e.costByCategory !== undefined ? { cost_by_category: { ...e.costByCategory } } : {}),
     ...(e.language !== undefined ? { language: e.language } : {}),
+    ...(e.repo !== undefined ? { repo: e.repo } : {}),
+    ...(e.branch !== undefined ? { branch: e.branch } : {}),
+    ...(e.attribution !== undefined ? { attribution: e.attribution } : {}),
   };
 }
 

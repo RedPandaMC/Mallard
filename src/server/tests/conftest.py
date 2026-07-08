@@ -158,6 +158,9 @@ def valid_payload() -> dict:
                 "completion_tokens": 40,
                 "cost_by_category": {"input": 0.12, "output": 0.08},
                 "language": "typescript",
+                "repo": "org/app",
+                "branch": "main",
+                "attribution": "heuristic",
             },
             {
                 "id": "claude-code:s1:1700000000001:claude-haiku-3",

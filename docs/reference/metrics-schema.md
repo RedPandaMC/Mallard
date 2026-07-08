@@ -31,17 +31,20 @@ Each HTTP POST (or MQTT publish) carries one batch. Batches are chunked at 100 e
 | `prompt_tokens` … `thinking_tokens` | `number?` | Token counts; absent fields mean "not reported", never zero. |
 | `cost_by_category` | `Record<string, number>?` | USD split per category (input, output, cache_read, cache_creation, thinking, tool). |
 | `language` | `string?` | Detected programming language (VS Code languageId). Heuristic — the active editor at parse time, live events only — treat as directional. Absent events land under the `unknown` tag. |
+| `repo` | `string?` | Repo the usage is attributed to (git slug or workspace folder name), calculated on the edge. Absent events land under the `unattributed` tag. |
+| `branch` | `string?` | Git branch active at parse time (heuristic, live events only). |
+| `attribution` | `string?` | How `repo` was determined: `authoritative` (recorded in the source log) or `heuristic` (active-editor guess). |
 
-Privacy boundary: **no repo names, branch names, or user identifiers** appear on the wire. Repo/branch attribution stays on-device.
+The division of labour: repo, branch, and language are **calculated on the edge** and shipped with each event; the server only aggregates them. Attribution to an API-key label, cert CN, or JWT claim exists **only on the server** (the `source` tag) — the client never knows or sends its own label. `instance_id` stays a one-way hash; no user identifiers cross the wire.
 
 ## Storage layout (InfluxDB)
 
 One point per event in the `mallard_events` measurement, timestamped at the event's `ts`:
 
-- **Tags** (indexed, bounded, sanitised): `source` (the server-side credential label — API key label, cert CN, or JWT claim), `connector`, `model`, `surface`, `language`, `instance_id`, `schema_version`.
+- **Tags** (indexed, bounded, sanitised): `source` (the server-side credential label — API key label, cert CN, or JWT claim), `connector`, `model`, `surface`, `language`, `repo`, `branch`, `attribution`, `instance_id`, `schema_version`.
 - **Fields**: `credits`, `cost_usd`, `count` (always 1 — sum it for event counts), `estimated`, per-token-type counts, `cbc_<category>` cost splits, `event_id`, and `extra_json` for anything the server didn't recognize.
 
-The server-side `source` tag and the on-device labels compose: per-credential-per-language, per-team-per-model, and similar splits are single Flux `group()` calls.
+The server-side `source` tag and the edge-calculated labels compose: per-credential-per-repo, per-team-per-language, and similar splits are single Flux `group()` calls.
 
 ## Delivery semantics
 

@@ -9,9 +9,11 @@
   on-device — is published to the self-hosted server as it happens, chunked at
   100 events, with durable on-device retry. The server stores one InfluxDB
   point per event (`mallard_events`) tagged by credential label, connector,
-  model, surface, and detected language; Grafana derives every aggregate. The
+  model, surface, language, repo, and branch; Grafana derives every aggregate. The
   old state-snapshot payload (and its v3 schema) is deleted — v1 is the only
-  wire version. Repo and branch names still never leave the machine.
+  wire version. Repo, branch, and language are calculated on the edge and
+  travel with each event; credential-label attribution (API key / cert CN /
+  JWT claim) exists only on the server.
 
 - **Extra charts**: an **Add chart** button in the dashboard's analysis bar adds
   optional panels beyond the stock eight — spend by repository, cost categories

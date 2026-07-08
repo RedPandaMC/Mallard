@@ -25,20 +25,21 @@ describe('toStreamEvent', () => {
     });
   });
 
-  it('never exports repo, branch, or attribution (privacy boundary)', () => {
+  it('exports edge-calculated repo, branch, and attribution when present', () => {
     const e = makeEvent({
-      ts: 1, repo: 'secret/repo', branch: 'feature/x', attribution: 'heuristic',
+      ts: 1, repo: 'org/app', branch: 'feature/x', attribution: 'heuristic',
     });
     const wire = toStreamEvent(e) as unknown as Record<string, unknown>;
-    assert.equal('repo' in wire, false);
-    assert.equal('branch' in wire, false);
-    assert.equal('attribution' in wire, false);
+    assert.equal(wire['repo'], 'org/app');
+    assert.equal(wire['branch'], 'feature/x');
+    assert.equal(wire['attribution'], 'heuristic');
   });
 
   it('omits optional fields that are absent instead of sending zeros', () => {
     const wire = toStreamEvent(makeEvent({ ts: 1 })) as unknown as Record<string, unknown>;
     for (const k of ['prompt_tokens', 'completion_tokens', 'cache_creation_tokens',
-                     'cache_read_tokens', 'thinking_tokens', 'cost_by_category', 'language']) {
+                     'cache_read_tokens', 'thinking_tokens', 'cost_by_category', 'language',
+                     'repo', 'branch', 'attribution']) {
       assert.equal(k in wire, false, k);
     }
   });

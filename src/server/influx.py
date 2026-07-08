@@ -61,8 +61,10 @@ async def write_payload(
     """Write one InfluxDB point per event in the batch (single write call).
 
     Tags carry the queryable dimensions: `source` is the server-side credential
-    label (who sent it), `connector`/`model`/`surface`/`language` are the
-    on-device labels (what produced it). The event timestamp is the point
+    label (who sent it — API key label, cert CN, or JWT claim; it exists only
+    here), while `connector`/`model`/`surface`/`language`/`repo`/`branch` are
+    calculated on the edge and shipped with each event; the server only
+    aggregates them. The event timestamp is the point
     timestamp, so the series reflects when the usage happened, not when the
     batch arrived. The client event id is written as a field — not a tag, to
     keep cardinality bounded — so duplicates from retries can be audited.
@@ -78,6 +80,8 @@ async def write_payload(
             .tag("model", _tag_value(e.model))
             .tag("surface", _tag_value(e.surface))
             .tag("language", _tag_value(e.language) if e.language else "unknown")
+            .tag("repo", _tag_value(e.repo) if e.repo else "unattributed")
+            .tag("branch", _tag_value(e.branch) if e.branch else "unknown")
             .field("credits", float(e.credits))
             .field("cost_usd", float(e.cost_usd))
             .field("estimated", bool(e.estimated))
@@ -87,6 +91,8 @@ async def write_payload(
             point = point.field(name, int(value))
         for key, value in e.cost_by_category.items():
             point = point.field(_field_key("cbc", key), float(value))
+        if e.attribution:
+            point = point.tag("attribution", _tag_value(e.attribution))
         if e.event_id:
             point = point.field("event_id", e.event_id[:128])
         if e.extra:

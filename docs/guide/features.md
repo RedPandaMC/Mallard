@@ -129,7 +129,7 @@ This is Copilot-specific and stays that way: GitHub exposes a user-scoped billin
 
 ## Event streaming
 
-Mallard can stream usage events to a self-hosted server via webhook or MQTT — set `mallard.server.url` and `mallard.export.transport`. Every batch of freshly ingested events is priced and labeled on-device and published as finished records (model, surface, connector, credits, USD cost, tokens, detected language); the server just stores them, one InfluxDB point per event, and Grafana derives the aggregates. Failed sends queue durably and re-deliver in order. No repo or branch names ever leave the machine. See the Metrics Schema reference for the wire format.
+Mallard can stream usage events to a self-hosted server via webhook or MQTT — set `mallard.server.url` and `mallard.export.transport`. Every batch of freshly ingested events is priced and labeled on-device and published as finished records (model, surface, connector, credits, USD cost, tokens, repo, branch, detected language); the server just stores them, one InfluxDB point per event, and Grafana derives the aggregates. Failed sends queue durably and re-deliver in order. Credential-label attribution (API key / cert CN / JWT claim) happens only on the server. See the Metrics Schema reference for the wire format.
 
 ## Export
 

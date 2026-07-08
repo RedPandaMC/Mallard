@@ -36,7 +36,8 @@ _TOKEN_FIELDS = (
 
 _KNOWN_EVENT_FIELDS = frozenset(
     ("id", "ts", "connector", "model", "surface", "credits", "cost_usd",
-     "estimated", "cost_by_category", "language", *_TOKEN_FIELDS)
+     "estimated", "cost_by_category", "language", "repo", "branch",
+     "attribution", *_TOKEN_FIELDS)
 )
 
 
@@ -53,6 +54,9 @@ class NormalizedEvent:
     estimated: bool
     event_id: str | None = None
     language: str | None = None
+    repo: str | None = None
+    branch: str | None = None
+    attribution: str | None = None
     tokens: dict[str, int] = field(default_factory=dict)
     cost_by_category: dict[str, float] = field(default_factory=dict)
     extra: dict[str, Any] = field(default_factory=dict)
@@ -117,6 +121,9 @@ def _normalize_event(raw: dict[str, Any], fallback_ts_ms: int) -> NormalizedEven
         estimated=bool(raw.get("estimated", True)),
         event_id=_coerce_str(raw.get("id")),
         language=_coerce_str(raw.get("language")),
+        repo=_coerce_str(raw.get("repo")),
+        branch=_coerce_str(raw.get("branch")),
+        attribution=_coerce_str(raw.get("attribution")),
         tokens=tokens,
         cost_by_category=_coerce_num_map(raw.get("cost_by_category")),
         extra={k: v for k, v in raw.items() if k not in _KNOWN_EVENT_FIELDS},

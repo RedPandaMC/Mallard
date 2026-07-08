@@ -32,6 +32,9 @@ def _batch(**overrides) -> dict:
                 "completion_tokens": 40,
                 "cost_by_category": {"input": 0.12, "output": 0.08},
                 "language": "typescript",
+                "repo": "org/app",
+                "branch": "main",
+                "attribution": "heuristic",
             }
         ],
     }
@@ -61,6 +64,9 @@ class TestNormalizeBatch:
         assert e.estimated is True
         assert e.event_id == "local:f1:span-1"
         assert e.language == "typescript"
+        assert e.repo == "org/app"
+        assert e.branch == "main"
+        assert e.attribution == "heuristic"
         assert e.tokens == {"prompt_tokens": 100, "completion_tokens": 40}
         assert e.cost_by_category == {"input": 0.12, "output": 0.08}
         assert e.extra == {}
@@ -82,6 +88,9 @@ class TestNormalizeBatch:
         assert e.estimated is True
         assert e.event_id is None
         assert e.language is None
+        assert e.repo is None
+        assert e.branch is None
+        assert e.attribution is None
 
     def test_missing_sent_at_falls_back_to_receipt_time(self) -> None:
         raw = _batch()
