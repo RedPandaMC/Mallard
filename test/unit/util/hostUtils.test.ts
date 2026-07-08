@@ -11,6 +11,7 @@ import {
 } from '../../../src/extension-backend/util/extensionDetector';
 import { defaultVscodeHost } from '../../../src/extension-backend/util/vscodeHost';
 import { LayoutStore } from '../../../src/extension-backend/app/LayoutStore';
+import { activeLanguage } from '../../../src/extension-backend/util/editor';
 import { UserConfigStore } from '../../../src/extension-backend/app/UserConfigStore';
 import { DASHBOARD_PANELS, DashboardLayout } from '../../../src/extension-backend/domain/types';
 
@@ -140,5 +141,17 @@ describe('LayoutStore (config.json-backed)', () => {
     assert.equal(fired.length, 0);
     store.dispose();
     userConfig.dispose();
+  });
+});
+
+describe('activeLanguage', () => {
+  it('returns the active editor languageId', () => {
+    win.activeTextEditor = { document: { languageId: 'rust' } } as never;
+    assert.equal(activeLanguage(), 'rust');
+  });
+
+  it('returns undefined when no editor is open', () => {
+    win.activeTextEditor = undefined as never;
+    assert.equal(activeLanguage(), undefined);
   });
 });

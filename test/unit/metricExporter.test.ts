@@ -260,6 +260,58 @@ describe('MetricExporter (offline queue + retry)', () => {
 
 // ── MetricPayloadSerializer ───────────────────────────────────────────────────
 
+describe('MetricExporter — concurrent export during a flush', () => {
+  it('queues (never drops) a batch that arrives while a flush is in flight', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mallard-flushing-'));
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => { release = r; });
+    const calls: string[] = [];
+    const protocol: MetricProtocol = {
+      async send(_topic, payload) {
+        calls.push(JSON.stringify(payload));
+        await gate; // hold the first send open
+        return { ok: true };
+      },
+      dispose() {},
+    };
+    const queue = new ExportQueue(dir, 'concurrent.json');
+    const serializer: MetricSerializer = { topic: 't', serialize: (b) => ({ n: b.sent_at }) };
+    const exporter = new MetricExporter(protocol, serializer, queue);
+
+    const first = exporter.export({ ...makeSnapshot(), sent_at: 1 });
+    // Second batch lands mid-flight: must be enqueued, not dropped.
+    await exporter.export({ ...makeSnapshot(), sent_at: 2 });
+    assert.equal(queue.peekAll().length, 1);
+    assert.deepEqual(queue.peekAll()[0]!.payload, { n: 2 });
+
+    release();
+    await first;
+    // The next export flushes the queued batch first, preserving order.
+    await exporter.export({ ...makeSnapshot(), sent_at: 3 });
+    assert.deepEqual(calls.map((c) => JSON.parse(c).n), [1, 2, 3]);
+    assert.equal(queue.peekAll().length, 0);
+    exporter.dispose();
+  });
+});
+
+describe('MetricExporter — concurrent export without a queue', () => {
+  it('drops the mid-flush batch harmlessly when no durable queue exists', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => { release = r; });
+    const protocol: MetricProtocol = {
+      async send() { await gate; return { ok: true }; },
+      dispose() {},
+    };
+    const serializer: MetricSerializer = { topic: 't', serialize: (b) => ({ n: b.sent_at }) };
+    const exporter = new MetricExporter(protocol, serializer);
+    const first = exporter.export(makeSnapshot());
+    await assert.doesNotReject(exporter.export(makeSnapshot()));
+    release();
+    await first;
+    exporter.dispose();
+  });
+});
+
 describe('StreamBatchSerializer', () => {
   const serializer = new StreamBatchSerializer();
 

@@ -208,6 +208,21 @@ describe('UsageService — GitHub billing + alert rule notify', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
+  it('applies the config.json currency with a fallback FX rate of 1 when unknown', async () => {
+    const dir2 = await tmpDir();
+    const eurConfig = new UserConfigStore(dir2);
+    await eurConfig.set({ currency: 'EUR' });
+    const svc = new UsageService(makeReader(), pricing, ingest, eurConfig, currency);
+    await svc.start();
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(svc.current?.currency, 'EUR');
+    // currentRates() has no EUR entry — the ?? 1 fallback keeps costs unscaled.
+    assert.equal(svc.current?.pricePerCredit, pricing.pricePerCredit);
+    svc.dispose();
+    eurConfig.dispose();
+    await fs.rm(dir2, { recursive: true, force: true });
+  });
+
   it('billing-only updates re-emit without re-reading the store', async () => {
     let reads = 0;
     const reader: IEventSnapshotReader = {

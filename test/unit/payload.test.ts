@@ -45,6 +45,17 @@ describe('toStreamEvent', () => {
   });
 });
 
+describe('toStreamEvent — full token breakdown', () => {
+  it('maps cache and thinking token counts when present', () => {
+    const wire = toStreamEvent(makeEvent({
+      ts: 1, cacheCreationTokens: 7, cacheReadTokens: 9, thinkingTokens: 3,
+    })) as unknown as Record<string, unknown>;
+    assert.equal(wire['cache_creation_tokens'], 7);
+    assert.equal(wire['cache_read_tokens'], 9);
+    assert.equal(wire['thinking_tokens'], 3);
+  });
+});
+
 describe('buildStreamBatch', () => {
   it('wraps events in a v1 envelope with instance hash and send time', () => {
     const before = Date.now();
@@ -72,5 +83,13 @@ describe('chunkEvents', () => {
 
   it('returns no chunks for no events', () => {
     assert.deepEqual(chunkEvents([]), []);
+  });
+
+  it('honours an explicit chunk size', () => {
+    const events = [makeEvent({ id: 'a', ts: 2 }), makeEvent({ id: 'b', ts: 1 }), makeEvent({ id: 'c', ts: 3 })];
+    const chunks = chunkEvents(events, 2);
+    assert.equal(chunks.length, 2);
+    assert.deepEqual(chunks[0]!.map((e) => e.id), ['b', 'a']);
+    assert.deepEqual(chunks[1]!.map((e) => e.id), ['c']);
   });
 });

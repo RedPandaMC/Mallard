@@ -184,4 +184,5 @@ export const CHART_REGISTRY: readonly ChartDef[] = [
     isDirty: changed,
     noData: (s) => !(s.githubBilling?.items ?? []).some((it) => it.netAmount > 0 || it.grossAmount > 0),
   },
+/* c8 ignore next */
 ];

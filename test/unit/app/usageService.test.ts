@@ -20,14 +20,14 @@ function fixtureData(): SnapshotSourceData {
     },
     estimatedEventCount: 9,
     daily: [
-      { dayStart: TODAY - 86_400_000, credits: 25, cost: 1.0, tokens: 7500, eventCount: 10, catInput: 0, catOutput: 0, catCacheRead: 0, catCacheCreation: 0, catThinking: 0, catTool: 0 },
+      { dayStart: TODAY - 86_400_000, credits: 25, cost: 1.0, tokens: 7500, eventCount: 10, catInput: 0.3, catOutput: 0.4, catCacheRead: 0.1, catCacheCreation: 0.1, catThinking: 0.05, catTool: 0.05 },
       { dayStart: TODAY,              credits: 5,  cost: 0.2, tokens: 1500, eventCount: 2, catInput: 0, catOutput: 0, catCacheRead: 0, catCacheCreation: 0, catThinking: 0, catTool: 0 },
     ],
     models: [
       { modelId: 'claude-sonnet-4-5', credits: 18, cost: 0.72, tokens: 6000 },
       { modelId: 'gpt-4o',            credits: 12, cost: 0.48, tokens: 3000 },
     ],
-    languages: [],
+    languages: [{ language: 'typescript', credits: 12, cost: 0.5, tokens: 4000 }],
     repos: [{ repo: 'mallard', credits: 30, cost: 1.2, tokens: 9000, heuristicShare: 0 }],
     hourly: [{ hourLocal: 14, credits: 22 }, { hourLocal: 9, credits: 8 }],
     categories: [{ category: 'input', cost: 0.5 }, { category: 'output', cost: 0.7 }],
@@ -118,6 +118,8 @@ describe('UsageService — snapshot assembly (merged compute path)', () => {
     assert.deepEqual(s.allSources, ['claude-code', 'local']);
     assert.equal(s.topModels[0]!.key, 'claude-sonnet-4-5');
     assert.equal(s.byRepo[0]!.key, 'mallard');
+    assert.equal(s.byLanguage[0]!.key, 'typescript');
+    assert.equal(s.byLanguage[0]!.credits, 12);
     assert.deepEqual(s.sankeyLinks, [{ source: 'claude-sonnet-4-5', target: 'agent', value: 18 }]);
     assert.equal(s.totalEventCount, 12);
     assert.equal(s.estimatedEventCount, 9);
