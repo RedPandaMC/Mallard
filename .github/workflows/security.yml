@@ -74,9 +74,9 @@ jobs:
           #     patches; each only lists env/envFrom, so Trivy sees an incomplete container
           #     spec and flags missing securityContext/resources/probes that the base
           #     Deployment (src/server/k8s/server/) already sets.
-          #   secrets.yaml.example (root, infisical, openbao) — template files with
+          #   secrets.yaml.example (root, openbao) — template files with
           #     CHANGE_ME placeholders, not real credentials.
-          skip-files: "src/server/k8s/infisical/patch-server-envfrom.yaml,src/server/k8s/openbao/patch-server-env.yaml,src/server/k8s/secrets.yaml.example,src/server/k8s/infisical/secrets.yaml.example,src/server/k8s/openbao/secrets.yaml.example"
+          skip-files: "src/server/k8s/openbao/patch-server-env.yaml,src/server/k8s/secrets.yaml.example,src/server/k8s/openbao/secrets.yaml.example"
 
       - name: Upload Trivy IaC SARIF
         uses: github/codeql-action/upload-sarif@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3

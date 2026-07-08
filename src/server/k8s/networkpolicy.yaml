@@ -37,18 +37,10 @@ spec:
               app: influxdb
       ports:
         - port: 8086
-    # mallard-server → secret manager. Without one of these rules the server
-    # cannot fetch credentials at all: /health stays green (it needs no
+    # mallard-server → OpenBao (only needed with SECRET_MANAGER_TYPE=openbao;
+    # harmless but removable in the default static setup). Without it the
+    # server cannot fetch credentials: /health stays green (it needs no
     # credentials) but every ingest fails 503 once the cache is cold.
-    # Keep the block matching your SECRET_MANAGER_TYPE; remove the other.
-    # Infisical (in-cluster install, see k8s/infisical/):
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: infisical
-      ports:
-        - port: 8080
-    # OpenBao (in-cluster install, see k8s/openbao/):
     - to:
         - namespaceSelector:
             matchLabels:

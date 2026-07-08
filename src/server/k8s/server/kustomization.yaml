@@ -1,6 +1,7 @@
-# Base for the secret-manager overlays (k8s/infisical/, k8s/openbao/), both of
-# which reference `../server` as a resource. Without this file, kustomize
-# cannot resolve the base and `kubectl apply -k` fails for either overlay.
+# The complete default deployment (static credentials from
+# mallard-server-secrets — see k8s/secrets.yaml.example): `kubectl apply -k
+# k8s/server/`. Also the base the k8s/openbao/ overlay builds on for
+# live-rotated credentials.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

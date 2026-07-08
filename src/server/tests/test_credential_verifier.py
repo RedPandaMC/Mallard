@@ -197,20 +197,20 @@ class TestStaticCredentialVerifier:
         assert await verifier.lookup_cert_label("unmapped-cn") is None
 
 
-# ── RemoteCredentialVerifier caching (via InfisicalCredentialVerifier) ─────────
+# ── RemoteCredentialVerifier caching (via OpenBaoCredentialVerifier) ─────────
 
 
 class TestRemoteCredentialVerifierCaching:
-    def _make_infisical_verifier(self, ttl: int = 30):
-        from server.credential_verifier import InfisicalCredentialVerifier
+    def _make_remote_verifier(self, ttl: int = 30):
+        from server.credential_verifier import OpenBaoCredentialVerifier
 
         s = MagicMock()
-        s.secret_manager_url = "http://infisical"
+        s.secret_manager_url = "http://openbao:8200"
         s.secret_manager_token = "tok"
         s.secret_manager_ca_cert_path = ""
-        s.infisical_project_id = "proj"
-        s.infisical_env_slug = "prod"
-        v = InfisicalCredentialVerifier(s, ttl_seconds=ttl)
+        s.openbao_secret_path = "secret/data/mallard/server"
+        s.openbao_namespace = ""
+        v = OpenBaoCredentialVerifier(s, ttl_seconds=ttl)
         return v
 
     def _mock_store(self, api_key: str = "key", label: str = "lbl"):
@@ -220,7 +220,7 @@ class TestRemoteCredentialVerifierCaching:
         return CredentialStore(api_keys={h: label})
 
     async def test_fetch_store_called_on_first_access(self) -> None:
-        verifier = self._make_infisical_verifier()
+        verifier = self._make_remote_verifier()
         store = self._mock_store()
 
         with patch.object(verifier, "_fetch_store", new=AsyncMock(return_value=store)) as mock_fetch:
@@ -228,7 +228,7 @@ class TestRemoteCredentialVerifierCaching:
             mock_fetch.assert_called_once()
 
     async def test_cache_used_within_ttl(self) -> None:
-        verifier = self._make_infisical_verifier(ttl=60)
+        verifier = self._make_remote_verifier(ttl=60)
         store = self._mock_store()
 
         with patch.object(verifier, "_fetch_store", new=AsyncMock(return_value=store)) as mock_fetch:
@@ -237,7 +237,7 @@ class TestRemoteCredentialVerifierCaching:
             mock_fetch.assert_called_once()  # only fetched once
 
     async def test_refetch_after_ttl_expires(self) -> None:
-        verifier = self._make_infisical_verifier(ttl=0)  # TTL = 0 always expires
+        verifier = self._make_remote_verifier(ttl=0)  # TTL = 0 always expires
         store = self._mock_store()
 
         with patch.object(verifier, "_fetch_store", new=AsyncMock(return_value=store)) as mock_fetch:
@@ -252,7 +252,7 @@ class TestRemoteCredentialVerifierCaching:
 
     async def test_concurrent_calls_fetch_once(self) -> None:
         """Lock prevents thundering herd — only one fetch even under concurrency."""
-        verifier = self._make_infisical_verifier(ttl=60)
+        verifier = self._make_remote_verifier(ttl=60)
         store = self._mock_store()
 
         fetch_count = 0
@@ -271,7 +271,7 @@ class TestRemoteCredentialVerifierCaching:
     async def test_verify_api_key_via_cached_store(self) -> None:
         from server.credential_verifier import VerifiedIdentity
 
-        verifier = self._make_infisical_verifier()
+        verifier = self._make_remote_verifier()
         store = self._mock_store(api_key="my-key", label="my-team")
 
         with patch.object(verifier, "_fetch_store", new=AsyncMock(return_value=store)):
@@ -281,7 +281,7 @@ class TestRemoteCredentialVerifierCaching:
     async def test_verify_mqtt_via_cached_store(self) -> None:
         from server.credential_verifier import CredentialStore
 
-        verifier = self._make_infisical_verifier()
+        verifier = self._make_remote_verifier()
         h = hashlib.sha256(b"mqtt-pass").hexdigest()
         store = CredentialStore(api_keys={}, mqtt_password_hash=h)
 
@@ -292,7 +292,7 @@ class TestRemoteCredentialVerifierCaching:
     async def test_lookup_cert_label_via_cached_store(self) -> None:
         from server.credential_verifier import CredentialStore
 
-        verifier = self._make_infisical_verifier()
+        verifier = self._make_remote_verifier()
         store = CredentialStore(cert_labels={"build-agent": "ci"})
 
         with patch.object(verifier, "_fetch_store", new=AsyncMock(return_value=store)):
@@ -301,17 +301,17 @@ class TestRemoteCredentialVerifierCaching:
 
     async def test_first_fetch_failure_propagates_to_caller(self) -> None:
         """No cache yet → exception from _fetch_store propagates."""
-        verifier = self._make_infisical_verifier()
+        verifier = self._make_remote_verifier()
 
         with patch.object(
-            verifier, "_fetch_store", new=AsyncMock(side_effect=RuntimeError("infisical down"))
+            verifier, "_fetch_store", new=AsyncMock(side_effect=RuntimeError("openbao down"))
         ):
-            with pytest.raises(RuntimeError, match="infisical down"):
+            with pytest.raises(RuntimeError, match="openbao down"):
                 await verifier._get_store()
 
     async def test_first_fetch_failure_verify_api_key_raises(self) -> None:
         """No cache yet → verify_api_key raises rather than returning None."""
-        verifier = self._make_infisical_verifier()
+        verifier = self._make_remote_verifier()
 
         with patch.object(
             verifier, "_fetch_store", new=AsyncMock(side_effect=RuntimeError("network error"))
@@ -321,7 +321,7 @@ class TestRemoteCredentialVerifierCaching:
 
     async def test_subsequent_fetch_failure_returns_stale_cache(self) -> None:
         """After a successful fetch, a later failure keeps serving the old store."""
-        verifier = self._make_infisical_verifier(ttl=0)
+        verifier = self._make_remote_verifier(ttl=0)
         initial_store = self._mock_store(api_key="valid-key", label="team-a")
 
         with patch.object(verifier, "_fetch_store", new=AsyncMock(return_value=initial_store)):
@@ -348,7 +348,7 @@ class TestRemoteCredentialVerifierCaching:
         """verify_api_key succeeds against stale cache when refresh fails."""
         from server.credential_verifier import CredentialStore, VerifiedIdentity
 
-        verifier = self._make_infisical_verifier(ttl=0)
+        verifier = self._make_remote_verifier(ttl=0)
         initial_store = self._mock_store(api_key="good-key", label="my-team")
 
         with patch.object(verifier, "_fetch_store", new=AsyncMock(return_value=initial_store)):
@@ -365,148 +365,6 @@ class TestRemoteCredentialVerifierCaching:
             result = await verifier.verify_api_key("good-key")
 
         assert result == VerifiedIdentity(label="my-team")
-
-
-# ── InfisicalCredentialVerifier._fetch_store ──────────────────────────────────
-
-
-class TestInfisicalFetchStore:
-    def _make_settings(self):
-        s = MagicMock()
-        s.secret_manager_url = "http://infisical"
-        s.secret_manager_token = "tok"
-        s.secret_manager_ca_cert_path = ""
-        s.infisical_project_id = "proj-123"
-        s.infisical_env_slug = "prod"
-        return s
-
-    async def test_success_parses_response(self) -> None:
-        from server.credential_verifier import InfisicalCredentialVerifier
-
-        response_json = {
-            "secrets": [
-                {"secretKey": "API_KEYS", "secretValue": "team-a:key-a"},
-                {"secretKey": "MQTT_PASSWORD", "secretValue": "broker-pass"},
-                {"secretKey": "CERT_LABELS", "secretValue": "ci:build-agent"},
-            ]
-        }
-
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json = MagicMock(return_value=response_json)
-
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.get = AsyncMock(return_value=mock_response)
-
-        with patch("server.credential_verifier.httpx.AsyncClient", return_value=mock_client):
-            verifier = InfisicalCredentialVerifier(self._make_settings())
-            store = await verifier._fetch_store()
-
-        h = hashlib.sha256(b"key-a").hexdigest()
-        assert store.api_keys[h] == "team-a"
-        assert store.mqtt_password_hash == hashlib.sha256(b"broker-pass").hexdigest()
-        assert store.cert_labels == {"build-agent": "ci"}
-
-    async def test_missing_keys_graceful(self) -> None:
-        from server.credential_verifier import InfisicalCredentialVerifier
-
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json = MagicMock(return_value={"secrets": []})
-
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.get = AsyncMock(return_value=mock_response)
-
-        with patch("server.credential_verifier.httpx.AsyncClient", return_value=mock_client):
-            verifier = InfisicalCredentialVerifier(self._make_settings())
-            store = await verifier._fetch_store()
-
-        assert store.api_keys == {}
-        assert store.cert_labels == {}
-        assert store.mqtt_password_hash is None
-
-    async def test_malformed_json_raises_value_error(self) -> None:
-        from server.credential_verifier import InfisicalCredentialVerifier
-
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json = MagicMock(return_value={"unexpected": "shape"})
-
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.get = AsyncMock(return_value=mock_response)
-
-        with patch("server.credential_verifier.httpx.AsyncClient", return_value=mock_client):
-            verifier = InfisicalCredentialVerifier(self._make_settings())
-            with pytest.raises(ValueError, match="Unexpected Infisical response shape"):
-                await verifier._fetch_store()
-
-    async def test_http_error_raises(self) -> None:
-        from server.credential_verifier import InfisicalCredentialVerifier
-
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock(
-            side_effect=Exception("HTTP 401 Unauthorized")
-        )
-
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.get = AsyncMock(return_value=mock_response)
-
-        with patch("server.credential_verifier.httpx.AsyncClient", return_value=mock_client):
-            verifier = InfisicalCredentialVerifier(self._make_settings())
-            with pytest.raises(Exception):
-                await verifier._fetch_store()
-
-    async def test_network_error_raises(self) -> None:
-        from server.credential_verifier import InfisicalCredentialVerifier
-
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.get = AsyncMock(side_effect=httpx.ConnectError("refused"))
-
-        with patch("server.credential_verifier.httpx.AsyncClient", return_value=mock_client):
-            verifier = InfisicalCredentialVerifier(self._make_settings())
-            with pytest.raises(httpx.ConnectError):
-                await verifier._fetch_store()
-
-    async def test_uses_ca_cert_path_when_set(self) -> None:
-        from server.credential_verifier import InfisicalCredentialVerifier
-
-        s = self._make_settings()
-        s.secret_manager_ca_cert_path = "/path/to/ca.crt"
-
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json = MagicMock(return_value={"secrets": []})
-
-        captured_verify: list = []
-
-        class _FakeClient:
-            def __init__(self, **kwargs):
-                captured_verify.append(kwargs.get("verify"))
-
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *_):
-                pass
-
-            async def get(self, *args, **kwargs):
-                return mock_response
-
-        with patch("server.credential_verifier.httpx.AsyncClient", _FakeClient):
-            verifier = InfisicalCredentialVerifier(s)
-            await verifier._fetch_store()
-
-        assert captured_verify[0] == "/path/to/ca.crt"
 
 
 # ── OpenBaoCredentialVerifier._fetch_store ────────────────────────────────────
@@ -650,11 +508,11 @@ class TestCreateVerifierFactory:
         s.secret_manager_type = sm_type
         return s
 
-    def test_infisical_type_returns_infisical(self) -> None:
-        from server.credential_verifier import InfisicalCredentialVerifier, create_verifier
+    def test_static_type_returns_static(self) -> None:
+        from server.credential_verifier import StaticCredentialVerifier, create_verifier
 
-        result = create_verifier(self._make_settings("infisical"))
-        assert isinstance(result, InfisicalCredentialVerifier)
+        result = create_verifier(self._make_settings("static"))
+        assert isinstance(result, StaticCredentialVerifier)
 
     def test_openbao_type_returns_openbao(self) -> None:
         from server.credential_verifier import OpenBaoCredentialVerifier, create_verifier
