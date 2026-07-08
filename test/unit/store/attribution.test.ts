@@ -66,4 +66,25 @@ describe('repo attribution storage', () => {
     } finally { store.dispose(); }
   });
 
+  it('round-trips language and aggregates per-language spend', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    try {
+      const now = Date.now();
+      await store.writer.insert([
+        makeEvent({ id: 'l1', ts: now - 1000, language: 'typescript', credits: 3, cost: 0.3 }),
+        makeEvent({ id: 'l2', ts: now - 2000, language: 'typescript', credits: 1, cost: 0.1 }),
+        makeEvent({ id: 'l3', ts: now - 3000, language: 'python', credits: 2, cost: 0.2 }),
+        makeEvent({ id: 'l4', ts: now - 4000, credits: 5, cost: 0.5 }),
+      ]);
+      const row = await store.reader.findById('l1');
+      assert.equal(row?.language, 'typescript');
+
+      const data = await store.reader.readFilteredSnapshot({});
+      const byLang = new Map(data.languages.map((l) => [l.language, l]));
+      assert.equal(byLang.get('typescript')?.credits, 4);
+      assert.equal(byLang.get('python')?.credits, 2);
+      assert.equal(byLang.get('unknown')?.credits, 5);
+    } finally { store.dispose(); }
+  });
 });

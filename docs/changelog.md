@@ -10,6 +10,11 @@
   resize, and hide like the stock ones, and the whole arrangement persists to
   `config.json`. Under the hood, all charts are now driven by a single registry,
   so a future chart is one entry instead of seven hand-wired touchpoints.
+- **Language detection**: each live event is tagged with the active editor's
+  language (VS Code languageId), using the same live-window rule as repo/branch
+  attribution — backfilled history stays untagged. Spend per language shows up
+  as a new `≈ By language` extra chart and as an additive `language_credits`
+  map in the metric export payload.
 - **Repo attribution provenance**: every event now records *how* it got its repo.
   Claude Code events are attributed authoritatively from the working directory
   recorded in the log; Copilot events use the active-editor heuristic and are

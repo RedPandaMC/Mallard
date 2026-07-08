@@ -123,6 +123,7 @@ export function buildSnapshot(events: readonly UsageEvent[], opts: SnapshotOptio
     sankeyLinks: sankeyLinksFor(events, opts.filter),
     allRepos: distinctRepos(dim),
     byRepo: topBy(events, 'repo', opts.filter),
+    byLanguage: topBy(events, 'language', opts.filter),
     chartData: buildChartData(
       dayAggregates,
       topModels,

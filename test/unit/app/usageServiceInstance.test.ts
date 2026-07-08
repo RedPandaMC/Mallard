@@ -26,6 +26,7 @@ const EMPTY_DATA: SnapshotSourceData = {
   estimatedEventCount: 0,
   daily: [],
   models: [],
+  languages: [],
   repos: [],
   hourly: [],
   categories: [],

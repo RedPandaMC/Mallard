@@ -79,7 +79,7 @@ export function aggregateBy(
 
 export function topBy(
   events: readonly UsageEvent[],
-  dimension: 'model' | 'surface' | 'repo',
+  dimension: 'model' | 'surface' | 'repo' | 'language',
   filter?: Filter,
   limit = 8,
 ): TopEntry[] {
@@ -91,7 +91,9 @@ export function topBy(
         ? entry.modelId
         : dimension === 'surface'
           ? entry.surface
-          : (entry.repo ?? UNATTRIBUTED_REPO);
+          : dimension === 'repo'
+          ? (entry.repo ?? UNATTRIBUTED_REPO)
+          : (entry.language ?? 'unknown');
     const topEntry = map.get(key) ?? { key, credits: 0, cost: 0, tokens: 0 };
     topEntry.credits += entry.credits;
     topEntry.cost += entry.cost;

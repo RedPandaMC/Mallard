@@ -82,6 +82,12 @@ export interface UsageEvent {
    */
   attribution?: RepoAttribution;
   /**
+   * Programming language this usage is attributed to (VS Code languageId).
+   * Heuristic like the repo fallback — the active editor's language at parse
+   * time, applied to live rows only — unless the source log names one.
+   */
+  language?: string;
+  /**
    * Per-category cost split. Optional + partial so the dimension is addable
    * without backfilling old rows; absent → treat the whole event as 'unknown'.
    * When fully attributed, the present entries sum to `cost`.
@@ -388,6 +394,7 @@ export const DASHBOARD_PANELS = [
   'categoryTrend',
   'tokens',
   'billing',
+  'languages',
 ] as const;
 
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
@@ -405,6 +412,7 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
   { id: 'categoryTrend', span: 2, hidden: true, size: 'normal' },
   { id: 'tokens', span: 1, hidden: true, size: 'normal' },
   { id: 'billing', span: 1, hidden: true, size: 'normal' },
+  { id: 'languages', span: 1, hidden: true, size: 'normal' },
 /* c8 ignore next */
 ];
 
@@ -653,6 +661,12 @@ export interface SnapshotDims {
   allRepos: string[];
   /** Per-repo spend, for workspace-aware attribution. */
   byRepo: TopEntry[];
+  /**
+   * Per-language spend. Detected like the repo heuristic — the active
+   * editor's languageId at parse time, live rows only — unless the source
+   * log names a language. Rows without one aggregate under 'unknown'.
+   */
+  byLanguage: TopEntry[];
 }
 
 /** GitHub auth + billing state; refreshed independently of usage data. */

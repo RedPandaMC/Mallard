@@ -60,6 +60,7 @@ class IngestPayloadV3(BaseModel):
     estimated_event_count: int | None = None
     model_credits: dict[str, object] = Field(default_factory=dict)
     surface_credits: dict[str, object] = Field(default_factory=dict)
+    language_credits: dict[str, object] = Field(default_factory=dict)
     cost_by_category: dict[str, object] = Field(default_factory=dict)
 
     # Dimension metadata

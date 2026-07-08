@@ -25,6 +25,7 @@ import { mountRepoBreakdown } from './repoBreakdown';
 import { mountCategoryTrend } from './categoryTrend';
 import { mountTokensTimeline } from './tokensTimeline';
 import { mountBillingItems } from './billingItems';
+import { mountLanguageBreakdown } from './languageBreakdown';
 
 /** Per-render context beyond the snapshot itself. */
 export interface RenderCtx {
@@ -166,6 +167,14 @@ export const CHART_REGISTRY: readonly ChartDef[] = [
     select: (s) => s.chartData.tokensDaily,
     isDirty: changed,
     noData: (s) => !s.chartData.tokensDaily.tokens.some((v) => v > 0),
+  },
+  {
+    id: 'languages', tier: 'extra', icon: 'codicon-code',
+    title: '≈ By language', bodyId: 'chart-languages', ariaLabel: 'Spend by detected language', bodyClass: 'mini',
+    mount: (el) => plain(mountLanguageBreakdown(el)),
+    select: (s) => s.byLanguage,
+    isDirty: changed,
+    noData: (s) => !s.byLanguage.some((l) => l.key !== 'unknown' && (l.credits > 0 || l.cost > 0)),
   },
   {
     id: 'billing', tier: 'extra', icon: 'codicon-credit-card',

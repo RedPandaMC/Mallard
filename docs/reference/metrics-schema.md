@@ -53,6 +53,7 @@ to Flux/Grafana, where it can be done correctly for any group of instances.
 | `estimated_event_count` | `number` | Events whose cost is estimated (log-derived) rather than authoritative GitHub billing. Divide by `total_event_count` server-side for the estimated ratio. |
 | `model_credits` | `Record<string, number>` | Absolute credits per model id. The server expands each entry into its own InfluxDB field (`model_credits_<id>`). |
 | `surface_credits` | `Record<string, number>` | Absolute credits per surface (`surface_credits_<surface>` fields). |
+| `language_credits` | `Record<string, number>` | Absolute credits per detected programming language (`language_credits_<lang>` fields). Detection is heuristic — the active editor at parse time, live events only — so treat it as directional; untagged events aggregate under `unknown`. |
 | `cost_by_category` | `Record<string, number>` | Absolute USD cost per category — input, output, cache_creation, cache_read, thinking, tool (`cost_by_category_<cat>` fields). |
 
 ### Dimension metadata

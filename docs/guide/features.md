@@ -27,6 +27,7 @@ Four more charts sit behind the **Add chart** button, hidden until you want them
 - **Cost categories over time** — a stacked view of input/output/cache/thinking/tool cost per day, showing how the mix shifts.
 - **Tokens over time** — daily token volume, with request counts in the tooltip.
 - **GitHub billing items** — net amount per model/SKU from the billing API (needs sign-in).
+- **≈ By language** — spend per programming language, detected from the active editor the same way the repo heuristic works (live events only, never backfill). The `≈` in the title is deliberate: treat it as directional.
 
 Added charts behave like the stock ones: drag, resize, hide, all persisted to `config.json`.
 

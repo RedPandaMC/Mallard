@@ -167,6 +167,22 @@ describe('ClaudeCodeConnector — folder attribution', () => {
     });
   });
 
+  it('applies the active-editor language to live rows only (logs carry none)', () => {
+    const connector = makeFolderConnector([{ name: 'myproject', fsPath: '/home/user/myproject' }]);
+    const iso = '2026-01-15T10:00:00.000Z';
+    const line = {
+      type: 'assistant',
+      message: { model: 'claude-sonnet-4', usage: { input_tokens: 10, output_tokens: 5 } },
+      timestamp: iso,
+      sessionId: UUID,
+      cwd: '/home/user/myproject',
+    };
+    const live = connector.mapRow(line, makeCtx({ language: 'rust', liveThresholdMs: Date.parse(iso) - 1 }));
+    assert.equal(live?.language, 'rust');
+    const backfill = connector.mapRow(line, makeCtx({ language: 'rust' }));
+    assert.equal(backfill?.language, undefined);
+  });
+
   it('mapRow() falls back to ctx.repo when the cwd is outside every folder', () => {
     const connector = makeFolderConnector([{ name: 'myproject', fsPath: '/home/user/myproject' }]);
     const result = connector.mapRow(

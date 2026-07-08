@@ -1,6 +1,7 @@
 /* c8 ignore next */
 import { currentRepo } from './repoResolver';
 import { activeBranch } from '../util/repo';
+import { activeLanguage } from '../util/editor';
 import { ParseContext } from './otelParse';
 import { PricingService } from '../pricing/PricingService';
 import { DuckDBFileReader, RowMapper } from '../store/DuckDBFileReader';
@@ -127,6 +128,7 @@ export abstract class BaseFileConnector implements LogConnector {
   protected async buildContext(_globs: string[], watermarkMs: number | null = null): Promise<ParseContext> {
     const repo = currentRepo();
     const branch = activeBranch();
+    const language = activeLanguage();
     const tokenPrices = this.pricing.tokenPrices;
     const now = Date.now();
     // Liveness rule: heuristic attribution only applies once this connector
@@ -144,6 +146,7 @@ export abstract class BaseFileConnector implements LogConnector {
       ...(repo !== undefined ? { repo } : {}),
       /* c8 ignore next */
       ...(branch !== undefined ? { branch } : {}),
+      ...(language !== undefined ? { language } : {}),
       ...(liveThresholdMs !== undefined ? { liveThresholdMs } : {}),
     };
   }

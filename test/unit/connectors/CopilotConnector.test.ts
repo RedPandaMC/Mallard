@@ -292,6 +292,35 @@ describe('CopilotConnector.mapRow()', () => {
     });
   });
 
+  describe('language detection', () => {
+    const iso = '2026-01-15T10:00:00.000Z';
+    const ts = Date.parse(iso);
+
+    it('applies the active-editor language to live rows only', () => {
+      const connector = makeConnector();
+      const live = connector.mapRow(
+        { timestamp: iso, attributes: baseAttrs },
+        makeCtx({ language: 'typescript', liveThresholdMs: ts - 1000 }),
+      );
+      assert.equal(live?.language, 'typescript');
+
+      const backfill = connector.mapRow(
+        { timestamp: iso, attributes: baseAttrs },
+        makeCtx({ language: 'typescript' }),
+      );
+      assert.equal(backfill?.language, undefined);
+    });
+
+    it('prefers a language named in the span itself, even on backfill', () => {
+      const connector = makeConnector();
+      const result = connector.mapRow(
+        { timestamp: iso, attributes: { ...baseAttrs, languageId: 'python' } },
+        makeCtx({ language: 'typescript' }),
+      );
+      assert.equal(result?.language, 'python');
+    });
+  });
+
   it('omits costByCategory when totalTok is 0', () => {
     const connector = makeConnector();
     const result = connector.mapRow(

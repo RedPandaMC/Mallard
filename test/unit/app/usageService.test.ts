@@ -27,6 +27,7 @@ function fixtureData(): SnapshotSourceData {
       { modelId: 'claude-sonnet-4-5', credits: 18, cost: 0.72, tokens: 6000 },
       { modelId: 'gpt-4o',            credits: 12, cost: 0.48, tokens: 3000 },
     ],
+    languages: [],
     repos: [{ repo: 'mallard', credits: 30, cost: 1.2, tokens: 9000, heuristicShare: 0 }],
     hourly: [{ hourLocal: 14, credits: 22 }, { hourLocal: 9, credits: 8 }],
     categories: [{ category: 'input', cost: 0.5 }, { category: 'output', cost: 0.7 }],

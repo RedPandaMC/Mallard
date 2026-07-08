@@ -56,6 +56,8 @@ class NormalizedMetric:
     estimated_event_count: int | None = None
     model_credits: dict[str, float] = field(default_factory=dict)
     surface_credits: dict[str, float] = field(default_factory=dict)
+    # Heuristic client-side detection (active editor at parse time) — directional.
+    language_credits: dict[str, float] = field(default_factory=dict)
     cost_by_category: dict[str, float] = field(default_factory=dict)
 
     # Dimension metadata
@@ -99,6 +101,7 @@ def normalize_v3(raw: dict[str, Any]) -> NormalizedMetric:
         estimated_event_count=payload.estimated_event_count,
         model_credits=_coerce_num_map(payload.model_credits),
         surface_credits=_coerce_num_map(payload.surface_credits),
+        language_credits=_coerce_num_map(payload.language_credits),
         cost_by_category=_coerce_num_map(payload.cost_by_category),
         active_models=payload.active_models,
         top_model=payload.top_model,
@@ -212,6 +215,7 @@ def normalize_unknown(raw: dict[str, Any]) -> NormalizedMetric:
         estimated_event_count=coerce("estimated_event_count", _coerce_int),
         model_credits=_coerce_num_map(raw.get("model_credits")),
         surface_credits=_coerce_num_map(raw.get("surface_credits")),
+        language_credits=_coerce_num_map(raw.get("language_credits")),
         cost_by_category=_coerce_num_map(raw.get("cost_by_category")),
         active_models=active_models,
         top_model=coerce("top_model", _coerce_str),

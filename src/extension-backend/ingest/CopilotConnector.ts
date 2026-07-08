@@ -124,6 +124,10 @@ export class CopilotConnector extends BaseFileConnector {
     const live = ctx.liveThresholdMs !== undefined && ts >= ctx.liveThresholdMs;
     const repo = live ? ctx.repo : undefined;
     const branch = live ? ctx.branch : undefined;
+    // Language: some OTel exports carry it per span (authoritative for the
+    // row); otherwise the live-gated active-editor heuristic, like repo.
+    const rowLanguage = pick(attrs, ['gen_ai.request.language', 'language', 'languageId']);
+    const language = rowLanguage !== undefined ? String(rowLanguage) : live ? ctx.language : undefined;
 
     return {
       id:     `local:${rowKey}`,
@@ -138,6 +142,7 @@ export class CopilotConnector extends BaseFileConnector {
       estimated: true,
       ...(repo   !== undefined ? { repo, attribution: 'heuristic' as const } : {}),
       ...(branch !== undefined ? { branch } : {}),
+      ...(language !== undefined ? { language } : {}),
       ...(costByCategory !== undefined ? { costByCategory } : {}),
     };
   }

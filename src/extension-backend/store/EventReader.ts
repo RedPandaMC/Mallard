@@ -44,6 +44,8 @@ export interface SnapshotSourceData {
   }>;
   models:     Array<{ modelId: string; credits: number; cost: number; tokens: number }>;
   repos:      Array<{ repo: string; credits: number; cost: number; tokens: number; heuristicShare: number }>;
+  /** Per-language spend; language is 'unknown' for rows without one. */
+  languages:  Array<{ language: string; credits: number; cost: number; tokens: number }>;
   /** hour_local = 0-23 in session timezone (DST-correct). */
   hourly:     Array<{ hourLocal: number; credits: number }>;
   categories: Array<{ category: string; cost: number }>;
@@ -132,6 +134,7 @@ const EventRow = z.object({
   repo: z.string().nullish(),
   branch: z.string().nullish(),
   attribution: z.enum(['authoritative', 'heuristic']).nullish(),
+  language: z.string().nullish(),
   costByCategory: z.string().nullish(),
 });
 
@@ -166,6 +169,7 @@ function rowToEvent(row: Record<string, unknown>): UsageEvent | null {
     ...(r.repo != null ? { repo: r.repo } : {}),
     ...(r.branch != null ? { branch: r.branch } : {}),
     ...(r.attribution != null ? { attribution: r.attribution } : {}),
+    ...(r.language != null ? { language: r.language } : {}),
     ...(costByCategory !== undefined ? { costByCategory } : {}),
   };
 }
@@ -521,6 +525,13 @@ SELECT
     'credits DESC',
   )} AS top_repos,
   ${listJson(
+    `'language': language, 'credits': credits, 'cost': cost, 'tokens': tokens`,
+    `SELECT COALESCE(language,'unknown') AS language, COALESCE(SUM(credits),0) AS credits,
+            COALESCE(SUM(cost),0) AS cost, ${tok} AS tokens
+     FROM f GROUP BY COALESCE(language,'unknown')`,
+    'credits DESC',
+  )} AS top_languages,
+  ${listJson(
     `'model': model, 'surface': surface, 'count': cnt, 'credits': credits`,
     `SELECT modelId AS model, surface, COUNT(*) AS cnt, COALESCE(SUM(credits),0) AS credits
      FROM f WHERE credits > 0 GROUP BY modelId, surface`,
@@ -581,6 +592,7 @@ SELECT
     const dailyArr   = parseArr<Record<string, unknown>>('daily');
     const modelArr   = parseArr<Record<string, unknown>>('top_models');
     const repoArr    = parseArr<Record<string, unknown>>('top_repos');
+    const langArr    = parseArr<Record<string, unknown>>('top_languages');
     const sankeyArr  = parseArr<Record<string, unknown>>('sankey');
     const hourArr    = parseArr<Record<string, unknown>>('hourly');
     const wdArr      = parseArr<Record<string, unknown>>('weekday_data');
@@ -616,6 +628,12 @@ SELECT
         cost:           Number(r['cost']            ?? 0),
         tokens:         Number(r['tokens']          ?? 0),
         heuristicShare: Number(r['heuristic_share'] ?? 0),
+      })),
+      languages: langArr.map((r) => ({
+        language: String(r['language'] ?? ''),
+        credits:  Number(r['credits']  ?? 0),
+        cost:     Number(r['cost']     ?? 0),
+        tokens:   Number(r['tokens']   ?? 0),
       })),
       sankey: sankeyArr.map((r) => ({
         model:   String(r['model']   ?? ''),

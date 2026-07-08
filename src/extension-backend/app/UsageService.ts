@@ -330,6 +330,13 @@ export class UsageService implements vscode.Disposable {
       heuristicShare: r.heuristicShare,
     }));
 
+    const byLanguage = data.languages.map((l) => ({
+      key:     l.language,
+      credits: l.credits,
+      cost:    l.cost * fxRate,
+      tokens:  Number(l.tokens),
+    }));
+
     const sankeyLinks = data.sankey.map((s) => ({
       source: s.model,
       target: s.surface,
@@ -395,6 +402,7 @@ export class UsageService implements vscode.Disposable {
       sankeyLinks,
       allRepos,
       byRepo,
+      byLanguage,
       // Raw chart inputs travel on the data; render-ready chart data is
       // composed lazily in `current` at the UI boundary.
       chartInputs: { dayAggregates, categoryBreakdown, hourlyTimeline, weekday: data.weekday, categoryDaily },

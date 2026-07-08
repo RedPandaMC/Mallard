@@ -11,6 +11,8 @@ export interface ParseContext {
   repo?: string;
   /** Git branch active at parse time. */
   branch?: string;
+  /** Language of the active editor at parse time (VS Code languageId). */
+  language?: string;
   /**
    * Events with ts at or after this are "live" and may take the heuristic
    * repo/branch above. Absent on a first/backfill pass (no prior watermark) —

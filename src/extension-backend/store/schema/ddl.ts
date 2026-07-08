@@ -16,7 +16,10 @@ export const CREATE_SQL = `
     -- How repo was determined: 'authoritative' (recorded in the source log,
     -- e.g. Claude Code's cwd), 'heuristic' (active-editor guess at parse
     -- time), or NULL when unattributed.
-    attribution VARCHAR
+    attribution VARCHAR,
+    -- VS Code languageId; heuristic (active editor at parse time, live rows
+    -- only) unless the source log names one. NULL when undetectable.
+    language VARCHAR
   );
   CREATE INDEX IF NOT EXISTS idx_ts ON events(ts);
   CREATE INDEX IF NOT EXISTS idx_model ON events(modelId);
@@ -28,6 +31,7 @@ export const CREATE_SQL = `
   CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR);
   ALTER TABLE events ADD COLUMN IF NOT EXISTS branch VARCHAR;
   ALTER TABLE events ADD COLUMN IF NOT EXISTS attribution VARCHAR;
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS language VARCHAR;
 
   CREATE TABLE IF NOT EXISTS prices (
     modelId VARCHAR PRIMARY KEY,
@@ -41,9 +45,11 @@ export const CREATE_SQL = `
     credits DOUBLE NOT NULL, cost DOUBLE NOT NULL,
     promptTokens INTEGER, completionTokens INTEGER,
     estimated BOOLEAN NOT NULL DEFAULT TRUE,
-    repo VARCHAR, costByCategory VARCHAR, branch VARCHAR, attribution VARCHAR
+    repo VARCHAR, costByCategory VARCHAR, branch VARCHAR, attribution VARCHAR,
+    language VARCHAR
   );
   ALTER TABLE events_staging ADD COLUMN IF NOT EXISTS attribution VARCHAR;
+  ALTER TABLE events_staging ADD COLUMN IF NOT EXISTS language VARCHAR;
 
   -- Normalization view: NULLs resolved, json cost categories extracted.
   CREATE OR REPLACE VIEW v_events AS
@@ -51,6 +57,7 @@ export const CREATE_SQL = `
       id, ts, modelId, surface, source,
       repo,
       attribution,
+      language,
       COALESCE(repo, 'unattributed')   AS repo_label,
       credits, cost, estimated,
       COALESCE(promptTokens, 0)        AS prompt_tokens,
@@ -171,7 +178,9 @@ export const CREATE_SQL = `
       NULL::VARCHAR                                                          AS branch,
       -- 'heuristic' wins lexically over 'authoritative': a rolled-up day is
       -- flagged heuristic when any contributing row was.
-      MAX(e.attribution)                                                     AS attribution
+      MAX(e.attribution)                                                     AS attribution,
+      -- Like branch, per-language detail is dropped at rollup.
+      NULL::VARCHAR                                                          AS language
     FROM v_events e
     WHERE NOT e.is_rolled
     GROUP BY strftime(to_timestamp(e.ts / 1000.0)::TIMESTAMPTZ, '%Y-%m-%d'),

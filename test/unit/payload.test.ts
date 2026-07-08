@@ -29,7 +29,7 @@ describe('buildMetricPayload', () => {
       'mtd_budget_pct', 'forecast_basis', 'forecast_low', 'forecast_high',
       'budget_trend', 'daily_credit_stddev',
       'total_credits', 'total_tokens', 'total_event_count', 'estimated_event_count',
-      'model_credits', 'surface_credits', 'cost_by_category',
+      'model_credits', 'surface_credits', 'language_credits', 'cost_by_category',
       'active_models', 'top_model', 'model_count', 'repo_count',
       'source_connector',
     ];
@@ -161,6 +161,7 @@ describe('buildMetricPayload', () => {
       allSources: [],
       allRepos: [],
       byRepo: [],
+      byLanguage: [],
       budget: { monthly: null, includedCredits: 90, usedCredits: 0, usedCost: 0, percentOfBudget: 0, percentOfIncluded: 0, projectedOverage: null, pace: 'no-budget' as const },
       forecast: { basis: 'linear' as const, projectedCredits: 600, projectedCost: 24, low: 500, high: 700, granularity: 'month' as const, asOf: now },
       today: { credits: 0, cost: 0, tokens: 0 },
@@ -198,6 +199,7 @@ describe('buildMetricPayload', () => {
       allSources: [],
       allRepos: [],
       byRepo: [],
+      byLanguage: [],
       budget: { monthly: null, includedCredits: 450, usedCredits: 0, usedCost: 0, percentOfBudget: 0, percentOfIncluded: 0, projectedOverage: null, pace: 'no-budget' as const },
       forecast: { basis: 'linear' as const, projectedCredits: 150, projectedCost: 6, low: 100, high: 200, granularity: 'month' as const, asOf: now },
       today: { credits: 0, cost: 0, tokens: 0 },
@@ -244,6 +246,7 @@ describe('buildMetricPayload', () => {
       allSources: [],
       allRepos: [],
       byRepo: [],
+      byLanguage: [],
       budget: { monthly: null, includedCredits: 300, usedCredits: 0, usedCost: 0, percentOfBudget: 0, percentOfIncluded: 0, projectedOverage: null, pace: 'no-budget' as const },
       forecast: { basis: 'insufficient-data' as const, projectedCredits: 0, projectedCost: 0, low: 0, high: 0, granularity: 'month' as const, asOf: now },
       today: { credits: 0, cost: 0, tokens: 0 },
@@ -276,6 +279,16 @@ describe('buildMetricPayload', () => {
     const p = buildMetricPayload(s);
     assert.equal(p.total_event_count, 0);
     assert.equal(p.estimated_event_count, 0);
+  });
+
+  it('language_credits carries absolute per-language credits from byLanguage', () => {
+    const s = buildSnapshot([], opts());
+    s.byLanguage = [
+      { key: 'typescript', credits: 12, cost: 0.48, tokens: 1200 },
+      { key: 'unknown', credits: 3, cost: 0.12, tokens: 300 },
+    ];
+    const p = buildMetricPayload(s);
+    assert.deepEqual(p.language_credits, { typescript: 12, unknown: 3 });
   });
 
   it('surface_credits carries absolute per-surface credits from sankey links', () => {

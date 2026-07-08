@@ -38,7 +38,7 @@ _INT_FIELDS = (
 # sanitised so a hostile model id can't smuggle field-name syntax. Fields
 # (unlike tags) are not indexed, so per-model field names carry no
 # cardinality cost.
-_MAP_FIELDS = ("model_credits", "surface_credits", "cost_by_category")
+_MAP_FIELDS = ("model_credits", "surface_credits", "language_credits", "cost_by_category")
 _FIELD_KEY_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 

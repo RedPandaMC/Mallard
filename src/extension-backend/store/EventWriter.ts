@@ -184,6 +184,7 @@ export class EventWriter implements IEventWriter {
       if (e.costByCategory)           appender.appendVarchar(JSON.stringify(e.costByCategory)); else appender.appendNull();
       if (e.branch != null)           appender.appendVarchar(e.branch);           else appender.appendNull();
       if (e.attribution != null)      appender.appendVarchar(e.attribution);      else appender.appendNull();
+      if (e.language != null)         appender.appendVarchar(e.language);         else appender.appendNull();
       appender.endRow();
     }
     appender.flushSync();

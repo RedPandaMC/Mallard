@@ -40,6 +40,7 @@ export function makeEvent(partial: Partial<UsageEvent> & { ts: number }): UsageE
     ...(partial.repo !== undefined ? { repo: partial.repo } : {}),
     ...(partial.branch !== undefined ? { branch: partial.branch } : {}),
     ...(partial.attribution !== undefined ? { attribution: partial.attribution } : {}),
+    ...(partial.language !== undefined ? { language: partial.language } : {}),
     ...(partial.costByCategory !== undefined ? { costByCategory: partial.costByCategory } : {}),
   };
 }

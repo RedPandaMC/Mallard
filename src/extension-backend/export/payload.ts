@@ -89,6 +89,12 @@ export interface MetricPayload {
   model_credits: Record<string, number>;
   /** Absolute credits per surface. */
   surface_credits: Record<string, number>;
+  /**
+   * Absolute credits per detected programming language (VS Code languageId;
+   * 'unknown' for events without one). Detection is heuristic — the active
+   * editor at parse time — so treat this as directional, not authoritative.
+   */
+  language_credits: Record<string, number>;
   /** Absolute USD cost per cost category (input, output, cache read/write, thinking, tool). */
   cost_by_category: Record<string, number>;
 
@@ -118,6 +124,9 @@ export function buildMetricPayload(s: UsageSnapshot): MetricPayload {
   for (const link of s.sankeyLinks) {
     surface_credits[link.target] = (surface_credits[link.target] ?? 0) + link.value;
   }
+
+  const language_credits: Record<string, number> = {};
+  for (const l of s.byLanguage) language_credits[l.key] = l.credits;
 
   const catData = s.chartData.categoryBreakdown;
   const cost_by_category: Record<string, number> = {};
@@ -172,6 +181,7 @@ export function buildMetricPayload(s: UsageSnapshot): MetricPayload {
     estimated_event_count: s.estimatedEventCount ?? 0,
     model_credits,
     surface_credits,
+    language_credits,
     cost_by_category,
     active_models: s.allModels,
     top_model: s.topModels[0]?.key ?? null,

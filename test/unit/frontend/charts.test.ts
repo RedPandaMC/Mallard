@@ -15,6 +15,7 @@ import { mountRepoBreakdown } from '../../../src/extension-frontend/charts/repoB
 import { mountCategoryTrend } from '../../../src/extension-frontend/charts/categoryTrend';
 import { mountTokensTimeline } from '../../../src/extension-frontend/charts/tokensTimeline';
 import { mountBillingItems } from '../../../src/extension-frontend/charts/billingItems';
+import { mountLanguageBreakdown } from '../../../src/extension-frontend/charts/languageBreakdown';
 import { CHART_REGISTRY } from '../../../src/extension-frontend/charts/registry';
 import { DASHBOARD_PANELS, DEFAULT_DASHBOARD_LAYOUT } from '../../../src/extension-backend/domain/types';
 
@@ -154,6 +155,19 @@ describe('extra charts', () => {
     const s = makeSnapshot();
     s.chartData.tokensDaily = { dates: ['01-01', '01-02'], tokens: [1500, 0], events: [3, 0] };
     c.update(s);
+  });
+
+  it('language breakdown renders detected languages and hides unknown-only data', () => {
+    const el = document.createElement('div');
+    const c = mountLanguageBreakdown(el);
+    const s = makeSnapshot();
+    s.byLanguage = [
+      { key: 'typescript', credits: 9, cost: 0.36, tokens: 900 },
+      { key: 'unknown', credits: 5, cost: 0.2, tokens: 500 },
+    ];
+    c.update(s);
+    s.byLanguage = [{ key: 'unknown', credits: 5, cost: 0.2, tokens: 500 }];
+    c.update(s); // unknown-only — clears, must not throw
   });
 
   it('billing items renders signed-in data and clears when signed out', () => {

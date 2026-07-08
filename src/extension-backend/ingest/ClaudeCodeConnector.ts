@@ -124,6 +124,9 @@ export class ClaudeCodeConnector extends BaseFileConnector {
     const attribution = resolvedRepo !== undefined ? ('authoritative' as const)
       : repo !== undefined ? ('heuristic' as const) : undefined;
     const branch = live ? ctx.branch : undefined;
+    // Session logs carry no language; like branch, this is always the
+    // live-gated active-editor heuristic.
+    const language = live ? ctx.language : undefined;
 
     // Claude Code writes a stable per-line `uuid` (fallback `requestId`). Using it
     // disambiguates two assistant turns that share the same session/model/ms —
@@ -152,6 +155,7 @@ export class ClaudeCodeConnector extends BaseFileConnector {
       ...(repo        !== undefined ? { repo }        : {}),
       ...(attribution !== undefined ? { attribution } : {}),
       ...(branch      !== undefined ? { branch }      : {}),
+      ...(language    !== undefined ? { language }    : {}),
       ...(costByCategory !== undefined ? { costByCategory } : {}),
     };
   }
