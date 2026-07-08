@@ -237,10 +237,10 @@ describe('chart tooltip formatter edge cases', () => {
     const fmt = tooltipOf(c);
     assert.equal(fmt([]), '');
     assert.equal(fmt([{ dataIndex: 99 }]), '');
-    // Rows render reversed (largest last); index 0 = smallest.
-    assert.match(fmt([{ dataIndex: 0 }]), /clean/);
-    assert.doesNotMatch(fmt([{ dataIndex: 0 }]), /heuristically/);
-    assert.match(fmt([{ dataIndex: 1 }]), /≈ 40% attributed heuristically/);
+    // byRepo order is preserved but rendered reversed: index 1 = first entry.
+    assert.match(fmt([{ dataIndex: 1 }]), /clean/);
+    assert.doesNotMatch(fmt([{ dataIndex: 1 }]), /heuristically/);
+    assert.match(fmt([{ dataIndex: 0 }]), /≈ 40% attributed heuristically/);
   });
 
   it('billing items: discounted vs undiscounted rows and empty params', () => {
@@ -259,9 +259,11 @@ describe('chart tooltip formatter edge cases', () => {
     const fmt = tooltipOf(c);
     assert.equal(fmt([]), '');
     assert.equal(fmt([{ dataIndex: 99 }]), '');
-    const texts = [fmt([{ dataIndex: 0 }]), fmt([{ dataIndex: 1 }])].join('|');
+    // Items sort by net desc then render reversed: index 0 = smallest net.
+    const texts = [fmt([{ dataIndex: 0 }]), fmt([{ dataIndex: 1 }]), fmt([{ dataIndex: 2 }])].join('|');
     assert.match(texts, /net .* · gross /);
     assert.match(texts, /sku-only/);
+    assert.match(texts, /unknown/);
   });
 
   it('language breakdown: empty params and unknown index', () => {
