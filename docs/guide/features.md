@@ -19,9 +19,20 @@ Open from the activity bar icon or **Mallard: Open Dashboard**. The dashboard sh
 
 A pop-out button opens the same view as a full editor tab.
 
+## Extra charts
+
+Four more charts sit behind the **Add chart** button, hidden until you want them:
+
+- **By repository** — spend per repo. Repos whose spend is partly attributed by the active-editor heuristic (see below) are marked with `≈`.
+- **Cost categories over time** — a stacked view of input/output/cache/thinking/tool cost per day, showing how the mix shifts.
+- **Tokens over time** — daily token volume, with request counts in the tooltip.
+- **GitHub billing items** — net amount per model/SKU from the billing API (needs sign-in).
+
+Added charts behave like the stock ones: drag, resize, hide, all persisted to `config.json`.
+
 ## Layout
 
-Click **Edit layout** to drag, resize, or hide panels. Your arrangement is saved automatically. **Reset layout** restores defaults.
+Use **Resize** and **Move** to drag, resize, or hide panels. Your arrangement is saved automatically into `config.json`. **Reset layout** restores defaults.
 
 ## Budget and alerts
 
@@ -97,9 +108,17 @@ Every event is tagged to the active git branch and repo. Set per-branch credit c
 
 When a branch hits its cap, Mallard fires a critical notification (4-hour cooldown). Custom rules can reference `currentBranchCredits` and `branchBudgets.<branch>` in conditions.
 
-## Per-repo filtering
+## Per-repo filtering and attribution
 
-When multiple repos are open, Mallard attributes usage to the active workspace. A dropdown in the dashboard filters all charts and KPIs to a single repo.
+A dropdown in the dashboard filters all charts and KPIs to a single repo. How an event gets its repo depends on what the source log records:
+
+| Attribution | Meaning |
+|---|---|
+| **Authoritative** | The log line itself names the workspace. Claude Code records the session's working directory per line, so its events are attributed reliably — even when old sessions are ingested later. |
+| **Heuristic** (`≈`) | Copilot's logs carry no workspace path, so live events are attributed to the repo of the active editor at parse time — usually right, but a guess. Repos with heuristic spend are marked `≈` in the dropdown and the repository chart. |
+| **Unattributed** | No trustworthy signal. Historical events found during a backfill (first install, or **Rebuild Ingested Data**) are never attributed by the heuristic — the usage happened before the current editor state existed, so guessing would silently blame the wrong repo. They land in the `unattributed` bucket instead. |
+
+An event's attribution is fixed when it is first stored and never silently relabeled by a later re-read.
 
 ## GitHub billing reconciliation
 

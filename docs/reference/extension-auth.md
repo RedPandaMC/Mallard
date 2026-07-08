@@ -49,7 +49,7 @@ Authorization: Bearer <token>
 The token value is treated identically to an API key: it goes through the
 same hash lookup against the `API_KEYS` store, so it must be pre-registered
 there like any other key. The server does **not** validate tokens against an
-identity provider — an Infisical/OpenBao/OAuth token works only if its exact
+identity provider — an OpenBao/OAuth token works only if its exact
 value has been added to `API_KEYS`.
 
 ## mTLS client certificate

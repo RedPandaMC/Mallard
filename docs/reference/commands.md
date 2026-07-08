@@ -31,7 +31,10 @@ ID `mallard.clearData`. Asks for confirmation, then wipes recorded usage
 events and re-parses every connector log from scratch. Your budget/alert
 settings, dashboard layout, and pricing cache are left untouched — only the
 ingested data is rebuilt. Use this if the dashboard's numbers look wrong and
-you want a clean re-read of the underlying logs. To wipe everything
+you want a clean re-read of the underlying logs. Note that a rebuild is a
+backfill: Copilot events are re-ingested as `unattributed` rather than being
+guessed onto whatever repo is focused (Claude Code events keep their reliable
+per-line attribution). To wipe everything
 (including settings) before uninstalling, use **Mallard: Prepare for
 Uninstall** instead.
 

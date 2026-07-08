@@ -108,4 +108,8 @@ Set `"restrict": { "reEnableWhen": <condition> }` to have the popup clear itself
 
 ## Dashboard layout
 
-Click **Edit layout** to drag, resize, or hide panels. Your layout is saved and restored on next launch. **Reset layout** restores defaults.
+Use the **Resize** and **Move** buttons to drag, resize, or hide panels, and **Add chart** to bring in the optional extra charts (by repository, cost categories over time, tokens over time, GitHub billing items). Every change is saved straight into `config.json`'s `dashboard.panels` block — the same file as your budget and rules — so the layout is hand-editable and travels with the file. **Reset layout** restores defaults.
+
+## Display currency
+
+The currency selector in the dashboard header writes `currency` into `config.json` (e.g. `"currency": "EUR"`). Exchange rates are fetched daily from Frankfurter; metric exports always use USD regardless.

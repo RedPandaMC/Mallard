@@ -34,6 +34,10 @@ Each Copilot log entry includes the model, input/output token counts, surface (c
 
 Run **Mallard: Sign In to GitHub** (or use the dashboard button) to pull the authoritative Copilot charge from GitHub's API. This shows spend across all your machines, not just the current one. Sign-in is optional and never shown at startup. This is Copilot-specific — Anthropic doesn't expose an equivalent user-scoped billing API, so Claude Code spend stays local-log-based (estimated) with or without signing in.
 
+## Where your data lives
+
+Ingested usage is stored in a local DuckDB database in the extension's storage directory and persists across VS Code restarts — history stays intact even after the source logs rotate away. If the numbers ever look wrong, **Mallard: Rebuild Ingested Data** wipes the recorded usage and re-parses every log from scratch.
+
 ## Uninstalling
 
 VS Code does not delete extension storage on uninstall, so run this one command first:

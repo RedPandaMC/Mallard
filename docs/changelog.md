@@ -1,5 +1,60 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Extra charts**: an **Add chart** button in the dashboard's analysis bar adds
+  optional panels beyond the stock eight — spend by repository, cost categories
+  over time, tokens over time, and GitHub billing line items. Added charts drag,
+  resize, and hide like the stock ones, and the whole arrangement persists to
+  `config.json`. Under the hood, all charts are now driven by a single registry,
+  so a future chart is one entry instead of seven hand-wired touchpoints.
+- **Repo attribution provenance**: every event now records *how* it got its repo.
+  Claude Code events are attributed authoritatively from the working directory
+  recorded in the log; Copilot events use the active-editor heuristic and are
+  marked as such (`≈` in the repo dropdown and the repository chart). Backfilled
+  history — first install, or a rebuild — is never attributed by the heuristic
+  anymore: guessing a repo for usage that happened before the current editor
+  state existed silently blamed the wrong repo, so those events now land in
+  `unattributed` instead.
+- **Static server credentials, first-class**: the self-hosted server now runs on
+  plain env-var credentials by default (`SECRET_MANAGER_TYPE=static`) — a `.env`
+  file or a Kubernetes Secret is a complete deployment. OpenBao remains the
+  advanced backend for restart-free rotation.
+
+### Changed
+
+- **Usage history survives restarts**: the local DuckDB store is no longer wiped
+  on every VS Code shutdown. History persists across restarts and outlives log
+  rotation; startup gets faster because ingest resumes from its watermark instead
+  of re-parsing everything. **Mallard: Prepare for Uninstall** remains the full
+  wipe.
+- **One config store**: the dashboard layout moved from VS Code `globalState`
+  into `config.json`'s `dashboard.panels` block (migrated automatically), and the
+  now-redundant "Save to config" button was removed — every layout change saves
+  directly. The `mallard.currency` setting was removed; currency lives in
+  `config.json` and is set from the dashboard (an existing setting value is
+  copied over once on upgrade).
+- **Billing on its own cadence**: a GitHub auth/billing refresh no longer forces
+  a full usage recompute, chart rebuild, or metric export.
+- **Infisical support removed** from the server. It required its own Postgres +
+  Redis stack to hold a handful of key-value credentials; static credentials or
+  OpenBao cover the same ground with less to operate. Deployments still setting
+  `SECRET_MANAGER_TYPE=infisical` fail at startup with a clear validation error —
+  copy your credentials into `.env`/`mallard-server-secrets` (static) or OpenBao
+  and update the variable.
+
+### Fixed
+
+- **Sidebar budget gauge**: the month-to-date gauge in the activity-bar panel
+  read snapshot fields that don't exist, so it never rendered. It now shows spend
+  against your monthly budget as designed.
+- **"Don't show again" actually persists**: one-shot dismissals (the remote-SSH
+  warning, onboarding, setup nudges) were erased by the shutdown wipe fixed
+  above; they now stick.
+
+
 ## 0.2.0 (2026-06-25)
 
 ### Added
