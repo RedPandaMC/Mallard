@@ -110,6 +110,7 @@ export class UsageService implements vscode.Disposable {
         this.pricing.currentManifest,
         chartInputs.weekday,
         this.userConfig.get().display,
+        chartInputs.categoryDaily,
       );
       const next: UsageSnapshot = { ...rest, ...this.billing, chartData, isIncremental: false };
       // Partial dashboard updates only make sense while filtering.
@@ -342,6 +343,19 @@ export class UsageService implements vscode.Disposable {
       ? { categories: catKeys, costs: catKeys.map((c) => catMap.get(c) ?? 0), available: true }
       : { categories: [] as typeof catKeys, costs: [] as number[], available: false };
 
+    // Per-day category costs (fx-adjusted) for the category-trend chart.
+    const categoryDaily = data.daily.map((row) => ({
+      dayStart: row.dayStart,
+      costs: {
+        ...(row.catInput         > 0 ? { input:          row.catInput * fxRate }         : {}),
+        ...(row.catOutput        > 0 ? { output:         row.catOutput * fxRate }        : {}),
+        ...(row.catCacheRead     > 0 ? { cache_read:     row.catCacheRead * fxRate }     : {}),
+        ...(row.catCacheCreation > 0 ? { cache_creation: row.catCacheCreation * fxRate } : {}),
+        ...(row.catThinking      > 0 ? { thinking:       row.catThinking * fxRate }      : {}),
+        ...(row.catTool          > 0 ? { tool:           row.catTool * fxRate }          : {}),
+      },
+    }));
+
     const hourArr = new Array<number>(24).fill(0);
     for (const h of data.hourly) hourArr[h.hourLocal] = h.credits;
     const maxHourCredits = Math.max(...hourArr);
@@ -383,7 +397,7 @@ export class UsageService implements vscode.Disposable {
       byRepo,
       // Raw chart inputs travel on the data; render-ready chart data is
       // composed lazily in `current` at the UI boundary.
-      chartInputs: { dayAggregates, categoryBreakdown, hourlyTimeline, weekday: data.weekday },
+      chartInputs: { dayAggregates, categoryBreakdown, hourlyTimeline, weekday: data.weekday, categoryDaily },
       ...this.billing,
       currentBranchCredits,
       totalEventCount:     data.totals.all.eventCount,

@@ -20,8 +20,8 @@ function fixtureData(): SnapshotSourceData {
     },
     estimatedEventCount: 9,
     daily: [
-      { dayStart: TODAY - 86_400_000, credits: 25, cost: 1.0, tokens: 7500, eventCount: 10 },
-      { dayStart: TODAY,              credits: 5,  cost: 0.2, tokens: 1500, eventCount: 2 },
+      { dayStart: TODAY - 86_400_000, credits: 25, cost: 1.0, tokens: 7500, eventCount: 10, catInput: 0, catOutput: 0, catCacheRead: 0, catCacheCreation: 0, catThinking: 0, catTool: 0 },
+      { dayStart: TODAY,              credits: 5,  cost: 0.2, tokens: 1500, eventCount: 2, catInput: 0, catOutput: 0, catCacheRead: 0, catCacheCreation: 0, catThinking: 0, catTool: 0 },
     ],
     models: [
       { modelId: 'claude-sonnet-4-5', credits: 18, cost: 0.72, tokens: 6000 },

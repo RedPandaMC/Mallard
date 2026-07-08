@@ -863,6 +863,30 @@ body {
   color: var(--w-action);
 }
 .wv-analysis-actions { display: flex; gap: var(--w-s2); }
+
+/* "Add chart" picker — anchored dropdown under the button. */
+.wv-add-chart { position: relative; display: inline-flex; }
+.wv-add-chart-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  padding: 4px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.wv-add-chart-item { justify-content: flex-start; text-align: left; }
+.wv-add-chart-empty {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
 .wv-btn--sm { padding: var(--w-s1) var(--w-s2); font-size: 11px; }
 
 .wv-panel-tools { display: none; }

@@ -384,6 +384,10 @@ export const DASHBOARD_PANELS = [
   'cumulative',
   'weekday',
   'hourly',
+  'repos',
+  'categoryTrend',
+  'tokens',
+  'billing',
 ] as const;
 
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
@@ -395,6 +399,12 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
   { id: 'cumulative', span: 1, hidden: false, size: 'normal' },
   { id: 'weekday', span: 1, hidden: false, size: 'normal' },
   { id: 'hourly', span: 1, hidden: false, size: 'normal' },
+  // Extra charts: part of the panel set but hidden until added via the
+  // dashboard's "Add chart" picker.
+  { id: 'repos', span: 1, hidden: true, size: 'normal' },
+  { id: 'categoryTrend', span: 2, hidden: true, size: 'normal' },
+  { id: 'tokens', span: 1, hidden: true, size: 'normal' },
+  { id: 'billing', span: 1, hidden: true, size: 'normal' },
 /* c8 ignore next */
 ];
 
@@ -561,6 +571,24 @@ export interface CategoryBreakdownData {
   available: boolean;
 }
 
+/** Daily token/event volume for the tokens-over-time chart. */
+export interface TokensDailyData {
+  /** MM-DD labels, oldest first (same window as dailyBars). */
+  dates: string[];
+  tokens: number[];
+  events: number[];
+}
+
+/** Per-day cost split by category, for the stacked category-trend chart. */
+export interface CategoryTrendData {
+  /** MM-DD labels, oldest first (same window as dailyBars). */
+  dates: string[];
+  /** One entry per category that has any nonzero cost in the window. */
+  series: Array<{ category: CostCategory; costs: number[] }>;
+  /** false hides the chart (no per-category data at all). */
+  available: boolean;
+}
+
 /** Credits and event count indexed by weekday (0=Sun … 6=Sat). */
 export interface WeekdayData {
   /** Credits per weekday, index 0=Sun … 6=Sat. */
@@ -576,6 +604,8 @@ export interface ChartData {
   categoryBreakdown: CategoryBreakdownData;
   hourlyTimeline: HourlyTimelineData;
   weekdayBreakdown: WeekdayData;
+  tokensDaily: TokensDailyData;
+  categoryTrend: CategoryTrendData;
 }
 
 /**
@@ -645,6 +675,14 @@ export interface ChartInputs {
   hourlyTimeline: HourlyTimelineData;
   /** Credits per weekday, index 0=Sun … 6=Sat. */
   weekday: number[];
+  /** Per-day cost split by category (display currency), oldest first. */
+  categoryDaily: CategoryDailyRow[];
+}
+
+/** One day's per-category cost split (input for CategoryTrendData). */
+export interface CategoryDailyRow {
+  dayStart: number;
+  costs: Partial<Record<CostCategory, number>>;
 }
 
 /** Host-internal snapshot: all facets plus raw chart inputs, no render data. */

@@ -106,8 +106,10 @@ describe('configPanelsToLayout / layoutToConfigPanels', () => {
 
   it('omits default hidden/size values when serializing', () => {
     const panels = layoutToConfigPanels(DEFAULT_DASHBOARD_LAYOUT);
+    const defaults = new Map(DEFAULT_DASHBOARD_LAYOUT.map((d) => [d.id, d]));
     for (const p of panels) {
-      assert.equal('hidden' in p, false);
+      // hidden is serialized only when true (the extra charts default hidden).
+      assert.equal('hidden' in p, defaults.get(p.id)!.hidden);
       assert.equal('size' in p, false);
       assert.match(p.gridColumn!, /^span [1-4]$/);
     }

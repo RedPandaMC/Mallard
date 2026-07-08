@@ -11,6 +11,12 @@ import { mountCategoryBreakdown } from '../../../src/extension-frontend/charts/c
 import { mountWeekdayRadial } from '../../../src/extension-frontend/charts/weekdayRadial';
 import { mountCumulativeArea } from '../../../src/extension-frontend/charts/cumulativeArea';
 import { applyTheme, initChart } from '../../../src/extension-frontend/charts/echarts';
+import { mountRepoBreakdown } from '../../../src/extension-frontend/charts/repoBreakdown';
+import { mountCategoryTrend } from '../../../src/extension-frontend/charts/categoryTrend';
+import { mountTokensTimeline } from '../../../src/extension-frontend/charts/tokensTimeline';
+import { mountBillingItems } from '../../../src/extension-frontend/charts/billingItems';
+import { CHART_REGISTRY } from '../../../src/extension-frontend/charts/registry';
+import { DASHBOARD_PANELS, DEFAULT_DASHBOARD_LAYOUT } from '../../../src/extension-backend/domain/types';
 
 function makeSnapshot(credits = 100): UsageSnapshot {
   const now = Date.now();
@@ -109,5 +115,90 @@ describe('charts — modelBreakdown with metric parameter', () => {
     const handle = mountModelBreakdown(el);
     handle.update(makeSnapshot(50), 'credits' as Metric);
     el.remove();
+  });
+});
+
+
+describe('extra charts', () => {
+  it('repo breakdown renders byRepo and updates without throwing', () => {
+    const el = document.createElement('div');
+    const c = mountRepoBreakdown(el);
+    const s = makeSnapshot();
+    s.byRepo = [
+      { key: 'org/app', credits: 12, cost: 0.5, tokens: 100, heuristicShare: 0.4 },
+      { key: 'lib', credits: 4, cost: 0.2, tokens: 40, heuristicShare: 0 },
+    ];
+    c.update(s);
+    c.resize();
+    c.reinit();
+    c.update(s);
+  });
+
+  it('category trend renders when available and clears when not', () => {
+    const el = document.createElement('div');
+    const c = mountCategoryTrend(el);
+    const s = makeSnapshot();
+    s.chartData.categoryTrend = {
+      dates: ['01-01', '01-02'],
+      series: [{ category: 'input', costs: [0.1, 0.2] }, { category: 'output', costs: [0.3, 0] }],
+      available: true,
+    };
+    c.update(s);
+    s.chartData.categoryTrend = { dates: [], series: [], available: false };
+    c.update(s); // clears — must not throw
+  });
+
+  it('tokens timeline renders daily token volume', () => {
+    const el = document.createElement('div');
+    const c = mountTokensTimeline(el);
+    const s = makeSnapshot();
+    s.chartData.tokensDaily = { dates: ['01-01', '01-02'], tokens: [1500, 0], events: [3, 0] };
+    c.update(s);
+  });
+
+  it('billing items renders signed-in data and clears when signed out', () => {
+    const el = document.createElement('div');
+    const c = mountBillingItems(el);
+    const s = makeSnapshot();
+    s.githubBilling = {
+      quota: null,
+      fetchedAt: Date.now(),
+      totalNetAmount: 12,
+      items: [{ model: 'gpt-4o', sku: 'copilot', grossAmount: 10, netAmount: 8, grossQuantity: 100 }],
+    };
+    c.update(s);
+    delete s.githubBilling;
+    c.update(s); // no data — must clear, not throw
+  });
+});
+
+describe('chart registry', () => {
+  it('covers exactly the DASHBOARD_PANELS set, each with a default layout entry', () => {
+    const registryIds = CHART_REGISTRY.map((d) => d.id).sort();
+    assert.deepEqual(registryIds, [...DASHBOARD_PANELS].sort());
+    const layoutIds = DEFAULT_DASHBOARD_LAYOUT.map((d) => d.id).sort();
+    assert.deepEqual(registryIds, layoutIds);
+  });
+
+  it('extras default to hidden, stock charts to visible', () => {
+    const byId = new Map(DEFAULT_DASHBOARD_LAYOUT.map((d) => [d.id, d]));
+    for (const def of CHART_REGISTRY) {
+      assert.equal(byId.get(def.id)!.hidden, def.tier === 'extra', def.id);
+    }
+  });
+
+  it('every def mounts, selects, and diffs against a real snapshot', () => {
+    const s = makeSnapshot();
+    for (const def of CHART_REGISTRY) {
+      const el = document.createElement('div');
+      const c = def.mount(el, { toggleModelFilter: () => {} });
+      const slice = def.select(s);
+      assert.equal(def.isDirty(undefined, slice), true, `${def.id}: first render must be dirty`);
+      assert.equal(def.isDirty(slice, slice), false, `${def.id}: identical slice must be clean`);
+      c.update(s, { metric: 'cost', focusedModels: [] });
+      c.resize();
+      c.reinit();
+      if (def.noData) def.noData(s);
+    }
   });
 });
