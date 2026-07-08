@@ -127,9 +127,9 @@ Run **Mallard: Sign In to GitHub** to pull the authoritative Copilot charge from
 
 This is Copilot-specific and stays that way: GitHub exposes a user-scoped billing API an individual can authenticate against with their own account. Anthropic's usage/cost API is organization-admin-scoped, not something an individual Claude Code user can call the way they call GitHub's. Claude Code spend is always local-log-based (estimated), the same way Copilot spend is before you sign in.
 
-## Metric streaming
+## Event streaming
 
-After each snapshot Mallard can publish a JSON usage vector to a self-hosted server via webhook or MQTT. Set `mallard.server.url` and `mallard.export.transport`.
+Mallard can stream usage events to a self-hosted server via webhook or MQTT — set `mallard.server.url` and `mallard.export.transport`. Every batch of freshly ingested events is priced and labeled on-device and published as finished records (model, surface, connector, credits, USD cost, tokens, detected language); the server just stores them, one InfluxDB point per event, and Grafana derives the aggregates. Failed sends queue durably and re-deliver in order. No repo or branch names ever leave the machine. See the Metrics Schema reference for the wire format.
 
 ## Export
 

@@ -15,7 +15,7 @@ configuration yourself, or have a qualified person do so.
 software. Please conduct your own due diligence.*
 :::
 
-Mallard ships an optional ingest server that receives metric payloads from one or more extension instances, stores them in InfluxDB v2, and visualises them in Grafana. The extension works fine without it. Self-hosting is for teams that want a centralised dashboard or want to keep data under their own control.
+Mallard ships an optional ingest server that receives streamed usage events from one or more extension instances, stores them in InfluxDB v2, and visualises them in Grafana. The extension works fine without it. Self-hosting is for teams that want a centralised dashboard or want to keep data under their own control.
 
 Source: `server/` in this repo.
 
@@ -39,7 +39,7 @@ The server is a single stateless FastAPI process. It accepts either:
 - **Webhook**: a `POST` to `/api/v1/ingest` with an `X-API-Key` header (or `Authorization: Bearer` for token-based auth, or a TLS client certificate for mTLS).
 - **MQTT**: a message published over a WebSocket-wrapped MQTT connection (`wss://your-server/mqtt`). The embedded amqtt broker accepts any topic; it doesn't filter by topic name, only by the authenticated client.
 
-InfluxDB stores every snapshot as a measurement named `mallard_metrics`. Grafana reads from InfluxDB via Flux queries and ships four pre-built dashboards: overview, per-model breakdown, team comparison, and velocity trends.
+InfluxDB stores one point per usage event in a measurement named `mallard_events`, tagged by credential label, connector, model, surface, and detected language. Grafana reads from InfluxDB via Flux queries and derives every aggregate from the raw events.
 
 ## Credentials: static by default
 

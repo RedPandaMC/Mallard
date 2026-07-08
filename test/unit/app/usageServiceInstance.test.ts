@@ -87,7 +87,7 @@ describe('UsageService — start/refresh/fireAlerts/scheduleTimer', () => {
       showWarningMessage: () => Promise.resolve(undefined),
       executeCommand: () => Promise.resolve(undefined),
     };
-    const svc = new UsageService(makeReader(data), pricing, ingest, userConfig, currency, undefined, undefined, host);
+    const svc = new UsageService(makeReader(data), pricing, ingest, userConfig, currency, undefined, host);
     let snapshots = 0;
     svc.onDidChangeSnapshot(() => snapshots++);
     await svc.start();
@@ -303,7 +303,7 @@ describe('UsageService — GitHub billing + alert rule notify', () => {
         today: { credits: 10, cost: 0.4, tokens: 100, eventCount: 1 },
       },
     };
-    const svc = new UsageService(makeReader(data), pricing, ingest, userConfig, currency, undefined, undefined, host);
+    const svc = new UsageService(makeReader(data), pricing, ingest, userConfig, currency, undefined, host);
     const fired: string[] = [];
     svc.onAlertFired(({ message }) => fired.push(message));
     await svc.start();

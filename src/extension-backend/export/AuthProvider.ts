@@ -12,7 +12,7 @@ import {
   NullMetricExporter,
   type MetricProtocol,
 } from './MetricExporter';
-import { MetricPayloadSerializer } from './payload';
+import { StreamBatchSerializer } from './payload';
 import { ExportQueue } from './ExportQueue';
 import { opt } from '../util/lang';
 
@@ -65,7 +65,7 @@ export class AuthProvider {
 
     if (built.length === 0) return new NullMetricExporter();
 
-    const serializer = new MetricPayloadSerializer();
+    const serializer = new StreamBatchSerializer();
     const exporters = built.map(
       (b) => new MetricExporter(b.protocol, serializer, new ExportQueue(dir, b.queueFile)),
     );

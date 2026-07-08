@@ -4,6 +4,15 @@
 
 ### Added
 
+- **Event streaming (wire protocol v1)**: metric export is now a true stream.
+  Each batch of freshly ingested events — priced, labeled, and deduplicated
+  on-device — is published to the self-hosted server as it happens, chunked at
+  100 events, with durable on-device retry. The server stores one InfluxDB
+  point per event (`mallard_events`) tagged by credential label, connector,
+  model, surface, and detected language; Grafana derives every aggregate. The
+  old state-snapshot payload (and its v3 schema) is deleted — v1 is the only
+  wire version. Repo and branch names still never leave the machine.
+
 - **Extra charts**: an **Add chart** button in the dashboard's analysis bar adds
   optional panels beyond the stock eight — spend by repository, cost categories
   over time, tokens over time, and GitHub billing line items. Added charts drag,
@@ -13,8 +22,8 @@
 - **Language detection**: each live event is tagged with the active editor's
   language (VS Code languageId), using the same live-window rule as repo/branch
   attribution — backfilled history stays untagged. Spend per language shows up
-  as a new `≈ By language` extra chart and as an additive `language_credits`
-  map in the metric export payload.
+  as a new `≈ By language` extra chart and as a `language` tag on every
+  streamed event.
 - **Repo attribution provenance**: every event now records *how* it got its repo.
   Claude Code events are attributed authoritatively from the working directory
   recorded in the log; Copilot events use the active-editor heuristic and are

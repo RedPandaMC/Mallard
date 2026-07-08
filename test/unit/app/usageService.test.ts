@@ -72,18 +72,11 @@ function makeService(data: SnapshotSourceData) {
     onDidChange: () => ({ dispose() {} }),
   } as unknown as UserConfigStore;
   const currency = { currentRates: () => ({}) } as unknown as CurrencyService;
-  const exported: UsageSnapshot[] = [];
-  const exporter = {
-    export: async (s: UsageSnapshot) => void exported.push(s),
-    flush: async () => {},
-    dispose: () => {},
-  };
   const svc = new UsageService(
     reader, pricing, ingest, userConfig, currency, undefined,
-    exporter as never,
     { showWarningMessage: async () => undefined } as never,
   );
-  return { svc, exported };
+  return { svc };
 }
 
 /** Strip the fields that legitimately differ between the two read paths. */
@@ -115,7 +108,7 @@ describe('UsageService — snapshot assembly (merged compute path)', () => {
   });
 
   it('assembles totals, dimensions, and rankings from the data bundle', async () => {
-    const { svc, exported } = makeService(fixtureData());
+    const { svc } = makeService(fixtureData());
     await svc.setFilter({});
     const s = svc.current!;
 
@@ -130,7 +123,6 @@ describe('UsageService — snapshot assembly (merged compute path)', () => {
     assert.equal(s.estimatedEventCount, 9);
     assert.equal(s.source, 'mixed'); // two sources present (claude-code + local)
     assert.equal(s.chartData.hourlyTimeline.peakHour, 14);
-    assert.equal(exported.length, 1, 'snapshot is handed to the exporter');
     svc.dispose();
   });
 

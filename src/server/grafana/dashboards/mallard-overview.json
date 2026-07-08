@@ -1,9 +1,15 @@
 {
   "__inputs": [],
   "__requires": [
-    { "type": "datasource", "id": "influxdb", "version": "1.0.0" }
+    {
+      "type": "datasource",
+      "id": "influxdb",
+      "version": "1.0.0"
+    }
   ],
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -12,25 +18,47 @@
   "panels": [
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "id": 10,
       "title": "Overview",
       "type": "row"
     },
     {
-      "datasource": { "type": "influxdb", "uid": "mallard-influx" },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
       "id": 1,
-      "options": { "tooltip": { "mode": "multi" } },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
       "targets": [
         {
-          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_metrics\" and r._field == \"today_credits\")\n  |> aggregateWindow(every: 1h, fn: mean)\n  |> yield(name: \"credits\")",
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\" and r._field == \"credits\")\n  |> aggregateWindow(every: 1h, fn: sum)\n  |> yield(name: \"credits\")",
           "refId": "A"
         }
       ],
@@ -38,16 +66,30 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "influxdb", "uid": "mallard-influx" },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.8 },
-              { "color": "red", "value": 1.0 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.8
+              },
+              {
+                "color": "red",
+                "value": 1.0
+              }
             ]
           },
           "max": 1,
@@ -55,29 +97,72 @@
           "unit": "percentunit"
         }
       },
-      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 1 },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
       "id": 2,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "showThresholdLabels": false, "showThresholdMarkers": true },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
       "targets": [
         {
-          "query": "from(bucket: \"metrics\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"mallard_metrics\" and r._field == \"mtd_budget_pct\")\n  |> last()\n  |> yield(name: \"budget_pct\")",
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\" and r._field == \"cost_usd\")\n  |> sum()\n  |> yield(name: \"mtd_cost_usd\")",
           "refId": "A"
         }
       ],
-      "title": "MTD Budget %",
+      "title": "Spend (USD, 30d)",
       "type": "gauge"
     },
     {
-      "datasource": { "type": "influxdb", "uid": "mallard-influx" },
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
       },
-      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
       "id": 3,
-      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["uniqueValues"] } },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "uniqueValues"
+          ]
+        }
+      },
       "targets": [
         {
-          "query": "from(bucket: \"metrics\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"mallard_metrics\")\n  |> keep(columns: [\"instance_id\"])\n  |> distinct(column: \"instance_id\")\n  |> count()\n  |> yield(name: \"active_instances\")",
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\")\n  |> keep(columns: [\"instance_id\"])\n  |> distinct(column: \"instance_id\")\n  |> count()\n  |> yield(name: \"active_instances\")",
           "refId": "A"
         }
       ],
@@ -85,19 +170,35 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "influxdb", "uid": "mallard-influx" },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "axisPlacement": "auto" }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisPlacement": "auto"
+          }
         }
       },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 9 },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
       "id": 4,
-      "options": { "barRadius": 0.1, "groupWidth": 0.7, "orientation": "horizontal" },
+      "options": {
+        "barRadius": 0.1,
+        "groupWidth": 0.7,
+        "orientation": "horizontal"
+      },
       "targets": [
         {
-          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_metrics\" and r._field == \"today_credits\")\n  |> group(columns: [\"instance_id\"])\n  |> sum()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)\n  |> yield(name: \"top_instances\")",
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\" and r._field == \"credits\")\n  |> group(columns: [\"instance_id\"])\n  |> sum()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)\n  |> yield(name: \"top_instances\")",
           "refId": "A"
         }
       ],
@@ -106,23 +207,49 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
       "id": 11,
       "title": "Ingest & version health",
       "type": "row"
     },
     {
-      "datasource": { "type": "influxdb", "uid": "mallard-influx" },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
+      },
       "description": "Splits ingest volume by connector (e.g. copilot, claude-code). A single instance running multiple connectors shows up under each.",
       "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" } }
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
       "id": 5,
-      "options": { "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] } },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        }
+      },
       "targets": [
         {
-          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_metrics\" and r._field == \"active_models_count\")\n  |> group(columns: [\"connector\"])\n  |> count()\n  |> yield(name: \"by_connector\")",
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\" and r._field == \"count\")\n  |> group(columns: [\"connector\"])\n  |> sum()\n  |> yield(name: \"by_connector\")",
           "refId": "A"
         }
       ],
@@ -130,17 +257,38 @@
       "type": "piechart"
     },
     {
-      "datasource": { "type": "influxdb", "uid": "mallard-influx" },
-      "description": "Splits ingest volume by payload schema_version. Useful for spotting extension version skew across a fleet — see GET /health for the range of versions this server understands.",
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" } }
+      "datasource": {
+        "type": "influxdb",
+        "uid": "mallard-influx"
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "description": "Splits ingest volume by payload schema_version. Useful for spotting extension version skew across a fleet \u2014 see GET /health for the range of versions this server understands.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
       "id": 6,
-      "options": { "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] } },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        }
+      },
       "targets": [
         {
-          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_metrics\" and r._field == \"active_models_count\")\n  |> group(columns: [\"schema_version\"])\n  |> count()\n  |> yield(name: \"by_schema_version\")",
+          "query": "from(bucket: \"metrics\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"mallard_events\" and r._field == \"count\")\n  |> group(columns: [\"schema_version\"])\n  |> sum()\n  |> yield(name: \"by_schema_version\")",
           "refId": "A"
         }
       ],
@@ -150,9 +298,16 @@
   ],
   "refresh": "5m",
   "schemaVersion": 39,
-  "tags": ["mallard"],
-  "templating": { "list": [] },
-  "time": { "from": "now-7d", "to": "now" },
+  "tags": [
+    "mallard"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "browser",
   "title": "Mallard Overview",

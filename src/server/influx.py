@@ -1,4 +1,4 @@
-"""InfluxDB v2 client factory and write helper."""
+"""InfluxDB v2 client factory and write helper for the v1 event stream."""
 
 from __future__ import annotations
 
@@ -11,35 +11,24 @@ from influxdb_client import Point, WritePrecision
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 
 from .config import Settings
-from .normalize import NormalizedMetric
+from .normalize import NormalizedBatch
 
 if TYPE_CHECKING:
     from influxdb_client.client.write_api_async import WriteApiAsync
 
 logger = logging.getLogger(__name__)
 
-_MEASUREMENT = "mallard_metrics"
+_MEASUREMENT = "mallard_events"
 
-# Fields carried straight through from NormalizedMetric when present (None is
-# omitted rather than written as 0/empty, so a field a given schema version
-# never supplied is absent from the point instead of misleadingly zero).
-_FLOAT_FIELDS = (
-    "mtd_budget_pct", "mtd_credits", "mtd_cost_usd",
-    "today_credits", "today_cost_usd", "daily_credit_stddev",
-    "forecast_low", "forecast_high",
-    "total_credits", "total_tokens",
-)
-_INT_FIELDS = (
-    "repo_count", "model_count", "budget_trend", "tz_offset_minutes",
-    "total_event_count", "estimated_event_count",
-)
-
-# Map entries become individual fields ("model_credits_<key>"); keys are
-# sanitised so a hostile model id can't smuggle field-name syntax. Fields
-# (unlike tags) are not indexed, so per-model field names carry no
-# cardinality cost.
-_MAP_FIELDS = ("model_credits", "surface_credits", "language_credits", "cost_by_category")
+# Tag values are indexed; restrict to a bounded, sanitised character set so a
+# hostile model/surface/language string can't smuggle line-protocol syntax or
+# explode cardinality with unbounded junk.
+_TAG_VALUE_RE = re.compile(r"[^A-Za-z0-9._@ /-]+")
 _FIELD_KEY_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _tag_value(value: str) -> str:
+    return _TAG_VALUE_RE.sub("_", value)[:64] or "unknown"
 
 
 def _field_key(prefix: str, key: str) -> str:
@@ -66,63 +55,54 @@ async def write_payload(
     write_api: "WriteApiAsync",
     bucket: str,
     org: str,
-    metric: NormalizedMetric,
+    batch: NormalizedBatch,
     source: str = "unknown",
 ) -> None:
-    """Convert a normalized metric to an InfluxDB Point and write it (awaiting the
-    async write API so the event loop is never blocked on the network).
+    """Write one InfluxDB point per event in the batch (single write call).
 
-    `connector` becomes its own tag so a single instance running multiple
-    connectors (e.g. Copilot and Claude Code) can be split apart in Grafana.
-    Anything the current server doesn't have a typed field for lands in
-    `extra_json`, so a future server version can read it back instead of it
-    having been discarded on ingest.
+    Tags carry the queryable dimensions: `source` is the server-side credential
+    label (who sent it), `connector`/`model`/`surface`/`language` are the
+    on-device labels (what produced it). The event timestamp is the point
+    timestamp, so the series reflects when the usage happened, not when the
+    batch arrived. The client event id is written as a field — not a tag, to
+    keep cardinality bounded — so duplicates from retries can be audited.
     """
-    point = (
-        Point(_MEASUREMENT)
-        .tag("instance_id", metric.instance_id or "unknown")
-        .tag("schema_version", str(metric.schema_version))
-        .tag("source", source)
-        .tag("connector", metric.connector or "unknown")
-        .field("top_model", metric.top_model or "")
-        .field("active_models_count", len(metric.active_models))
-    )
-
-    for name in _FLOAT_FIELDS:
-        value = getattr(metric, name)
-        if value is not None:
-            point = point.field(name, float(value))
-
-    for name in _INT_FIELDS:
-        value = getattr(metric, name)
-        if value is not None:
+    points: list[Point] = []
+    for e in batch.events:
+        point = (
+            Point(_MEASUREMENT)
+            .tag("instance_id", batch.instance_id or "unknown")
+            .tag("schema_version", str(batch.schema_version))
+            .tag("source", source)
+            .tag("connector", _tag_value(e.connector))
+            .tag("model", _tag_value(e.model))
+            .tag("surface", _tag_value(e.surface))
+            .tag("language", _tag_value(e.language) if e.language else "unknown")
+            .field("credits", float(e.credits))
+            .field("cost_usd", float(e.cost_usd))
+            .field("estimated", bool(e.estimated))
+            .field("count", 1)
+        )
+        for name, value in e.tokens.items():
             point = point.field(name, int(value))
+        for key, value in e.cost_by_category.items():
+            point = point.field(_field_key("cbc", key), float(value))
+        if e.event_id:
+            point = point.field("event_id", e.event_id[:128])
+        if e.extra:
+            point = point.field("extra_json", json.dumps(e.extra, default=str))
+        points.append(point.time(e.ts_ms, WritePrecision.MS))
 
-    if metric.forecast_basis is not None:
-        point = point.field("forecast_basis", metric.forecast_basis)
-
-    # Counter maps: one field per entry so Grafana can query them directly.
-    for map_name in _MAP_FIELDS:
-        for key, value in getattr(metric, map_name).items():
-            point = point.field(_field_key(map_name, key), float(value))
-
-    # One comma-joined list field — the old active_model_{i} position-indexed
-    # field names were unbounded and order-dependent (an InfluxDB anti-pattern).
-    if metric.active_models:
-        point = point.field("active_models", ",".join(metric.active_models))
-
-    if metric.extra:
-        point = point.field("extra_json", json.dumps(metric.extra, default=str))
-
-    point = point.time(metric.ts_ms, WritePrecision.MS)
+    if not points:
+        return
 
     logger.debug(
-        "Writing InfluxDB point: measurement=%s instance=%s ts=%d",
+        "Writing %d InfluxDB points: measurement=%s instance=%s",
+        len(points),
         _MEASUREMENT,
-        metric.instance_id,
-        metric.ts_ms,
+        batch.instance_id,
     )
-    await write_api.write(bucket=bucket, org=org, record=point)
+    await write_api.write(bucket=bucket, org=org, record=points)
 
 
 async def ping_influx(client: InfluxDBClientAsync) -> bool:

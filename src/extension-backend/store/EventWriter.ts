@@ -18,7 +18,7 @@ import {
 } from './schema';
 import type { RecordFilter } from './EventRepository';
 import type { SnapshotCacheToken } from './EventReader';
-import { readRows, runPrepared } from './dbUtils';
+import { readPrepared, readRows, runPrepared } from './dbUtils';
 
 // ── Interface ─────────────────────────────────────────────────────────────────
 
@@ -163,9 +163,36 @@ export class EventWriter implements IEventWriter {
     return rows[0] ?? 0;
   }
 
+  /**
+   * Called with the events that actually survived the INSERT OR IGNORE merge
+   * (new ids only, in-batch duplicates collapsed) — the hook the streaming
+   * exporter hangs off. Deliberately a plain callback, not a vscode
+   * EventEmitter: the store layer stays framework-free.
+   */
+  onInserted?: (events: UsageEvent[]) => void;
+
   private async insertAll(events: UsageEvent[]): Promise<number> {
     /* c8 ignore next */
     if (events.length === 0) return 0;
+
+    // Collapse in-batch duplicates (first occurrence wins, matching INSERT OR
+    // IGNORE) and find which ids already exist so the merge delta is exact.
+    const seen = new Set<string>();
+    const unique = events.filter((e) => !seen.has(e.id) && (seen.add(e.id), true));
+    const existing = new Set<string>();
+    const CHUNK = 5_000;
+    for (let i = 0; i < unique.length; i += CHUNK) {
+      const chunk = unique.slice(i, i + CHUNK);
+      const placeholders = chunk.map(() => '?').join(',');
+      const rows = await readPrepared(
+        this.conn,
+        `SELECT id FROM events WHERE id IN (${placeholders})`,
+        chunk.map((e) => e.id),
+        (r) => String(r['id']),
+      );
+      for (const id of rows) existing.add(id);
+    }
+
     await this.conn.run('DELETE FROM events_staging');
 
     const appender = await this.conn.createAppender('events_staging');
@@ -194,6 +221,9 @@ export class EventWriter implements IEventWriter {
     await this.conn.run(INSERT_STAGING_MERGE);
     const after  = await this.countAll();
     await this.conn.run(CLEAR_STAGING);
+
+    const inserted = unique.filter((e) => !existing.has(e.id));
+    if (inserted.length > 0) this.onInserted?.(inserted);
     return after - before;
   }
 

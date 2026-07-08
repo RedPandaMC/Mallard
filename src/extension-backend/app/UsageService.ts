@@ -32,7 +32,6 @@ import { PricingService } from '../pricing/PricingService';
 import { CurrencyService } from '../pricing/CurrencyService';
 import type { IEventSnapshotReader, SnapshotSourceData } from '../store/EventReader';
 import { UserConfigStore } from './UserConfigStore';
-import { MetricExporter, NullMetricExporter } from '../export/MetricExporter';
 import { activeBranch } from '../util/repo';
 import { defaultVscodeHost, VscodeHost } from '../util/vscodeHost';
 import { IntervalManager } from '../util/IntervalManager';
@@ -70,7 +69,6 @@ export class UsageService implements vscode.Disposable {
   private readonly history: SnapshotSample[] = [];
   private billing: BillingState = { authStatus: 'signed-out' };
   private readonly subs: vscode.Disposable[] = [];
-  private readonly exporter: MetricExporter;
 
   constructor(
     private readonly reader: IEventSnapshotReader,
@@ -79,10 +77,8 @@ export class UsageService implements vscode.Disposable {
     private readonly userConfig: UserConfigStore,
     private readonly currency: CurrencyService,
     private readonly github?: IBillingProvider,
-    exporter: MetricExporter = new NullMetricExporter(),
     private readonly host: VscodeHost = defaultVscodeHost,
   ) {
-    this.exporter = exporter;
     if (github) {
       this.subs.push(github.onDidChange(() => void this.refreshGitHub()));
     }
@@ -264,11 +260,6 @@ export class UsageService implements vscode.Disposable {
     this.recordSample(now, next);
     this.fireAlerts(next, userConfig, now);
     this._onDidChange.fire(next);
-    // intentionally not awaited — see ExportQueue; export() persists a durable
-    // retry queue on failure, so a slow/unreachable endpoint never blocks the UI.
-    // Exports fire only on data recomputes, never on billing-only updates.
-    const composedForExport = this.current;
-    if (composedForExport) void this.exporter.export(composedForExport);
   }
 
   /** Build a SnapshotData from the normalized data bundle (either read path). */

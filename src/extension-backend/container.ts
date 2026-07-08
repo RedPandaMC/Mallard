@@ -24,6 +24,7 @@ import { PricingService } from './pricing/PricingService';
 import { CurrencyService } from './pricing/CurrencyService';
 import { EventStore } from './store/EventStore';
 import { AuthProvider } from './export/AuthProvider';
+import { buildStreamBatch, chunkEvents } from './export/payload';
 import { opt } from './util/lang';
 
 export interface Container {
@@ -108,7 +109,18 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
     userConfig.get().export ?? {},
   ).createExporter();
 
-  const usage = new UsageService(store.reader, pricing, ingest, userConfig, currency, github, exporter);
+  const usage = new UsageService(store.reader, pricing, ingest, userConfig, currency, github);
+
+  // The streaming pipeline: every batch of freshly ingested (deduped) events
+  // is priced/labeled already — chunk it and hand it to the exporter, which
+  // owns durable retry. Fire-and-forget; ingest never blocks on the network.
+  store.writer.onInserted = (events) => {
+    void (async () => {
+      for (const chunk of chunkEvents(events)) {
+        await exporter.export(buildStreamBatch(chunk));
+      }
+    })().catch((err: unknown) => console.error('[mallard] event stream export failed:', err));
+  };
   // When the background FX refresh lands real rates, recompute so the dashboard
   // updates from the USD-only default it started with.
   currency.onRatesUpdated = () => void usage.refresh();

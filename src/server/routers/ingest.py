@@ -172,18 +172,17 @@ async def ingest(
     verifier: Annotated[CredentialVerifier, Depends(get_verifier)],
 ) -> JSONResponse:
     """
-    Accepts a Mallard metric payload and writes one InfluxDB point.
+    Accepts a v1 event-stream batch and writes one InfluxDB point per event.
 
     Rate limiting is two-layer: per client IP before auth (slowapi middleware)
     and per verified credential label here (SlidingWindowLimiter), so one
     team's flood cannot exhaust another's budget and junk credentials cannot
     mint fresh buckets.
 
-    Tolerant of schema drift: any well-formed JSON body naming a
-    `schema_version` is accepted, even one this server doesn't recognize yet
-    (see normalize.py) — an extension can be upgraded ahead of its server
-    without every export failing. Only a body that isn't valid JSON, or
-    doesn't carry a `schema_version` at all, is rejected outright.
+    Tolerant of field drift: unknown per-event fields are preserved in
+    `extra_json` rather than rejected (see normalize.py). Only a body that
+    isn't valid JSON, carries no integer `schema_version`, or has no `events`
+    list is rejected outright.
     """
     # Fast-path 413 for requests honest enough to declare their size
     content_length = request.headers.get("content-length")
@@ -251,7 +250,7 @@ async def ingest(
         )
 
     try:
-        metric = normalize_payload(raw)
+        batch = normalize_payload(raw)
     except InvalidIngestPayload as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -263,7 +262,7 @@ async def ingest(
             write_api=write_api,
             bucket=settings.influx_bucket,
             org=settings.influx_org,
-            metric=metric,
+            batch=batch,
             source=source,
         )
     except Exception as exc:
@@ -274,9 +273,10 @@ async def ingest(
         ) from exc
 
     logger.info(
-        "Ingested payload: instance=%s schema_v=%d source=%s",
-        metric.instance_id,
-        metric.schema_version,
+        "Ingested batch: instance=%s schema_v=%d events=%d source=%s",
+        batch.instance_id,
+        batch.schema_version,
+        len(batch.events),
         source,
     )
 

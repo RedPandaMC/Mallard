@@ -1,80 +1,50 @@
 # Metrics Schema Reference
 
-The extension and the self-hosted server are versioned and upgraded independently. Every metric payload carries a `schema_version` so the server can tell which shape it's looking at, and the server is a tolerant reader: it accepts the current version, a newer one, and even a `schema_version` it has never seen before, rather than rejecting an export outright. This page documents the current version and how the server handles the rest.
+Mallard streams usage **events**, not aggregates: every batch of freshly ingested log entries is priced and labeled on-device, then published to your self-hosted server as finished records. The server stores one InfluxDB point per event; every aggregate (daily totals, month-to-date, per-model splits) is derived in Flux/Grafana, where it can be computed correctly for any group of instances and any time window.
 
-## Version history
+There is exactly **one wire version: `1`**. Earlier state-snapshot payload drafts were retired before any public release. The server is still a tolerant reader — a payload carrying a *newer* `schema_version` is read best-effort with the same field names, and unknown per-event fields are preserved in an `extra_json` field rather than dropped — so an upgraded extension keeps working against an older server.
 
-| Version | Sent by | Notes |
-| --- | --- | --- |
-| `1` / `2` | Never shipped | Pre-release iterations; retired before any public release. A payload claiming these versions is still accepted via the best-effort path below. |
-| `3` | Current extension | Additive counters + per-instance gauges. `ts` is Unix epoch milliseconds; `tz_offset_minutes` lets the server align client-local day boundaries. |
+## The batch envelope
 
-## Design principle
-
-**Export additive counters and per-instance gauges; derive ratios server-side.**
-Earlier drafts sent normalized fractions (`model_dist`), local-time statistics
-(`peak_usage_hour`), and derived coefficients (Gini surface concentration).
-None of those can be re-aggregated across instances — an average of ratios is
-not the ratio of sums — so v3 sends the absolute inputs and leaves derivation
-to Flux/Grafana, where it can be done correctly for any group of instances.
-
-## v3 fields (current)
-
-### Identity & time
+Each HTTP POST (or MQTT publish) carries one batch. Batches are chunked at 100 events, so even a first-install backfill of full history streams as a sequence of small payloads under the server's 64 KB body limit.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `schema_version` | `3` | Payload schema version. |
-| `instance_id` | `string` | One-way SHA-256 hash of VS Code's machineId. Stable per install, not reversible to identify the machine or user. |
-| `ts` | `number` | Unix epoch milliseconds of the snapshot. |
-| `tz_offset_minutes` | `number` | Client UTC offset in minutes (e.g. `120` for CEST). All "today"/"month-to-date" windows are client-local. |
+| `schema_version` | `1` | Streaming-protocol version. |
+| `instance_id` | `string` | One-way SHA-256 hash of VS Code's machineId. Stable per install, not reversible. |
+| `sent_at` | `number` | Unix epoch milliseconds when the batch was sent. |
+| `tz_offset_minutes` | `number` | Client UTC offset in minutes at send time. |
+| `events` | `StreamEvent[]` | The usage events (below). |
 
-### Gauges — aggregate with `last()` per `instance_id`
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `mtd_credits` | `number` | Month-to-date credits used (client-local month). |
-| `mtd_cost_usd` | `number` | Month-to-date cost in USD. |
-| `today_credits` | `number` | Credits used today (client-local day). |
-| `today_cost_usd` | `number` | Cost today in USD. |
-| `mtd_budget_pct` | `number` | Month-to-date credits as a fraction of the monthly budget (0 when no budget is set). |
-| `forecast_basis` | `"linear" \| "seasonal" \| "insufficient-data"` | Forecaster used for the month-end projection. |
-| `forecast_low` / `forecast_high` | `number` | Confidence bounds for month-end projected credits. |
-| `budget_trend` | `-1 \| 0 \| 1` | Spend trajectory vs. last week: accelerating, flat, or decelerating. |
-| `daily_credit_stddev` | `number` | Standard deviation of daily credits over the last 7 days. |
-
-### Counters — additive across instances
+## StreamEvent
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `total_credits` | `number` | Credits in the snapshot window. |
-| `total_tokens` | `number` | Total tokens (prompt + completion) in the snapshot window. |
-| `total_event_count` | `number` | Events in the snapshot window. |
-| `estimated_event_count` | `number` | Events whose cost is estimated (log-derived) rather than authoritative GitHub billing. Divide by `total_event_count` server-side for the estimated ratio. |
-| `model_credits` | `Record<string, number>` | Absolute credits per model id. The server expands each entry into its own InfluxDB field (`model_credits_<id>`). |
-| `surface_credits` | `Record<string, number>` | Absolute credits per surface (`surface_credits_<surface>` fields). |
-| `language_credits` | `Record<string, number>` | Absolute credits per detected programming language (`language_credits_<lang>` fields). Detection is heuristic — the active editor at parse time, live events only — so treat it as directional; untagged events aggregate under `unknown`. |
-| `cost_by_category` | `Record<string, number>` | Absolute USD cost per category — input, output, cache_creation, cache_read, thinking, tool (`cost_by_category_<cat>` fields). |
+| `id` | `string` | Client event id (hashed file key + span/uuid fragment). Stable across re-sends — duplicates from delivery retries can be audited by it. |
+| `ts` | `number` | Unix epoch milliseconds of the usage itself, not of the send. This becomes the InfluxDB point timestamp. |
+| `connector` | `string` | Which connector produced the event (`local` = Copilot OTel, `claude-code`, …). |
+| `model` | `string` | Model id. |
+| `surface` | `string` | `chat`, `inline`, `agent`, `edit`, or `unknown`. |
+| `credits` | `number` | Priced credit amount. |
+| `cost_usd` | `number` | Priced USD cost. Always USD — display-currency conversion is client-side only. |
+| `estimated` | `boolean` | True when the cost is log-derived (credit multiplier) rather than exact token pricing. |
+| `prompt_tokens` … `thinking_tokens` | `number?` | Token counts; absent fields mean "not reported", never zero. |
+| `cost_by_category` | `Record<string, number>?` | USD split per category (input, output, cache_read, cache_creation, thinking, tool). |
+| `language` | `string?` | Detected programming language (VS Code languageId). Heuristic — the active editor at parse time, live events only — treat as directional. Absent events land under the `unknown` tag. |
 
-### Dimension metadata
+Privacy boundary: **no repo names, branch names, or user identifiers** appear on the wire. Repo/branch attribution stays on-device.
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `active_models` | `string[]` | All distinct model IDs seen in the current data (stored as one comma-joined field plus `active_models_count`). |
-| `top_model` | `string \| null` | The single most-used model by credits, or `null` if there's no data yet. |
-| `model_count` | `number` | Number of distinct models seen in the snapshot window. |
-| `repo_count` | `number` | Number of distinct repositories observed (count only, no names). |
-| `source_connector` | `string` | Primary data source (`"local"`, `"claude-code"`, `"github"`, `"mixed"`, or `"none"`). Becomes the `connector` tag. |
+## Storage layout (InfluxDB)
 
-## How the server ingests every version
+One point per event in the `mallard_events` measurement, timestamped at the event's `ts`:
 
-Both the HTTP webhook and the MQTT transport funnel through the same normalization step before anything is written to InfluxDB, so the two transports behave identically:
+- **Tags** (indexed, bounded, sanitised): `source` (the server-side credential label — API key label, cert CN, or JWT claim), `connector`, `model`, `surface`, `language`, `instance_id`, `schema_version`.
+- **Fields**: `credits`, `cost_usd`, `count` (always 1 — sum it for event counts), `estimated`, per-token-type counts, `cbc_<category>` cost splits, `event_id`, and `extra_json` for anything the server didn't recognize.
 
-1. The raw JSON body is read just enough to find `schema_version`.
-2. A known version (`3`) is validated against its own shape and mapped into one canonical internal record. Fields the payload didn't supply are stored as absent, not zero.
-3. A `schema_version` the server has never seen, or a known version whose payload doesn't actually match its expected shape, falls back to a best-effort mapping: every field name the server recognizes is coerced if possible, and anything left over is preserved in an internal `extra` field rather than discarded, so a future server version can make sense of it without the client needing to resend anything.
-4. `connector` (from `source_connector`) becomes its own InfluxDB tag, so a single instance running multiple connectors, for example Copilot and Claude Code, can be split apart in Grafana.
+The server-side `source` tag and the on-device labels compose: per-credential-per-language, per-team-per-model, and similar splits are single Flux `group()` calls.
 
-The only thing that gets a request rejected outright is a body that isn't valid JSON, or one with no `schema_version` at all — there's no way to route those anywhere. Everything else is accepted, even in degraded form, which is what lets an extension and a server move at different release speeds.
+## Delivery semantics
 
-`GET /health` reports `min_known_schema_version` and `max_known_schema_version` so operators can spot version skew across a fleet of extension installs at a glance.
+- Batches are sent as ingest happens — a genuine streaming workload: bursty while you code, quiet when idle. On failure they are queued durably on-device (oldest-first, capped) and re-sent in order when the endpoint recovers.
+- Delivery is at-least-once: a batch whose write succeeded but whose response was lost may be re-sent. Points with identical tags and millisecond timestamps overwrite rather than double-count; the `event_id` field makes remaining duplicates auditable.
+- A batch is rejected (HTTP 400) only when it isn't a JSON object, has no integer `schema_version`, or has no `events` list. Everything else is read tolerantly.

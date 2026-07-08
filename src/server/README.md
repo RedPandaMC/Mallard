@@ -1,6 +1,6 @@
 # Mallard Server
 
-A self-hosted ingest server for the Mallard VS Code extension. It receives metric payloads over HTTP webhook and/or MQTT WebSocket, tags each data point with the sender's identity, and writes to InfluxDB for visualization in Grafana.
+A self-hosted ingest server for the Mallard VS Code extension. It receives streamed usage events (priced and labeled on-device) over HTTP webhook and/or MQTT WebSocket, tags each one with the sender's identity, and writes one InfluxDB point per event for visualization in Grafana.
 
 ## Quick starts
 

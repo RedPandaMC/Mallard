@@ -14,15 +14,23 @@ r = httpx.post(
     "http://localhost:8080/api/v1/ingest",
     headers={"X-API-Key": api_key},
     json={
+        "schema_version": 1,
         "instance_id": "e2e-instance",
-        "schema_version": 3,
-        "ts": 1700000000000,
-        "mtd_credits": 42.5,
-        "mtd_cost_usd": 1.5,
-        "today_credits": 3.5,
-        "today_cost_usd": 0.2,
-        "active_models": ["claude-sonnet-4-5"],
-        "top_model": "claude-sonnet-4-5",
+        "sent_at": 1700000000500,
+        "tz_offset_minutes": 0,
+        "events": [
+            {
+                "id": "e2e:1",
+                "ts": 1700000000000,
+                "connector": "local",
+                "model": "claude-sonnet-4-5",
+                "surface": "agent",
+                "credits": 42.5,
+                "cost_usd": 1.5,
+                "estimated": True,
+                "language": "python",
+            }
+        ],
     },
 )
 print(r.status_code)
