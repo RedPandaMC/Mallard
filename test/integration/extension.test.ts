@@ -70,7 +70,6 @@ describe('Mallard extension (integration)', () => {
     assert.deepStrictEqual(Object.keys(props).sort(), [
       'mallard.copilotLogPath',
       'mallard.copilotOtelPath',
-      'mallard.currency',
       'mallard.dataRetentionDays',
       'mallard.enabledConnectors',
       'mallard.export.transport',
