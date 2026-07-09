@@ -37,8 +37,13 @@ export function makeEvent(partial: Partial<UsageEvent> & { ts: number }): UsageE
     ...base,
     ...(partial.promptTokens !== undefined ? { promptTokens: partial.promptTokens } : {}),
     ...(partial.completionTokens !== undefined ? { completionTokens: partial.completionTokens } : {}),
+    ...(partial.cacheCreationTokens !== undefined ? { cacheCreationTokens: partial.cacheCreationTokens } : {}),
+    ...(partial.cacheReadTokens !== undefined ? { cacheReadTokens: partial.cacheReadTokens } : {}),
+    ...(partial.thinkingTokens !== undefined ? { thinkingTokens: partial.thinkingTokens } : {}),
     ...(partial.repo !== undefined ? { repo: partial.repo } : {}),
     ...(partial.branch !== undefined ? { branch: partial.branch } : {}),
+    ...(partial.attribution !== undefined ? { attribution: partial.attribution } : {}),
+    ...(partial.language !== undefined ? { language: partial.language } : {}),
     ...(partial.costByCategory !== undefined ? { costByCategory: partial.costByCategory } : {}),
   };
 }

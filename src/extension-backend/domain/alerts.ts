@@ -5,7 +5,7 @@
  * the alerts that should fire now (respecting per-alert cooldowns). No vscode,
  * no side effects — fully unit-testable.
  */
-import { UsageSnapshot, UserConfig } from './types';
+import { BillingState, SnapshotCore, UserConfig } from './types';
 
 const BUDGET_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours
 const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 1 day
@@ -42,7 +42,7 @@ export function velocityCreditsPerHour(history: readonly SnapshotSample[]): numb
 
 /* c8 ignore next */
 export function evaluateAlerts(
-  s: UsageSnapshot,
+  s: SnapshotCore & BillingState,
   history: readonly SnapshotSample[],
   config: UserConfig,
   fired: ReadonlyMap<string, number>,

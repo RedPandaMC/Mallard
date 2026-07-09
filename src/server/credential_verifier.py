@@ -1,4 +1,4 @@
-"""Credential verification hierarchy — static (env vars) or remote (Infisical / OpenBao).
+"""Credential verification hierarchy — static (env vars / K8s Secret) or remote (OpenBao).
 
 Label model ("tracking cookie" semantics, server-side only):
 - API keys (and Bearer tokens, which hit the same store) carry a `label:secret`
@@ -165,8 +165,7 @@ def _match_mqtt_password(candidate: str, stored_hash: str | None) -> bool:
 
 _ASYMMETRIC_PREFIXES = ("RS", "ES", "PS")
 
-# Secret-manager KV keys carrying JWT config. OpenBao uses these names verbatim;
-# Infisical uses their upper-cased form (matching API_KEYS / CERT_LABELS / …).
+# Secret-manager KV keys carrying JWT config (OpenBao uses these names verbatim).
 _JWT_KV_KEYS = (
     "jwt_hmac_secret",
     "jwt_public_key",
@@ -362,36 +361,6 @@ def _build_store(
     )
 
 
-# ── Infisical ─────────────────────────────────────────────────────────────────
-
-
-class InfisicalCredentialVerifier(RemoteCredentialVerifier):
-    async def _fetch_store(self) -> CredentialStore:
-        s = self._settings
-        ca = s.secret_manager_ca_cert_path or True
-        async with httpx.AsyncClient(verify=ca, timeout=10.0) as c:
-            r = await c.get(
-                f"{s.secret_manager_base_url}/api/v3/secrets/raw",
-                params={
-                    "workspaceId": s.infisical_project_id,
-                    "environment": s.infisical_env_slug,
-                },
-                headers={"Authorization": f"Bearer {s.secret_manager_token}"},
-            )
-        r.raise_for_status()
-        try:
-            kv = {item["secretKey"]: item["secretValue"] for item in r.json()["secrets"]}
-        except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError(f"Unexpected Infisical response shape: {exc}") from exc
-        return _build_store(
-            kv.get("API_KEYS", ""),
-            kv.get("CERT_LABELS", ""),
-            kv.get("MQTT_PASSWORD", ""),
-            kv.get("WEBHOOK_HMAC_SECRETS", ""),
-            jwt_raw={low: kv.get(low.upper(), "") for low in _JWT_KV_KEYS},
-        )
-
-
 # ── OpenBao ───────────────────────────────────────────────────────────────────
 
 
@@ -421,13 +390,12 @@ class OpenBaoCredentialVerifier(RemoteCredentialVerifier):
 
 
 def create_verifier(settings: "Settings") -> CredentialVerifier:
-    """Return the verifier implementation for the configured secret manager.
+    """Return the verifier for the configured credential backend.
 
-    `StaticCredentialVerifier` is not reachable here — `Settings.secret_manager_type`
-    only accepts "infisical" or "openbao", so a real deployment always resolves to
-    one of the two remote verifiers below. The static verifier remains available
-    for tests that construct it directly.
+    "static" (the default) reads credentials from environment variables — a
+    plain .env file or Kubernetes Secret. "openbao" fetches them live from an
+    OpenBao KV store so they can be rotated without a restart.
     """
-    if settings.secret_manager_type == "infisical":
-        return InfisicalCredentialVerifier(settings)
-    return OpenBaoCredentialVerifier(settings)
+    if settings.secret_manager_type == "openbao":
+        return OpenBaoCredentialVerifier(settings)
+    return StaticCredentialVerifier(settings)

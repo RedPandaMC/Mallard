@@ -20,7 +20,7 @@ import pytest
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 
 from server.influx import _MEASUREMENT, write_payload
-from server.normalize import NormalizedMetric
+from server.normalize import NormalizedBatch, NormalizedEvent
 
 
 def _live_influx_settings() -> tuple[str, str, str, str] | None:
@@ -42,15 +42,25 @@ class TestLiveInfluxWriteAndRead:
 
         instance_id = f"live-test-{uuid.uuid4().hex[:12]}"
         ts_ms = int(time.time() * 1000)
-        metric = NormalizedMetric(
-            schema_version=3,
+        batch = NormalizedBatch(
+            schema_version=1,
             instance_id=instance_id,
-            ts_ms=ts_ms,
-            connector="claude-code",
-            mtd_credits=42.5,
-            today_credits=3.5,
-            active_models=["claude-sonnet-4-5"],
-            top_model="claude-sonnet-4-5",
+            sent_at_ms=ts_ms,
+            tz_offset_minutes=120,
+            events=[
+                NormalizedEvent(
+                    ts_ms=ts_ms,
+                    connector="claude-code",
+                    model="claude-sonnet-4-5",
+                    surface="agent",
+                    credits=42.5,
+                    cost_usd=1.7,
+                    estimated=True,
+                    event_id="live:e2e:1",
+                    language="typescript",
+                    tokens={"prompt_tokens": 100},
+                )
+            ],
         )
 
         async with InfluxDBClientAsync(url=url, token=token, org=org) as client:
@@ -66,7 +76,7 @@ class TestLiveInfluxWriteAndRead:
                 client.write_api(),
                 bucket=bucket,
                 org=org,
-                metric=metric,
+                batch=batch,
                 source="live-e2e-test",
             )
 
@@ -83,6 +93,6 @@ class TestLiveInfluxWriteAndRead:
             for record in table.records:
                 fields[record.get_field()] = record.get_value()
 
-        assert fields.get("mtd_credits") == 42.5
-        assert fields.get("top_model") == "claude-sonnet-4-5"
-        assert fields.get("active_models_count") == 1
+        assert fields.get("credits") == 42.5
+        assert fields.get("cost_usd") == 1.7
+        assert fields.get("prompt_tokens") == 100

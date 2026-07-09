@@ -1,10 +1,10 @@
 # Mallard Server
 
-A self-hosted ingest server for the Mallard VS Code extension. It receives metric payloads over HTTP webhook and/or MQTT WebSocket, tags each data point with the sender's identity, and writes to InfluxDB for visualization in Grafana.
+A self-hosted ingest server for the Mallard VS Code extension. It receives streamed usage events (priced and labeled on-device) over HTTP webhook and/or MQTT WebSocket, tags each one with the sender's identity, and writes one InfluxDB point per event for visualization in Grafana.
 
 ## Quick starts
 
-A secret manager is required — there is no supported static-credentials-only deployment. Pick Infisical or OpenBao first, then follow the Docker Compose or Kubernetes quickstart for that choice on the [Self-hosted server guide](https://redpandamc.github.io/Mallard/guide/self-hosting) on the docs site.
+Credentials come from environment variables by default — a plain `.env` file (Docker Compose) or a Kubernetes Secret is a complete production setup. If you want live credential rotation without restarts, add OpenBao as the secret backend. Follow the Docker Compose or Kubernetes quickstart on the [Self-hosted server guide](https://redpandamc.github.io/Mallard/guide/self-hosting) on the docs site.
 
 ## Architecture
 
@@ -47,16 +47,14 @@ All settings are environment variables. In Docker Compose, set them in `.env`. I
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `SECRET_MANAGER_TYPE` | **yes** | none | `"infisical"` \| `"openbao"` — the server refuses to start without one |
-| `SECRET_MANAGER_URL` | **yes** | none | Base URL of the secret manager instance |
-| `SECRET_MANAGER_TOKEN` | **yes** | none | Auth token for the secret manager |
+| `SECRET_MANAGER_TYPE` | no | `static` | `"static"` (credentials from env vars) \| `"openbao"` (live-fetched) |
+| `SECRET_MANAGER_URL` | **yes, if OpenBao** | none | Base URL of the OpenBao instance |
+| `SECRET_MANAGER_TOKEN` | **yes, if OpenBao** | none | Auth token for OpenBao |
 | `SECRET_MANAGER_CA_CERT_PATH` | no | none | Path to CA cert for TLS verification |
-| `INFISICAL_PROJECT_ID` | **yes, if Infisical** | none | Infisical project UUID |
-| `INFISICAL_ENV_SLUG` | no | `prod` | Infisical environment slug |
 | `OPENBAO_SECRET_PATH` | no | `secret/data/mallard/server` | KV path in OpenBao |
 | `OPENBAO_NAMESPACE` | no | `""` | OpenBao namespace (leave empty for community edition) |
 
-Missing any of the required fields above fails `Settings()` validation at startup with a clear error, rather than failing obscurely on the first ingest request.
+With `SECRET_MANAGER_TYPE=openbao`, a missing URL or token fails `Settings()` validation at startup with a clear error, rather than failing obscurely on the first ingest request.
 
 ---
 
@@ -103,14 +101,16 @@ cert-manager automates TLS. See `server/k8s/cert-manager/README.md` for issuer s
 
 ## Secret management
 
-Pick one of the two self-hosted secret managers below; there is no supported way to run the server without one.
+The default backend is `static`: credentials come from environment variables (a `.env` file or a Kubernetes Secret). Rotating a static credential means updating the env source and restarting — simple, and fine for most single-team deployments.
 
-| Manager | K8s | Docker Compose |
+OpenBao is the advanced option for teams that rotate credentials often:
+
+| Backend | K8s | Docker Compose |
 |---|---|---|
-| Infisical | `kubectl apply -k server/k8s/infisical/`, see `server/k8s/infisical/README.md` | `docker compose -f docker-compose.yml -f docker-compose.infisical.yml up -d` |
+| static (default) | `kubectl apply -k server/k8s/server/` with `k8s/secrets.yaml.example` filled in | `docker compose -f docker-compose.yml up -d` |
 | OpenBao | `kubectl apply -k server/k8s/openbao/`, see `server/k8s/openbao/install.md` | `docker compose -f docker-compose.yml -f docker-compose.openbao.yml up -d` |
 
-Credentials are fetched from the manager with a 30-second TTL cache; rotation requires no restart. See the Secret Management guide on the docs site for a pros/cons and licensing comparison between the two.
+With OpenBao, credentials are fetched with a 30-second TTL cache; rotation requires no restart. See the Secret Management guide on the docs site.
 
 ---
 
@@ -166,7 +166,7 @@ Returns `{"status": "ok"|"degraded", "influx": "pong"|"error", "min_known_schema
 
 - **Static rotation (K8s):** update `mallard-server-secrets`; Stakater Reloader triggers a rolling restart automatically (HPA min=2 + PDB minAvailable=1 ensure zero downtime).
 - **Static rotation (Docker Compose):** edit `.env`, then `docker compose restart server`.
-- **Remote rotation (Infisical/OpenBao):** update the credential in the secret manager; the server re-fetches within 30 seconds, no restart needed.
+- **Remote rotation (OpenBao):** update the credential in OpenBao; the server re-fetches within 30 seconds, no restart needed.
 - **Scaling:** `kubectl get hpa -n mallard` / `kubectl get pdb -n mallard`
 - **InfluxDB backup:** `docker compose exec influxdb influx backup /tmp/backup --token $INFLUX_TOKEN`
 

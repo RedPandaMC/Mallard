@@ -75,7 +75,7 @@ class TestHmacSignature:
     def test_signature_over_different_body_rejected(
         self, hmac_client: TestClient, valid_payload: dict
     ) -> None:
-        other_body = json.dumps({**valid_payload, "mtd_credits": 999999}).encode()
+        other_body = json.dumps({**valid_payload, "sent_at": 999999}).encode()
         body = json.dumps(valid_payload).encode()
         response = hmac_client.post(
             "/api/v1/ingest",
@@ -129,8 +129,8 @@ class TestIngestHappyPath:
         assert response.status_code == 202
         assert response.json() == {"status": "accepted"}
 
-    def test_null_top_model_accepted(self, client: TestClient, valid_payload: dict) -> None:
-        valid_payload["top_model"] = None
+    def test_null_sent_at_accepted(self, client: TestClient, valid_payload: dict) -> None:
+        valid_payload["sent_at"] = None
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
@@ -138,8 +138,8 @@ class TestIngestHappyPath:
         )
         assert response.status_code == 202
 
-    def test_empty_active_models_accepted(self, client: TestClient, valid_payload: dict) -> None:
-        valid_payload["active_models"] = []
+    def test_empty_events_list_accepted(self, client: TestClient, valid_payload: dict) -> None:
+        valid_payload["events"] = []
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
@@ -323,10 +323,11 @@ class TestMalformedActiveModels:
 
 
 class TestIngestValidation:
-    """The ingest endpoint is a tolerant reader: a well-formed payload that
-    names a schema_version is accepted even with fields missing, wrongly
-    typed, or unrecognized — see normalize.py. Only a body that isn't valid
-    JSON, or has no schema_version at all, is rejected outright."""
+    """The ingest endpoint is a tolerant reader: a well-formed batch that
+    names a schema_version and an events list is accepted even with event
+    fields missing, wrongly typed, or unrecognized — see normalize.py. Only
+    a body that isn't valid JSON, has no integer schema_version, or has no
+    events list is rejected outright."""
 
     def test_malformed_json_returns_400(self, client: TestClient) -> None:
         response = client.post(
@@ -364,10 +365,10 @@ class TestIngestValidation:
         )
         assert response.status_code == 202
 
-    def test_missing_ts_field_still_accepted_in_degraded_mode(
+    def test_missing_event_ts_still_accepted_in_degraded_mode(
         self, client: TestClient, valid_payload: dict
     ) -> None:
-        del valid_payload["ts"]
+        del valid_payload["events"][0]["ts"]
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
@@ -378,7 +379,7 @@ class TestIngestValidation:
     def test_wrong_type_for_numeric_field_still_accepted_in_degraded_mode(
         self, client: TestClient, valid_payload: dict
     ) -> None:
-        valid_payload["mtd_cost_usd"] = "not-a-number"
+        valid_payload["events"][0]["cost_usd"] = "not-a-number"
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
@@ -386,10 +387,10 @@ class TestIngestValidation:
         )
         assert response.status_code == 202
 
-    def test_active_models_wrong_type_still_accepted_in_degraded_mode(
+    def test_non_object_events_are_skipped_not_rejected(
         self, client: TestClient, valid_payload: dict
     ) -> None:
-        valid_payload["active_models"] = "claude-sonnet"
+        valid_payload["events"].append("not-an-event")
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
@@ -397,7 +398,7 @@ class TestIngestValidation:
         )
         assert response.status_code == 202
 
-    def test_unknown_schema_version_accepted_in_degraded_mode(
+    def test_newer_schema_version_accepted_in_degraded_mode(
         self, client: TestClient, valid_payload: dict
     ) -> None:
         """A client newer than this server (schema_version the server has
@@ -411,39 +412,16 @@ class TestIngestValidation:
         )
         assert response.status_code == 202
 
-    def test_v1_shaped_payload_from_an_unupgraded_extension_is_accepted(
-        self, client: TestClient
+    def test_missing_events_list_returns_400(
+        self, client: TestClient, valid_payload: dict
     ) -> None:
-        """A server upgraded ahead of the extension must still accept the
-        older extension's real v1 payload shape (issue #27)."""
-        v1_payload = {
-            "schema_version": 1,
-            "ts": "2026-01-01T00:00:00.000Z",
-            "model_dist": {"gpt-4o": 1.0},
-            "surface_dist": {"chat": 1.0},
-            "cost_dist": {"input": 0.6, "output": 0.4},
-            "input_cost_ratio": 0.6,
-            "credits_velocity_per_hour": 1.5,
-            "mtd_budget_pct": 42.0,
-            "repo_count": 2,
-            "peak_usage_hour": 14,
-            "daily_credit_variance": 3.2,
-            "model_count": 1,
-            "surface_concentration": 0.0,
-            "estimated_event_ratio": 1.0,
-            "forecast_basis": "linear",
-            "budget_trend": 0,
-            "token_per_credit": 120.0,
-            "forecast_low": 100.0,
-            "forecast_high": 200.0,
-            "source_connector": "local",
-        }
+        del valid_payload["events"]
         response = client.post(
             "/api/v1/ingest",
-            json=v1_payload,
+            json=valid_payload,
             headers={"X-API-Key": "test-key-valid"},
         )
-        assert response.status_code == 202
+        assert response.status_code == 400
 
     def test_oversized_body_returns_413(self, client: TestClient) -> None:
         # Build a payload larger than 64 KB

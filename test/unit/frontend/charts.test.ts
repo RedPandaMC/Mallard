@@ -11,6 +11,13 @@ import { mountCategoryBreakdown } from '../../../src/extension-frontend/charts/c
 import { mountWeekdayRadial } from '../../../src/extension-frontend/charts/weekdayRadial';
 import { mountCumulativeArea } from '../../../src/extension-frontend/charts/cumulativeArea';
 import { applyTheme, initChart } from '../../../src/extension-frontend/charts/echarts';
+import { mountRepoBreakdown } from '../../../src/extension-frontend/charts/repoBreakdown';
+import { mountCategoryTrend } from '../../../src/extension-frontend/charts/categoryTrend';
+import { mountTokensTimeline } from '../../../src/extension-frontend/charts/tokensTimeline';
+import { mountBillingItems } from '../../../src/extension-frontend/charts/billingItems';
+import { mountLanguageBreakdown } from '../../../src/extension-frontend/charts/languageBreakdown';
+import { CHART_REGISTRY } from '../../../src/extension-frontend/charts/registry';
+import { DASHBOARD_PANELS, DEFAULT_DASHBOARD_LAYOUT } from '../../../src/extension-backend/domain/types';
 
 function makeSnapshot(credits = 100): UsageSnapshot {
   const now = Date.now();
@@ -109,5 +116,265 @@ describe('charts — modelBreakdown with metric parameter', () => {
     const handle = mountModelBreakdown(el);
     handle.update(makeSnapshot(50), 'credits' as Metric);
     el.remove();
+  });
+});
+
+
+describe('extra charts', () => {
+  it('repo breakdown renders byRepo and updates without throwing', () => {
+    const el = document.createElement('div');
+    const c = mountRepoBreakdown(el);
+    const s = makeSnapshot();
+    s.byRepo = [
+      { key: 'org/app', credits: 12, cost: 0.5, tokens: 100, heuristicShare: 0.4 },
+      { key: 'lib', credits: 4, cost: 0.2, tokens: 40, heuristicShare: 0 },
+    ];
+    c.update(s);
+    c.resize();
+    c.reinit();
+    c.update(s);
+  });
+
+  it('category trend renders when available and clears when not', () => {
+    const el = document.createElement('div');
+    const c = mountCategoryTrend(el);
+    const s = makeSnapshot();
+    s.chartData.categoryTrend = {
+      dates: ['01-01', '01-02'],
+      series: [{ category: 'input', costs: [0.1, 0.2] }, { category: 'output', costs: [0.3, 0] }],
+      available: true,
+    };
+    c.update(s);
+    s.chartData.categoryTrend = { dates: [], series: [], available: false };
+    c.update(s); // clears — must not throw
+  });
+
+  it('tokens timeline renders daily token volume', () => {
+    const el = document.createElement('div');
+    const c = mountTokensTimeline(el);
+    const s = makeSnapshot();
+    s.chartData.tokensDaily = { dates: ['01-01', '01-02'], tokens: [1500, 0], events: [3, 0] };
+    c.update(s);
+  });
+
+  it('language breakdown renders detected languages and hides unknown-only data', () => {
+    const el = document.createElement('div');
+    const c = mountLanguageBreakdown(el);
+    const s = makeSnapshot();
+    s.byLanguage = [
+      { key: 'typescript', credits: 9, cost: 0.36, tokens: 900 },
+      { key: 'unknown', credits: 5, cost: 0.2, tokens: 500 },
+    ];
+    c.update(s);
+    s.byLanguage = [{ key: 'unknown', credits: 5, cost: 0.2, tokens: 500 }];
+    c.update(s); // unknown-only — clears, must not throw
+  });
+
+  it('billing items renders signed-in data and clears when signed out', () => {
+    const el = document.createElement('div');
+    const c = mountBillingItems(el);
+    const s = makeSnapshot();
+    s.githubBilling = {
+      quota: null,
+      fetchedAt: Date.now(),
+      totalNetAmount: 12,
+      items: [{ model: 'gpt-4o', sku: 'copilot', grossAmount: 10, netAmount: 8, grossQuantity: 100 }],
+    };
+    c.update(s);
+    delete s.githubBilling;
+    c.update(s); // no data — must clear, not throw
+  });
+});
+
+describe('chart registry', () => {
+  it('covers exactly the DASHBOARD_PANELS set, each with a default layout entry', () => {
+    const registryIds = CHART_REGISTRY.map((d) => d.id).sort();
+    assert.deepEqual(registryIds, [...DASHBOARD_PANELS].sort());
+    const layoutIds = DEFAULT_DASHBOARD_LAYOUT.map((d) => d.id).sort();
+    assert.deepEqual(registryIds, layoutIds);
+  });
+
+  it('extras default to hidden, stock charts to visible', () => {
+    const byId = new Map(DEFAULT_DASHBOARD_LAYOUT.map((d) => [d.id, d]));
+    for (const def of CHART_REGISTRY) {
+      assert.equal(byId.get(def.id)!.hidden, def.tier === 'extra', def.id);
+    }
+  });
+
+  it('every def mounts, selects, and diffs against a real snapshot', () => {
+    const s = makeSnapshot();
+    for (const def of CHART_REGISTRY) {
+      const el = document.createElement('div');
+      const c = def.mount(el, { toggleModelFilter: () => {} });
+      const slice = def.select(s);
+      assert.equal(def.isDirty(undefined, slice), true, `${def.id}: first render must be dirty`);
+      assert.equal(def.isDirty(slice, slice), false, `${def.id}: identical slice must be clean`);
+      c.update(s, { metric: 'cost', focusedModels: [] });
+      c.resize();
+      c.reinit();
+      if (def.noData) def.noData(s);
+    }
+  });
+});
+
+
+describe('chart tooltip formatter edge cases', () => {
+  type Fmt = (params: unknown) => string;
+  function tooltipOf(c: unknown): Fmt {
+    const chart = (c as { chart: { _lastOption: { tooltip: { formatter: Fmt } } } }).chart;
+    return chart._lastOption.tooltip.formatter;
+  }
+
+  it('repo breakdown: empty params, unknown index, and clean-vs-heuristic rows', () => {
+    const el = document.createElement('div');
+    const c = mountRepoBreakdown(el);
+    const s = makeSnapshot();
+    s.byRepo = [
+      { key: 'clean', credits: 4, cost: 0.2, tokens: 40 },
+      { key: 'approx', credits: 12, cost: 0.5, tokens: 100, heuristicShare: 0.4 },
+    ];
+    c.update(s);
+    const fmt = tooltipOf(c);
+    assert.equal(fmt([]), '');
+    assert.equal(fmt([{ dataIndex: 99 }]), '');
+    // byRepo order is preserved but rendered reversed: index 1 = first entry.
+    assert.match(fmt([{ dataIndex: 1 }]), /clean/);
+    assert.doesNotMatch(fmt([{ dataIndex: 1 }]), /heuristically/);
+    assert.match(fmt([{ dataIndex: 0 }]), /≈ 40% attributed heuristically/);
+  });
+
+  it('billing items: discounted vs undiscounted rows and empty params', () => {
+    const el = document.createElement('div');
+    const c = mountBillingItems(el);
+    const s = makeSnapshot();
+    s.githubBilling = {
+      quota: null, fetchedAt: Date.now(), totalNetAmount: 18,
+      items: [
+        { model: 'gpt-4o', sku: 'copilot', grossAmount: 10, netAmount: 8, grossQuantity: 100 },
+        { model: '', sku: 'sku-only', grossAmount: 10, netAmount: 10, grossQuantity: 50 },
+        { model: '', sku: '', grossAmount: 1, netAmount: 1, grossQuantity: 1 },
+      ],
+    };
+    c.update(s);
+    const fmt = tooltipOf(c);
+    assert.equal(fmt([]), '');
+    assert.equal(fmt([{ dataIndex: 99 }]), '');
+    // Items sort by net desc then render reversed: index 0 = smallest net.
+    const texts = [fmt([{ dataIndex: 0 }]), fmt([{ dataIndex: 1 }]), fmt([{ dataIndex: 2 }])].join('|');
+    assert.match(texts, /net .* · gross /);
+    assert.match(texts, /sku-only/);
+    assert.match(texts, /unknown/);
+  });
+
+  it('language breakdown: empty params and unknown index', () => {
+    const el = document.createElement('div');
+    const c = mountLanguageBreakdown(el);
+    const s = makeSnapshot();
+    s.byLanguage = [{ key: 'typescript', credits: 9, cost: 0.36, tokens: 900 }];
+    c.update(s);
+    const fmt = tooltipOf(c);
+    assert.equal(fmt([]), '');
+    assert.equal(fmt([{ dataIndex: 99 }]), '');
+    assert.match(fmt([{ dataIndex: 0 }]), /typescript/);
+  });
+
+  it('tokens timeline: empty params and a real index', () => {
+    const el = document.createElement('div');
+    const c = mountTokensTimeline(el);
+    const s = makeSnapshot();
+    s.chartData.tokensDaily = { dates: ['01-01', '01-02'], tokens: [1500, 0], events: [3, 0] };
+    c.update(s);
+    const fmt = tooltipOf(c);
+    assert.equal(fmt([]), '');
+    assert.match(fmt([{ dataIndex: 0, axisValue: '01-01' }]), /1.5k tokens · 3 requests/);
+  });
+
+  it('category trend: zero-value series are filtered from the tooltip', () => {
+    const el = document.createElement('div');
+    const c = mountCategoryTrend(el);
+    const s = makeSnapshot();
+    s.chartData.categoryTrend = {
+      dates: ['01-01'],
+      series: [
+        { category: 'input', costs: [0.5] },
+        { category: 'output', costs: [0] },
+      ],
+      available: true,
+    };
+    c.update(s);
+    const fmt = tooltipOf(c);
+    assert.equal(fmt([]), '');
+    const text = fmt([
+      { seriesName: 'Input', value: 0.5, axisValue: '01-01' },
+      { seriesName: 'Output', value: 0, axisValue: '01-01' },
+    ]);
+    assert.match(text, /Input/);
+    assert.doesNotMatch(text, /Output/);
+  });
+});
+
+describe('chart registry — noData over a data-rich snapshot', () => {
+  it('every noData predicate sees both empty and populated data', () => {
+    const empty = makeSnapshot();
+    empty.byRepo = [];
+    empty.byLanguage = [];
+
+    const rich = makeSnapshot();
+    rich.byRepo = [{ key: 'org/app', credits: 3, cost: 0.1, tokens: 30 }];
+    rich.byLanguage = [{ key: 'python', credits: 2, cost: 0.08, tokens: 20 }];
+    rich.chartData.tokensDaily = { dates: ['01-01'], tokens: [10], events: [1] };
+    rich.chartData.categoryTrend = { dates: ['01-01'], series: [{ category: 'input', costs: [1] }], available: true };
+    rich.githubBilling = {
+      quota: null, fetchedAt: Date.now(), totalNetAmount: 5,
+      items: [{ model: 'gpt-4o', sku: 'copilot', grossAmount: 5, netAmount: 5, grossQuantity: 10 }],
+    };
+
+    for (const def of CHART_REGISTRY) {
+      if (!def.noData) continue;
+      assert.equal(typeof def.noData(rich), 'boolean', def.id);
+      assert.equal(typeof def.noData(empty), 'boolean', def.id);
+      if (['repos', 'languages', 'tokens', 'billing', 'categoryTrend'].includes(def.id)) {
+        assert.equal(def.noData(rich), false, `${def.id} should have data`);
+      }
+    }
+  });
+});
+
+
+describe('extra charts — high-contrast + fallback branches', () => {
+  function withHighContrast(fn: () => void): void {
+    document.body.classList.add('vscode-high-contrast');
+    try { fn(); } finally { document.body.classList.remove('vscode-high-contrast'); }
+  }
+
+  it('renders every extra chart under high contrast with fallback currency', () => {
+    withHighContrast(() => {
+      const s = makeSnapshot();
+      s.currency = '';
+      s.byRepo = [{ key: 'org/app', credits: 3, cost: 0.1, tokens: 30, heuristicShare: 0 }];
+      s.byLanguage = [
+        { key: 'python', credits: 2, cost: 0.08, tokens: 20 },
+        { key: 'unknown', credits: 1, cost: 0.04, tokens: 10 },
+      ];
+      s.chartData.tokensDaily = { dates: ['01-01', '01-02'], tokens: [10, 10], events: [1, 2] };
+      s.chartData.categoryTrend = {
+        dates: ['01-01'],
+        series: Array.from({ length: 8 }, (_, i) => ({ category: 'input' as const, costs: [i + 1] })),
+        available: true,
+      };
+      s.githubBilling = {
+        quota: null, fetchedAt: Date.now(), totalNetAmount: 5,
+        items: [{ model: 'gpt-4o', sku: 'copilot', grossAmount: 5, netAmount: 5, grossQuantity: 10 }],
+      };
+
+      for (const mount of [
+        mountRepoBreakdown, mountLanguageBreakdown, mountTokensTimeline,
+        mountCategoryTrend, mountBillingItems,
+      ]) {
+        const el = document.createElement('div');
+        const c = mount(el);
+        assert.doesNotThrow(() => c.update(s));
+      }
+    });
   });
 });

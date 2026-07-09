@@ -4,12 +4,8 @@ name: Server E2E
 # server built from this PR's own code, and OpenBao) and posts a real ingest
 # payload through it. Unlike server.yml's mocked unit tests, this exercises
 # the actual credential-fetch path — the exact class of bug (OpenBao's
-# agent-injector file never sourced, Infisical's Operator auth mismatch) that
-# shipped undetected because every mocked test bypasses create_verifier.
-#
-# Infisical e2e is out of scope for now: unlike OpenBao's one-shot
-# openbao-init seed container, there's no non-interactive way to bootstrap an
-# Infisical project + machine token today.
+# agent-injector file never sourced) that shipped undetected because every
+# mocked test bypasses create_verifier.
 #
 # Scoped narrowly on pull_request (only paths that can affect credential
 # wiring) plus unconditionally on push to main, as a safety net — mirrors
@@ -50,6 +46,80 @@ permissions:
   contents: read
 
 jobs:
+  static-e2e:
+    name: Static credentials e2e
+    # Validates the default configuration: the base compose file boots on its
+    # own with env-var credentials (SECRET_MANAGER_TYPE=static), no secret
+    # manager container involved.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/server/docker
+    env:
+      COMPOSE_FILE: docker-compose.yml
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Write CI-only .env
+        run: |
+          cat > .env <<'EOF'
+          INFLUX_ADMIN_USER=admin
+          INFLUX_ADMIN_PASSWORD=ci-admin-password
+          INFLUX_TOKEN=ci-influx-token
+          INFLUX_ORG=mallard
+          INFLUX_BUCKET=metrics
+          GF_SECURITY_ADMIN_PASSWORD=ci-grafana-password
+          SERVER_DOMAIN=localhost
+          API_KEYS=e2e-team:e2e-test-key
+          MQTT_PASSWORD=
+          CERT_LABELS=
+          WEBHOOK_HMAC_SECRETS=
+          EOF
+
+      - name: Start the stack
+        run: docker compose up -d --build server
+
+      - name: Wait for the server to become healthy
+        run: |
+          for i in $(seq 1 60); do
+            if docker compose exec -T server python3 - < e2e-checks/health_check.py; then
+              echo "server is healthy"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::server never became healthy within the time budget"
+          exit 1
+
+      - name: POST a real payload with the static API key (expect 202)
+        run: |
+          result=$(docker compose exec -T server python3 - e2e-test-key < e2e-checks/post_check.py)
+          status=$(echo "$result" | head -n1)
+          echo "$result" | tail -n +2
+          if [ "$status" != "202" ]; then
+            echo "::error::expected 202 from a validly-authenticated payload, got $status"
+            exit 1
+          fi
+
+      - name: POST with a wrong API key (expect 401 — negative control)
+        run: |
+          result=$(docker compose exec -T server python3 - not-the-real-key < e2e-checks/post_check.py)
+          status=$(echo "$result" | head -n1)
+          echo "$result" | tail -n +2
+          if [ "$status" != "401" ]; then
+            echo "::error::expected 401 for a wrong API key, got $status — credential verification may be bypassed"
+            exit 1
+          fi
+
+      - name: Dump compose logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
   openbao-e2e:
     name: OpenBao live e2e
     runs-on: ubuntu-latest

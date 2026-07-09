@@ -37,9 +37,15 @@ export interface SnapshotSourceData {
   /** Events whose cost is estimated (log-derived) rather than authoritative. */
   estimatedEventCount: number;
   /** day_start = epoch ms of local midnight, DST-correct. */
-  daily:      Array<{ dayStart: number; credits: number; cost: number; tokens: number; eventCount: number }>;
+  daily:      Array<{
+    dayStart: number; credits: number; cost: number; tokens: number; eventCount: number;
+    /** Per-day cost split by category (USD), for the category-trend chart. */
+    catInput: number; catOutput: number; catCacheRead: number; catCacheCreation: number; catThinking: number; catTool: number;
+  }>;
   models:     Array<{ modelId: string; credits: number; cost: number; tokens: number }>;
-  repos:      Array<{ repo: string; credits: number; cost: number; tokens: number }>;
+  repos:      Array<{ repo: string; credits: number; cost: number; tokens: number; heuristicShare: number }>;
+  /** Per-language spend; language is 'unknown' for rows without one. */
+  languages:  Array<{ language: string; credits: number; cost: number; tokens: number }>;
   /** hour_local = 0-23 in session timezone (DST-correct). */
   hourly:     Array<{ hourLocal: number; credits: number }>;
   categories: Array<{ category: string; cost: number }>;
@@ -127,6 +133,8 @@ const EventRow = z.object({
   completionTokens: z.number().nullish(),
   repo: z.string().nullish(),
   branch: z.string().nullish(),
+  attribution: z.enum(['authoritative', 'heuristic']).nullish(),
+  language: z.string().nullish(),
   costByCategory: z.string().nullish(),
 });
 
@@ -160,6 +168,8 @@ function rowToEvent(row: Record<string, unknown>): UsageEvent | null {
     ...(r.completionTokens != null ? { completionTokens: r.completionTokens } : {}),
     ...(r.repo != null ? { repo: r.repo } : {}),
     ...(r.branch != null ? { branch: r.branch } : {}),
+    ...(r.attribution != null ? { attribution: r.attribution } : {}),
+    ...(r.language != null ? { language: r.language } : {}),
     ...(costByCategory !== undefined ? { costByCategory } : {}),
   };
 }
@@ -483,10 +493,19 @@ SELECT
   ${agg(tok,                        todaCond)}           AS today_tokens,
   ${agg(`COUNT(*)`,                 todaCond)}           AS today_ec,
   ${listJson(
-    `'day_start': day_start, 'credits': credits, 'cost': cost, 'tokens': tokens, 'event_count': event_count`,
+    `'day_start': day_start, 'credits': credits, 'cost': cost, 'tokens': tokens, 'event_count': event_count,
+     'cat_input': cat_input, 'cat_output': cat_output, 'cat_cache_read': cat_cache_read,
+     'cat_cache_creation': cat_cache_creation, 'cat_thinking': cat_thinking, 'cat_tool': cat_tool`,
     `SELECT CAST(extract(epoch from date_trunc('day', to_timestamp(ts/1000.0)::TIMESTAMPTZ))*1000 AS BIGINT) AS day_start,
             COALESCE(SUM(credits),0) AS credits, COALESCE(SUM(cost),0) AS cost,
-            ${tok} AS tokens, COUNT(*) AS event_count FROM f GROUP BY 1`,
+            ${tok} AS tokens, COUNT(*) AS event_count,
+            SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.input') AS DOUBLE),0)) AS cat_input,
+            SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.output') AS DOUBLE),0)) AS cat_output,
+            SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.cache_read') AS DOUBLE),0)) AS cat_cache_read,
+            SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.cache_creation') AS DOUBLE),0)) AS cat_cache_creation,
+            SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.thinking') AS DOUBLE),0)) AS cat_thinking,
+            SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.tool') AS DOUBLE),0)) AS cat_tool
+     FROM f GROUP BY 1`,
     'day_start',
   )} AS daily,
   ${listJson(
@@ -496,12 +515,22 @@ SELECT
     'credits DESC',
   )} AS top_models,
   ${listJson(
-    `'repo': repo, 'credits': credits, 'cost': cost, 'tokens': tokens`,
+    `'repo': repo, 'credits': credits, 'cost': cost, 'tokens': tokens, 'heuristic_share': heuristic_share`,
     `SELECT COALESCE(repo,'unattributed') AS repo, COALESCE(SUM(credits),0) AS credits,
-            COALESCE(SUM(cost),0) AS cost, ${tok} AS tokens
+            COALESCE(SUM(cost),0) AS cost, ${tok} AS tokens,
+            CASE WHEN COALESCE(SUM(cost),0) > 0
+                 THEN COALESCE(SUM(CASE WHEN attribution = 'heuristic' THEN cost ELSE 0 END),0) / SUM(cost)
+                 ELSE 0 END AS heuristic_share
      FROM f GROUP BY COALESCE(repo,'unattributed')`,
     'credits DESC',
   )} AS top_repos,
+  ${listJson(
+    `'language': language, 'credits': credits, 'cost': cost, 'tokens': tokens`,
+    `SELECT COALESCE(language,'unknown') AS language, COALESCE(SUM(credits),0) AS credits,
+            COALESCE(SUM(cost),0) AS cost, ${tok} AS tokens
+     FROM f GROUP BY COALESCE(language,'unknown')`,
+    'credits DESC',
+  )} AS top_languages,
   ${listJson(
     `'model': model, 'surface': surface, 'count': cnt, 'credits': credits`,
     `SELECT modelId AS model, surface, COUNT(*) AS cnt, COALESCE(SUM(credits),0) AS credits
@@ -563,6 +592,7 @@ SELECT
     const dailyArr   = parseArr<Record<string, unknown>>('daily');
     const modelArr   = parseArr<Record<string, unknown>>('top_models');
     const repoArr    = parseArr<Record<string, unknown>>('top_repos');
+    const langArr    = parseArr<Record<string, unknown>>('top_languages');
     const sankeyArr  = parseArr<Record<string, unknown>>('sankey');
     const hourArr    = parseArr<Record<string, unknown>>('hourly');
     const wdArr      = parseArr<Record<string, unknown>>('weekday_data');
@@ -579,6 +609,12 @@ SELECT
         cost:       Number(r['cost']        ?? 0),
         tokens:     Number(r['tokens']      ?? 0),
         eventCount: Number(r['event_count'] ?? 0),
+        catInput:         Number(r['cat_input']          ?? 0),
+        catOutput:        Number(r['cat_output']         ?? 0),
+        catCacheRead:     Number(r['cat_cache_read']     ?? 0),
+        catCacheCreation: Number(r['cat_cache_creation'] ?? 0),
+        catThinking:      Number(r['cat_thinking']       ?? 0),
+        catTool:          Number(r['cat_tool']           ?? 0),
       })),
       models: modelArr.map((r) => ({
         modelId: String(r['modelId'] ?? ''),
@@ -587,10 +623,17 @@ SELECT
         tokens:  Number(r['tokens']  ?? 0),
       })),
       repos: repoArr.map((r) => ({
-        repo:    String(r['repo']    ?? ''),
-        credits: Number(r['credits'] ?? 0),
-        cost:    Number(r['cost']    ?? 0),
-        tokens:  Number(r['tokens']  ?? 0),
+        repo:           String(r['repo']            ?? ''),
+        credits:        Number(r['credits']         ?? 0),
+        cost:           Number(r['cost']            ?? 0),
+        tokens:         Number(r['tokens']          ?? 0),
+        heuristicShare: Number(r['heuristic_share'] ?? 0),
+      })),
+      languages: langArr.map((r) => ({
+        language: String(r['language'] ?? ''),
+        credits:  Number(r['credits']  ?? 0),
+        cost:     Number(r['cost']     ?? 0),
+        tokens:   Number(r['tokens']   ?? 0),
       })),
       sankey: sankeyArr.map((r) => ({
         model:   String(r['model']   ?? ''),

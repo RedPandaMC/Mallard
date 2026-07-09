@@ -54,6 +54,9 @@ export type DatePreset = 'today' | '7d' | '30d' | 'month' | 'all';
  * A single normalized unit of Copilot usage. Costs are plain numbers in USD;
  * `credits` are normalized premium-request weights.
  */
+/** Provenance of an event's repo/branch attribution. */
+export type RepoAttribution = 'authoritative' | 'heuristic';
+
 export interface UsageEvent {
   id: string;
   ts: number; // epoch ms
@@ -72,6 +75,18 @@ export interface UsageEvent {
   repo?: string;
   /** Git branch active at parse time, when resolvable. */
   branch?: string;
+  /**
+   * How `repo` was determined: 'authoritative' when the source log records it
+   * (Claude Code's per-line cwd), 'heuristic' when it's the active-editor
+   * guess at parse time. Absent when the event is unattributed.
+   */
+  attribution?: RepoAttribution;
+  /**
+   * Programming language this usage is attributed to (VS Code languageId).
+   * Heuristic like the repo fallback — the active editor's language at parse
+   * time, applied to live rows only — unless the source log names one.
+   */
+  language?: string;
   /**
    * Per-category cost split. Optional + partial so the dimension is addable
    * without backfilling old rows; absent → treat the whole event as 'unknown'.
@@ -375,6 +390,11 @@ export const DASHBOARD_PANELS = [
   'cumulative',
   'weekday',
   'hourly',
+  'repos',
+  'categoryTrend',
+  'tokens',
+  'billing',
+  'languages',
 ] as const;
 
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
@@ -386,6 +406,13 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = [
   { id: 'cumulative', span: 1, hidden: false, size: 'normal' },
   { id: 'weekday', span: 1, hidden: false, size: 'normal' },
   { id: 'hourly', span: 1, hidden: false, size: 'normal' },
+  // Extra charts: part of the panel set but hidden until added via the
+  // dashboard's "Add chart" picker.
+  { id: 'repos', span: 1, hidden: true, size: 'normal' },
+  { id: 'categoryTrend', span: 2, hidden: true, size: 'normal' },
+  { id: 'tokens', span: 1, hidden: true, size: 'normal' },
+  { id: 'billing', span: 1, hidden: true, size: 'normal' },
+  { id: 'languages', span: 1, hidden: true, size: 'normal' },
 /* c8 ignore next */
 ];
 
@@ -458,6 +485,12 @@ export interface TopEntry {
   credits: number;
   cost: number;
   tokens: number;
+  /**
+   * Fraction of this entry's cost attributed by the active-editor heuristic
+   * rather than recorded in the source log (0..1). Only set on per-repo
+   * entries; lets the UI badge approximate attributions with "\u2248".
+   */
+  heuristicShare?: number;
 }
 
 /** One directed edge in the model → surface Sankey chart. */
@@ -546,6 +579,24 @@ export interface CategoryBreakdownData {
   available: boolean;
 }
 
+/** Daily token/event volume for the tokens-over-time chart. */
+export interface TokensDailyData {
+  /** MM-DD labels, oldest first (same window as dailyBars). */
+  dates: string[];
+  tokens: number[];
+  events: number[];
+}
+
+/** Per-day cost split by category, for the stacked category-trend chart. */
+export interface CategoryTrendData {
+  /** MM-DD labels, oldest first (same window as dailyBars). */
+  dates: string[];
+  /** One entry per category that has any nonzero cost in the window. */
+  series: Array<{ category: CostCategory; costs: number[] }>;
+  /** false hides the chart (no per-category data at all). */
+  available: boolean;
+}
+
 /** Credits and event count indexed by weekday (0=Sun … 6=Sat). */
 export interface WeekdayData {
   /** Credits per weekday, index 0=Sun … 6=Sat. */
@@ -561,14 +612,20 @@ export interface ChartData {
   categoryBreakdown: CategoryBreakdownData;
   hourlyTimeline: HourlyTimelineData;
   weekdayBreakdown: WeekdayData;
+  tokensDaily: TokensDailyData;
+  categoryTrend: CategoryTrendData;
 }
 
-/** The single object every piece of UI consumes. */
-export interface UsageSnapshot {
+/**
+ * The snapshot is split into three facets so consumers can depend on only
+ * what they read: scalar summary (core), dimension breakdowns (dims), and
+ * GitHub billing/auth (billing — which updates on its own cadence, without a
+ * database recompute). The wire type the webview receives (UsageSnapshot) is
+ * still the flat intersection of all three plus render-ready chart data.
+ */
+export interface SnapshotCore {
   generatedAt: number;
   source: SnapshotSource;
-  /** True when only the current day's bar changed since the previous snapshot. */
-  isIncremental: boolean;
   status: ProviderStatus;
   currency: string;
   pricePerCredit: number;
@@ -578,8 +635,20 @@ export interface UsageSnapshot {
   range: { start: number; end: number };
   forecast: Forecast;
   budget: BudgetState;
-  topModels: TopEntry[];
   today: TodayTotals;
+  /** Currently active git branch, when detectable. */
+  currentBranch?: string;
+  /** Total credits attributed to the current branch in the visible window. */
+  currentBranchCredits: number;
+  /** Events in the snapshot window (drives export counters). */
+  totalEventCount?: number;
+  /** Events whose cost is estimated (log-derived) rather than authoritative. */
+  estimatedEventCount?: number;
+}
+
+/** Dimension breakdowns: per-model/repo/surface aggregates and filter options. */
+export interface SnapshotDims {
+  topModels: TopEntry[];
   /** All distinct model IDs in current data (for filter dropdown). */
   allModels: string[];
   /** All distinct surfaces in current data (for surface toggle). */
@@ -592,20 +661,53 @@ export interface UsageSnapshot {
   allRepos: string[];
   /** Per-repo spend, for workspace-aware attribution. */
   byRepo: TopEntry[];
-  /** Pre-computed, render-ready data for each chart — assembled on the host. */
-  chartData: ChartData;
-  /** GitHub auth state for the billing integration panel. */
+  /**
+   * Per-language spend. Detected like the repo heuristic — the active
+   * editor's languageId at parse time, live rows only — unless the source
+   * log names a language. Rows without one aggregate under 'unknown'.
+   */
+  byLanguage: TopEntry[];
+}
+
+/** GitHub auth + billing state; refreshed independently of usage data. */
+export interface BillingState {
   authStatus: AuthStatus;
   /** Human-readable detail when authStatus is 'error' (e.g. a PAT is required). */
   authError?: string;
   /** Authoritative billing data from the GitHub API, when signed in. */
   githubBilling?: GitHubBillingData;
-  /** Currently active git branch, when detectable. */
-  currentBranch?: string;
-  /** Total credits attributed to the current branch in the visible window. */
-  currentBranchCredits: number;
-  /** Events in the snapshot window (drives export counters). */
-  totalEventCount?: number;
-  /** Events whose cost is estimated (log-derived) rather than authoritative. */
-  estimatedEventCount?: number;
+}
+
+/**
+ * Everything buildChartData needs beyond core/dims — carried on the host-side
+ * SnapshotData so chart assembly can run lazily at the UI boundary instead of
+ * inside every recompute.
+ */
+export interface ChartInputs {
+  dayAggregates: UsageAggregate[];
+  categoryBreakdown: CategoryBreakdownData;
+  hourlyTimeline: HourlyTimelineData;
+  /** Credits per weekday, index 0=Sun … 6=Sat. */
+  weekday: number[];
+  /** Per-day cost split by category (display currency), oldest first. */
+  categoryDaily: CategoryDailyRow[];
+}
+
+/** One day's per-category cost split (input for CategoryTrendData). */
+export interface CategoryDailyRow {
+  dayStart: number;
+  costs: Partial<Record<CostCategory, number>>;
+}
+
+/** Host-internal snapshot: all facets plus raw chart inputs, no render data. */
+export interface SnapshotData extends SnapshotCore, SnapshotDims, BillingState {
+  chartInputs: ChartInputs;
+}
+
+/** The single object the webview consumes (wire shape). */
+export interface UsageSnapshot extends SnapshotCore, SnapshotDims, BillingState {
+  /** True when only the current day's bar changed since the previous snapshot. */
+  isIncremental: boolean;
+  /** Pre-computed, render-ready data for each chart — assembled on the host. */
+  chartData: ChartData;
 }

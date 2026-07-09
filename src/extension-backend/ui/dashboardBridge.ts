@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { UsageService } from '../app/UsageService';
 import { UserConfigStore } from '../app/UserConfigStore';
 import { LayoutStore } from '../app/LayoutStore';
-import { RestrictionEngine } from '../domain/restriction/engine';
+import { RestrictionEngine } from '../app/RestrictionEngine';
 import { Filter } from '../domain/types';
 import { readConfig } from '../config';
 import { isHostBoundMsg, ThemeKind, WebviewBoundMsg } from './messaging';
@@ -95,7 +95,12 @@ export function bindDashboard(webview: vscode.Webview, deps: DashboardDeps): vsc
 
   return [
     webview.onDidReceiveMessage((m) => void onMessage(m)),
-    usage.onDidChangeSnapshot((s) => post({ type: 'snapshot', payload: s })),
+    // The event carries host-side SnapshotData; the wire payload is the
+    // composed (and cached) full snapshot with chart data.
+    usage.onDidChangeSnapshot(() => {
+      const s = usage.current;
+      if (s) post({ type: 'snapshot', payload: s });
+    }),
     userConfig.onDidChange((value) => post({ type: 'config', value })),
     layout.onDidChange((value) => post({ type: 'layout', value })),
     restriction.onDidChange((value) => post({ type: 'restriction', value })),

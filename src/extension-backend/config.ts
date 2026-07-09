@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { PaletteMode } from './domain/types';
 
 export interface MallardConfig {
-  currency: string;
   copilotLogPath: string;
   /** Optional override for Copilot's OTel export file / SQLite DB path. */
   copilotOtelPath: string;
@@ -36,7 +35,6 @@ export interface MallardConfig {
 }
 
 export const RELEVANT_CONFIG_KEYS = [
-  'mallard.currency',
   'mallard.copilotLogPath',
   'mallard.copilotOtelPath',
   'mallard.pricingManifestUrl',
@@ -100,7 +98,6 @@ export function readConfig(): MallardConfig {
     rawMqttAuth === 'certificate' ? 'certificate' : 'password';
 
   return {
-    currency: c.get<string>('currency', 'USD').trim().toUpperCase() || 'USD',
     copilotLogPath: c.get('copilotLogPath', ''),
     copilotOtelPath: c.get('copilotOtelPath', ''),
     pricingManifestUrl: c.get('pricingManifestUrl', ''),

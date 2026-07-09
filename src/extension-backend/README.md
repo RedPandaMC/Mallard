@@ -18,7 +18,7 @@ extension-backend/
 ├── extension.ts    activate() entry point
 ├── config.ts       reads and validates mallard.* VS Code settings
 ├── container.ts    dependency-injection wiring for all services below
-├── app/            orchestration: UsageService, config/layout stores, report generation
+├── app/            orchestration: UsageService, config/layout stores, restriction engine, report generation
 ├── ingest/         log discovery, file watching, OTel parsing
 ├── store/          DuckDB-backed event storage
 ├── pricing/        pricing manifest and currency conversion
@@ -31,7 +31,7 @@ extension-backend/
 
 ## app/
 
-`UsageService` (`app/UsageService.ts`) is the central orchestrator: it reads events via `EventReader`, prices them with `PricingService`, applies the active filter, computes budget and forecast, evaluates alert rules, and emits a `UsageSnapshot` that the dashboard, sidebar, and status bar all subscribe to. It also owns GitHub billing refresh and metric export triggering. `UserConfigStore` persists rules/budgets/variables to `config.json`; `LayoutStore` persists the dashboard panel arrangement; `ReportGenerator` builds the standalone HTML export.
+`UsageService` (`app/UsageService.ts`) is the central orchestrator: it reads events via `EventReader`, prices them with `PricingService`, applies the active filter, computes budget and forecast, evaluates alert rules, and emits a host-side `SnapshotData` (core + dims + billing facets, see `domain/types.ts`). The render-ready `chartData` is composed lazily in the `current` getter at the UI boundary, and GitHub billing rides its own `onDidChangeBilling` stream — a billing refresh never triggers a store re-read or a metric export. `UserConfigStore` persists rules/budgets/currency/layout to `config.json` (the single user-config store; `LayoutStore` is a thin facade over its `dashboard.panels` block); `RestrictionEngine` owns the restriction popup state; `EphemeralFlags` names the few machine-local globalState dismissal flags; `ReportGenerator` builds the standalone HTML export.
 
 ## ingest/
 
@@ -39,7 +39,7 @@ extension-backend/
 
 ## store/
 
-DuckDB-backed event storage via `@duckdb/node-api`. Schema lives in `schema/ddl.ts`: an `events` table for raw per-request data, a `meta` table for ingest bookkeeping, and views that normalise cost-by-category and roll events up to daily totals. `EventWriter` handles retention (raw events for `mallard.dataRetentionDays`, older data rolled up to daily rows) and compaction. `MetaStore` tracks per-connector parse offsets so ingestion is idempotent across restarts.
+DuckDB-backed event storage via `@duckdb/node-api`. Schema lives in `schema/ddl.ts`: an `events` table for raw per-request data, a `meta` table for ingest bookkeeping, and views that normalise cost-by-category and roll events up to daily totals. `EventWriter` handles retention (raw events for `mallard.dataRetentionDays`, older data rolled up to daily rows) and compaction. `MetaStore` tracks per-connector parse offsets so ingestion is idempotent across restarts; the database persists across VS Code sessions (only "Prepare for Uninstall" deletes it). Events carry an `attribution` column ('authoritative' | 'heuristic' | NULL): connectors apply the active-editor repo/branch heuristic only to live rows (watermark exists and ts within `LIVE_WINDOW_MS`), never to backfill.
 
 ## pricing/
 
@@ -55,7 +55,7 @@ Framework-free core logic:
 
 - `types.ts`: the shared data model (`UsageEvent`, `UsageSnapshot`, `AlertRule`, etc).
 - `expr/`: a minimal JSONLogic-style condition evaluator used by both alert rules and restrictions.
-- `restriction/`: the Copilot-restriction engine, evaluating `restrict` blocks against the live snapshot and persisting state to `restriction.json`.
+- `restriction/`: the pure restriction evaluator (the stateful engine lives in `app/RestrictionEngine.ts`, since it needs vscode + file I/O — domain/ stays framework-free, now enforced by ESLint import boundaries).
 - `forecasters/`: pluggable month-end forecasters (linear regression, Holt-Winters seasonal).
 - `aggregate.ts`, `budget.ts`, `alerts.ts`, `chartData.ts`, `format.ts`: snapshot aggregation, budget/pace calculation, alert firing, and chart-ready data shaping.
 
@@ -65,7 +65,7 @@ Pluggable metric export to a self-hosted Mallard server. `ExporterFactory` wires
 
 ## ui/
 
-`DashboardPanel` hosts the pop-out editor-tab dashboard; `SidebarView` hosts the activity-bar panel. Both render the same webview HTML (`webviewHtml.ts`) and talk to it through `dashboardBridge.ts`, which pushes `UsageSnapshot`/config/layout/restriction updates and relays filter and config changes back. Message shapes are defined once in `messaging.ts` and shared with `../extension-frontend` so both sides stay in sync.
+`DashboardPanel` hosts the pop-out editor-tab dashboard; `SidebarView` hosts the activity-bar panel. On the webview side, every chart (stock and extra) is declared once in `../extension-frontend/charts/registry.ts` — panel chrome, mount factory, dirty comparator, and layout defaults — and `main.ts` iterates the registry. Both render the same webview HTML (`webviewHtml.ts`) and talk to it through `dashboardBridge.ts`, which pushes `UsageSnapshot`/config/layout/restriction updates and relays filter and config changes back. Message shapes are defined once in `messaging.ts` and shared with `../extension-frontend` so both sides stay in sync.
 
 ## util/
 

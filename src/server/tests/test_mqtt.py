@@ -85,17 +85,23 @@ def _make_message(data: bytes | str, topic: str = "mallard/metrics") -> MagicMoc
 
 
 VALID_JSON = json.dumps({
+    "schema_version": 1,
     "instance_id": "abc123",
-    "schema_version": 3,
-    "ts": 1_700_000_000_000,
+    "sent_at": 1_700_000_000_500,
     "tz_offset_minutes": 120,
-    "mtd_budget_pct": 42.0,
-    "mtd_credits": 100.0,
-    "mtd_cost_usd": 3.50,
-    "today_credits": 10.0,
-    "today_cost_usd": 0.35,
-    "active_models": ["claude-sonnet-4-5"],
-    "top_model": "claude-sonnet-4-5",
+    "events": [
+        {
+            "id": "local:f1:span-1",
+            "ts": 1_700_000_000_000,
+            "connector": "local",
+            "model": "claude-sonnet-4-5",
+            "surface": "agent",
+            "credits": 5.0,
+            "cost_usd": 0.2,
+            "estimated": True,
+            "language": "typescript",
+        }
+    ],
 })
 
 

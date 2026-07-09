@@ -10,7 +10,6 @@ import {
   type SendResult,
 } from '../../src/extension-backend/export/MetricExporter';
 import { ExportQueue } from '../../src/extension-backend/export/ExportQueue';
-import type { UsageSnapshot } from '../../src/extension-backend/domain/types';
 import { webhookTargetSlots, SECRET_KEYS } from '../../src/extension-backend/app/credentials';
 
 function proto() {
@@ -37,7 +36,7 @@ async function tmpDir(): Promise<string> {
 }
 
 describe('FanoutMetricExporter — per-target queues', () => {
-  const snap = {} as UsageSnapshot;
+  const snap = {} as never;
 
   it('re-delivers only to the failed target, never re-sending to one that succeeded', async () => {
     const dir = await tmpDir();

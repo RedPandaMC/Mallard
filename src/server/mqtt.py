@@ -123,15 +123,18 @@ async def _handle_message(
         data = json.loads(data)
         if not isinstance(data, dict):
             raise InvalidIngestPayload("MQTT payload must be a JSON object")
-        metric = normalize_payload(data)
+        batch = normalize_payload(data)
         await write_payload(
             write_api=ctx.write_api,
             bucket=settings.influx_bucket,
             org=settings.influx_org,
-            metric=metric,
+            batch=batch,
             source=source,
         )
-        logger.debug("MQTT: ingested instance=%s source=%s", metric.instance_id, source)
+        logger.debug(
+            "MQTT: ingested instance=%s events=%d source=%s",
+            batch.instance_id, len(batch.events), source,
+        )
     except (json.JSONDecodeError, UnicodeDecodeError, InvalidIngestPayload) as exc:
         logger.warning("MQTT: rejected message: %s", exc)
     except Exception as exc:

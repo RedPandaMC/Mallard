@@ -28,9 +28,7 @@ _DEFAULT_ENV = {
     "RATE_LIMIT": "1000/minute",  # effectively unlimited during tests
     # A secret manager is mandatory to construct Settings at all now, even though
     # these tests bypass it by constructing StaticCredentialVerifier directly.
-    "SECRET_MANAGER_TYPE": "openbao",
-    "SECRET_MANAGER_URL": "http://secret-manager-test:8200",
-    "SECRET_MANAGER_TOKEN": "test-sm-token",
+    "SECRET_MANAGER_TYPE": "static",
 }
 
 VALID_API_KEY = "test-key-valid"
@@ -95,22 +93,10 @@ def _build_client(
         importlib.reload(main_module)  # pick up fresh settings; also rebinds create_verifier
         app = main_module.create_app()
 
-        # `with TestClient(...) as tc` runs the real lifespan, which calls the real
-        # create_verifier(settings). Settings.secret_manager_type is now always a
-        # live backend (openbao/infisical), so without this patch lifespan would
-        # build a real remote verifier that makes actual network calls to the fake
-        # SECRET_MANAGER_URL above. Patched after the reload so it isn't rebound
-        # back to the real function by the `from .credential_verifier import
-        # create_verifier` line executing again. Tests want the fast, no-network
-        # static verifier instead, keyed off the same API_KEYS/MQTT_PASSWORD env vars.
-        with (
-            patch.object(
-                main_module,
-                "create_verifier",
-                side_effect=lambda settings: StaticCredentialVerifier(settings),
-            ),
-            TestClient(app, raise_server_exceptions=False) as tc,
-        ):
+        # `with TestClient(...) as tc` runs the real lifespan; SECRET_MANAGER_TYPE
+        # is "static" here, so create_verifier resolves to the no-network
+        # StaticCredentialVerifier keyed off the same API_KEYS/MQTT_PASSWORD env vars.
+        with TestClient(app, raise_server_exceptions=False) as tc:
             yield tc
 
 
@@ -154,21 +140,37 @@ def jwt_client(monkeypatch: pytest.MonkeyPatch, mock_influx_client: MagicMock) -
 @pytest.fixture()
 def valid_payload() -> dict:
     return {
+        "schema_version": 1,
         "instance_id": "abc123",
-        "schema_version": 3,
-        "ts": 1_700_000_000_000,
+        "sent_at": 1_700_000_000_500,
         "tz_offset_minutes": 120,
-        "mtd_budget_pct": 42.0,
-        "mtd_credits": 100.0,
-        "mtd_cost_usd": 3.50,
-        "today_credits": 10.0,
-        "today_cost_usd": 0.35,
-        "total_credits": 110.0,
-        "total_event_count": 12,
-        "estimated_event_count": 9,
-        "model_credits": {"claude-sonnet-4-5": 80.0, "claude-haiku-3": 30.0},
-        "surface_credits": {"agent": 110.0},
-        "cost_by_category": {"input": 1.5, "output": 2.0},
-        "active_models": ["claude-sonnet-4-5", "claude-haiku-3"],
-        "top_model": "claude-sonnet-4-5",
+        "events": [
+            {
+                "id": "local:f1:span-1",
+                "ts": 1_700_000_000_000,
+                "connector": "local",
+                "model": "claude-sonnet-4-5",
+                "surface": "agent",
+                "credits": 5.0,
+                "cost_usd": 0.2,
+                "estimated": True,
+                "prompt_tokens": 100,
+                "completion_tokens": 40,
+                "cost_by_category": {"input": 0.12, "output": 0.08},
+                "language": "typescript",
+                "repo": "org/app",
+                "branch": "main",
+                "attribution": "heuristic",
+            },
+            {
+                "id": "claude-code:s1:1700000000001:claude-haiku-3",
+                "ts": 1_700_000_000_001,
+                "connector": "claude-code",
+                "model": "claude-haiku-3",
+                "surface": "chat",
+                "credits": 1.0,
+                "cost_usd": 0.04,
+                "estimated": True,
+            },
+        ],
     }

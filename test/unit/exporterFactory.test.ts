@@ -40,4 +40,44 @@ describe('ExporterFactory', () => {
     assert.deepEqual(result, { ok: false, retryable: false });
     protocol!.dispose();
   });
+
+  it('createMqttProtocol builds a protocol with every optional field set', () => {
+    const protocol = createMqttProtocol({
+      brokerUrl: 'wss://broker.example/mqtt',
+      topic: 'custom/topic',
+      username: 'u',
+      password: 'p',
+      certPath: '/tmp/cert.pem',
+      keyPath: '/tmp/key.pem',
+      caPath: '/tmp/ca.pem',
+      workspaceFolders: ['/w1', '/w2'],
+    });
+    assert.ok(protocol);
+    protocol!.dispose();
+  });
+
+  it('createMqttProtocol/createMetricExporter return null without a broker url', () => {
+    assert.equal(createMqttProtocol({}), null);
+    assert.equal(createMetricExporter({}), null);
+  });
+
+  it('createMetricExporter wraps a minimal MQTT protocol (default topic prefix)', () => {
+    const exporter = createMetricExporter({ brokerUrl: 'wss://broker.example/mqtt' });
+    assert.ok(exporter instanceof MetricExporter);
+    exporter!.dispose();
+  });
+
+  it('createWebhookProtocol builds a protocol with every optional field set', () => {
+    const protocol = createWebhookProtocol({
+      url: 'https://example.com/ingest',
+      secret: 's3',
+      headers: { 'X-Extra': '1' },
+      retries: 2,
+      certFile: '/tmp/cert.pem',
+      keyFile: '/tmp/key.pem',
+      caFile: '/tmp/ca.pem',
+    });
+    assert.ok(protocol);
+    protocol!.dispose();
+  });
 });

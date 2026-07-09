@@ -15,7 +15,7 @@ const stack = [
   ['InfluxDB v2', 'time-series storage, line protocol write'],
   ['Grafana', '4 pre-built dashboards: overview, model, team, velocity'],
   ['Caddy / cert-manager', 'automatic HTTPS: Caddy for Docker Compose, cert-manager for Kubernetes'],
-  ['Infisical / OpenBao', 'live credential rotation without container restarts'],
+  ['OpenBao (optional)', 'live credential rotation without container restarts'],
 ];
 </script>
 

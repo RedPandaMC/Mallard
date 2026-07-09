@@ -1,4 +1,7 @@
 import { strict as assert } from 'assert';
+import { promises as fs } from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import {
   detectAll,
@@ -8,6 +11,8 @@ import {
 } from '../../../src/extension-backend/util/extensionDetector';
 import { defaultVscodeHost } from '../../../src/extension-backend/util/vscodeHost';
 import { LayoutStore } from '../../../src/extension-backend/app/LayoutStore';
+import { activeLanguage } from '../../../src/extension-backend/util/editor';
+import { UserConfigStore } from '../../../src/extension-backend/app/UserConfigStore';
 import { DASHBOARD_PANELS, DashboardLayout } from '../../../src/extension-backend/domain/types';
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
@@ -88,50 +93,65 @@ describe('defaultVscodeHost', () => {
   });
 });
 
-describe('LayoutStore', () => {
-  function makeMemento(initial: Record<string, unknown> = {}) {
-    const state = new Map<string, unknown>(Object.entries(initial));
-    return {
-      get: <T>(key: string) => state.get(key) as T | undefined,
-      update: async (key: string, value: unknown) => {
-        if (value === undefined) state.delete(key);
-        else state.set(key, value);
-      },
-      keys: () => [...state.keys()],
-      _state: state,
-    } as unknown as vscode.Memento & { _state: Map<string, unknown> };
+describe('LayoutStore (config.json-backed)', () => {
+  async function makeStore() {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mallard-layout-'));
+    const userConfig = new UserConfigStore(dir);
+    return { dir, userConfig, store: new LayoutStore(userConfig) };
   }
 
-  it('returns the default layout when nothing is stored', () => {
-    const store = new LayoutStore(makeMemento());
+  it('returns the default layout when nothing is stored', async () => {
+    const { store, userConfig } = await makeStore();
     const layout = store.get();
     assert.equal(layout.length, DASHBOARD_PANELS.length);
     store.dispose();
+    userConfig.dispose();
   });
 
-  it('set() persists a normalized layout and fires onDidChange', async () => {
-    const memento = makeMemento();
-    const store = new LayoutStore(memento);
+  it('set() persists a normalized layout into config.json and fires onDidChange', async () => {
+    const { dir, store, userConfig } = await makeStore();
     const fired: DashboardLayout[] = [];
     store.onDidChange((l) => fired.push(l));
 
-    const layout = store.get();
-    const reordered = [...layout].reverse();
+    const reordered = [...store.get()].reverse();
     await store.set(reordered);
 
     assert.equal(fired.length, 1);
     assert.equal(store.get()[0]!.id, reordered[0]!.id);
-    assert.ok(memento._state.has('mallard.dashboardLayout'));
+    const onDisk = JSON.parse(await fs.readFile(path.join(dir, 'config.json'), 'utf8'));
+    assert.equal(onDisk.dashboard.panels[0].id, reordered[0]!.id);
     store.dispose();
+    userConfig.dispose();
   });
 
-  it('reset() clears the stored layout back to defaults', async () => {
-    const memento = makeMemento();
-    const store = new LayoutStore(memento);
+  it('reset() restores the default layout', async () => {
+    const { store, userConfig } = await makeStore();
     await store.set([...store.get()].reverse());
     await store.reset();
-    assert.equal(memento._state.has('mallard.dashboardLayout'), false);
-    assert.equal(store.get()[0]!.id, DASHBOARD_PANELS.includes('daily') ? 'daily' : store.get()[0]!.id);
+    assert.deepEqual(store.get().map((p) => p.id), [...DASHBOARD_PANELS]);
     store.dispose();
+    userConfig.dispose();
+  });
+
+  it('does not re-fire onDidChange for config edits that leave the layout unchanged', async () => {
+    const { store, userConfig } = await makeStore();
+    const fired: DashboardLayout[] = [];
+    store.onDidChange((l) => fired.push(l));
+    await userConfig.set({ monthlyBudget: 42 });
+    assert.equal(fired.length, 0);
+    store.dispose();
+    userConfig.dispose();
+  });
+});
+
+describe('activeLanguage', () => {
+  it('returns the active editor languageId', () => {
+    win.activeTextEditor = { document: { languageId: 'rust' } } as never;
+    assert.equal(activeLanguage(), 'rust');
+  });
+
+  it('returns undefined when no editor is open', () => {
+    win.activeTextEditor = undefined as never;
+    assert.equal(activeLanguage(), undefined);
   });
 });

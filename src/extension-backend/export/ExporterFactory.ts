@@ -1,5 +1,5 @@
 import { MetricExporter, MqttProtocol } from './MetricExporter';
-import { MetricPayloadSerializer } from './payload';
+import { StreamBatchSerializer } from './payload';
 import { WebhookProtocol } from './WebhookProtocol';
 import type { ExportQueue } from './ExportQueue';
 
@@ -30,7 +30,7 @@ export function createMqttProtocol(cfg: Partial<MqttExporterConfig>): MqttProtoc
   if (!cfg.brokerUrl) return null;
   return new MqttProtocol({
     brokerUrl: cfg.brokerUrl,
-    topicPrefix: cfg.topic ?? 'mallard/v3/metrics',
+    topicPrefix: cfg.topic ?? 'mallard/v1',
     ...(cfg.username ? { username: cfg.username } : {}),
     ...(cfg.password ? { password: cfg.password } : {}),
     ...(cfg.certPath ? { certPath: cfg.certPath } : {}),
@@ -47,7 +47,7 @@ export function createMetricExporter(
 ): MetricExporter | null {
   const protocol = createMqttProtocol(cfg);
   if (!protocol) return null;
-  return new MetricExporter(protocol, new MetricPayloadSerializer(), queue);
+  return new MetricExporter(protocol, new StreamBatchSerializer(), queue);
 }
 
 /** Creates the webhook protocol alone — used by the multi-target fanout path. */
@@ -73,5 +73,5 @@ export function createWebhookExporter(
 ): MetricExporter | null {
   const protocol = createWebhookProtocol(cfg);
   if (!protocol) return null;
-  return new MetricExporter(protocol, new MetricPayloadSerializer(), queue);
+  return new MetricExporter(protocol, new StreamBatchSerializer(), queue);
 }

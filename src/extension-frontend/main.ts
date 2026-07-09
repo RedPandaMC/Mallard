@@ -9,34 +9,15 @@ import '@vscode/codicons/dist/codicon.css';
 
 import { onMessage, post } from './api';
 import { state, setState, subscribe } from './store';
-import {
-  dailyBarsChanged,
-  heatmapChanged,
-  modelBreakdownChanged,
-  categoryBreakdownChanged,
-  hourlyChanged,
-} from './chartDiff';
 import { lazyChart } from './lazyMount';
 import { mountLayout } from './layout';
 import {
-  CategoryBreakdownData,
-  DailyBarsData,
   DashboardLayout,
   DEFAULT_DASHBOARD_LAYOUT,
-  HeatmapData,
-  HourlyTimelineData,
-  ModelBreakdownData,
 } from '../extension-backend/domain/types';
 import { applyTheme } from './charts/echarts';
 import { applyPalette } from './theme';
-import { mountDailyBars } from './charts/dailyBars';
-import { mountHeatmap } from './charts/heatmap';
-import { mountModelBreakdown } from './charts/modelBreakdown';
-import { mountSankey } from './charts/sankey';
-import { mountCategoryBreakdown } from './charts/categoryBreakdown';
-import { mountCumulativeArea } from './charts/cumulativeArea';
-import { mountWeekdayRadial } from './charts/weekdayRadial';
-import { mountHourlyTimeline } from './charts/hourlyTimeline';
+import { CHART_REGISTRY, ChartHooks, RegisteredChart } from './charts/registry';
 import { mountKpiCards } from './components/KpiCards';
 import { mountFilterBar } from './components/FilterBar';
 import { mountGitHubBillingStrip } from './components/GitHubBillingStrip';
@@ -175,9 +156,12 @@ function mountDashboard(root: HTMLElement): void {
         <div class="wv-analysis-bar">
           <span class="wv-analysis-title">Analysis</span>
           <span class="wv-analysis-actions">
-            <button class="wv-btn wv-btn--sm" id="layout-save" hidden>
-              <i class="codicon codicon-save"></i> Save to config
-            </button>
+            <span class="wv-add-chart" id="add-chart-wrap">
+              <button class="wv-btn wv-btn--sm" id="layout-add" aria-haspopup="true" aria-expanded="false">
+                <i class="codicon codicon-add"></i> Add chart
+              </button>
+              <div class="wv-add-chart-menu" id="add-chart-menu" role="menu" hidden></div>
+            </span>
             <button class="wv-btn wv-btn--sm" id="layout-reset" hidden>
               <i class="codicon codicon-discard"></i> Reset layout
             </button>
@@ -191,14 +175,9 @@ function mountDashboard(root: HTMLElement): void {
         </div>
         <div class="wv-section-label">More views</div>
         <div class="wv-charts-grid" id="charts-grid">
-          ${panelHtml('daily', 'codicon-graph', 'Daily usage (last 30 days)', 'chart-daily', 'Daily usage bar chart')}
-          ${panelHtml('heatmap', 'codicon-calendar', 'Activity (past year)', 'chart-heatmap', 'Activity heatmap', 'heatmap')}
-          ${panelHtml('models', 'codicon-symbol-method', 'By model', 'chart-models', 'Usage by model', 'mini')}
-          ${panelHtml('sankey', 'codicon-type-hierarchy-sub', 'Flow breakdown', 'chart-sankey', 'Model to surface flow', 'mini')}
-          ${panelHtml('category', 'codicon-pie-chart', 'Spend by cost type', 'chart-category', 'Spend by cost type', 'mini')}
-          ${panelHtml('cumulative', 'codicon-graph-line', 'Cumulative spend', 'chart-cumulative', 'Cumulative spend over the month', 'mini')}
-          ${panelHtml('weekday', 'codicon-pulse', 'Usage by weekday', 'chart-weekday', 'Usage by weekday', 'mini')}
-          ${panelHtml('hourly', 'codicon-clock', 'Usage by hour', 'chart-hourly', 'Usage by hour of day', 'mini')}
+          ${CHART_REGISTRY.map((d) =>
+            panelHtml(d.id, d.icon, d.title, d.bodyId, d.ariaLabel, d.bodyClass ?? ''),
+          ).join('')}
         </div>
       </div>
     </div>`;
@@ -246,23 +225,13 @@ function mountDashboard(root: HTMLElement): void {
     applyTheme();
     rerenderAllChartsForTheme?.();
   });
-  const dailyEl = document.getElementById('chart-daily')!;
-  const heatmapEl = document.getElementById('chart-heatmap')!;
-  const modelsEl = document.getElementById('chart-models')!;
-  const sankeyEl = document.getElementById('chart-sankey')!;
-  const categoryEl = document.getElementById('chart-category')!;
-  const cumulativeEl = document.getElementById('chart-cumulative')!;
-  const weekdayEl = document.getElementById('chart-weekday')!;
-  const hourlyEl = document.getElementById('chart-hourly')!;
   const chartsGrid = document.getElementById('charts-grid')!;
 
-  const daily = lazyChart(dailyEl, () => mountDailyBars(dailyEl));
-  const heatmap = lazyChart(heatmapEl, () => mountHeatmap(heatmapEl));
-  const models = lazyChart(modelsEl, () =>
-    mountModelBreakdown(modelsEl, (label) => {
-      // The model filter dropdown (FilterBar) is the single source of truth
-      // for "focus" — a bar click toggles the same filter.models list the
-      // dropdown reads and writes, so both stay in sync automatically.
+  // The model filter dropdown (FilterBar) is the single source of truth for
+  // "focus" — a bar click toggles the same filter.models list the dropdown
+  // reads and writes, so both stay in sync automatically.
+  const hooks: ChartHooks = {
+    toggleModelFilter(label) {
       const current = new Set(state().filter.models ?? []);
       if (current.has(label)) current.delete(label);
       else current.add(label);
@@ -271,50 +240,33 @@ function mountDashboard(root: HTMLElement): void {
       else delete newFilter.models;
       setState({ filter: newFilter });
       post({ type: 'setFilter', value: newFilter });
+    },
+  };
+
+  // One lazy handle per registered chart; every fan-out below iterates this.
+  const charts = new Map(
+    CHART_REGISTRY.map((def) => {
+      const el = document.getElementById(def.bodyId)!;
+      return [def.id, lazyChart<RegisteredChart>(el, () => def.mount(el, hooks))] as const;
     }),
   );
-  const sankey = lazyChart(sankeyEl, () => mountSankey(sankeyEl));
-  const category = lazyChart(categoryEl, () => mountCategoryBreakdown(categoryEl));
-  const cumulative = lazyChart(cumulativeEl, () => mountCumulativeArea(cumulativeEl));
-  const weekday = lazyChart(weekdayEl, () => mountWeekdayRadial(weekdayEl));
-  const hourly = lazyChart(hourlyEl, () => mountHourlyTimeline(hourlyEl));
+
   const alertConfig = mountAlertConfigPanel(document.getElementById('alert-config')!);
   const content = document.getElementById('content')!;
 
   // Section elements (the dockable/resizable panels) keyed by panel id.
   const section = (id: string) =>
     document.querySelector<HTMLElement>(`.wv-chart-section[data-panel="${id}"]`)!;
-  const sections: Record<string, HTMLElement> = {
-    daily: section('daily'),
-    heatmap: section('heatmap'),
-    models: section('models'),
-    sankey: section('sankey'),
-    category: section('category'),
-    cumulative: section('cumulative'),
-    weekday: section('weekday'),
-    hourly: section('hourly'),
-  };
+  const sections: Record<string, HTMLElement> = Object.fromEntries(
+    CHART_REGISTRY.map((d) => [d.id, section(d.id)]),
+  );
 
   const resizeAll = () => {
-    daily.resize();
-    heatmap.resize();
-    models.resize();
-    sankey.resize();
-    category.resize();
-    cumulative.resize();
-    weekday.resize();
-    hourly.resize();
+    for (const c of charts.values()) c.resize();
   };
 
   rerenderAllChartsForTheme = () => {
-    daily.rerenderForTheme();
-    heatmap.rerenderForTheme();
-    models.rerenderForTheme();
-    sankey.rerenderForTheme();
-    category.rerenderForTheme();
-    cumulative.rerenderForTheme();
-    weekday.rerenderForTheme();
-    hourly.rerenderForTheme();
+    for (const c of charts.values()) c.rerenderForTheme();
   };
 
   // Dynamic scaling + docking: the layout manager reorders, resizes (span), and
@@ -332,7 +284,6 @@ function mountDashboard(root: HTMLElement): void {
   const resizeBtn = document.getElementById('layout-resize')!;
   const moveBtn = document.getElementById('layout-move')!;
   const resetBtn = document.getElementById('layout-reset')!;
-  const saveBtn = document.getElementById('layout-save')!;
 
   function setMode(next: 'none' | 'resize' | 'move'): void {
     mode = mode === next ? 'none' : next;
@@ -341,27 +292,60 @@ function mountDashboard(root: HTMLElement): void {
     moveBtn.setAttribute('aria-pressed', String(mode === 'move'));
     const editing = mode !== 'none';
     resetBtn.hidden = !editing;
-    saveBtn.hidden = !editing;
     requestAnimationFrame(resizeAll);
   }
+
+  // "Add chart" picker: lists panels currently hidden in the layout (the
+  // extra charts start life hidden); choosing one unhides it in place.
+  const addBtn = document.getElementById('layout-add')!;
+  const addMenu = document.getElementById('add-chart-menu')!;
+  const titleById = new Map(CHART_REGISTRY.map((d) => [d.id, d.title]));
+
+  function closeAddMenu(): void {
+    addMenu.hidden = true;
+    addBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  function openAddMenu(): void {
+    const hiddenPanels = state().layout.filter((pnl) => pnl.hidden && titleById.has(pnl.id));
+    addMenu.innerHTML = '';
+    if (hiddenPanels.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'wv-add-chart-empty';
+      empty.textContent = 'All charts are already shown';
+      addMenu.appendChild(empty);
+    }
+    for (const pnl of hiddenPanels) {
+      const item = document.createElement('button');
+      item.className = 'wv-btn wv-btn--sm wv-add-chart-item';
+      item.setAttribute('role', 'menuitem');
+      item.textContent = titleById.get(pnl.id)!;
+      item.addEventListener('click', () => {
+        const next = state().layout.map((q) => (q.id === pnl.id ? { ...q, hidden: false } : q));
+        post({ type: 'setLayout', value: next });
+        closeAddMenu();
+      });
+      addMenu.appendChild(item);
+    }
+    addMenu.hidden = false;
+    addBtn.setAttribute('aria-expanded', 'true');
+  }
+
+  addBtn.addEventListener('click', () => {
+    if (addMenu.hidden) openAddMenu();
+    else closeAddMenu();
+  });
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('add-chart-wrap')!.contains(e.target as Node)) closeAddMenu();
+  });
 
   resizeBtn.addEventListener('click', () => setMode('resize'));
   moveBtn.addEventListener('click', () => setMode('move'));
 
+  // Layout persists straight into config.json via setLayout, so resetting is
+  // just writing the default layout back.
   resetBtn.addEventListener('click', () => {
     post({ type: 'setLayout', value: DEFAULT_DASHBOARD_LAYOUT });
-    post({ type: 'setConfig', value: { dashboard: { panels: [] } } });
-  });
-
-  saveBtn.addEventListener('click', () => {
-    const layout = state().layout;
-    const panels = layout.map((p) => ({
-      id: p.id,
-      gridColumn: `span ${p.span}`,
-      ...(p.hidden ? { hidden: true } : {}),
-      ...(p.size && p.size !== 'normal' ? { size: p.size } : {}),
-    }));
-    post({ type: 'setConfig', value: { dashboard: { panels } } });
   });
 
   // Ctrl/Cmd+Shift+E toggles resize mode, Ctrl/Cmd+Shift+M toggles move mode.
@@ -386,13 +370,8 @@ function mountDashboard(root: HTMLElement): void {
 
   // Per-chart payload trackers for diff-based render skipping.
   // Charts only re-render when their specific input data changes.
-  let prevDailyBars: DailyBarsData | undefined;
-  let prevHeatmap: HeatmapData | undefined;
-  let prevModelBreakdown: ModelBreakdownData | undefined;
+  const prevSlices = new Map<string, unknown>();
   let prevFocusedModelsKey: string | undefined;
-  let prevSankeyKey: string | undefined;
-  let prevCategory: CategoryBreakdownData | undefined;
-  let prevHourly: HourlyTimelineData | undefined;
   let prevMetric: string | undefined;
 
   subscribe((s) => {
@@ -433,53 +412,21 @@ function mountDashboard(root: HTMLElement): void {
       updateGhHeaderButton(snapshot);
       currencySelector.update(snapshot.fxRates, snapshot.currency);
 
-      // dailyBars drives both the bar chart and the cumulative area view.
-      if (dailyBarsChanged(prevDailyBars, snapshot.chartData.dailyBars)) {
-        daily.render((c) => c.update(snapshot));
-        cumulative.render((c) => c.update(snapshot));
-        prevDailyBars = snapshot.chartData.dailyBars;
-      }
-
-      // heatmap data drives both the calendar heatmap and the weekday radial.
-      const heatmapDirty = heatmapChanged(prevHeatmap, snapshot.chartData.heatmap);
-      sections['heatmap']!.classList.toggle('wv-no-data', snapshot.chartData.heatmap.max <= 0);
-      sections['weekday']!.classList.toggle('wv-no-data', snapshot.chartData.heatmap.max <= 0);
-      if (heatmapDirty) {
-        heatmap.render((c) => c.update(snapshot));
-        weekday.render((c) => c.update(snapshot));
-        prevHeatmap = snapshot.chartData.heatmap;
-      }
-
       const focusedModelsKey = focusedModelsList.join(',');
-      const focusedDirty = focusedModelsKey !== prevFocusedModelsKey;
-      if (modelBreakdownChanged(prevModelBreakdown, snapshot.chartData.modelBreakdown) || metric !== prevMetric || focusedDirty) {
-        const fm = new Set(focusedModelsList);
-        models.render((c) => { c.setFocused(fm); c.update(snapshot, metric); });
-        prevModelBreakdown = snapshot.chartData.modelBreakdown;
-        prevFocusedModelsKey = focusedModelsKey;
+      const ctx = { metric, focusedModels: focusedModelsList };
+      for (const def of CHART_REGISTRY) {
+        if (def.noData) sections[def.id]!.classList.toggle('wv-no-data', def.noData(snapshot));
+        const slice = def.select(snapshot);
+        const dirty =
+          def.isDirty(prevSlices.get(def.id), slice) ||
+          (def.usesMetric === true && metric !== prevMetric) ||
+          (def.usesFocus === true && focusedModelsKey !== prevFocusedModelsKey);
+        if (dirty) {
+          charts.get(def.id)!.render((c) => c.update(snapshot, ctx));
+          prevSlices.set(def.id, slice);
+        }
       }
-
-      // Sankey depends on links + dimension lists (no chartData slot).
-      const sankeyKey = JSON.stringify([snapshot.sankeyLinks, snapshot.allModels, snapshot.allSurfaces]);
-      sections['sankey']!.classList.toggle('wv-no-data', snapshot.sankeyLinks.length === 0);
-      if (sankeyKey !== prevSankeyKey) {
-        sankey.render((c) => c.update(snapshot));
-        prevSankeyKey = sankeyKey;
-      }
-
-      sections['category']!.classList.toggle(
-        'wv-no-data',
-        !snapshot.chartData.categoryBreakdown.available,
-      );
-      if (categoryBreakdownChanged(prevCategory, snapshot.chartData.categoryBreakdown)) {
-        category.render((c) => c.update(snapshot));
-        prevCategory = snapshot.chartData.categoryBreakdown;
-      }
-
-      if (hourlyChanged(prevHourly, snapshot.chartData.hourlyTimeline)) {
-        hourly.render((c) => c.update(snapshot));
-        prevHourly = snapshot.chartData.hourlyTimeline;
-      }
+      prevFocusedModelsKey = focusedModelsKey;
 
       prevMetric = metric;
       updateSrDescriptions(snapshot);

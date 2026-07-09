@@ -114,7 +114,19 @@ export class ClaudeCodeConnector extends BaseFileConnector {
     // workspaces. (sessionId is a random UUID and can't identify the folder.)
     const cwd = typeof row['cwd'] === 'string' ? row['cwd'] : undefined;
     const resolvedRepo = cwd ? this.folderMatcher.resolve(cwd) : undefined;
-    const repo = resolvedRepo ?? ctx.repo;
+    // cwd is recorded in the log line itself, so it stays valid for backfill;
+    // the ctx fallback is the active-editor heuristic and only applies to
+    // live rows (see ParseContext.liveThresholdMs). `attribution` qualifies
+    // `repo`; branch is always heuristic here (the log carries no branch) and
+    // follows the same live rule.
+    const live = ctx.liveThresholdMs !== undefined && ts >= ctx.liveThresholdMs;
+    const repo = resolvedRepo ?? (live ? ctx.repo : undefined);
+    const attribution = resolvedRepo !== undefined ? ('authoritative' as const)
+      : repo !== undefined ? ('heuristic' as const) : undefined;
+    const branch = live ? ctx.branch : undefined;
+    // Session logs carry no language; like branch, this is always the
+    // live-gated active-editor heuristic.
+    const language = live ? ctx.language : undefined;
 
     // Claude Code writes a stable per-line `uuid` (fallback `requestId`). Using it
     // disambiguates two assistant turns that share the same session/model/ms —
@@ -140,8 +152,10 @@ export class ClaudeCodeConnector extends BaseFileConnector {
       credits,
       cost,
       estimated: true,
-      ...(repo       !== undefined ? { repo }          : {}),
-      ...(ctx.branch !== undefined ? { branch: ctx.branch } : {}),
+      ...(repo        !== undefined ? { repo }        : {}),
+      ...(attribution !== undefined ? { attribution } : {}),
+      ...(branch      !== undefined ? { branch }      : {}),
+      ...(language    !== undefined ? { language }    : {}),
       ...(costByCategory !== undefined ? { costByCategory } : {}),
     };
   }

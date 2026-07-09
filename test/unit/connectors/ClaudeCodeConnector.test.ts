@@ -124,6 +124,65 @@ describe('ClaudeCodeConnector — folder attribution', () => {
     assert.equal(result.repo, 'inner');
   });
 
+  describe('attribution liveness', () => {
+    const ISO = '2026-01-15T10:00:00.000Z';
+    const TS = Date.parse(ISO);
+
+    it('marks cwd-resolved repos authoritative even on backfill (no liveThresholdMs)', () => {
+      const connector = makeFolderConnector([{ name: 'myproject', fsPath: '/home/user/myproject' }]);
+      const result = connector.mapRow(
+        {
+          type: 'assistant',
+          message: { model: 'claude-sonnet-4', usage: { input_tokens: 10, output_tokens: 5 } },
+          timestamp: ISO,
+          sessionId: UUID,
+          cwd: '/home/user/myproject/sub',
+        },
+        makeCtx({ repo: 'ctx-repo', branch: 'main' }),
+      );
+      assert.equal(result?.repo, 'myproject');
+      assert.equal(result?.attribution, 'authoritative');
+      // branch is always heuristic — never applied to backfill rows.
+      assert.equal(result?.branch, undefined);
+    });
+
+    it('marks the ctx fallback heuristic, live rows only', () => {
+      const connector = makeFolderConnector([{ name: 'myproject', fsPath: '/home/user/myproject' }]);
+      const line = {
+        type: 'assistant',
+        message: { model: 'claude-sonnet-4', usage: { input_tokens: 10, output_tokens: 5 } },
+        timestamp: ISO,
+        sessionId: UUID,
+        cwd: '/elsewhere',
+      };
+      const live = connector.mapRow(line, makeCtx({ repo: 'ctx-repo', branch: 'main', liveThresholdMs: TS - 1000 }));
+      assert.equal(live?.repo, 'ctx-repo');
+      assert.equal(live?.attribution, 'heuristic');
+      assert.equal(live?.branch, 'main');
+
+      const backfill = connector.mapRow(line, makeCtx({ repo: 'ctx-repo', branch: 'main' }));
+      assert.equal(backfill?.repo, undefined);
+      assert.equal(backfill?.attribution, undefined);
+      assert.equal(backfill?.branch, undefined);
+    });
+  });
+
+  it('applies the active-editor language to live rows only (logs carry none)', () => {
+    const connector = makeFolderConnector([{ name: 'myproject', fsPath: '/home/user/myproject' }]);
+    const iso = '2026-01-15T10:00:00.000Z';
+    const line = {
+      type: 'assistant',
+      message: { model: 'claude-sonnet-4', usage: { input_tokens: 10, output_tokens: 5 } },
+      timestamp: iso,
+      sessionId: UUID,
+      cwd: '/home/user/myproject',
+    };
+    const live = connector.mapRow(line, makeCtx({ language: 'rust', liveThresholdMs: Date.parse(iso) - 1 }));
+    assert.equal(live?.language, 'rust');
+    const backfill = connector.mapRow(line, makeCtx({ language: 'rust' }));
+    assert.equal(backfill?.language, undefined);
+  });
+
   it('mapRow() falls back to ctx.repo when the cwd is outside every folder', () => {
     const connector = makeFolderConnector([{ name: 'myproject', fsPath: '/home/user/myproject' }]);
     const result = connector.mapRow(
@@ -134,7 +193,7 @@ describe('ClaudeCodeConnector — folder attribution', () => {
         sessionId: UUID,
         cwd: '/home/user/other',
       },
-      makeCtx({ repo: 'ctx-repo' }),
+      makeCtx({ repo: 'ctx-repo', liveThresholdMs: 0 }),
     );
     assert.ok(result);
     assert.equal(result.repo, 'ctx-repo');
@@ -149,7 +208,7 @@ describe('ClaudeCodeConnector — folder attribution', () => {
         timestamp: '2026-01-15T10:00:00.000Z',
         sessionId: UUID,
       },
-      makeCtx({ repo: 'fallback' }),
+      makeCtx({ repo: 'fallback', liveThresholdMs: 0 }),
     );
     assert.ok(result);
     assert.equal(result.repo, 'fallback');
@@ -169,7 +228,7 @@ describe('ClaudeCodeConnector — folder attribution', () => {
         sessionId: UUID,
         cwd: '/home/user/myproject',
       },
-      makeCtx({ repo: 'fallback' }),
+      makeCtx({ repo: 'fallback', liveThresholdMs: 0 }),
     );
     assert.ok(result);
     assert.equal(result.repo, 'fallback');
@@ -285,13 +344,13 @@ describe('ClaudeCodeConnector.mapRow()', () => {
 
   it('includes repo from ctx', () => {
     const connector = makeConnector();
-    const result = connector.mapRow(makeLine({}), makeCtx({ repo: 'org/repo' }));
+    const result = connector.mapRow(makeLine({}), makeCtx({ repo: 'org/repo', liveThresholdMs: 0 }));
     assert.equal(result?.repo, 'org/repo');
   });
 
   it('includes branch from ctx', () => {
     const connector = makeConnector();
-    const result = connector.mapRow(makeLine({}), makeCtx({ branch: 'main' }));
+    const result = connector.mapRow(makeLine({}), makeCtx({ branch: 'main', liveThresholdMs: 0 }));
     assert.equal(result?.branch, 'main');
   });
 

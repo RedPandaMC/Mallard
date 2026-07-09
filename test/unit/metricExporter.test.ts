@@ -19,8 +19,7 @@ import { strict as assert } from 'assert';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { MetricPayloadSerializer } from '../../src/extension-backend/export/payload';
-import { buildSnapshot } from './snapshotFixture';
+import { buildStreamBatch, StreamBatchSerializer } from '../../src/extension-backend/export/payload';
 import { makeEvent } from './helpers';
 import { ExportQueue } from '../../src/extension-backend/export/ExportQueue';
 import type { MetricProtocol, MetricSerializer, SendResult } from '../../src/extension-backend/export/MetricExporter';
@@ -122,28 +121,17 @@ function fakeSerializer(topic = 'test/topic'): MetricSerializer & { serializeCal
   return {
     topic,
     get serializeCalled() { return serializeCalled; },
-    serialize(snapshot) {
+    serialize(batch) {
       serializeCalled = true;
-      return { ts: new Date(snapshot.generatedAt).toISOString() };
+      return { ts: new Date(batch.sent_at).toISOString() };
     },
   };
 }
 
 function makeSnapshot() {
-  return buildSnapshot(
-    [makeEvent({ ts: Date.now() - 1000, modelId: 'gpt-4o', credits: 5 })],
-    {
-      now: Date.now(),
-      currency: 'USD',
-      pricePerCredit: 0.04,
-      monthlyBudget: null,
-      includedCredits: 300,
-      filter: {},
-      source: 'local',
-      status: { kind: 'ok' },
-      authStatus: 'signed-out',
-    },
-  );
+  return buildStreamBatch([
+    makeEvent({ ts: Date.now() - 1000, modelId: 'gpt-4o', credits: 5, language: 'typescript' }),
+  ]);
 }
 
 // ── MetricExporter DI contract ────────────────────────────────────────────────
@@ -272,77 +260,77 @@ describe('MetricExporter (offline queue + retry)', () => {
 
 // ── MetricPayloadSerializer ───────────────────────────────────────────────────
 
-describe('MetricPayloadSerializer', () => {
-  const serializer = new MetricPayloadSerializer();
+describe('MetricExporter — concurrent export during a flush', () => {
+  it('queues (never drops) a batch that arrives while a flush is in flight', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mallard-flushing-'));
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => { release = r; });
+    const calls: string[] = [];
+    const protocol: MetricProtocol = {
+      async send(_topic, payload) {
+        calls.push(JSON.stringify(payload));
+        await gate; // hold the first send open
+        return { ok: true };
+      },
+      dispose() {},
+    };
+    const queue = new ExportQueue(dir, 'concurrent.json');
+    const serializer: MetricSerializer = { topic: 't', serialize: (b) => ({ n: b.sent_at }) };
+    const exporter = new MetricExporter(protocol, serializer, queue);
 
-  it('topic is "mallard/v3/metrics"', () => {
-    assert.equal(serializer.topic, 'mallard/v3/metrics');
+    const first = exporter.export({ ...makeSnapshot(), sent_at: 1 });
+    // Second batch lands mid-flight: must be enqueued, not dropped.
+    await exporter.export({ ...makeSnapshot(), sent_at: 2 });
+    assert.equal(queue.peekAll().length, 1);
+    assert.deepEqual(queue.peekAll()[0]!.payload, { n: 2 });
+
+    release();
+    await first;
+    // The next export flushes the queued batch first, preserving order.
+    await exporter.export({ ...makeSnapshot(), sent_at: 3 });
+    assert.deepEqual(calls.map((c) => JSON.parse(c).n), [1, 2, 3]);
+    assert.equal(queue.peekAll().length, 0);
+    exporter.dispose();
+  });
+});
+
+describe('MetricExporter — concurrent export without a queue', () => {
+  it('drops the mid-flush batch harmlessly when no durable queue exists', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => { release = r; });
+    const protocol: MetricProtocol = {
+      async send() { await gate; return { ok: true }; },
+      dispose() {},
+    };
+    const serializer: MetricSerializer = { topic: 't', serialize: (b) => ({ n: b.sent_at }) };
+    const exporter = new MetricExporter(protocol, serializer);
+    const first = exporter.export(makeSnapshot());
+    await assert.doesNotReject(exporter.export(makeSnapshot()));
+    release();
+    await first;
+    exporter.dispose();
+  });
+});
+
+describe('StreamBatchSerializer', () => {
+  const serializer = new StreamBatchSerializer();
+
+  it('topic is "events"', () => {
+    assert.equal(serializer.topic, 'events');
   });
 
-  it('serialize returns an object with all expected metric keys', () => {
+  it('serialize passes the v1 batch through with its events', () => {
     const payload = serializer.serialize(makeSnapshot());
-    const EXPECTED_KEYS = [
-      'schema_version', 'instance_id', 'ts', 'tz_offset_minutes',
-      'mtd_credits', 'mtd_cost_usd', 'today_credits', 'today_cost_usd',
-      'mtd_budget_pct', 'forecast_basis', 'forecast_low', 'forecast_high',
-      'budget_trend', 'daily_credit_stddev',
-      'total_credits', 'total_tokens', 'total_event_count', 'estimated_event_count',
-      'model_credits', 'surface_credits', 'cost_by_category',
-      'active_models', 'top_model', 'model_count', 'repo_count',
-      'source_connector',
-    ];
-    for (const key of EXPECTED_KEYS) {
-      assert.ok(key in payload, `missing key: ${key}`);
-    }
-  });
+    assert.equal(payload['schema_version'], 1);
+    assert.equal(typeof payload['instance_id'], 'string');
+    assert.equal(typeof payload['sent_at'], 'number');
+    const events = payload['events'] as Array<Record<string, unknown>>;
+    assert.equal(events.length, 1);
+    assert.equal(events[0]!['model'], 'gpt-4o');
+    assert.equal(events[0]!['credits'], 5);
+    assert.equal(events[0]!['language'], 'typescript');
+    assert.equal(events[0]!['connector'], 'local');
 
-  it('serialize returns a Record<string, unknown>', () => {
-    const payload = serializer.serialize(makeSnapshot());
-    assert.equal(typeof payload, 'object');
-    assert.notEqual(payload, null);
-  });
-
-  it('schema_version is 3', () => {
-    const payload = serializer.serialize(makeSnapshot());
-    assert.equal(payload['schema_version'], 3);
-  });
-
-  it('cost_by_category is a record of string→number', () => {
-    const payload = serializer.serialize(makeSnapshot());
-    assert.equal(typeof payload['cost_by_category'], 'object');
-    assert.notEqual(payload['cost_by_category'], null);
-  });
-
-  it('source_connector is "none" for a snapshot with no events', () => {
-    const empty = buildSnapshot([], {
-      now: Date.now(),
-      currency: 'USD',
-      pricePerCredit: 0.04,
-      monthlyBudget: null,
-      includedCredits: 300,
-      filter: {},
-      source: 'local',
-      status: { kind: 'ok' },
-      authStatus: 'signed-out',
-    });
-    const payload = serializer.serialize(empty);
-    assert.equal(payload['source_connector'], 'none');
-  });
-
-  it('source_connector reflects the snapshot source when only one kind is present', () => {
-    const payload = serializer.serialize(makeSnapshot());
-    assert.ok(
-      typeof payload['source_connector'] === 'string',
-      'source_connector should be a string',
-    );
-    assert.notEqual(payload['source_connector'], 'mixed');
-    assert.notEqual(payload['source_connector'], 'none');
-  });
-
-  it('event counts are exported raw — the server derives the estimated ratio', () => {
-    const payload = serializer.serialize(makeSnapshot());
-    assert.equal(typeof payload['total_event_count'], 'number');
-    assert.equal(typeof payload['estimated_event_count'], 'number');
   });
 });
 

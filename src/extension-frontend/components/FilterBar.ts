@@ -133,13 +133,15 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
     dispatchFilter();
   });
 
-  function rebuildRepoSelect(allRepos: string[]) {
+  function rebuildRepoSelect(allRepos: string[], heuristicRepos: ReadonlySet<string>) {
     const selected = activeRepos[0] ?? '__all__';
     repoSelect.innerHTML = '';
     for (const r of ['__all__', ...allRepos]) {
       const opt = document.createElement('option');
       opt.value = r;
-      opt.textContent = r === '__all__' ? 'All repos' : r;
+      // "\u2248" marks repos whose spend is (partly) attributed by the
+      // active-editor heuristic rather than recorded in the source log.
+      opt.textContent = r === '__all__' ? 'All repos' : heuristicRepos.has(r) ? `\u2248 ${r}` : r;
       opt.selected = r === selected;
       repoSelect.appendChild(opt);
     }
@@ -330,7 +332,10 @@ export function mountFilterBar(el: HTMLElement): FilterBarHandle {
 
       if (s.allRepos.length > 1) {
         repoSelect.hidden = false;
-        rebuildRepoSelect(s.allRepos);
+        const heuristicRepos = new Set(
+          s.byRepo.filter((r) => (r.heuristicShare ?? 0) > 0).map((r) => r.key),
+        );
+        rebuildRepoSelect(s.allRepos, heuristicRepos);
       } else {
         repoSelect.hidden = true;
         activeRepos = [];

@@ -4,6 +4,8 @@ OpenBao (an open-source Vault fork) provides dynamic credential management with 
 
 The server talks to OpenBao directly — the same `OpenBaoCredentialVerifier` live-fetch code path Docker Compose uses, just pointed at an in-cluster OpenBao instead of a container on the same network. No agent sidecar or injector webhook is needed.
 
+> **Warning — sealed after every restart.** OpenBao starts *sealed*: after any pod restart (node reboot, eviction, upgrade) someone must run the unseal commands below with 3 of the 5 key shares before the server can fetch credentials again. Until then `/health` stays green but every ingest fails 503 once the 30-second cache goes cold. If nobody on the team will notice and unseal promptly, stay on the default static backend — a Kubernetes Secret has no such failure mode.
+
 ## Install OpenBao (self-hosted, HA + Raft)
 
 ```bash

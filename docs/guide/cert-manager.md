@@ -8,9 +8,9 @@ cert-manager is a Kubernetes operator that manages the **lifecycle of TLS certif
 |---|---|
 | HTTPS on the ingress (Let's Encrypt or self-signed) | cert-manager |
 | mTLS client certificates for the VS Code extension | cert-manager |
-| API keys (`API_KEYS` env var) | Static `.env` or Infisical/OpenBao |
-| MQTT passwords (`MQTT_CREDENTIALS`) | Static `.env` or Infisical/OpenBao |
-| InfluxDB token (`INFLUX_TOKEN`) | Static `.env` or Infisical/OpenBao |
+| API keys (`API_KEYS` env var) | Static `.env`/K8s Secret or OpenBao |
+| MQTT password (`MQTT_PASSWORD`) | Static `.env`/K8s Secret or OpenBao |
+| InfluxDB token (`INFLUX_TOKEN`) | Static `.env`/K8s Secret or OpenBao |
 
 ## Installing cert-manager
 

@@ -26,7 +26,7 @@ updates:
     schedule:
       interval: "weekly"
 
-  # Docker Compose service images (InfluxDB, Grafana, Caddy, OpenBao, Infisical, etc).
+  # Docker Compose service images (InfluxDB, Grafana, Caddy, OpenBao, etc).
   - package-ecosystem: "docker"
     directory: "/src/server/docker"
     schedule:
