@@ -19,7 +19,7 @@ export function mountStatusBanner(el: HTMLElement): StatusBannerHandle {
     update(s: UsageSnapshot) {
       const { status } = s;
       let kind: 'ok' | 'warn' | 'empty' | 'loading' = 'ok';
-      let msg = '';
+      let msg: string;
 
       if (status.kind === 'loading') {
         kind = 'loading';

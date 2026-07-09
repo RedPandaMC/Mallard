@@ -344,7 +344,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@eslint/js": "^9.9.0",
+    "@eslint/js": "^10.0.1",
     "@preact/signals-core": "^1.14.2",
     "@resvg/resvg-js": "^2.6.2",
     "@types/mocha": "^10.0.7",
