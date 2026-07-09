@@ -173,7 +173,10 @@
       "properties": {
         "mallard.enabledConnectors": {
           "type": "array",
-          "items": { "type": "string", "enum": ["copilot", "claude-code"] },
+          "items": {
+            "type": "string",
+            "enum": ["copilot", "claude-code"]
+          },
           "default": ["copilot", "claude-code"],
           "description": "Which usage connectors Mallard ingests from. Set automatically by the onboarding flow when both Copilot and Claude Code are installed (Mallard: Show Onboarding to re-run it). Changing this setting requires reloading the window."
         },
@@ -364,8 +367,8 @@
     "mocha": "^11.7.6",
     "prettier": "^3.3.3",
     "tsx": "^4.22.4",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.0.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "^8.63.0",
     "vitepress": "^1.6.4",
     "vitepress-plugin-mermaid": "^2.0.17",
     "zustand": "^5.0.14"

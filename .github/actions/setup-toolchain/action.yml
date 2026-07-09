@@ -1,10 +1,6 @@
 name: Setup Bun + Node toolchain
 description: >
   Sets up Bun and Node, then installs dependencies with a frozen lockfile.
-  Assumes checkout has already run. Used by every extension/docs job that
-  needs bun run — factored out so the four call sites (ci.yml's build and
-  package jobs, docs.yml's validate and build jobs) don't each repeat the
-  same three steps.
 
 runs:
   using: composite
