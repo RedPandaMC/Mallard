@@ -12,7 +12,14 @@ export const CREATE_SQL = `
     estimated BOOLEAN NOT NULL DEFAULT TRUE,
     repo VARCHAR,
     costByCategory VARCHAR,
-    branch VARCHAR
+    branch VARCHAR,
+    -- How repo was determined: 'authoritative' (recorded in the source log,
+    -- e.g. Claude Code's cwd), 'heuristic' (active-editor guess at parse
+    -- time), or NULL when unattributed.
+    attribution VARCHAR,
+    -- VS Code languageId; heuristic (active editor at parse time, live rows
+    -- only) unless the source log names one. NULL when undetectable.
+    language VARCHAR
   );
   CREATE INDEX IF NOT EXISTS idx_ts ON events(ts);
   CREATE INDEX IF NOT EXISTS idx_model ON events(modelId);
@@ -23,6 +30,8 @@ export const CREATE_SQL = `
 
   CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR);
   ALTER TABLE events ADD COLUMN IF NOT EXISTS branch VARCHAR;
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS attribution VARCHAR;
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS language VARCHAR;
 
   CREATE TABLE IF NOT EXISTS prices (
     modelId VARCHAR PRIMARY KEY,
@@ -36,14 +45,19 @@ export const CREATE_SQL = `
     credits DOUBLE NOT NULL, cost DOUBLE NOT NULL,
     promptTokens INTEGER, completionTokens INTEGER,
     estimated BOOLEAN NOT NULL DEFAULT TRUE,
-    repo VARCHAR, costByCategory VARCHAR, branch VARCHAR
+    repo VARCHAR, costByCategory VARCHAR, branch VARCHAR, attribution VARCHAR,
+    language VARCHAR
   );
+  ALTER TABLE events_staging ADD COLUMN IF NOT EXISTS attribution VARCHAR;
+  ALTER TABLE events_staging ADD COLUMN IF NOT EXISTS language VARCHAR;
 
   -- Normalization view: NULLs resolved, json cost categories extracted.
   CREATE OR REPLACE VIEW v_events AS
     SELECT
       id, ts, modelId, surface, source,
       repo,
+      attribution,
+      language,
       COALESCE(repo, 'unattributed')   AS repo_label,
       credits, cost, estimated,
       COALESCE(promptTokens, 0)        AS prompt_tokens,
@@ -161,7 +175,12 @@ export const CREATE_SQL = `
       CAST(SUM(e.completion_tokens) AS INTEGER)                              AS completionTokens,
       true                                                                   AS estimated,
       NULL::VARCHAR                                                          AS costByCategory,
-      NULL::VARCHAR                                                          AS branch
+      NULL::VARCHAR                                                          AS branch,
+      -- 'heuristic' wins lexically over 'authoritative': a rolled-up day is
+      -- flagged heuristic when any contributing row was.
+      MAX(e.attribution)                                                     AS attribution,
+      -- Like branch, per-language detail is dropped at rollup.
+      NULL::VARCHAR                                                          AS language
     FROM v_events e
     WHERE NOT e.is_rolled
     GROUP BY strftime(to_timestamp(e.ts / 1000.0)::TIMESTAMPTZ, '%Y-%m-%d'),
@@ -216,59 +235,6 @@ export const CREATE_SQL = `
   ALTER TABLE fact_daily_usage ADD COLUMN IF NOT EXISTS cost_cache_write  DOUBLE DEFAULT 0;
   ALTER TABLE fact_daily_usage ADD COLUMN IF NOT EXISTS cost_thinking     DOUBLE DEFAULT 0;
   ALTER TABLE fact_daily_usage ADD COLUMN IF NOT EXISTS cost_tool         DOUBLE DEFAULT 0;
-
-  -- ── Snapshot cache ───────────────────────────────────────────────────────────
-  CREATE TABLE IF NOT EXISTS snap_totals (
-    period      VARCHAR PRIMARY KEY,
-    credits     DOUBLE  NOT NULL DEFAULT 0,
-    cost        DOUBLE  NOT NULL DEFAULT 0,
-    tokens      BIGINT  NOT NULL DEFAULT 0,
-    event_count INTEGER NOT NULL DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS snap_daily (
-    day_start   BIGINT  PRIMARY KEY,
-    credits     DOUBLE  NOT NULL DEFAULT 0,
-    cost        DOUBLE  NOT NULL DEFAULT 0,
-    tokens      BIGINT  NOT NULL DEFAULT 0,
-    event_count INTEGER NOT NULL DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS snap_models (
-    modelId VARCHAR PRIMARY KEY,
-    credits DOUBLE  NOT NULL DEFAULT 0,
-    cost    DOUBLE  NOT NULL DEFAULT 0,
-    tokens  BIGINT  NOT NULL DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS snap_repos (
-    repo    VARCHAR PRIMARY KEY,
-    credits DOUBLE  NOT NULL DEFAULT 0,
-    cost    DOUBLE  NOT NULL DEFAULT 0,
-    tokens  BIGINT  NOT NULL DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS snap_hourly (
-    hour_local  INTEGER PRIMARY KEY,
-    credits     DOUBLE  NOT NULL DEFAULT 0,
-    event_count INTEGER NOT NULL DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS snap_categories (
-    category VARCHAR PRIMARY KEY,
-    cost     DOUBLE  NOT NULL DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS snap_sankey (
-    model   VARCHAR NOT NULL,
-    surface VARCHAR NOT NULL,
-    count   INTEGER NOT NULL DEFAULT 0,
-    credits DOUBLE  NOT NULL DEFAULT 0,
-    PRIMARY KEY (model, surface)
-  );
-  CREATE TABLE IF NOT EXISTS snap_dim_models   (name VARCHAR PRIMARY KEY);
-  CREATE TABLE IF NOT EXISTS snap_dim_surfaces (name VARCHAR PRIMARY KEY);
-  CREATE TABLE IF NOT EXISTS snap_dim_sources  (name VARCHAR PRIMARY KEY);
-  CREATE TABLE IF NOT EXISTS snap_dim_repos    (name VARCHAR PRIMARY KEY);
-  CREATE TABLE IF NOT EXISTS snap_weekday (
-    weekday     INTEGER PRIMARY KEY,
-    credits     DOUBLE  NOT NULL DEFAULT 0,
-    event_count INTEGER NOT NULL DEFAULT 0
-  );
 `;
 
 // ── DML: staging merge ────────────────────────────────────────────────────────

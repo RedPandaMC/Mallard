@@ -101,6 +101,24 @@ describe('CopilotConnector.mapRow()', () => {
     assert.equal(result.completionTokens, 50);
   });
 
+  it('gives two same-model/timestamp spans distinct ids via span id', () => {
+    const connector = makeConnector();
+    const ts = '2026-01-15T10:00:00.000Z';
+    const a = connector.mapRow({ timestamp: ts, span_id: 'span-a', attributes: baseAttrs }, makeCtx());
+    const b = connector.mapRow({ timestamp: ts, span_id: 'span-b', attributes: baseAttrs }, makeCtx());
+    assert.ok(a && b);
+    assert.notEqual(a.id, b.id, 'distinct span ids must yield distinct ids');
+  });
+
+  it('reuses the same id for the same span id (re-ingest dedups)', () => {
+    const connector = makeConnector();
+    const row = { timestamp: '2026-01-15T10:00:00.000Z', span_id: 'span-x', attributes: baseAttrs };
+    const first = connector.mapRow(row, makeCtx());
+    const second = connector.mapRow(row, makeCtx());
+    assert.ok(first && second);
+    assert.equal(first.id, second.id);
+  });
+
   it('uses row.time as fallback when timestamp is absent', () => {
     const connector = makeConnector();
     const time = '2026-01-15T10:00:00.000Z';
@@ -211,7 +229,7 @@ describe('CopilotConnector.mapRow()', () => {
     const connector = makeConnector();
     const result = connector.mapRow(
       { timestamp: '2026-01-15T10:00:00.000Z', attributes: baseAttrs },
-      makeCtx({ repo: 'org/repo' }),
+      makeCtx({ repo: 'org/repo', liveThresholdMs: 0 }),
     );
     assert.equal(result?.repo, 'org/repo');
   });
@@ -220,9 +238,87 @@ describe('CopilotConnector.mapRow()', () => {
     const connector = makeConnector();
     const result = connector.mapRow(
       { timestamp: '2026-01-15T10:00:00.000Z', attributes: baseAttrs },
-      makeCtx({ branch: 'main' }),
+      makeCtx({ branch: 'main', liveThresholdMs: 0 }),
     );
     assert.equal(result?.branch, 'main');
+  });
+
+  describe('attribution liveness', () => {
+    const rowAt = (iso: string) => ({ timestamp: iso, attributes: baseAttrs });
+    const tsOf = (iso: string) => Date.parse(iso);
+
+    it('marks live heuristic attribution', () => {
+      const connector = makeConnector();
+      const iso = '2026-01-15T10:00:00.000Z';
+      const result = connector.mapRow(
+        rowAt(iso),
+        makeCtx({ repo: 'org/repo', branch: 'main', liveThresholdMs: tsOf(iso) - 1000 }),
+      );
+      assert.equal(result?.repo, 'org/repo');
+      assert.equal(result?.branch, 'main');
+      assert.equal(result?.attribution, 'heuristic');
+    });
+
+    it('leaves backfilled rows unattributed when no watermark exists (no liveThresholdMs)', () => {
+      const connector = makeConnector();
+      const result = connector.mapRow(
+        rowAt('2026-01-15T10:00:00.000Z'),
+        makeCtx({ repo: 'org/repo', branch: 'main' }),
+      );
+      assert.equal(result?.repo, undefined);
+      assert.equal(result?.branch, undefined);
+      assert.equal(result?.attribution, undefined);
+    });
+
+    it('leaves rows older than the live window unattributed', () => {
+      const connector = makeConnector();
+      const iso = '2026-01-15T10:00:00.000Z';
+      const result = connector.mapRow(
+        rowAt(iso),
+        makeCtx({ repo: 'org/repo', liveThresholdMs: tsOf(iso) + 1 }),
+      );
+      assert.equal(result?.repo, undefined);
+      assert.equal(result?.attribution, undefined);
+    });
+
+    it('sets no attribution when live but no repo resolves', () => {
+      const connector = makeConnector();
+      const result = connector.mapRow(
+        rowAt('2026-01-15T10:00:00.000Z'),
+        makeCtx({ liveThresholdMs: 0 }),
+      );
+      assert.equal(result?.repo, undefined);
+      assert.equal(result?.attribution, undefined);
+    });
+  });
+
+  describe('language detection', () => {
+    const iso = '2026-01-15T10:00:00.000Z';
+    const ts = Date.parse(iso);
+
+    it('applies the active-editor language to live rows only', () => {
+      const connector = makeConnector();
+      const live = connector.mapRow(
+        { timestamp: iso, attributes: baseAttrs },
+        makeCtx({ language: 'typescript', liveThresholdMs: ts - 1000 }),
+      );
+      assert.equal(live?.language, 'typescript');
+
+      const backfill = connector.mapRow(
+        { timestamp: iso, attributes: baseAttrs },
+        makeCtx({ language: 'typescript' }),
+      );
+      assert.equal(backfill?.language, undefined);
+    });
+
+    it('prefers a language named in the span itself, even on backfill', () => {
+      const connector = makeConnector();
+      const result = connector.mapRow(
+        { timestamp: iso, attributes: { ...baseAttrs, languageId: 'python' } },
+        makeCtx({ language: 'typescript' }),
+      );
+      assert.equal(result?.language, 'python');
+    });
   });
 
   it('omits costByCategory when totalTok is 0', () => {

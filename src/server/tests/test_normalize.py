@@ -1,199 +1,141 @@
-"""Tests for payload normalization (v3 + tolerant handling of everything else)."""
+"""Tests for the v1 event-stream normalizer."""
 
 from __future__ import annotations
-
-import time
 
 import pytest
 
 from server.normalize import (
     KNOWN_SCHEMA_VERSIONS,
     InvalidIngestPayload,
+    NormalizedBatch,
     normalize_payload,
-    normalize_unknown,
-    normalize_v3,
 )
 
 
-def v3_payload(**overrides: object) -> dict:
-    base: dict = {
-        "schema_version": 3,
+def _batch(**overrides) -> dict:
+    base = {
+        "schema_version": 1,
         "instance_id": "abc123",
-        "ts": 1_700_000_000_000,
+        "sent_at": 1_700_000_000_500,
         "tz_offset_minutes": 120,
-        "mtd_credits": 100.0,
-        "mtd_cost_usd": 4.0,
-        "today_credits": 10.0,
-        "today_cost_usd": 0.4,
-        "mtd_budget_pct": 42.0,
-        "forecast_basis": "linear",
-        "forecast_low": 120.0,
-        "forecast_high": 160.0,
-        "budget_trend": 1,
-        "daily_credit_stddev": 2.5,
-        "total_credits": 30.0,
-        "total_tokens": 9000,
-        "total_event_count": 12,
-        "estimated_event_count": 9,
-        "model_credits": {"claude-sonnet-4-5": 18.0, "gpt-4o": 12.0},
-        "surface_credits": {"agent": 18.0, "chat": 12.0},
-        "cost_by_category": {"input": 0.5, "output": 0.7},
-        "active_models": ["claude-sonnet-4-5", "gpt-4o"],
-        "top_model": "claude-sonnet-4-5",
-        "model_count": 2,
-        "repo_count": 1,
-        "source_connector": "claude-code",
+        "events": [
+            {
+                "id": "local:f1:span-1",
+                "ts": 1_700_000_000_000,
+                "connector": "local",
+                "model": "claude-sonnet-4-5",
+                "surface": "agent",
+                "credits": 5.0,
+                "cost_usd": 0.2,
+                "estimated": True,
+                "prompt_tokens": 100,
+                "completion_tokens": 40,
+                "cost_by_category": {"input": 0.12, "output": 0.08},
+                "language": "typescript",
+                "repo": "org/app",
+                "branch": "main",
+                "attribution": "heuristic",
+            }
+        ],
     }
     base.update(overrides)
     return base
 
 
-class TestNormalizeV3:
-    def test_all_fields_mapped(self) -> None:
-        m = normalize_v3(v3_payload())
-        assert m.schema_version == 3
-        assert m.instance_id == "abc123"
-        assert m.ts_ms == 1_700_000_000_000
-        assert m.tz_offset_minutes == 120
-        assert m.connector == "claude-code"
-        assert m.mtd_credits == 100.0
-        assert m.today_cost_usd == 0.4
-        assert m.daily_credit_stddev == 2.5
-        assert m.total_credits == 30.0
-        assert m.total_event_count == 12
-        assert m.estimated_event_count == 9
-        assert m.model_credits == {"claude-sonnet-4-5": 18.0, "gpt-4o": 12.0}
-        assert m.surface_credits == {"agent": 18.0, "chat": 12.0}
-        assert m.cost_by_category == {"input": 0.5, "output": 0.7}
-        assert m.active_models == ["claude-sonnet-4-5", "gpt-4o"]
-        assert m.top_model == "claude-sonnet-4-5"
+class TestNormalizeBatch:
+    def test_known_versions_is_exactly_v1(self) -> None:
+        assert KNOWN_SCHEMA_VERSIONS == [1]
 
-    def test_missing_optional_fields_are_none_or_empty(self) -> None:
-        minimal = {
-            "schema_version": 3,
-            "instance_id": "abc",
-            "ts": 1_700_000_000_000,
-            "mtd_credits": 1.0,
-            "mtd_cost_usd": 0.04,
-            "today_credits": 0.0,
-            "today_cost_usd": 0.0,
-        }
-        m = normalize_v3(minimal)
-        assert m.tz_offset_minutes is None
-        assert m.forecast_basis is None
-        assert m.total_event_count is None
-        assert m.model_credits == {}
-        assert m.active_models == []
+    def test_maps_batch_and_event_fields(self) -> None:
+        batch = normalize_payload(_batch())
+        assert isinstance(batch, NormalizedBatch)
+        assert batch.schema_version == 1
+        assert batch.instance_id == "abc123"
+        assert batch.sent_at_ms == 1_700_000_000_500
+        assert batch.tz_offset_minutes == 120
+        assert len(batch.events) == 1
+        e = batch.events[0]
+        assert e.ts_ms == 1_700_000_000_000
+        assert e.connector == "local"
+        assert e.model == "claude-sonnet-4-5"
+        assert e.surface == "agent"
+        assert e.credits == 5.0
+        assert e.cost_usd == 0.2
+        assert e.estimated is True
+        assert e.event_id == "local:f1:span-1"
+        assert e.language == "typescript"
+        assert e.repo == "org/app"
+        assert e.branch == "main"
+        assert e.attribution == "heuristic"
+        assert e.tokens == {"prompt_tokens": 100, "completion_tokens": 40}
+        assert e.cost_by_category == {"input": 0.12, "output": 0.08}
+        assert e.extra == {}
 
-    def test_unknown_fields_preserved_in_extra(self) -> None:
-        m = normalize_v3(v3_payload(brand_new_field="hello"))
-        assert m.extra["brand_new_field"] == "hello"
+    def test_unknown_event_fields_preserved_in_extra(self) -> None:
+        raw = _batch()
+        raw["events"][0]["a_future_field"] = {"nested": True}
+        e = normalize_payload(raw).events[0]
+        assert e.extra == {"a_future_field": {"nested": True}}
 
-    def test_non_numeric_map_entries_dropped(self) -> None:
-        m = normalize_v3(v3_payload(model_credits={"good": 1.5, "bad": "NaN-ish"}))
-        assert m.model_credits == {"good": 1.5}
+    def test_missing_event_fields_get_safe_defaults(self) -> None:
+        e = normalize_payload(_batch(events=[{}])).events[0]
+        assert e.ts_ms == 1_700_000_000_500  # falls back to sent_at
+        assert e.connector == "unknown"
+        assert e.model == "unknown"
+        assert e.surface == "unknown"
+        assert e.credits == 0.0
+        assert e.cost_usd == 0.0
+        assert e.estimated is True
+        assert e.event_id is None
+        assert e.language is None
+        assert e.repo is None
+        assert e.branch is None
+        assert e.attribution is None
 
+    def test_missing_sent_at_falls_back_to_receipt_time(self) -> None:
+        raw = _batch()
+        del raw["sent_at"]
+        batch = normalize_payload(raw)
+        assert batch.sent_at_ms > 1_700_000_000_000
 
-class TestNormalizePayloadDispatch:
-    def test_dispatches_v3_by_schema_version(self) -> None:
-        m = normalize_payload(v3_payload())
-        assert m.schema_version == 3
-        assert m.instance_id == "abc123"
+    def test_wrongly_typed_numbers_are_dropped_not_fatal(self) -> None:
+        raw = _batch()
+        raw["events"][0]["credits"] = "many"
+        raw["events"][0]["prompt_tokens"] = 1.5
+        e = normalize_payload(raw).events[0]
+        assert e.credits == 0.0
+        assert "prompt_tokens" not in e.tokens
 
-    def test_raises_when_schema_version_missing(self) -> None:
+    def test_non_object_events_are_skipped(self) -> None:
+        raw = _batch(events=[{"credits": 1.0}, "junk", 42, None])
+        batch = normalize_payload(raw)
+        assert len(batch.events) == 1
+
+    def test_newer_schema_version_read_best_effort(self) -> None:
+        batch = normalize_payload(_batch(schema_version=99))
+        assert batch.schema_version == 99
+        assert len(batch.events) == 1
+
+    def test_missing_schema_version_raises(self) -> None:
+        raw = _batch()
+        del raw["schema_version"]
         with pytest.raises(InvalidIngestPayload):
-            normalize_payload({"instance_id": "x"})
+            normalize_payload(raw)
 
-    def test_raises_when_schema_version_not_an_int(self) -> None:
+    def test_boolean_schema_version_raises(self) -> None:
         with pytest.raises(InvalidIngestPayload):
-            normalize_payload({"schema_version": "three"})
+            normalize_payload(_batch(schema_version=True))
 
-    def test_unknown_future_version_falls_back_to_best_effort(self) -> None:
-        m = normalize_payload(v3_payload(schema_version=99, hyper_metric=42))
-        assert m.schema_version == 99
-        assert m.instance_id == "abc123"
-        assert m.extra["hyper_metric"] == 42
+    def test_missing_events_list_raises(self) -> None:
+        raw = _batch()
+        del raw["events"]
+        with pytest.raises(InvalidIngestPayload):
+            normalize_payload(raw)
 
-    def test_retired_v2_version_is_handled_best_effort_not_rejected(self) -> None:
-        # v1/v2 never shipped, but a stray old build must still get a 202-path
-        # normalization rather than an error.
-        m = normalize_payload(
-            {
-                "schema_version": 2,
-                "instance_id": "old",
-                "ts": 1_700_000_000_000,
-                "mtd_credits": 5.0,
-                "estimated_event_ratio": 0.5,
-            }
-        )
-        assert m.schema_version == 2
-        assert m.instance_id == "old"
-        assert m.mtd_credits == 5.0
-        # Retired v2-only fields are preserved, not typed
-        assert m.extra["estimated_event_ratio"] == 0.5
+    def test_events_wrong_type_raises(self) -> None:
+        with pytest.raises(InvalidIngestPayload):
+            normalize_payload(_batch(events="nope"))
 
-    def test_known_version_with_wrong_shape_falls_back_to_best_effort(self) -> None:
-        # Claims v3 but misses required fields — degraded handling, not a 4xx.
-        m = normalize_payload({"schema_version": 3, "instance_id": "x"})
-        assert m.schema_version == 3
-        assert m.instance_id == "x"
-
-
-class TestNormalizeUnknown:
-    def test_never_raises_on_empty_dict_with_version(self) -> None:
-        m = normalize_unknown({"schema_version": 42})
-        assert m.schema_version == 42
-        assert m.instance_id is None
-
-    def test_ts_falls_back_to_now_when_absent(self) -> None:
-        before = int(time.time() * 1000)
-        m = normalize_unknown({"schema_version": 9})
-        after = int(time.time() * 1000)
-        assert before <= m.ts_ms <= after
-
-    def test_coerces_float_string_to_none(self) -> None:
-        m = normalize_unknown({"schema_version": 9, "mtd_credits": "12.5"})
-        assert m.mtd_credits is None
-
-    def test_uncoercible_known_field_is_preserved_in_extra(self) -> None:
-        m = normalize_unknown({"schema_version": 9, "mtd_credits": "12.5"})
-        assert m.extra["mtd_credits"] == "12.5"
-
-    def test_coerces_int_from_whole_float(self) -> None:
-        m = normalize_unknown({"schema_version": 9, "repo_count": 3.0})
-        assert m.repo_count == 3
-
-    def test_rejects_non_integer_float_for_int_field(self) -> None:
-        m = normalize_unknown({"schema_version": 9, "repo_count": 3.7})
-        assert m.repo_count is None
-
-    def test_bool_not_coerced_to_number(self) -> None:
-        m = normalize_unknown({"schema_version": 9, "mtd_credits": True, "repo_count": False})
-        assert m.mtd_credits is None
-        assert m.repo_count is None
-
-    def test_active_models_wrong_type_becomes_empty_list(self) -> None:
-        m = normalize_unknown({"schema_version": 9, "active_models": "not-a-list"})
-        assert m.active_models == []
-        assert m.extra["active_models"] == "not-a-list"
-
-    def test_counter_maps_coerced_best_effort(self) -> None:
-        m = normalize_unknown(
-            {"schema_version": 9, "model_credits": {"a": 1, "b": "x"}, "surface_credits": "junk"}
-        )
-        assert m.model_credits == {"a": 1.0}
-        assert m.surface_credits == {}
-
-    def test_missing_field_is_not_added_to_extra(self) -> None:
-        m = normalize_unknown({"schema_version": 9})
-        assert "mtd_credits" not in m.extra
-
-    def test_string_ts_is_not_parsed_in_v3_world(self) -> None:
-        # v3 requires epoch ms; a string ts falls back to receipt time.
-        before = int(time.time() * 1000)
-        m = normalize_unknown({"schema_version": 9, "ts": "2026-01-15T12:00:00Z"})
-        assert m.ts_ms >= before
-
-
-def test_known_schema_versions_is_exactly_v3() -> None:
-    assert KNOWN_SCHEMA_VERSIONS == [3]
+    def test_non_dict_body_raises(self) -> None:
+        with pytest.raises(InvalidIngestPayload):
+            normalize_payload([1, 2, 3])  # type: ignore[arg-type]

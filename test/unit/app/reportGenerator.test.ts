@@ -1,7 +1,7 @@
 import { strict as assert } from 'assert';
 import * as os from 'os';
 import { defaultReportPath, generateReport } from '../../../src/extension-backend/app/ReportGenerator';
-import { buildSnapshot } from '../../../src/extension-backend/domain/snapshot';
+import { buildSnapshot } from '../snapshotFixture';
 import { makeEvent } from '../helpers';
 import type { UsageSnapshot } from '../../../src/extension-backend/domain/types';
 

@@ -4,6 +4,8 @@ OpenBao (an open-source Vault fork) provides dynamic credential management with 
 
 The server talks to OpenBao directly — the same `OpenBaoCredentialVerifier` live-fetch code path Docker Compose uses, just pointed at an in-cluster OpenBao instead of a container on the same network. No agent sidecar or injector webhook is needed.
 
+> **Warning — sealed after every restart.** OpenBao starts *sealed*: after any pod restart (node reboot, eviction, upgrade) someone must run the unseal commands below with 3 of the 5 key shares before the server can fetch credentials again. Until then `/health` stays green but every ingest fails 503 once the 30-second cache goes cold. If nobody on the team will notice and unseal promptly, stay on the default static backend — a Kubernetes Secret has no such failure mode.
+
 ## Install OpenBao (self-hosted, HA + Raft)
 
 ```bash
@@ -42,12 +44,26 @@ chmod +x server/k8s/openbao/approle-setup.sh
 #   api_keys      "label:secret" pairs — the label becomes the InfluxDB source tag
 #   mqtt_password single shared broker password (all MQTT ingest is source='mqtt')
 #   cert_labels   optional "label:cn" pairs mapping mTLS cert CNs to source labels
+#   jwt_*         optional JWT bearer auth (any subset; presence of key material enables it):
+#                   jwt_hmac_secret  HS* shared secret   OR
+#                   jwt_public_key   PEM for RS*/ES*/PS*  OR  jwt_jwks_url  JWKS endpoint
+#                   jwt_algorithms   CSV (default HS256, or RS256/ES256 when asymmetric)
+#                   jwt_issuer/jwt_audience  enforced when set
+#                   jwt_label_claim  claim used for the source label (default "sub")
+#                   jwt_labels       "label:claimValue" pairs (unmapped → claim value)
 bao kv put secret/mallard/server \
   api_keys="team-alpha:key-abc123,team-beta:key-def456" \
   mqtt_password="shared-broker-password" \
   cert_labels="ci:build-agent-01" \
+  jwt_jwks_url="https://idp.example.com/.well-known/jwks.json" \
+  jwt_issuer="https://idp.example.com/" \
+  jwt_labels="ci:ci-bot" \
   influx_token="your-influx-token"
 ```
+
+> All `jwt_*` keys live in the same `secret/data/mallard/*` path, which the
+> `policy-mallard.hcl` policy already grants `read` on — no policy change needed
+> to add JWT auth.
 
 `approle-setup.sh` prints a client token at the end. Store it in the `mallard-openbao-secrets` Secret (see `secrets.yaml.example`):
 

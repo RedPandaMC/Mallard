@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { buildSnapshot, SnapshotOptions } from '../../src/extension-backend/domain/snapshot';
+import { buildSnapshot, SnapshotOptions } from './snapshotFixture';
 import { makeEvent } from './helpers';
 
 function opts(over: Partial<SnapshotOptions>): SnapshotOptions {

@@ -11,9 +11,9 @@ export const COMPACT_CHECK_SQL  = `SELECT COUNT(*) AS c FROM events WHERE ts < ?
 export const COMPACT_ROLLUP_SQL = `
   INSERT OR IGNORE INTO events
     (id, ts, modelId, surface, source, credits, cost,
-     promptTokens, completionTokens, estimated, repo, costByCategory, branch)
+     promptTokens, completionTokens, estimated, repo, costByCategory, branch, attribution, language)
   SELECT id, ts, modelId, surface, source, credits, cost,
-         promptTokens, completionTokens, estimated, repo, costByCategory, branch
+         promptTokens, completionTokens, estimated, repo, costByCategory, branch, attribution, language
   FROM v_daily_rollup
   WHERE ts < ?`;
 export const COMPACT_DELETE_SQL = `DELETE FROM events WHERE ts < ? AND id NOT LIKE 'roll:%'`;
@@ -71,15 +71,4 @@ export const CLEAR_ALL_SQL = `
   DELETE FROM dim_model;
   DELETE FROM dim_repo;
   DELETE FROM events_staging;
-  DELETE FROM snap_totals;
-  DELETE FROM snap_daily;
-  DELETE FROM snap_models;
-  DELETE FROM snap_repos;
-  DELETE FROM snap_hourly;
-  DELETE FROM snap_categories;
-  DELETE FROM snap_sankey;
-  DELETE FROM snap_dim_models;
-  DELETE FROM snap_dim_surfaces;
-  DELETE FROM snap_dim_sources;
-  DELETE FROM snap_dim_repos;
 `;

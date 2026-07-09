@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
 import { applyPalette, readTheme } from '../../../src/extension-frontend/theme';
-import { parseColor, hslToRgb, rgbToHsl, deriveAccent } from '../../../src/extension-frontend/color';
+import { parseColor, hslToRgb, rgbToHsl, deriveAccent, readableForeground } from '../../../src/extension-frontend/color';
 import type { PaletteMode } from '../../../src/extension-backend/domain/types';
 
 describe('theme — applyPalette + readTheme', () => {
@@ -34,6 +34,27 @@ describe('theme — applyPalette + readTheme', () => {
   it('applyPalette high-contrast-light mode uses the light base red', () => {
     applyPalette('swiss' as PaletteMode, 'high-contrast-light');
     assert.ok(document.documentElement.style.getPropertyValue('--w-accent'));
+  });
+
+  it('applyPalette derives a contrasting --w-accent-fg for a light accent', () => {
+    // A pale button colour would make white-on-accent text illegible; the fg
+    // must flip to black instead of the old hardcoded white.
+    document.documentElement.style.setProperty('--vscode-button-background', '#f5e6a8');
+    document.documentElement.style.setProperty('--vscode-editor-background', '#ffffff');
+    applyPalette('theme' as PaletteMode, 'light');
+    const fg = document.documentElement.style.getPropertyValue('--w-accent-fg');
+    assert.equal(fg, '#000000', 'light accent → black foreground');
+    document.documentElement.style.removeProperty('--vscode-button-background');
+    document.documentElement.style.removeProperty('--vscode-editor-background');
+  });
+});
+
+describe('color — readableForeground', () => {
+  it('picks white on a dark background', () => {
+    assert.equal(readableForeground({ r: 20, g: 20, b: 20 }), '#ffffff');
+  });
+  it('picks black on a light background', () => {
+    assert.equal(readableForeground({ r: 245, g: 230, b: 168 }), '#000000');
   });
 });
 

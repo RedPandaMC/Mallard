@@ -1,6 +1,7 @@
-# Base for the secret-manager overlays (k8s/infisical/, k8s/openbao/), both of
-# which reference `../server` as a resource. Without this file, kustomize
-# cannot resolve the base and `kubectl apply -k` fails for either overlay.
+# The complete default deployment (static credentials from
+# mallard-server-secrets — see k8s/secrets.yaml.example): `kubectl apply -k
+# k8s/server/`. Also the base the k8s/openbao/ overlay builds on for
+# live-rotated credentials.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -10,3 +11,11 @@ resources:
   - service.yaml
   - hpa.yaml
   - pdb.yaml
+  - redis.yaml
+
+# Central image pin — override per release (e.g. `kustomize edit set image
+# ghcr.io/redpandamc/mallard-server=ghcr.io/redpandamc/mallard-server:<sha>`) so
+# a rollout/rollback always targets an immutable tag.
+images:
+  - name: ghcr.io/redpandamc/mallard-server
+    newTag: v1.0.0

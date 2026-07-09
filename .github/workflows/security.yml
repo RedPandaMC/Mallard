@@ -60,7 +60,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Run Trivy (filesystem / IaC)
-        uses: aquasecurity/trivy-action@df678dbccf677bc6937338d569ba0da18964a8cc # master, pinned — was a floating branch ref
+        uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # master, pinned — was a floating branch ref
         with:
           scan-type: fs
           scan-ref: "."
@@ -74,12 +74,12 @@ jobs:
           #     patches; each only lists env/envFrom, so Trivy sees an incomplete container
           #     spec and flags missing securityContext/resources/probes that the base
           #     Deployment (src/server/k8s/server/) already sets.
-          #   secrets.yaml.example (root, infisical, openbao) — template files with
+          #   secrets.yaml.example (root, openbao) — template files with
           #     CHANGE_ME placeholders, not real credentials.
-          skip-files: "src/server/k8s/infisical/patch-server-envfrom.yaml,src/server/k8s/openbao/patch-server-env.yaml,src/server/k8s/secrets.yaml.example,src/server/k8s/infisical/secrets.yaml.example,src/server/k8s/openbao/secrets.yaml.example"
+          skip-files: "src/server/k8s/openbao/patch-server-env.yaml,src/server/k8s/secrets.yaml.example,src/server/k8s/openbao/secrets.yaml.example"
 
       - name: Upload Trivy IaC SARIF
-        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        uses: github/codeql-action/upload-sarif@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
         if: always()
         with:
           sarif_file: trivy-iac.sarif
@@ -116,7 +116,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload Kubescape SARIF
-        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        uses: github/codeql-action/upload-sarif@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
         if: always() && hashFiles('results.sarif') != '' && github.event_name != 'pull_request'
         with:
           sarif_file: results.sarif
@@ -143,7 +143,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy (image)
-        uses: aquasecurity/trivy-action@df678dbccf677bc6937338d569ba0da18964a8cc # master, pinned — was a floating branch ref
+        uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # master, pinned — was a floating branch ref
         with:
           scan-type: image
           image-ref: ghcr.io/redpandamc/mallard-server:latest
@@ -153,7 +153,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload Trivy image SARIF
-        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        uses: github/codeql-action/upload-sarif@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
         if: always()
         with:
           sarif_file: trivy-image.sarif
@@ -187,7 +187,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Docker Scout CVE scan
-        uses: docker/scout-action@7520205ff60037fdc436b40b6a1d1e55a839ec2d # v1.22.0
+        uses: docker/scout-action@2688993af7bafd6ba8c6a74ec652442be91dd82b # v1.23.1
         with:
           command: cves,recommendations
           image: ghcr.io/redpandamc/mallard-server:latest
@@ -196,7 +196,7 @@ jobs:
           sarif-file: scout.sarif
 
       - name: Upload Docker Scout SARIF
-        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        uses: github/codeql-action/upload-sarif@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
         if: always()
         with:
           sarif_file: scout.sarif

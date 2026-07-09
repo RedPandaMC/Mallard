@@ -115,7 +115,9 @@ describe('evaluateRestrictionState', () => {
     assert.equal(out.matching.length, 0);
   });
 
-  it('returns matching rules and clears candidates', () => {
+  it('lists a matching rule in canClear only when its reEnableWhen holds', () => {
+    // reEnableWhen references a different dimension than `when` so a rule can be
+    // matching (wants to restrict) while its clear condition is independently met.
     const rules: AlertRule[] = [
       {
         id: 'r',
@@ -123,13 +125,28 @@ describe('evaluateRestrictionState', () => {
         message: '',
         when: { '>': [{ var: 'today.credits' }, 50] },
         restrict: {
-          reEnableWhen: { '<': [{ var: 'today.credits' }, 25] },
+          reEnableWhen: { '<': [{ var: 'mtd.credits' }, 10] },
         },
       },
     ];
-    const out = evaluateRestrictionState(rules, { today: { credits: 100 } }, Date.now());
-    assert.equal(out.matching.length, 1);
-    assert.equal(out.canClear.length, 1);
+
+    // reEnableWhen true → clearable
+    const cleared = evaluateRestrictionState(
+      rules,
+      { today: { credits: 100 }, mtd: { credits: 5 } },
+      Date.now(),
+    );
+    assert.equal(cleared.matching.length, 1);
+    assert.equal(cleared.canClear.length, 1);
+
+    // reEnableWhen false → matching but NOT clearable (was the bug: presence-only check)
+    const notCleared = evaluateRestrictionState(
+      rules,
+      { today: { credits: 100 }, mtd: { credits: 100 } },
+      Date.now(),
+    );
+    assert.equal(notCleared.matching.length, 1);
+    assert.equal(notCleared.canClear.length, 0);
   });
 
   it('skips restrict rules whose when condition evaluates to false', () => {

@@ -123,6 +123,16 @@ export class DuckDBFileReader {
     return this.queue as Promise<IngestResult>;
   }
 
+  private sqliteExtensionReady = false;
+
+  /** Load the DuckDB sqlite extension once per connection (idempotent). */
+  private async ensureSqliteExtension(): Promise<void> {
+    if (this.sqliteExtensionReady) return;
+    await this.conn.run('INSTALL sqlite');
+    await this.conn.run('LOAD sqlite');
+    this.sqliteExtensionReady = true;
+  }
+
   private async _ingestSqlite(
     dbPath: string,
     query: string,
@@ -131,8 +141,10 @@ export class DuckDBFileReader {
   ): Promise<IngestResult> {
     const safePath = dbPath.replace(/'/g, "''");
     try {
-      await this.conn.run('INSTALL sqlite');
-      await this.conn.run('LOAD sqlite');
+      // INSTALL/LOAD are idempotent per connection — do them once, not on every
+      // debounced file-watcher tick. ATTACH/DETACH stay per-call since the
+      // underlying sqlite file changes between ingests.
+      await this.ensureSqliteExtension();
       await this.conn.run(`ATTACH '${safePath}' AS ${SQLITE_ALIAS} (TYPE sqlite, READ_ONLY)`);
     } catch (err) {
       this.logger.warn('duckdb', `sqlite attach failed for ${dbPath}: ${String(err)}`);

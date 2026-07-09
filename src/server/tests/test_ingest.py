@@ -75,7 +75,7 @@ class TestHmacSignature:
     def test_signature_over_different_body_rejected(
         self, hmac_client: TestClient, valid_payload: dict
     ) -> None:
-        other_body = json.dumps({**valid_payload, "mtd_credits": 999999}).encode()
+        other_body = json.dumps({**valid_payload, "sent_at": 999999}).encode()
         body = json.dumps(valid_payload).encode()
         response = hmac_client.post(
             "/api/v1/ingest",
@@ -129,8 +129,8 @@ class TestIngestHappyPath:
         assert response.status_code == 202
         assert response.json() == {"status": "accepted"}
 
-    def test_null_top_model_accepted(self, client: TestClient, valid_payload: dict) -> None:
-        valid_payload["top_model"] = None
+    def test_null_sent_at_accepted(self, client: TestClient, valid_payload: dict) -> None:
+        valid_payload["sent_at"] = None
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
@@ -138,8 +138,8 @@ class TestIngestHappyPath:
         )
         assert response.status_code == 202
 
-    def test_empty_active_models_accepted(self, client: TestClient, valid_payload: dict) -> None:
-        valid_payload["active_models"] = []
+    def test_empty_events_list_accepted(self, client: TestClient, valid_payload: dict) -> None:
+        valid_payload["events"] = []
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
@@ -194,11 +194,11 @@ class TestIngestAuthentication:
         assert response.status_code == 401
 
     def test_cert_cn_header_bypasses_api_key(self, client: TestClient, valid_payload: dict) -> None:
-        """mTLS: ingress forwards SSL_CLIENT_S_DN_CN — no API key needed."""
+        """mTLS: ingress forwards a *verified* SSL_CLIENT_S_DN_CN — no API key needed."""
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
-            headers={"SSL_CLIENT_S_DN_CN": "team-alpha"},
+            headers={"SSL_CLIENT_S_DN_CN": "team-alpha", "SSL_CLIENT_VERIFY": "SUCCESS"},
         )
         assert response.status_code == 202
 
@@ -209,7 +209,40 @@ class TestIngestAuthentication:
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
-            headers={"SSL_CLIENT_S_DN_CN": "team-alpha", "X-API-Key": "wrong-key"},
+            headers={
+                "SSL_CLIENT_S_DN_CN": "team-alpha",
+                "SSL_CLIENT_VERIFY": "SUCCESS",
+                "X-API-Key": "wrong-key",
+            },
+        )
+        assert response.status_code == 202
+
+    def test_unverified_cert_cn_does_not_authenticate(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """SECURITY: a CN forwarded without SSL_CLIENT_VERIFY=SUCCESS (self-signed
+        cert under verify-client 'optional') must NOT authenticate — no fallback
+        API key means 401, not a bypass into the CN's identity."""
+        for verify in ("", "NONE", "FAILED:self signed certificate"):
+            response = client.post(
+                "/api/v1/ingest",
+                json=valid_payload,
+                headers={"SSL_CLIENT_S_DN_CN": "attacker-chosen-cn", "SSL_CLIENT_VERIFY": verify},
+            )
+            assert response.status_code == 401, verify
+
+    def test_unverified_cert_cn_falls_back_to_api_key(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """An unverified cert is ignored, but a valid API key still grants access."""
+        response = client.post(
+            "/api/v1/ingest",
+            json=valid_payload,
+            headers={
+                "SSL_CLIENT_S_DN_CN": "attacker-chosen-cn",
+                "SSL_CLIENT_VERIFY": "FAILED",
+                "X-API-Key": "test-key-valid",
+            },
         )
         assert response.status_code == 202
 
@@ -271,11 +304,30 @@ class TestIngestAuthentication:
         assert response.status_code == 202
 
 
+class TestMalformedActiveModels:
+    def test_non_string_active_models_does_not_500_or_503(
+        self, client: TestClient, valid_payload: dict
+    ) -> None:
+        """A v3 payload whose active_models holds non-strings falls back to the
+        tolerant path; the bad elements are filtered so the write succeeds
+        instead of crashing ",".join() into a misleading 503."""
+        payload = {**valid_payload, "active_models": [1, 2]}
+        with patch("server.routers.ingest.write_payload") as write_mock:
+            response = client.post(
+                "/api/v1/ingest",
+                json=payload,
+                headers={"X-API-Key": "test-key-valid"},
+            )
+        assert response.status_code == 202
+        assert write_mock.call_count == 1
+
+
 class TestIngestValidation:
-    """The ingest endpoint is a tolerant reader: a well-formed payload that
-    names a schema_version is accepted even with fields missing, wrongly
-    typed, or unrecognized — see normalize.py. Only a body that isn't valid
-    JSON, or has no schema_version at all, is rejected outright."""
+    """The ingest endpoint is a tolerant reader: a well-formed batch that
+    names a schema_version and an events list is accepted even with event
+    fields missing, wrongly typed, or unrecognized — see normalize.py. Only
+    a body that isn't valid JSON, has no integer schema_version, or has no
+    events list is rejected outright."""
 
     def test_malformed_json_returns_400(self, client: TestClient) -> None:
         response = client.post(
@@ -313,10 +365,10 @@ class TestIngestValidation:
         )
         assert response.status_code == 202
 
-    def test_missing_ts_field_still_accepted_in_degraded_mode(
+    def test_missing_event_ts_still_accepted_in_degraded_mode(
         self, client: TestClient, valid_payload: dict
     ) -> None:
-        del valid_payload["ts"]
+        del valid_payload["events"][0]["ts"]
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
@@ -327,7 +379,7 @@ class TestIngestValidation:
     def test_wrong_type_for_numeric_field_still_accepted_in_degraded_mode(
         self, client: TestClient, valid_payload: dict
     ) -> None:
-        valid_payload["mtd_cost_usd"] = "not-a-number"
+        valid_payload["events"][0]["cost_usd"] = "not-a-number"
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
@@ -335,10 +387,10 @@ class TestIngestValidation:
         )
         assert response.status_code == 202
 
-    def test_active_models_wrong_type_still_accepted_in_degraded_mode(
+    def test_non_object_events_are_skipped_not_rejected(
         self, client: TestClient, valid_payload: dict
     ) -> None:
-        valid_payload["active_models"] = "claude-sonnet"
+        valid_payload["events"].append("not-an-event")
         response = client.post(
             "/api/v1/ingest",
             json=valid_payload,
@@ -346,7 +398,7 @@ class TestIngestValidation:
         )
         assert response.status_code == 202
 
-    def test_unknown_schema_version_accepted_in_degraded_mode(
+    def test_newer_schema_version_accepted_in_degraded_mode(
         self, client: TestClient, valid_payload: dict
     ) -> None:
         """A client newer than this server (schema_version the server has
@@ -360,39 +412,16 @@ class TestIngestValidation:
         )
         assert response.status_code == 202
 
-    def test_v1_shaped_payload_from_an_unupgraded_extension_is_accepted(
-        self, client: TestClient
+    def test_missing_events_list_returns_400(
+        self, client: TestClient, valid_payload: dict
     ) -> None:
-        """A server upgraded ahead of the extension must still accept the
-        older extension's real v1 payload shape (issue #27)."""
-        v1_payload = {
-            "schema_version": 1,
-            "ts": "2026-01-01T00:00:00.000Z",
-            "model_dist": {"gpt-4o": 1.0},
-            "surface_dist": {"chat": 1.0},
-            "cost_dist": {"input": 0.6, "output": 0.4},
-            "input_cost_ratio": 0.6,
-            "credits_velocity_per_hour": 1.5,
-            "mtd_budget_pct": 42.0,
-            "repo_count": 2,
-            "peak_usage_hour": 14,
-            "daily_credit_variance": 3.2,
-            "model_count": 1,
-            "surface_concentration": 0.0,
-            "estimated_event_ratio": 1.0,
-            "forecast_basis": "linear",
-            "budget_trend": 0,
-            "token_per_credit": 120.0,
-            "forecast_low": 100.0,
-            "forecast_high": 200.0,
-            "source_connector": "local",
-        }
+        del valid_payload["events"]
         response = client.post(
             "/api/v1/ingest",
-            json=v1_payload,
+            json=valid_payload,
             headers={"X-API-Key": "test-key-valid"},
         )
-        assert response.status_code == 202
+        assert response.status_code == 400
 
     def test_oversized_body_returns_413(self, client: TestClient) -> None:
         # Build a payload larger than 64 KB
@@ -472,7 +501,7 @@ class TestCertLabelMapping:
             response = client.post(
                 "/api/v1/ingest",
                 json=valid_payload,
-                headers={"SSL_CLIENT_S_DN_CN": "machine-01"},
+                headers={"SSL_CLIENT_S_DN_CN": "machine-01", "SSL_CLIENT_VERIFY": "SUCCESS"},
             )
         assert response.status_code == 202
         assert write_mock.call_args.kwargs["source"] == "team-cert"
@@ -482,7 +511,7 @@ class TestCertLabelMapping:
             response = client.post(
                 "/api/v1/ingest",
                 json=valid_payload,
-                headers={"SSL_CLIENT_S_DN_CN": "unmapped-cn"},
+                headers={"SSL_CLIENT_S_DN_CN": "unmapped-cn", "SSL_CLIENT_VERIFY": "SUCCESS"},
             )
         assert response.status_code == 202
         assert write_mock.call_args.kwargs["source"] == "unmapped-cn"
@@ -524,7 +553,7 @@ class TestVerifierOutage:
             response = client.post(
                 "/api/v1/ingest",
                 json=valid_payload,
-                headers={"SSL_CLIENT_S_DN_CN": "machine-01"},
+                headers={"SSL_CLIENT_S_DN_CN": "machine-01", "SSL_CLIENT_VERIFY": "SUCCESS"},
             )
         finally:
             client.app.state.verifier = original
@@ -535,10 +564,10 @@ class TestPerCredentialRateLimit:
     def test_label_exceeding_limit_gets_429_with_retry_after(
         self, client: TestClient, valid_payload: dict
     ) -> None:
-        from server.rate_limit import SlidingWindowLimiter
+        from server.rate_limit import InProcessRateLimiter, SlidingWindowLimiter
 
         original = client.app.state.label_limiter
-        client.app.state.label_limiter = SlidingWindowLimiter(2, 60)
+        client.app.state.label_limiter = InProcessRateLimiter(SlidingWindowLimiter(2, 60))
         try:
             for _ in range(2):
                 ok = client.post(
@@ -561,10 +590,10 @@ class TestPerCredentialRateLimit:
         self, client: TestClient, valid_payload: dict
     ) -> None:
         """Exhausting one credential's budget must not block another's."""
-        from server.rate_limit import SlidingWindowLimiter
+        from server.rate_limit import InProcessRateLimiter, SlidingWindowLimiter
 
         original = client.app.state.label_limiter
-        client.app.state.label_limiter = SlidingWindowLimiter(1, 60)
+        client.app.state.label_limiter = InProcessRateLimiter(SlidingWindowLimiter(1, 60))
         try:
             first = client.post(
                 "/api/v1/ingest",
@@ -667,7 +696,7 @@ class TestExtractCertCn:
             response = client.post(
                 "/api/v1/ingest",
                 json=valid_payload,
-                headers={"SSL_CLIENT_S_DN_CN": "CN=machine-01,O=acme"},
+                headers={"SSL_CLIENT_S_DN_CN": "CN=machine-01,O=acme", "SSL_CLIENT_VERIFY": "SUCCESS"},
             )
         assert response.status_code == 202
         assert write_mock.call_args.kwargs["source"] == "team-cert"

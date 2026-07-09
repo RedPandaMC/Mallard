@@ -1,0 +1,61 @@
+# Production-oriented OpenBao overlay (contrast with docker-compose.openbao.yml,
+# which is dev/laptop only). Differences that matter:
+#   * Integrated raft storage on a named volume → secrets SURVIVE restarts
+#     (no data loss / ingest outage on a bounce).
+#   * No `-dev`, no hardcoded root token. OpenBao starts SEALED; an operator
+#     runs the one-time init/unseal + seed steps below and stores the unseal
+#     keys and root token in a secure secret store — never in this file.
+#   * 8200 is NOT published to the host; OpenBao is reachable only on the
+#     internal Compose network.
+#
+# One-time bring-up (run from the host, with the stack up):
+#   docker compose ... up -d openbao
+#   docker compose ... exec openbao bao operator init      # save the unseal keys + root token securely
+#   docker compose ... exec openbao bao operator unseal <key-1..3>
+#   BAO_ADDR=http://openbao:8200 BAO_TOKEN=<root> \
+#     docker compose ... exec openbao bao secrets enable -path=secret kv-v2
+#   ...then seed secret/mallard/server (see k8s/openbao/install.md for the keys).
+# Provide SECRET_MANAGER_TOKEN to the server out-of-band (an AppRole token or a
+# scoped token), e.g. via your own secret, not a compose default.
+services:
+  openbao:
+    image: quay.io/openbao/openbao:2.5.5
+    command: server -config=/openbao/config/openbao.hcl
+    environment:
+      BAO_ADDR: "http://127.0.0.1:8200"
+    # No host port publish: internal network only.
+    volumes:
+      - openbao-data:/openbao/data
+      - ./openbao.prod.hcl:/openbao/config/openbao.hcl:ro
+    healthcheck:
+      # 0 = unsealed & active, 2 = sealed. Treat "sealed" as not-yet-healthy so
+      # dependents wait for the operator to unseal.
+      test: ["CMD", "bao", "status"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+    cap_add:
+      - IPC_LOCK
+    restart: unless-stopped
+    networks:
+      - internal
+
+  server:
+    environment:
+      SECRET_MANAGER_TYPE: openbao
+      SECRET_MANAGER_URL: http://openbao:8200
+      # Operator-provided (AppRole/scoped token). No dev default — the server
+      # fails fast at startup if it isn't set.
+      SECRET_MANAGER_TOKEN: ${SECRET_MANAGER_TOKEN:?set SECRET_MANAGER_TOKEN}
+      OPENBAO_SECRET_PATH: secret/data/mallard/server
+    depends_on:
+      openbao:
+        condition: service_healthy
+    networks:
+      - internal
+
+volumes:
+  openbao-data:
+
+networks:
+  internal:

@@ -70,6 +70,10 @@ export class CurrencyService {
   private rates: FxRates = { USD: 1 };
   private refreshTimer?: ReturnType<typeof setInterval>;
 
+  /** Invoked after a background refresh actually changes the rates, so the
+   *  dashboard can recompute (the initial load never blocks on the network). */
+  onRatesUpdated?: () => void;
+
   constructor(
     private readonly storageDir: string,
     private readonly logger: Logger = defaultLogger,
@@ -81,17 +85,14 @@ export class CurrencyService {
   }
 
   async load(): Promise<void> {
+    // Never block activation on the network. Populate from the local cache when
+    // available (USD-only default otherwise), and always refresh in the
+    // background; onRatesUpdated triggers a recompute once real rates arrive.
+    // Previously a cold/stale cache awaited the fetch here, which could stall
+    // activation for up to ~20s (redirects × 5s timeouts) on a slow network.
     const cached = await this.loadCached();
-    if (cached) {
-      // Fresh cache already populates the selector — refresh in the background
-      // so activation isn't blocked on the network.
-      this.rates = cached;
-      void this.tryRefresh();
-    } else {
-      // Cold start (no/stale cache): await the fetch so the first snapshot
-      // carries real rates and the currency selector isn't stuck on USD-only.
-      await this.tryRefresh();
-    }
+    if (cached) this.rates = cached;
+    void this.tryRefresh();
   }
 
   startDailyRefresh(): void {
@@ -127,8 +128,10 @@ export class CurrencyService {
   private async tryRefresh(): Promise<void> {
     try {
       const rates = await fetchRates();
+      const changed = JSON.stringify(rates) !== JSON.stringify(this.rates);
       this.rates = rates;
       await this.writeCache(rates);
+      if (changed) this.onRatesUpdated?.();
     } catch (err) {
       // Keep the last known rates; log so a stuck USD-only selector is diagnosable.
       this.logger.debug('currency', `FX refresh failed: ${String(err)}`);

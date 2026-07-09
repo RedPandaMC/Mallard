@@ -16,7 +16,7 @@ import * as mqtt from 'mqtt';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
-import type { UsageSnapshot } from '../domain/types';
+import type { StreamBatch } from './payload';
 import { defaultLogger, Logger } from '../util/logger';
 import { hashMachineId } from '../util/machineId';
 import type { ExportQueue } from './ExportQueue';
@@ -39,10 +39,10 @@ export interface MetricProtocol {
   dispose(): void;
 }
 
-/** Payload shape — implement for each metric format (vector, Prometheus, …). */
+/** Payload shape — implement for each wire format. */
 export interface MetricSerializer {
   readonly topic: string;
-  serialize(snapshot: UsageSnapshot): Record<string, unknown>;
+  serialize(batch: StreamBatch): Record<string, unknown>;
 }
 
 // ── Orchestrator ─────────────────────────────────────────────────────────────
@@ -58,20 +58,26 @@ export class MetricExporter {
   ) {}
 
   /**
-   * Flushes any queued backlog before sending the new snapshot, so delivery
+   * Flushes any queued backlog before sending the new batch, so delivery
    * order matches capture order. If the flush stops early because the
    * protocol is still unreachable, the new payload is queued directly rather
-   * than attempted against an endpoint just proven down.
+   * than attempted against an endpoint just proven down. A batch arriving
+   * while a flush is in flight is queued instead of dropped — event batches,
+   * unlike the old state snapshots, are deltas and must not be lost.
    */
-  async export(snapshot: UsageSnapshot): Promise<void> {
-    if (this.flushing || this.disposed) return;
+  async export(batch: StreamBatch): Promise<void> {
+    if (this.disposed) return;
+    if (this.flushing) {
+      this.queue?.enqueue(this.serializer.topic, this.serializer.serialize(batch));
+      return;
+    }
     this.flushing = true;
     try {
       const stillDown = this.queue ? await this.flushQueue() : false;
       if (this.disposed) return;
 
       const topic = this.serializer.topic;
-      const payload = this.serializer.serialize(snapshot);
+      const payload = this.serializer.serialize(batch);
 
       if (stillDown) {
         this.queue?.enqueue(topic, payload);
@@ -136,8 +142,41 @@ export class NullMetricExporter extends MetricExporter {
     super(NullMetricExporter.nullProtocol, NullMetricExporter.nullSerializer);
   }
 
-  override async export(_snapshot: UsageSnapshot): Promise<void> {}
+  override async export(_batch: StreamBatch): Promise<void> {}
   override dispose(): void {}
+}
+
+/**
+ * Fans one event batch out to several independent MetricExporters — one per
+ * configured target, each with its own queue. Because every target retries from
+ * its own backlog, a partial outage (one target down while another is up)
+ * re-delivers only to the target that actually failed, and never re-delivers to
+ * a target that already succeeded. (The previous FanoutProtocol shared one
+ * queue across all targets, so any retry replayed the payload to every target,
+ * double-counting on non-idempotent receivers.)
+ */
+export class FanoutMetricExporter extends MetricExporter {
+  /* c8 ignore start */
+  private static readonly nullProtocol: MetricProtocol = {
+    async send() {
+      return { ok: true };
+    },
+    dispose() {},
+  };
+  private static readonly nullSerializer: MetricSerializer = { topic: '', serialize: () => ({}) };
+  /* c8 ignore stop */
+
+  constructor(private readonly children: readonly MetricExporter[]) {
+    super(FanoutMetricExporter.nullProtocol, FanoutMetricExporter.nullSerializer);
+  }
+
+  override async export(batch: StreamBatch): Promise<void> {
+    await Promise.all(this.children.map((c) => c.export(batch)));
+  }
+
+  override dispose(): void {
+    for (const c of this.children) c.dispose();
+  }
 }
 
 // ── MQTT protocol ─────────────────────────────────────────────────────────────

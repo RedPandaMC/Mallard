@@ -109,11 +109,37 @@ export class ClaudeCodeConnector extends BaseFileConnector {
 
     const sessionId  = typeof row['sessionId'] === 'string' ? row['sessionId'] : undefined;
     const sessionKey = sessionId ? sessionId.slice(-8) : 'cc';
-    const resolvedRepo = sessionId ? this.folderMatcher.resolve(sessionId) : undefined;
-    const repo = resolvedRepo ?? ctx.repo;
+    // Claude Code records the session's working directory per line; match that
+    // against the open workspace folders for per-repo attribution in multi-root
+    // workspaces. (sessionId is a random UUID and can't identify the folder.)
+    const cwd = typeof row['cwd'] === 'string' ? row['cwd'] : undefined;
+    const resolvedRepo = cwd ? this.folderMatcher.resolve(cwd) : undefined;
+    // cwd is recorded in the log line itself, so it stays valid for backfill;
+    // the ctx fallback is the active-editor heuristic and only applies to
+    // live rows (see ParseContext.liveThresholdMs). `attribution` qualifies
+    // `repo`; branch is always heuristic here (the log carries no branch) and
+    // follows the same live rule.
+    const live = ctx.liveThresholdMs !== undefined && ts >= ctx.liveThresholdMs;
+    const repo = resolvedRepo ?? (live ? ctx.repo : undefined);
+    const attribution = resolvedRepo !== undefined ? ('authoritative' as const)
+      : repo !== undefined ? ('heuristic' as const) : undefined;
+    const branch = live ? ctx.branch : undefined;
+    // Session logs carry no language; like branch, this is always the
+    // live-gated active-editor heuristic.
+    const language = live ? ctx.language : undefined;
+
+    // Claude Code writes a stable per-line `uuid` (fallback `requestId`). Using it
+    // disambiguates two assistant turns that share the same session/model/ms —
+    // without it those collide on the composite id and INSERT OR IGNORE silently
+    // drops the second, undercounting. The uuid is stable in the file, so
+    // re-ingesting the same line still dedups to one row.
+    const uniq =
+      (typeof row['uuid'] === 'string' && row['uuid']) ||
+      (typeof row['requestId'] === 'string' && row['requestId']) ||
+      '';
 
     return {
-      id:      `claude-code:${sessionKey}:${ts}:${model}`,
+      id:      `claude-code:${sessionKey}:${ts}:${model}${uniq ? `:${uniq}` : ''}`,
       ts,
       modelId: model,
       surface,
@@ -126,8 +152,10 @@ export class ClaudeCodeConnector extends BaseFileConnector {
       credits,
       cost,
       estimated: true,
-      ...(repo       !== undefined ? { repo }          : {}),
-      ...(ctx.branch !== undefined ? { branch: ctx.branch } : {}),
+      ...(repo        !== undefined ? { repo }        : {}),
+      ...(attribution !== undefined ? { attribution } : {}),
+      ...(branch      !== undefined ? { branch }      : {}),
+      ...(language    !== undefined ? { language }    : {}),
       ...(costByCategory !== undefined ? { costByCategory } : {}),
     };
   }

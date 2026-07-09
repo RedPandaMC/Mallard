@@ -96,6 +96,44 @@ describe('ConnectorSetupGate', () => {
     assert.equal(applied, true);
   });
 
+  it('check() re-nudges after a FAILED apply (does not permanently suppress)', async () => {
+    const store = new Map<string, unknown>();
+    let shown = 0;
+    win.showInformationMessage = (async () => { shown++; return 'Enable'; }) as never;
+    win.showWarningMessage = (async () => undefined) as never;
+    // apply fails → the requirement stays unsatisfied and must be nudged again.
+    const req = fakeReq({ id: 'a', apply: async () => ({ ok: false, message: 'boom' }) });
+    const gate = new ConnectorSetupGate(fakeContext(store), [connectorWith([req])], () => {});
+    await gate.check();
+    await gate.check();
+    assert.equal(shown, 2, 'a failed apply must not silence future nudges');
+  });
+
+  it('check() suppresses future nudges after a SUCCESSFUL apply', async () => {
+    const store = new Map<string, unknown>();
+    let shown = 0;
+    // Count only the nudge prompt (which offers Enable/Not now), not the success toast.
+    win.showInformationMessage = (async (_m: string, ...opts: string[]) => {
+      if (opts.includes('Enable')) { shown++; return 'Enable'; }
+      return undefined;
+    }) as never;
+    const req = fakeReq({ id: 'a', apply: async () => ({ ok: true, message: 'ok' }) });
+    const gate = new ConnectorSetupGate(fakeContext(store), [connectorWith([req])], () => {});
+    await gate.check();
+    await gate.check();
+    assert.equal(shown, 1, 'a successful apply suppresses the nudge');
+  });
+
+  it('check() suppresses after an explicit "Not now"', async () => {
+    const store = new Map<string, unknown>();
+    let shown = 0;
+    win.showInformationMessage = (async () => { shown++; return 'Not now'; }) as never;
+    const gate = new ConnectorSetupGate(fakeContext(store), [connectorWith([fakeReq({ id: 'a' })])], () => {});
+    await gate.check();
+    await gate.check();
+    assert.equal(shown, 1, '"Not now" means shown once, not nagged forever');
+  });
+
   it('run() applies, calls onApplied, and prompts to reload when hinted', async () => {
     let onApplied = 0;
     const execs: string[] = [];

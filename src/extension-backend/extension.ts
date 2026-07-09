@@ -12,15 +12,12 @@ import {
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
 import { DashboardPanel } from './ui/DashboardPanel';
 import { SidebarView } from './ui/SidebarView';
-import { cleanupGlobalState, cleanupStorage } from './app/Lifecycle';
 import { formatCredits } from './domain/format';
 import { severityFor } from './domain/budget';
 import { runOnboardingIfNeeded, showOnboarding } from './onboarding';
-
-let _context: vscode.ExtensionContext | undefined;
+import { FLAG_REMOTE_COPILOT_WARNED, getFlag, setFlag } from './app/EphemeralFlags';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  _context = context;
   let container: import('./container').Container;
   try {
     container = await buildContainer(context);
@@ -124,7 +121,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   await runOnboardingIfNeeded(context, container.setupGate);
   container.setupGate.start();
 
-  if (vscode.env.remoteName && !context.globalState.get<boolean>('mallard.remoteCopilotWarned')) {
+  if (vscode.env.remoteName && !getFlag(context.globalState, FLAG_REMOTE_COPILOT_WARNED)) {
     const d = usage.onDidChangeSnapshot(() => {
       d.dispose();
       if (ingest.getConnectorLogPaths('copilot').length === 0) {
@@ -141,7 +138,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             );
           }
           if (choice === "Don't show again") {
-            await context.globalState.update('mallard.remoteCopilotWarned', true);
+            await setFlag(context.globalState, FLAG_REMOTE_COPILOT_WARNED);
           }
         });
       }
@@ -150,13 +147,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
 }
 
-export async function deactivate(): Promise<void> {
-  if (!_context) return;
-  // context.subscriptions are disposed by VS Code before deactivate() is called,
-  // so EventStore.dispose() (which closes the DuckDB connection) runs first.
-  // It is then safe to delete the database files.
-  await cleanupStorage(_context.globalStorageUri.fsPath);
-  await cleanupGlobalState(_context.globalState);
+export function deactivate(): void {
+  // Nothing to do: context.subscriptions (disposed by VS Code before this
+  // runs) already close the DuckDB connection and stop all timers/watchers.
+  // The database and globalState deliberately survive shutdown so usage
+  // history outlives the source logs; the "Prepare for Uninstall" command is
+  // the one and only full-wipe path.
 }
 
 function registerCommands(context: vscode.ExtensionContext, c: Container): void {

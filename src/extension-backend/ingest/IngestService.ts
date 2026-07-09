@@ -11,15 +11,20 @@ export class IngestService implements vscode.Disposable {
   }
 
   getStatus(): ProviderStatus {
-    const statuses = this.connectors.map((c) => c.getStatus());
-    if (statuses.some((s) => s === 'loading')) {
+    const statuses = this.connectors.map((c) => ({ id: c.id, status: c.getStatus() }));
+    if (statuses.some((s) => s.status === 'loading')) {
       return { kind: 'loading', reason: 'Reading log files…' };
     }
-    if (statuses.some((s) => s === 'ok')) {
-      return { kind: 'ok', reason: `Tracking from ${this.connectors.length} connector(s)` };
+    // A failing connector must surface as degraded even when another connector
+    // is healthy — otherwise a broken source is silently masked by a working
+    // one and the user never learns half their data is missing.
+    const errored = statuses.filter((s) => s.status === 'error');
+    if (errored.length > 0) {
+      const ids = errored.map((s) => s.id).join(', ');
+      return { kind: 'degraded', reason: `Connector error: ${ids}` };
     }
-    if (statuses.some((s) => s === 'error')) {
-      return { kind: 'degraded', reason: 'One or more connectors encountered errors' };
+    if (statuses.some((s) => s.status === 'ok')) {
+      return { kind: 'ok', reason: `Tracking from ${this.connectors.length} connector(s)` };
     }
     return { kind: 'empty', reason: 'No log files found' };
   }

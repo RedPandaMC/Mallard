@@ -1,4 +1,4 @@
-import { deriveAccent, ensureContrast, parseColor, toHex } from './color';
+import { deriveAccent, ensureContrast, parseColor, readableForeground, toHex } from './color';
 import type { PaletteMode } from '../extension-backend/domain/types';
 import type { ThemeKind } from '../extension-backend/ui/messaging';
 
@@ -32,6 +32,13 @@ export function applyPalette(palette: PaletteMode, kind: ThemeKind): void {
     accent = toHex(ensureContrast(parseColor(baseRed)!, bg, 3));
   }
   root.style.setProperty('--w-accent', accent);
+
+  // Derive the accent foreground from the accent's own luminance so text/icons
+  // on primary buttons and pressed chips stay legible even when the editor
+  // theme yields a light/pastel accent — --w-accent-fg was hardcoded white,
+  // which vanished on a light accent. --w-action-fg / --w-brand-fg follow it.
+  const accentRgb = parseColor(accent);
+  if (accentRgb) root.style.setProperty('--w-accent-fg', readableForeground(accentRgb));
 }
 
 export interface MallardTheme {

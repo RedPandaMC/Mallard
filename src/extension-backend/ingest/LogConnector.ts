@@ -3,8 +3,10 @@ import type { SetupRequirement } from './SetupRequirement';
 
 export type ConnectorStatus = 'idle' | 'loading' | 'ok' | 'empty' | 'error';
 
-/** Ingest source kinds a connector can read from. */
-export type SourceKind = 'ndjson' | 'sqlite';
+/** The on-disk medium a connector reads. Distinct from the domain `SourceKind`
+ *  (event provenance: 'local' | 'lm' | 'github' | 'claude-code'); the name clash
+ *  was a footgun, so this ingest-side type is `IngestMedium`. */
+export type IngestMedium = 'ndjson' | 'sqlite';
 
 export interface ConnectorCapabilities {
   /** Token fields this connector can populate on a UsageEvent. */
@@ -15,8 +17,8 @@ export interface ConnectorCapabilities {
   readonly costCategories: ReadonlyArray<CostCategory>;
   /** Whether this connector can attribute events to a workspace repo. */
   readonly supportsRepoAttribution: boolean;
-  /** Ingest source kinds this connector reads from (NDJSON files, SQLite DBs). */
-  readonly sources: ReadonlyArray<SourceKind>;
+  /** Ingest media this connector reads from (NDJSON files, SQLite DBs). */
+  readonly sources: ReadonlyArray<IngestMedium>;
 }
 
 /**

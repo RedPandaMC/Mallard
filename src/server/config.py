@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if TYPE_CHECKING:
+    from .credential_verifier import JwtConfig
 
 
 class Settings(BaseSettings):
@@ -18,10 +21,9 @@ class Settings(BaseSettings):
     influx_org: str = Field("mallard", description="InfluxDB organisation")
     influx_bucket: str = Field("metrics", description="InfluxDB bucket")
 
-    # Auth — comma-separated plain-text keys in label:secret or bare format. Only meaningful for
-    # StaticCredentialVerifier, which production deployments no longer select (see
-    # secret_manager_type below); kept so it can still be constructed directly in tests.
-    api_keys: str = Field("", description="Comma-separated API keys (label:key or bare key), static-mode only")
+    # Auth — comma-separated plain-text keys in label:secret or bare format.
+    # Read by StaticCredentialVerifier, the default (static) secret backend.
+    api_keys: str = Field("", description="Comma-separated API keys (label:key or bare key)")
 
     # Server
     server_host: str = Field("0.0.0.0", description="Bind address")  # nosec B104 — intentional for containerised deployment
@@ -29,6 +31,13 @@ class Settings(BaseSettings):
 
     # Rate limiting
     rate_limit: str = Field("60/minute", description="Per-key rate limit (slowapi format)")
+    # When set, the post-auth per-credential limiter is backed by Redis so the
+    # limit holds across all replicas (the in-process limiter multiplies the
+    # effective limit by the replica count and resets on restart). Empty falls
+    # back to the in-process limiter (single-node / local dev only).
+    redis_url: str = Field(
+        "", description="Redis URL for the shared per-credential rate limiter (e.g. redis://redis:6379/0)"
+    )
 
     # Logging
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
@@ -38,13 +47,17 @@ class Settings(BaseSettings):
     # MQTT (optional — embedded broker started when mqtt_enabled = true)
     mqtt_enabled: bool = Field(False, description="Start the embedded MQTT broker on mqtt_port")
     mqtt_port: int = Field(8083, description="WebSocket MQTT port (internal; proxied by Caddy/Ingress)")
+    mqtt_topic_prefix: str = Field(
+        "mallard/",
+        description="Only MQTT messages on topics under this prefix are ingested (topic scoping)",
+    )
     mqtt_password: str = Field(
         "",
         description=(
             "Single shared password for the embedded MQTT broker. All MQTT ingest is "
             "tagged source='mqtt'; per-credential labels exist only for API keys "
-            "(and cert CNs via CERT_LABELS). Static-mode only — production deployments "
-            "store MQTT_PASSWORD in the secret manager."
+            "(and cert CNs via CERT_LABELS). With SECRET_MANAGER_TYPE=openbao the "
+            "value is read from the secret manager instead."
         ),
     )
 
@@ -52,7 +65,7 @@ class Settings(BaseSettings):
     # source label; CNs without an entry fall back to the CN itself as the source.
     cert_labels: str = Field(
         "",
-        description="Comma-separated 'label:cn' pairs for mTLS clients, static-mode only",
+        description="Comma-separated 'label:cn' pairs for mTLS clients",
     )
 
     # Optional HMAC request signing. When non-empty, every ingest request must
@@ -63,18 +76,32 @@ class Settings(BaseSettings):
         "",
         description=(
             "Comma-separated HMAC signing secrets for X-Mallard-Signature-256 "
-            "verification. Empty disables signature checking. Static-mode only — "
-            "production deployments store WEBHOOK_HMAC_SECRETS in the secret manager."
+            "verification. Empty disables signature checking. With openbao the "
+            "value is read from the secret manager instead."
         ),
     )
 
-    # Secret manager (required — every deployment must pick one; there is no
-    # supported static/env-var-only production path)
-    secret_manager_type: Literal["infisical", "openbao"] = Field(
-        ...,
+    # JWT bearer auth (optional). Symmetric (HS*) via jwt_hmac_secret, or
+    # asymmetric (RS*/ES*/PS*) via a PEM jwt_public_key or a jwt_jwks_url.
+    # With openbao the material is read from the secret manager instead.
+    jwt_hmac_secret: str = Field("", description="HS* shared secret")
+    jwt_public_key: str = Field("", description="PEM public key for RS*/ES*/PS*")
+    jwt_jwks_url: str = Field("", description="JWKS endpoint for asymmetric keys")
+    jwt_algorithms: str = Field("", description="Comma-separated allowed algs (default HS256 or RS256/ES256)")
+    jwt_issuer: str = Field("", description="Required 'iss' claim (empty = not enforced)")
+    jwt_audience: str = Field("", description="Required 'aud' claim (empty = not enforced)")
+    jwt_label_claim: str = Field("sub", description="Claim used to derive the source label")
+    jwt_labels: str = Field("", description="Comma-separated 'label:claimValue' pairs")
+
+    # Secret backend. "static" (the default) reads credentials from the env
+    # vars above — a plain .env file or Kubernetes Secret is a first-class
+    # production setup. "openbao" fetches them live from an OpenBao KV store
+    # for rotation without restarts (the advanced path).
+    secret_manager_type: Literal["static", "openbao"] = Field(
+        "static",
         description=(
-            "Secret manager backend. Static env-var credentials are not a supported "
-            "production configuration; every deployment must pick Infisical or OpenBao."
+            "Credential backend: 'static' (env vars / K8s Secret, the default) or "
+            "'openbao' (live-fetched from OpenBao for rotation without restarts)."
         ),
     )
     secret_manager_url: str = Field("", description="Secret manager API base URL")
@@ -82,10 +109,6 @@ class Settings(BaseSettings):
     secret_manager_ca_cert_path: str = Field(
         "", description="Path to CA cert PEM for secret manager TLS (empty = system CAs)"
     )
-
-    # Infisical-specific
-    infisical_project_id: str = Field("", description="Infisical workspace/project ID")
-    infisical_env_slug: str = Field("prod", description="Infisical environment slug")
 
     # OpenBao-specific
     openbao_secret_path: str = Field(
@@ -103,12 +126,11 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _secret_manager_configured(self) -> "Settings":
         """Fail fast at startup rather than at the first ingest request."""
-        if not self.secret_manager_url.strip():
-            raise ValueError("SECRET_MANAGER_URL must be set")
-        if not self.secret_manager_token.strip():
-            raise ValueError("SECRET_MANAGER_TOKEN must be set")
-        if self.secret_manager_type == "infisical" and not self.infisical_project_id.strip():
-            raise ValueError("INFISICAL_PROJECT_ID must be set when SECRET_MANAGER_TYPE=infisical")
+        if self.secret_manager_type == "openbao":
+            if not self.secret_manager_url.strip():
+                raise ValueError("SECRET_MANAGER_URL must be set when SECRET_MANAGER_TYPE=openbao")
+            if not self.secret_manager_token.strip():
+                raise ValueError("SECRET_MANAGER_TOKEN must be set when SECRET_MANAGER_TYPE=openbao")
         return self
 
     @cached_property
@@ -122,25 +144,40 @@ class Settings(BaseSettings):
 
     @cached_property
     def parsed_cert_labels(self) -> dict[str, str]:
-        """CN → label map for mTLS clients (computed once), static-mode only."""
+        """CN → label map for mTLS clients (computed once)."""
         from .credential_verifier import CredentialStore
 
         return CredentialStore.parse_cert_labels(self.cert_labels)
 
     @cached_property
     def parsed_webhook_hmac_secrets(self) -> list[str]:
-        """HMAC signing secrets (computed once), static-mode only."""
+        """HMAC signing secrets (computed once)."""
         from .credential_verifier import CredentialStore
 
         return CredentialStore.parse_secret_list(self.webhook_hmac_secrets)
 
+    @cached_property
+    def parsed_jwt(self) -> "JwtConfig":
+        """JWT verification config (computed once)."""
+        from .credential_verifier import _jwt_config_from
+
+        return _jwt_config_from(
+            {
+                "jwt_hmac_secret": self.jwt_hmac_secret,
+                "jwt_public_key": self.jwt_public_key,
+                "jwt_jwks_url": self.jwt_jwks_url,
+                "jwt_algorithms": self.jwt_algorithms,
+                "jwt_issuer": self.jwt_issuer,
+                "jwt_audience": self.jwt_audience,
+                "jwt_label_claim": self.jwt_label_claim,
+                "jwt_labels": self.jwt_labels,
+            }
+        )
+
     @property
     def secret_manager_base_url(self) -> str:
-        """secret_manager_url normalised for the verifiers: no trailing slash, and a
-        trailing '/api' stripped — the Infisical verifier appends '/api/v3/...' itself,
-        so a URL configured with '/api' would otherwise fetch '/api/api/v3/...'."""
-        base = self.secret_manager_url.rstrip("/")
-        return base[: -len("/api")] if base.endswith("/api") else base
+        """secret_manager_url normalised for the verifier: no trailing slash."""
+        return self.secret_manager_url.rstrip("/")
 
 
 _settings: Settings | None = None

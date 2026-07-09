@@ -11,20 +11,29 @@ import pytest
 
 import server.mqtt as mqtt_module
 from server.mqtt import MQTT_SOURCE, BrokerContext
+from server.rate_limit import SlidingWindowLimiter
 
 
 @pytest.fixture()
 def mock_write_api() -> MagicMock:
-    return MagicMock()
+    api = MagicMock()
+    api.write = AsyncMock(return_value=True)
+    return api
 
 
 @pytest.fixture()
-def settings(monkeypatch) -> MagicMock:
+def settings() -> MagicMock:
     s = MagicMock()
     s.influx_bucket = "metrics"
     s.influx_org = "mallard"
     s.mqtt_port = 8083
+    s.mqtt_topic_prefix = "mallard/"
+    s.rate_limit = "1000/minute"
     return s
+
+
+def _limiter(spec: str = "1000/minute") -> SlidingWindowLimiter:
+    return SlidingWindowLimiter.from_string(spec)
 
 
 @pytest.fixture()
@@ -51,67 +60,114 @@ def empty_verifier():
     return StaticCredentialVerifier(mock_settings)
 
 
+def _ctx(settings, write_api, verifier, limiter=None) -> BrokerContext:
+    return BrokerContext(
+        settings=settings,
+        write_api=write_api,
+        verifier=verifier,
+        limiter=limiter or _limiter(),
+    )
+
+
 @pytest.fixture()
 def broker_ctx(settings, mock_write_api, static_verifier, monkeypatch):
     """Install a BrokerContext for the plugin under test; restored afterwards."""
-    ctx = BrokerContext(settings=settings, write_api=mock_write_api, verifier=static_verifier)
+    ctx = _ctx(settings, mock_write_api, static_verifier)
     monkeypatch.setattr(mqtt_module, "_broker_ctx", ctx)
     return ctx
 
 
-def _make_message(data: bytes | str) -> MagicMock:
+def _make_message(data: bytes | str, topic: str = "mallard/metrics") -> MagicMock:
     msg = MagicMock()
     msg.data = data if isinstance(data, bytes) else data.encode()
-    msg.topic = "mallard/metrics"
+    msg.topic = topic
     return msg
 
 
 VALID_JSON = json.dumps({
+    "schema_version": 1,
     "instance_id": "abc123",
-    "schema_version": 3,
-    "ts": 1_700_000_000_000,
+    "sent_at": 1_700_000_000_500,
     "tz_offset_minutes": 120,
-    "mtd_budget_pct": 42.0,
-    "mtd_credits": 100.0,
-    "mtd_cost_usd": 3.50,
-    "today_credits": 10.0,
-    "today_cost_usd": 0.35,
-    "active_models": ["claude-sonnet-4-5"],
-    "top_model": "claude-sonnet-4-5",
+    "events": [
+        {
+            "id": "local:f1:span-1",
+            "ts": 1_700_000_000_000,
+            "connector": "local",
+            "model": "claude-sonnet-4-5",
+            "surface": "agent",
+            "credits": 5.0,
+            "cost_usd": 0.2,
+            "estimated": True,
+            "language": "typescript",
+        }
+    ],
 })
 
 
 class TestMqttHandleMessage:
-    def test_valid_payload_calls_write(self, mock_write_api, settings) -> None:
+    async def test_valid_payload_calls_write(self, mock_write_api, settings, static_verifier) -> None:
         from server.mqtt import _handle_message
 
-        _handle_message(_make_message(VALID_JSON), mock_write_api, settings)
+        await _handle_message(_make_message(VALID_JSON), "c1", _ctx(settings, mock_write_api, static_verifier))
         mock_write_api.write.assert_called_once()
 
-    def test_valid_payload_with_source(self, mock_write_api, settings) -> None:
+    async def test_valid_payload_with_source(self, mock_write_api, settings, static_verifier) -> None:
         from server.mqtt import _handle_message
 
-        _handle_message(_make_message(VALID_JSON), mock_write_api, settings, source="team-alpha")
+        await _handle_message(
+            _make_message(VALID_JSON), "c1", _ctx(settings, mock_write_api, static_verifier), source="team-alpha"
+        )
         mock_write_api.write.assert_called_once()
 
-    def test_invalid_json_does_not_crash(self, mock_write_api, settings) -> None:
+    async def test_invalid_json_does_not_crash(self, mock_write_api, settings, static_verifier) -> None:
         from server.mqtt import _handle_message
 
-        _handle_message(_make_message(b"not { valid json"), mock_write_api, settings)
+        await _handle_message(_make_message(b"not { valid json"), "c1", _ctx(settings, mock_write_api, static_verifier))
         mock_write_api.write.assert_not_called()
 
-    def test_schema_mismatch_does_not_crash(self, mock_write_api, settings) -> None:
+    async def test_schema_mismatch_does_not_crash(self, mock_write_api, settings, static_verifier) -> None:
         from server.mqtt import _handle_message
 
         bad = json.dumps({"completely": "wrong", "shape": True})
-        _handle_message(_make_message(bad), mock_write_api, settings)
+        await _handle_message(_make_message(bad), "c1", _ctx(settings, mock_write_api, static_verifier))
         mock_write_api.write.assert_not_called()
 
-    def test_write_failure_does_not_crash(self, mock_write_api, settings) -> None:
+    async def test_write_failure_does_not_crash(self, mock_write_api, settings, static_verifier) -> None:
         from server.mqtt import _handle_message
 
-        mock_write_api.write.side_effect = RuntimeError("influxdb down")
-        _handle_message(_make_message(VALID_JSON), mock_write_api, settings)
+        mock_write_api.write = AsyncMock(side_effect=RuntimeError("influxdb down"))
+        await _handle_message(_make_message(VALID_JSON), "c1", _ctx(settings, mock_write_api, static_verifier))
+
+    async def test_out_of_scope_topic_is_dropped(self, mock_write_api, settings, static_verifier) -> None:
+        from server.mqtt import _handle_message
+
+        msg = _make_message(VALID_JSON, topic="somethingelse/x")
+        await _handle_message(msg, "c1", _ctx(settings, mock_write_api, static_verifier))
+        mock_write_api.write.assert_not_called()
+
+    async def test_oversized_message_is_dropped(self, mock_write_api, settings, static_verifier) -> None:
+        from server.mqtt import _handle_message
+
+        huge = b"x" * (64 * 1024 + 1)
+        await _handle_message(_make_message(huge), "c1", _ctx(settings, mock_write_api, static_verifier))
+        mock_write_api.write.assert_not_called()
+
+    async def test_rate_limit_drops_excess_messages(self, mock_write_api, settings, static_verifier) -> None:
+        from server.mqtt import _handle_message
+
+        ctx = _ctx(settings, mock_write_api, static_verifier, limiter=_limiter("1/minute"))
+        await _handle_message(_make_message(VALID_JSON), "c1", ctx)
+        await _handle_message(_make_message(VALID_JSON), "c1", ctx)  # second exceeds 1/min for c1
+        assert mock_write_api.write.call_count == 1
+
+    async def test_rate_limit_is_per_client(self, mock_write_api, settings, static_verifier) -> None:
+        from server.mqtt import _handle_message
+
+        ctx = _ctx(settings, mock_write_api, static_verifier, limiter=_limiter("1/minute"))
+        await _handle_message(_make_message(VALID_JSON), "c1", ctx)
+        await _handle_message(_make_message(VALID_JSON), "c2", ctx)  # different client, still allowed
+        assert mock_write_api.write.call_count == 2
 
 
 class TestMallardAuthPlugin:
@@ -157,7 +213,7 @@ class TestMallardAuthPlugin:
     async def test_rejects_when_no_password_configured(
         self, settings, mock_write_api, empty_verifier, monkeypatch
     ) -> None:
-        ctx = BrokerContext(settings=settings, write_api=mock_write_api, verifier=empty_verifier)
+        ctx = _ctx(settings, mock_write_api, empty_verifier)
         monkeypatch.setattr(mqtt_module, "_broker_ctx", ctx)
         plugin = self._make_plugin()
         session = MagicMock()
@@ -178,7 +234,7 @@ class TestMallardAuthPlugin:
     ) -> None:
         raising_verifier = MagicMock()
         raising_verifier.verify_mqtt_password = AsyncMock(side_effect=RuntimeError("vault down"))
-        ctx = BrokerContext(settings=settings, write_api=mock_write_api, verifier=raising_verifier)
+        ctx = _ctx(settings, mock_write_api, raising_verifier)
         monkeypatch.setattr(mqtt_module, "_broker_ctx", ctx)
         plugin = self._make_plugin()
         session = MagicMock()
@@ -209,7 +265,7 @@ class TestMallardMessagePlugin:
     async def test_all_messages_tagged_source_mqtt(self, broker_ctx, mock_write_api) -> None:
         plugin = self._make_plugin()
 
-        with patch("server.mqtt.write_payload") as write_mock:
+        with patch("server.mqtt.write_payload", new=AsyncMock()) as write_mock:
             await plugin.on_broker_message_received(
                 client_id="whoever", message=_make_message(VALID_JSON)
             )

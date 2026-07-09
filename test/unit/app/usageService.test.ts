@@ -20,14 +20,15 @@ function fixtureData(): SnapshotSourceData {
     },
     estimatedEventCount: 9,
     daily: [
-      { dayStart: TODAY - 86_400_000, credits: 25, cost: 1.0, tokens: 7500, eventCount: 10 },
-      { dayStart: TODAY,              credits: 5,  cost: 0.2, tokens: 1500, eventCount: 2 },
+      { dayStart: TODAY - 86_400_000, credits: 25, cost: 1.0, tokens: 7500, eventCount: 10, catInput: 0.3, catOutput: 0.4, catCacheRead: 0.1, catCacheCreation: 0.1, catThinking: 0.05, catTool: 0.05 },
+      { dayStart: TODAY,              credits: 5,  cost: 0.2, tokens: 1500, eventCount: 2, catInput: 0, catOutput: 0, catCacheRead: 0, catCacheCreation: 0, catThinking: 0, catTool: 0 },
     ],
     models: [
       { modelId: 'claude-sonnet-4-5', credits: 18, cost: 0.72, tokens: 6000 },
       { modelId: 'gpt-4o',            credits: 12, cost: 0.48, tokens: 3000 },
     ],
-    repos: [{ repo: 'mallard', credits: 30, cost: 1.2, tokens: 9000 }],
+    languages: [{ language: 'typescript', credits: 12, cost: 0.5, tokens: 4000 }],
+    repos: [{ repo: 'mallard', credits: 30, cost: 1.2, tokens: 9000, heuristicShare: 0 }],
     hourly: [{ hourLocal: 14, credits: 22 }, { hourLocal: 9, credits: 8 }],
     categories: [{ category: 'input', cost: 0.5 }, { category: 'output', cost: 0.7 }],
     sankey: [{ model: 'claude-sonnet-4-5', surface: 'agent', count: 8, credits: 18 }],
@@ -71,18 +72,11 @@ function makeService(data: SnapshotSourceData) {
     onDidChange: () => ({ dispose() {} }),
   } as unknown as UserConfigStore;
   const currency = { currentRates: () => ({}) } as unknown as CurrencyService;
-  const exported: UsageSnapshot[] = [];
-  const exporter = {
-    export: async (s: UsageSnapshot) => void exported.push(s),
-    flush: async () => {},
-    dispose: () => {},
-  };
   const svc = new UsageService(
     reader, pricing, ingest, userConfig, currency, undefined,
-    exporter as never,
     { showWarningMessage: async () => undefined } as never,
   );
-  return { svc, exported };
+  return { svc };
 }
 
 /** Strip the fields that legitimately differ between the two read paths. */
@@ -114,7 +108,7 @@ describe('UsageService — snapshot assembly (merged compute path)', () => {
   });
 
   it('assembles totals, dimensions, and rankings from the data bundle', async () => {
-    const { svc, exported } = makeService(fixtureData());
+    const { svc } = makeService(fixtureData());
     await svc.setFilter({});
     const s = svc.current!;
 
@@ -124,12 +118,13 @@ describe('UsageService — snapshot assembly (merged compute path)', () => {
     assert.deepEqual(s.allSources, ['claude-code', 'local']);
     assert.equal(s.topModels[0]!.key, 'claude-sonnet-4-5');
     assert.equal(s.byRepo[0]!.key, 'mallard');
+    assert.equal(s.byLanguage[0]!.key, 'typescript');
+    assert.equal(s.byLanguage[0]!.credits, 12);
     assert.deepEqual(s.sankeyLinks, [{ source: 'claude-sonnet-4-5', target: 'agent', value: 18 }]);
     assert.equal(s.totalEventCount, 12);
     assert.equal(s.estimatedEventCount, 9);
-    assert.equal(s.source, 'local'); // 'local' present in sources
+    assert.equal(s.source, 'mixed'); // two sources present (claude-code + local)
     assert.equal(s.chartData.hourlyTimeline.peakHour, 14);
-    assert.equal(exported.length, 1, 'snapshot is handed to the exporter');
     svc.dispose();
   });
 
@@ -142,12 +137,21 @@ describe('UsageService — snapshot assembly (merged compute path)', () => {
     svc.dispose();
   });
 
-  it("source is 'lm' when data exists without the local connector", async () => {
+  it('source reflects the single event source when only one is present', async () => {
     const data = fixtureData();
     data.dims.sources = ['claude-code'];
     const { svc } = makeService(data);
     await svc.setFilter({});
-    assert.equal(svc.current!.source, 'lm');
+    assert.equal(svc.current!.source, 'claude-code');
+    svc.dispose();
+  });
+
+  it("source is 'mixed' when more than one event source is present", async () => {
+    const data = fixtureData();
+    data.dims.sources = ['local', 'claude-code'];
+    const { svc } = makeService(data);
+    await svc.setFilter({});
+    assert.equal(svc.current!.source, 'mixed');
     svc.dispose();
   });
 });

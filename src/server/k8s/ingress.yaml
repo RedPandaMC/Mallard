@@ -20,8 +20,15 @@ metadata:
     # configs referencing unknown variables, which broke the whole ingress.
     # Always setting the header (even empty) also prevents clients from
     # spoofing a CN of their own.
+    #
+    # SECURITY: verify-client is "optional", so nginx still populates
+    # $ssl_client_s_dn for an UNVERIFIED (e.g. self-signed) client cert.
+    # We therefore also forward $ssl_client_verify and the server only
+    # trusts the CN when SSL_CLIENT_VERIFY == "SUCCESS" (routers/ingest.py).
+    # Without this gate any self-signed cert could authenticate as any CN.
     nginx.ingress.kubernetes.io/configuration-snippet: |
       proxy_set_header SSL_CLIENT_S_DN_CN $ssl_client_s_dn;
+      proxy_set_header SSL_CLIENT_VERIFY $ssl_client_verify;
 spec:
   tls:
     - hosts:

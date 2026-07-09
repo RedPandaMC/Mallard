@@ -38,6 +38,17 @@ describe('IngestService', () => {
     assert.equal(svc.getStatus().kind, 'degraded');
   });
 
+  it('getStatus reports degraded (not ok) when a healthy connector coexists with a failed one', () => {
+    const svc = new IngestService([
+      makeStub({ id: 'claude-code', getStatus: () => 'ok' }),
+      makeStub({ id: 'copilot', getStatus: () => 'error' }),
+    ]);
+    const status = svc.getStatus();
+    assert.equal(status.kind, 'degraded');
+    // The failing connector is named so the user knows which source is broken.
+    assert.match(status.reason ?? '', /copilot/);
+  });
+
   it('getLogPaths flattens paths from all connectors', () => {
     const svc = new IngestService([
       makeStub({ id: 'a', getLogPaths: () => ['/a/1', '/a/2'] }),

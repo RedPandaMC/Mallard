@@ -8,21 +8,6 @@ export const COUNT_ALL_SQL   = `SELECT COUNT(*) AS c FROM events`;
 
 export const CREDITS_BY_BRANCH_SQL = `SELECT COALESCE(SUM(credits), 0) AS c FROM events WHERE branch = ?`;
 
-// ── Queries: snapshot cache reads ────────────────────────────────────────────
-
-export const READ_SNAP_TOTALS      = `SELECT period, credits, cost, tokens, event_count FROM snap_totals`;
-export const READ_SNAP_DAILY       = `SELECT day_start, credits, cost, tokens, event_count FROM snap_daily ORDER BY day_start`;
-export const READ_SNAP_MODELS      = `SELECT modelId, credits, cost, tokens FROM snap_models`;
-export const READ_SNAP_REPOS       = `SELECT repo, credits, cost, tokens FROM snap_repos`;
-export const READ_SNAP_HOURLY      = `SELECT hour_local, credits, event_count FROM snap_hourly ORDER BY hour_local`;
-export const READ_SNAP_CATEGORIES  = `SELECT category, cost FROM snap_categories`;
-export const READ_SNAP_SANKEY      = `SELECT model, surface, count, credits FROM snap_sankey`;
-export const READ_SNAP_DIM_MODELS  = `SELECT name FROM snap_dim_models`;
-export const READ_SNAP_DIM_SURFACES= `SELECT name FROM snap_dim_surfaces`;
-export const READ_SNAP_DIM_SOURCES = `SELECT name FROM snap_dim_sources`;
-export const READ_SNAP_DIM_REPOS   = `SELECT name FROM snap_dim_repos`;
-export const READ_SNAP_WEEKDAY     = `SELECT weekday, credits, event_count FROM snap_weekday ORDER BY weekday`;
-
 // ── Queries: queryFacts (parameterized via fact tables) ───────────────────────
 
 export const QUERY_FACTS_BASE_SQL = `

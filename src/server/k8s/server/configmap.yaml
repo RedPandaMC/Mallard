@@ -9,5 +9,9 @@ data:
   INFLUX_BUCKET: "metrics"
   LOG_LEVEL: "INFO"
   RATE_LIMIT: "60/minute"
+  # Shared Redis backs the per-credential rate limiter so the limit holds across
+  # all replicas (an in-process limiter would multiply it by the replica count
+  # and reset on restart). Empty falls back to the in-process limiter.
+  REDIS_URL: "redis://mallard-redis:6379/0"
   MQTT_ENABLED: "false"
   MQTT_PORT: "8083"

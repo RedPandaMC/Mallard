@@ -23,8 +23,14 @@ spec:
         runAsGroup: 1000
       containers:
         - name: mallard-server
-          # trivy:ignore:KSV013 -- intentional: CI tags both :latest and :<sha>; deployment uses :latest + imagePullPolicy Always
-          image: ghcr.io/redpandamc/mallard-server:latest
+          # Immutable tag for reproducible rollouts and reliable rollback. The
+          # release process publishes ghcr.io/redpandamc/mallard-server:<version>
+          # (and :<git-sha>); bump this tag per release (or override it centrally
+          # via the `images:` transformer in kustomization.yaml). Rollback =
+          # re-point to the previous immutable tag. imagePullPolicy IfNotPresent
+          # is safe because an immutable tag never moves under a running pod.
+          image: ghcr.io/redpandamc/mallard-server:v1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
           envFrom:
@@ -42,12 +48,18 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+          # Liveness is a TCP-socket check (process is up / not wedged), NOT an
+          # HTTP /health check: /health reports dependency health and returns 503
+          # when InfluxDB/secret-manager/Redis are unreachable. Using it for
+          # liveness would restart-loop the pod on a transient dependency blip.
           livenessProbe:
-            httpGet:
-              path: /health
+            tcpSocket:
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 30
+          # Readiness uses /health so a pod that can't reach a hard dependency is
+          # drained from the Service (503) instead of serving traffic it can't
+          # fulfil. It recovers automatically once the dependency returns.
           readinessProbe:
             httpGet:
               path: /health

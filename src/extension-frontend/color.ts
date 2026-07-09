@@ -70,6 +70,16 @@ export function contrastRatio(a: RGB, b: RGB): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+const WHITE: RGB = { r: 255, g: 255, b: 255 };
+const BLACK: RGB = { r: 0, g: 0, b: 0 };
+
+/** Black or white, whichever has higher WCAG contrast on top of `bg`. Used to
+ *  pick a legible foreground for a derived accent (a light/pastel accent needs
+ *  black text, not the hardcoded white). */
+export function readableForeground(bg: RGB): string {
+  return contrastRatio(WHITE, bg) >= contrastRatio(BLACK, bg) ? '#ffffff' : '#000000';
+}
+
 // ── HSL conversions (for lightness/saturation nudging) ──────────────────────
 
 export interface HSL {
@@ -102,9 +112,9 @@ export function hslToRgb({ h, s, l }: HSL): RGB {
   const c = (1 - Math.abs(2 * l - 1)) * s;
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
   const m = l - c / 2;
-  let r = 0;
-  let g = 0;
-  let b = 0;
+  let r: number;
+  let g: number;
+  let b: number;
   if (h < 60) [r, g, b] = [c, x, 0];
   else if (h < 120) [r, g, b] = [x, c, 0];
   else if (h < 180) [r, g, b] = [0, c, x];

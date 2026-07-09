@@ -4,10 +4,10 @@
  * whether the restriction popup (Dismiss/Snooze/Disable Mallard) should show.
  */
 import * as vscode from 'vscode';
-import { AlertRule, DEFAULT_RESTRICTION_STATE, RestrictionState } from '../types';
-import { buildRuleContext, EvalBuildInput } from '../expr/context';
-import { evaluateRestrictionState } from './evaluator';
-import { JsonFileStore } from '../../util/JsonFileStore';
+import { AlertRule, DEFAULT_RESTRICTION_STATE, RestrictionState } from '../domain/types';
+import { buildRuleContext, EvalBuildInput } from '../domain/expr/context';
+import { evaluateRestrictionState } from '../domain/restriction/evaluator';
+import { JsonFileStore } from '../util/JsonFileStore';
 
 const STATE_FILE = 'restriction.json';
 

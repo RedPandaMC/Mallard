@@ -109,7 +109,25 @@ export class CopilotConnector extends BaseFileConnector {
       pick(attrs, ['gen_ai.operation.surface', 'surface', 'gen_ai.operation.name']) ?? row['name'];
 
     const fileKey = typeof row['filename'] === 'string' ? fileKeyOf(row['filename']) : 'cp';
-    const rowKey  = `${fileKey}:${ts}:${String(model)}`;
+    // An OTel span carries a unique span id; use it so multiple completions to
+    // the same model within one reported timestamp (coarse exporter clocks) don't
+    // collapse onto one composite id and get dropped by INSERT OR IGNORE. The
+    // span id is stable in the source, so re-ingest still dedups to one row.
+    const spanId =
+      pick(row, ['span_id', 'spanId', 'spanID']) ?? pick(attrs, ['span_id', 'spanId', 'spanID']);
+    const rowKey = spanId ? `${fileKey}:${String(spanId)}` : `${fileKey}:${ts}:${String(model)}`;
+
+    // Copilot's OTel lines carry no workspace path, so repo/branch can only
+    // come from the active-editor heuristic — and only for live rows.
+    // Backfilled rows stay unattributed rather than being blamed on whatever
+    // repo happens to be focused at parse time.
+    const live = ctx.liveThresholdMs !== undefined && ts >= ctx.liveThresholdMs;
+    const repo = live ? ctx.repo : undefined;
+    const branch = live ? ctx.branch : undefined;
+    // Language: some OTel exports carry it per span (authoritative for the
+    // row); otherwise the live-gated active-editor heuristic, like repo.
+    const rowLanguage = pick(attrs, ['gen_ai.request.language', 'language', 'languageId']);
+    const language = rowLanguage !== undefined ? String(rowLanguage) : live ? ctx.language : undefined;
 
     return {
       id:     `local:${rowKey}`,
@@ -122,8 +140,9 @@ export class CopilotConnector extends BaseFileConnector {
       credits,
       cost,
       estimated: true,
-      ...(ctx.repo   !== undefined ? { repo:   ctx.repo }   : {}),
-      ...(ctx.branch !== undefined ? { branch: ctx.branch } : {}),
+      ...(repo   !== undefined ? { repo, attribution: 'heuristic' as const } : {}),
+      ...(branch !== undefined ? { branch } : {}),
+      ...(language !== undefined ? { language } : {}),
       ...(costByCategory !== undefined ? { costByCategory } : {}),
     };
   }

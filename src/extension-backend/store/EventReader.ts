@@ -17,28 +17,16 @@ import {
   FIND_ALL_SQL,
   FIND_BY_ID_SQL,
   QUERY_FACTS_BASE_SQL,
-  READ_SNAP_CATEGORIES,
-  READ_SNAP_DAILY,
-  READ_SNAP_DIM_MODELS,
-  READ_SNAP_DIM_REPOS,
-  READ_SNAP_DIM_SOURCES,
-  READ_SNAP_DIM_SURFACES,
-  READ_SNAP_HOURLY,
-  READ_SNAP_MODELS,
-  READ_SNAP_REPOS,
-  READ_SNAP_SANKEY,
-  READ_SNAP_TOTALS,
-  READ_SNAP_WEEKDAY,
 } from './schema';
 import { FilterClauseBuilder } from './FilterClauseBuilder';
 
 // ── SnapshotSourceData ─────────────────────────────────────────────────────────
 
 /**
- * The normalized data bundle both snapshot read paths produce — the cached
- * snap_* tables (readSnapshotCache) and the filtered DuckDB aggregation
- * (readFilteredSnapshot) return the same shape, so UsageService assembles a
- * snapshot from either through one code path.
+ * The normalized data bundle the snapshot engine produces. There is one engine
+ * (readFilteredSnapshot); the no-filter dashboard load is its memoized
+ * empty-filter case (readSnapshotCache), so both return the same shape and can
+ * never disagree.
  */
 export interface SnapshotSourceData {
   totals: {
@@ -49,9 +37,15 @@ export interface SnapshotSourceData {
   /** Events whose cost is estimated (log-derived) rather than authoritative. */
   estimatedEventCount: number;
   /** day_start = epoch ms of local midnight, DST-correct. */
-  daily:      Array<{ dayStart: number; credits: number; cost: number; tokens: number; eventCount: number }>;
+  daily:      Array<{
+    dayStart: number; credits: number; cost: number; tokens: number; eventCount: number;
+    /** Per-day cost split by category (USD), for the category-trend chart. */
+    catInput: number; catOutput: number; catCacheRead: number; catCacheCreation: number; catThinking: number; catTool: number;
+  }>;
   models:     Array<{ modelId: string; credits: number; cost: number; tokens: number }>;
-  repos:      Array<{ repo: string; credits: number; cost: number; tokens: number }>;
+  repos:      Array<{ repo: string; credits: number; cost: number; tokens: number; heuristicShare: number }>;
+  /** Per-language spend; language is 'unknown' for rows without one. */
+  languages:  Array<{ language: string; credits: number; cost: number; tokens: number }>;
   /** hour_local = 0-23 in session timezone (DST-correct). */
   hourly:     Array<{ hourLocal: number; credits: number }>;
   categories: Array<{ category: string; cost: number }>;
@@ -105,12 +99,33 @@ export interface IEventReader extends IEventSnapshotReader {
 
 type Categories = Partial<Record<CostCategory, number>>;
 
+// Coerce an out-of-enum value to a default, but surface it (once per distinct
+// value) rather than swallowing it — an unknown source/surface is usually schema
+// drift (a new connector writing a value this reader doesn't recognise), which
+// the old silent `.catch(default)` hid while corrupting the attribution.
+const _warnedEnumValues = new Set<string>();
+function coerceEnum<T extends string>(fallback: T, label: string) {
+  // Only invoked by zod's .catch when the stored value isn't a known enum member,
+  // i.e. genuine schema drift — always worth logging (once per distinct value).
+  return (ctx: { input: unknown }): T => {
+    const key = `${label}:${String(ctx.input)}`;
+    if (!_warnedEnumValues.has(key)) {
+      _warnedEnumValues.add(key);
+      console.warn(
+        `[mallard:store] unknown ${label} value ${JSON.stringify(ctx.input)} in events; ` +
+          `coercing to '${fallback}'. The event schema may have drifted.`,
+      );
+    }
+    return fallback;
+  };
+}
+
 const EventRow = z.object({
   id: z.string(),
   ts: z.union([z.number(), z.bigint()]).transform(Number),
   modelId: z.string(),
-  surface: z.enum(['chat', 'inline', 'agent', 'edit', 'unknown']).catch('unknown'),
-  source: z.enum(['lm', 'local', 'github', 'claude-code']).catch('local'),
+  surface: z.enum(['chat', 'inline', 'agent', 'edit', 'unknown']).catch(coerceEnum('unknown', 'surface')),
+  source: z.enum(['lm', 'local', 'github', 'claude-code']).catch(coerceEnum('local', 'source')),
   credits: z.number(),
   cost: z.number(),
   estimated: z.boolean().catch(true),
@@ -118,6 +133,8 @@ const EventRow = z.object({
   completionTokens: z.number().nullish(),
   repo: z.string().nullish(),
   branch: z.string().nullish(),
+  attribution: z.enum(['authoritative', 'heuristic']).nullish(),
+  language: z.string().nullish(),
   costByCategory: z.string().nullish(),
 });
 
@@ -151,6 +168,8 @@ function rowToEvent(row: Record<string, unknown>): UsageEvent | null {
     ...(r.completionTokens != null ? { completionTokens: r.completionTokens } : {}),
     ...(r.repo != null ? { repo: r.repo } : {}),
     ...(r.branch != null ? { branch: r.branch } : {}),
+    ...(r.attribution != null ? { attribution: r.attribution } : {}),
+    ...(r.language != null ? { language: r.language } : {}),
     ...(costByCategory !== undefined ? { costByCategory } : {}),
   };
 }
@@ -191,8 +210,19 @@ function buildFactsFilterSQL(filter?: RecordFilter): { clause: string; params: u
 
 // ── Implementation ─────────────────────────────────────────────────────────────
 
+/** Shared mutable token bumped by the writer on every mutation so the reader can
+ *  memoize the (expensive) no-filter snapshot until the data actually changes. */
+export interface SnapshotCacheToken {
+  version: number;
+}
+
 export class EventReader implements IEventReader {
-  constructor(private readonly conn: DuckDBConnection) {}
+  private snapCache?: { version: number; data: SnapshotSourceData };
+
+  constructor(
+    private readonly conn: DuckDBConnection,
+    private readonly cacheToken: SnapshotCacheToken = { version: 0 },
+  ) {}
 
   async find(filter?: RecordFilter): Promise<UsageEvent[]> {
     if (!filter || Object.keys(filter).length === 0) {
@@ -406,92 +436,21 @@ export class EventReader implements IEventReader {
     }));
   }
 
+  /**
+   * The no-filter snapshot. There is one snapshot engine — the live
+   * aggregation in readFilteredSnapshot — and this path is simply its
+   * empty-filter case, memoized so repeated dashboard reads between writes are
+   * O(1). (Previously a second, separately-maintained snap_* materialization
+   * computed the same numbers and could silently drift from the filtered path.)
+   * The writer bumps cacheToken.version on every mutation to invalidate this.
+   */
   async readSnapshotCache(): Promise<SnapshotSourceData> {
-    const [totalsRaw, daily, models, repos, hourly, categories, sankey,
-           dimModels, dimSurfaces, dimSources, dimRepos, weekdayRows, estRows] = await Promise.all([
-      readRows(this.conn, READ_SNAP_TOTALS, (r) => r),
-      /* c8 ignore start */
-      readRows(this.conn, READ_SNAP_DAILY,  (r) => ({
-        dayStart:   Number(r['day_start']   ?? 0),
-        credits:    Number(r['credits']     ?? 0),
-        cost:       Number(r['cost']        ?? 0),
-        tokens:     Number(r['tokens']      ?? 0),
-        eventCount: Number(r['event_count'] ?? 0),
-      })),
-      readRows(this.conn, READ_SNAP_MODELS, (r) => ({
-        modelId: String(r['modelId'] ?? ''),
-        credits: Number(r['credits'] ?? 0),
-        cost:    Number(r['cost']    ?? 0),
-        tokens:  Number(r['tokens']  ?? 0),
-      })),
-      readRows(this.conn, READ_SNAP_REPOS, (r) => ({
-        repo:    String(r['repo']    ?? ''),
-        credits: Number(r['credits'] ?? 0),
-        cost:    Number(r['cost']    ?? 0),
-        tokens:  Number(r['tokens']  ?? 0),
-      })),
-      readRows(this.conn, READ_SNAP_HOURLY, (r) => ({
-        hourLocal: Number(r['hour_local'] ?? 0),
-        credits:   Number(r['credits']   ?? 0),
-      })),
-      readRows(this.conn, READ_SNAP_CATEGORIES, (r) => ({
-        category: String(r['category'] ?? ''),
-        cost:     Number(r['cost']     ?? 0),
-      })),
-      readRows(this.conn, READ_SNAP_SANKEY, (r) => ({
-        model:   String(r['model']   ?? ''),
-        surface: String(r['surface'] ?? ''),
-        count:   Number(r['count']   ?? 0),
-        credits: Number(r['credits'] ?? 0),
-      })),
-      readRows(this.conn, READ_SNAP_DIM_MODELS,   (r) => String(r['name'] ?? '')),
-      readRows(this.conn, READ_SNAP_DIM_SURFACES, (r) => String(r['name'] ?? '')),
-      readRows(this.conn, READ_SNAP_DIM_SOURCES,  (r) => String(r['name'] ?? '')),
-      readRows(this.conn, READ_SNAP_DIM_REPOS,    (r) => String(r['name'] ?? '')),
-      readRows(this.conn, READ_SNAP_WEEKDAY, (r) => ({
-        weekday: Number(r['weekday'] ?? 0),
-        credits: Number(r['credits'] ?? 0),
-      })),
-      readRows(this.conn, 'SELECT COUNT(*) AS c FROM events WHERE estimated', (r) => Number(r['c'] ?? 0)),
-      /* c8 ignore stop */
-    ]);
-
-    const zero = { credits: 0, cost: 0, tokens: 0, eventCount: 0 };
-    const totals = { all: { ...zero }, mtd: { ...zero }, today: { ...zero } };
-    for (const row of totalsRaw) {
-      /* c8 ignore start */
-      const period = String(row['period'] ?? '');
-      if (period === 'all' || period === 'mtd' || period === 'today') {
-        totals[period] = {
-          credits:    Number(row['credits']     ?? 0),
-          cost:       Number(row['cost']        ?? 0),
-          tokens:     Number(row['tokens']      ?? 0),
-          eventCount: Number(row['event_count'] ?? 0),
-        };
-      }
-      /* c8 ignore stop */
+    if (this.snapCache && this.snapCache.version === this.cacheToken.version) {
+      return this.snapCache.data;
     }
-
-    const weekdayArr = new Array<number>(7).fill(0);
-    for (const row of weekdayRows) weekdayArr[row.weekday] = row.credits;
-
-    return {
-      totals,
-      estimatedEventCount: estRows[0] ?? 0,
-      daily,
-      models,
-      repos,
-      hourly,
-      categories,
-      sankey,
-      dims: {
-        models:   dimModels,
-        surfaces: dimSurfaces,
-        sources:  dimSources,
-        repos:    dimRepos,
-      },
-      weekday: weekdayArr,
-    };
+    const data = await this.readFilteredSnapshot({});
+    this.snapCache = { version: this.cacheToken.version, data };
+    return data;
   }
 
   async readFilteredSnapshot(filter: RecordFilter): Promise<SnapshotSourceData> {
@@ -534,10 +493,19 @@ SELECT
   ${agg(tok,                        todaCond)}           AS today_tokens,
   ${agg(`COUNT(*)`,                 todaCond)}           AS today_ec,
   ${listJson(
-    `'day_start': day_start, 'credits': credits, 'cost': cost, 'tokens': tokens, 'event_count': event_count`,
+    `'day_start': day_start, 'credits': credits, 'cost': cost, 'tokens': tokens, 'event_count': event_count,
+     'cat_input': cat_input, 'cat_output': cat_output, 'cat_cache_read': cat_cache_read,
+     'cat_cache_creation': cat_cache_creation, 'cat_thinking': cat_thinking, 'cat_tool': cat_tool`,
     `SELECT CAST(extract(epoch from date_trunc('day', to_timestamp(ts/1000.0)::TIMESTAMPTZ))*1000 AS BIGINT) AS day_start,
             COALESCE(SUM(credits),0) AS credits, COALESCE(SUM(cost),0) AS cost,
-            ${tok} AS tokens, COUNT(*) AS event_count FROM f GROUP BY 1`,
+            ${tok} AS tokens, COUNT(*) AS event_count,
+            SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.input') AS DOUBLE),0)) AS cat_input,
+            SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.output') AS DOUBLE),0)) AS cat_output,
+            SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.cache_read') AS DOUBLE),0)) AS cat_cache_read,
+            SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.cache_creation') AS DOUBLE),0)) AS cat_cache_creation,
+            SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.thinking') AS DOUBLE),0)) AS cat_thinking,
+            SUM(COALESCE(TRY_CAST(json_extract_string(costByCategory,'$.tool') AS DOUBLE),0)) AS cat_tool
+     FROM f GROUP BY 1`,
     'day_start',
   )} AS daily,
   ${listJson(
@@ -547,12 +515,22 @@ SELECT
     'credits DESC',
   )} AS top_models,
   ${listJson(
-    `'repo': repo, 'credits': credits, 'cost': cost, 'tokens': tokens`,
+    `'repo': repo, 'credits': credits, 'cost': cost, 'tokens': tokens, 'heuristic_share': heuristic_share`,
     `SELECT COALESCE(repo,'unattributed') AS repo, COALESCE(SUM(credits),0) AS credits,
-            COALESCE(SUM(cost),0) AS cost, ${tok} AS tokens
+            COALESCE(SUM(cost),0) AS cost, ${tok} AS tokens,
+            CASE WHEN COALESCE(SUM(cost),0) > 0
+                 THEN COALESCE(SUM(CASE WHEN attribution = 'heuristic' THEN cost ELSE 0 END),0) / SUM(cost)
+                 ELSE 0 END AS heuristic_share
      FROM f GROUP BY COALESCE(repo,'unattributed')`,
     'credits DESC',
   )} AS top_repos,
+  ${listJson(
+    `'language': language, 'credits': credits, 'cost': cost, 'tokens': tokens`,
+    `SELECT COALESCE(language,'unknown') AS language, COALESCE(SUM(credits),0) AS credits,
+            COALESCE(SUM(cost),0) AS cost, ${tok} AS tokens
+     FROM f GROUP BY COALESCE(language,'unknown')`,
+    'credits DESC',
+  )} AS top_languages,
   ${listJson(
     `'model': model, 'surface': surface, 'count': cnt, 'credits': credits`,
     `SELECT modelId AS model, surface, COUNT(*) AS cnt, COALESCE(SUM(credits),0) AS credits
@@ -614,6 +592,7 @@ SELECT
     const dailyArr   = parseArr<Record<string, unknown>>('daily');
     const modelArr   = parseArr<Record<string, unknown>>('top_models');
     const repoArr    = parseArr<Record<string, unknown>>('top_repos');
+    const langArr    = parseArr<Record<string, unknown>>('top_languages');
     const sankeyArr  = parseArr<Record<string, unknown>>('sankey');
     const hourArr    = parseArr<Record<string, unknown>>('hourly');
     const wdArr      = parseArr<Record<string, unknown>>('weekday_data');
@@ -630,6 +609,12 @@ SELECT
         cost:       Number(r['cost']        ?? 0),
         tokens:     Number(r['tokens']      ?? 0),
         eventCount: Number(r['event_count'] ?? 0),
+        catInput:         Number(r['cat_input']          ?? 0),
+        catOutput:        Number(r['cat_output']         ?? 0),
+        catCacheRead:     Number(r['cat_cache_read']     ?? 0),
+        catCacheCreation: Number(r['cat_cache_creation'] ?? 0),
+        catThinking:      Number(r['cat_thinking']       ?? 0),
+        catTool:          Number(r['cat_tool']           ?? 0),
       })),
       models: modelArr.map((r) => ({
         modelId: String(r['modelId'] ?? ''),
@@ -638,10 +623,17 @@ SELECT
         tokens:  Number(r['tokens']  ?? 0),
       })),
       repos: repoArr.map((r) => ({
-        repo:    String(r['repo']    ?? ''),
-        credits: Number(r['credits'] ?? 0),
-        cost:    Number(r['cost']    ?? 0),
-        tokens:  Number(r['tokens']  ?? 0),
+        repo:           String(r['repo']            ?? ''),
+        credits:        Number(r['credits']         ?? 0),
+        cost:           Number(r['cost']            ?? 0),
+        tokens:         Number(r['tokens']          ?? 0),
+        heuristicShare: Number(r['heuristic_share'] ?? 0),
+      })),
+      languages: langArr.map((r) => ({
+        language: String(r['language'] ?? ''),
+        credits:  Number(r['credits']  ?? 0),
+        cost:     Number(r['cost']     ?? 0),
+        tokens:   Number(r['tokens']   ?? 0),
       })),
       sankey: sankeyArr.map((r) => ({
         model:   String(r['model']   ?? ''),

@@ -544,8 +544,11 @@ body {
   border-color: var(--w-action);
 }
 
-/* edit-layout toggle reads as a lit instrument button when active */
-#layout-edit[aria-pressed='true'] {
+/* Resize/Move layout toggles read as a lit instrument button when active.
+   (The single #layout-edit button was split into #layout-resize and
+   #layout-move; this rule must target both or neither ever highlights.) */
+#layout-resize[aria-pressed='true'],
+#layout-move[aria-pressed='true'] {
   background: var(--w-action);
   color: var(--w-action-fg);
   border-color: var(--w-action);
@@ -828,8 +831,10 @@ body {
   align-items: start;
 }
 
-.wv-chart-section[data-span='2'] { grid-column: span 2; }
 .wv-chart-section[data-span='1'] { grid-column: span 1; }
+.wv-chart-section[data-span='2'] { grid-column: span 2; }
+.wv-chart-section[data-span='3'] { grid-column: span 3; }
+.wv-chart-section[data-span='4'] { grid-column: span 4; }
 
 /* Panels with no data never render. */
 .wv-chart-section.wv-no-data { display: none !important; }
@@ -858,6 +863,30 @@ body {
   color: var(--w-action);
 }
 .wv-analysis-actions { display: flex; gap: var(--w-s2); }
+
+/* "Add chart" picker — anchored dropdown under the button. */
+.wv-add-chart { position: relative; display: inline-flex; }
+.wv-add-chart-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  padding: 4px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.wv-add-chart-item { justify-content: flex-start; text-align: left; }
+.wv-add-chart-empty {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
 .wv-btn--sm { padding: var(--w-s1) var(--w-s2); font-size: 11px; }
 
 .wv-panel-tools { display: none; }
@@ -968,8 +997,8 @@ body {
 @media (max-width: 700px) {
   .wv-dashboard { padding: var(--w-s3) var(--w-s3) var(--w-s6); gap: var(--w-s3); }
   .wv-charts-grid { grid-template-columns: 1fr; }
-  .wv-chart-section[data-span='1'],
-  .wv-chart-section[data-span='2'] { grid-column: span 1; }
+  /* Single column on narrow screens — every panel spans the one column. */
+  .wv-chart-section { grid-column: span 1 !important; }
   .wv-kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .wv-header { flex-wrap: wrap; }
   .wv-filter-bar { flex-wrap: wrap; }

@@ -298,6 +298,9 @@ describe('DuckDBFileReader — ingestSqlite', () => {
     assert.equal(result.inserted, 2);
     assert.ok(conn.calls.some((c) => c.startsWith('ATTACH')), 'attaches the db');
     assert.ok(conn.calls.some((c) => c.startsWith('DETACH')), 'detaches after');
+    // A second ingest reuses the loaded extension — INSTALL/LOAD run once.
+    await reader.ingestSqlite('/db/spans.sqlite', 'SELECT * FROM mallard_otel.spans', () => makeEvent(), baseCtx);
+    assert.equal(conn.calls.filter((c) => c === 'INSTALL sqlite').length, 1, 'INSTALL runs once per connection');
   });
 
   it('returns 0 when the attach fails', async () => {

@@ -171,11 +171,6 @@
     "configuration": {
       "title": "Mallard",
       "properties": {
-        "mallard.currency": {
-          "type": "string",
-          "default": "USD",
-          "description": "Display currency for all cost amounts in the dashboard and status bar (e.g. USD, EUR, GBP, JPY, AUD, CAD). Exchange rates are fetched daily from Frankfurter. MQTT and webhook metric exports always use USD regardless of this setting."
-        },
         "mallard.enabledConnectors": {
           "type": "array",
           "items": { "type": "string", "enum": ["copilot", "claude-code"] },
@@ -349,11 +344,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@eslint/js": "^9.9.0",
+    "@eslint/js": "^10.0.1",
     "@preact/signals-core": "^1.14.2",
     "@resvg/resvg-js": "^2.6.2",
     "@types/mocha": "^10.0.7",
-    "@types/node": "^20.14.0",
+    "@types/node": "^26.1.0",
     "@types/vscode": "^1.95.0",
     "@vscode/codicons": "^0.0.45",
     "@vscode/test-cli": "^0.0.15",

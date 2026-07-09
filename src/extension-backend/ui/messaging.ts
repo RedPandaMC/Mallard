@@ -22,7 +22,9 @@ export type WebviewBoundMsg =
   | { type: 'config'; value: UserConfig }
   | { type: 'layout'; value: DashboardLayout }
   | { type: 'restriction'; value: RestrictionState }
-  | { type: 'theme'; kind: ThemeKind; palette: PaletteMode };
+  | { type: 'theme'; kind: ThemeKind; palette: PaletteMode }
+  // Sidebar-only: pulse the budget section when an alert fires.
+  | { type: 'alertFired'; message: string };
 
 export type HostBoundMsg =
   | { type: 'ready' }
@@ -33,7 +35,10 @@ export type HostBoundMsg =
   | { type: 'openConfig' }
   | { type: 'command'; id: CommandId }
   | { type: 'restrictSnooze'; minutes: number }
-  | { type: 'setCurrency'; value: string };
+  | { type: 'setCurrency'; value: string }
+  // Sidebar-only: toggle a model in/out of the shared filter (host applies it
+  // against the authoritative UsageService filter).
+  | { type: 'toggleModelFilter'; model: string };
 
 const COMMAND_IDS: CommandId[] = ['openDashboard', 'signIn', 'disableExtension', 'enableCopilotTelemetry', 'setGitHubPat'];
 
@@ -59,6 +64,8 @@ export function isHostBoundMsg(m: unknown): m is HostBoundMsg {
       return COMMAND_IDS.includes(m.id as CommandId);
     case 'setCurrency':
       return typeof m.value === 'string' && /^[A-Za-z]{3}$/.test(m.value);
+    case 'toggleModelFilter':
+      return typeof m.model === 'string' && m.model.length > 0;
     default:
       return false;
   }
@@ -77,6 +84,8 @@ export function isWebviewBoundMsg(m: unknown): m is WebviewBoundMsg {
       return Array.isArray(m.value);
     case 'restriction':
       return isObject(m.value);
+    case 'alertFired':
+      return typeof m.message === 'string';
     default:
       return false;
   }

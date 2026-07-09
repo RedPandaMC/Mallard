@@ -6,6 +6,8 @@
 import {
   BudgetState,
   CategoryBreakdownData,
+  CategoryDailyRow,
+  CategoryTrendData,
   ChartData,
   COST_CATEGORIES,
   CostCategory,
@@ -17,6 +19,7 @@ import {
   HeatmapData,
   HourlyTimelineData,
   ModelBreakdownData,
+  TokensDailyData,
   TopEntry,
   UsageAggregate,
   UsageEvent,
@@ -117,7 +120,10 @@ export function buildWeekdayTotals(events: readonly UsageEvent[], filter?: Filte
   for (const e of events) {
     if (!matchesFilter(e, filter)) continue;
     const day = Math.floor((e.ts + tzOffsetMs) / DAY_MS);
-    totals[day % 7]! += e.credits;
+    // Epoch day 0 (1970-01-01) was a Thursday, so `day % 7 === 0` is Thursday,
+    // not Sunday. Shift by +4 to anchor index 0 on Sunday, matching the SQL
+    // dayofweek() path (0=Sun … 6=Sat).
+    totals[(day + 4) % 7]! += e.credits;
   }
   return totals;
 }
@@ -185,6 +191,58 @@ export function buildWeekdayData(totals: number[]): WeekdayData {
 }
 
 /* c8 ignore next */
+/** MM-DD label for a local-day timestamp (same format as dailyBars). */
+function dayLabel(ts: number): string {
+  const d = new Date(ts);
+  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Daily token/event volume over the dailyBars window. */
+export function buildTokensDailyData(
+  dayAggregates: UsageAggregate[],
+  now: number,
+  window = DAILY_BARS_WINDOW,
+): TokensDailyData {
+  const byKey = new Map<string, UsageAggregate>(dayAggregates.map((a) => [a.bucketKey, a]));
+  const dates: string[] = [];
+  const tokens: number[] = [];
+  const events: number[] = [];
+  for (let i = window - 1; i >= 0; i--) {
+    const ts = startOf(now - i * DAY_MS, 'day');
+    const agg = byKey.get(bucketKey(ts, 'day'));
+    dates.push(dayLabel(ts));
+    tokens.push(agg?.tokens ?? 0);
+    events.push(agg?.eventCount ?? 0);
+  }
+  return { dates, tokens, events };
+}
+
+/** Stacked per-category cost over the dailyBars window. */
+export function buildCategoryTrendData(
+  categoryDaily: CategoryDailyRow[],
+  now: number,
+  window = DAILY_BARS_WINDOW,
+): CategoryTrendData {
+  const byKey = new Map(categoryDaily.map((r) => [bucketKey(r.dayStart, 'day'), r.costs]));
+  const dates: string[] = [];
+  const perCategory = new Map<CostCategory, number[]>();
+  for (let i = window - 1; i >= 0; i--) {
+    const ts = startOf(now - i * DAY_MS, 'day');
+    dates.push(dayLabel(ts));
+    const costs = byKey.get(bucketKey(ts, 'day')) ?? {};
+    for (const cat of COST_CATEGORIES) {
+      const arr = perCategory.get(cat) ?? new Array<number>(0);
+      while (arr.length < dates.length - 1) arr.push(0);
+      arr.push(costs[cat] ?? 0);
+      perCategory.set(cat, arr);
+    }
+  }
+  const series = COST_CATEGORIES
+    .map((category) => ({ category, costs: perCategory.get(category) ?? [] }))
+    .filter((sr) => sr.costs.some((v) => v > 0));
+  return { dates, series, available: series.length > 0 };
+}
+
 export function buildChartData(
   dayAggregates: UsageAggregate[],
   topModels: TopEntry[],
@@ -197,6 +255,7 @@ export function buildChartData(
   manifest?: PricingManifest,
   weekdayTotals?: number[],
   display?: DisplayPrefs,
+  categoryDaily: CategoryDailyRow[] = [],
 ): ChartData {
   return {
     dailyBars: buildDailyBarsData(dayAggregates, budget, forecast, now, display?.dailyBarsWindow),
@@ -205,5 +264,7 @@ export function buildChartData(
     categoryBreakdown,
     hourlyTimeline,
     weekdayBreakdown: buildWeekdayData(weekdayTotals ?? []),
+    tokensDaily: buildTokensDailyData(dayAggregates, now, display?.dailyBarsWindow),
+    categoryTrend: buildCategoryTrendData(categoryDaily, now, display?.dailyBarsWindow),
   };
 }

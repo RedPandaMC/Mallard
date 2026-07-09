@@ -7,19 +7,10 @@ import hashlib
 import pytest
 from pydantic import ValidationError
 
-# Every Settings() must now name a secret manager and its connection details —
-# static env-var-only credentials are not a supported production configuration.
-# OpenBao is used as the default in these tests since it has no extra required
-# field beyond url/token (unlike Infisical, which also needs a project id).
-_SM_KWARGS = {
-    "secret_manager_type": "openbao",
-    "secret_manager_url": "http://sm.example",
-    "secret_manager_token": "sm-token",
-}
+# The static backend is the default; url/token are only required for openbao.
+_SM_KWARGS: dict[str, str] = {}
 _SM_ENV = {
-    "SECRET_MANAGER_TYPE": "openbao",
-    "SECRET_MANAGER_URL": "http://sm.example",
-    "SECRET_MANAGER_TOKEN": "sm-token",
+    "SECRET_MANAGER_TYPE": "static",
 }
 
 
@@ -58,31 +49,26 @@ class TestSettingsValidators:
         s = Settings(influx_url="  http://x:8086  ", influx_token="tok", **_SM_KWARGS)
         assert s.influx_url == "http://x:8086"
 
-    def test_missing_secret_manager_type_raises(self) -> None:
+    def test_secret_manager_type_defaults_to_static(self) -> None:
         from server.config import Settings
 
-        with pytest.raises(ValidationError, match="secret_manager_type"):
-            Settings(
-                influx_url="http://x:8086",
-                influx_token="tok",
-                secret_manager_url="http://sm.example",
-                secret_manager_token="sm-token",
-            )
+        s = Settings(influx_url="http://x:8086", influx_token="tok")
+        assert s.secret_manager_type == "static"
 
-    def test_static_is_not_an_accepted_secret_manager_type(self) -> None:
+    def test_infisical_is_not_an_accepted_secret_manager_type(self) -> None:
         from server.config import Settings
 
         with pytest.raises(ValidationError):
             Settings(
                 influx_url="http://x:8086",
                 influx_token="tok",
-                secret_manager_type="static",  # type: ignore[arg-type]
+                secret_manager_type="infisical",  # type: ignore[arg-type]
             )
 
     def test_missing_secret_manager_url_raises(self) -> None:
         from server.config import Settings
 
-        with pytest.raises(ValidationError, match="SECRET_MANAGER_URL must be set"):
+        with pytest.raises(ValidationError, match="SECRET_MANAGER_URL must be set when SECRET_MANAGER_TYPE=openbao"):
             Settings(
                 influx_url="http://x:8086",
                 influx_token="tok",
@@ -93,7 +79,7 @@ class TestSettingsValidators:
     def test_missing_secret_manager_token_raises(self) -> None:
         from server.config import Settings
 
-        with pytest.raises(ValidationError, match="SECRET_MANAGER_TOKEN must be set"):
+        with pytest.raises(ValidationError, match="SECRET_MANAGER_TOKEN must be set when SECRET_MANAGER_TYPE=openbao"):
             Settings(
                 influx_url="http://x:8086",
                 influx_token="tok",
@@ -101,34 +87,25 @@ class TestSettingsValidators:
                 secret_manager_url="http://sm.example",
             )
 
-    def test_infisical_requires_project_id(self) -> None:
-        from server.config import Settings
-
-        with pytest.raises(ValidationError, match="INFISICAL_PROJECT_ID"):
-            Settings(
-                influx_url="http://x:8086",
-                influx_token="tok",
-                secret_manager_type="infisical",
-                secret_manager_url="http://sm.example",
-                secret_manager_token="sm-token",
-            )
-
-    def test_infisical_with_project_id_succeeds(self) -> None:
+    def test_openbao_with_url_and_token_succeeds(self) -> None:
         from server.config import Settings
 
         s = Settings(
             influx_url="http://x:8086",
             influx_token="tok",
-            secret_manager_type="infisical",
+            secret_manager_type="openbao",
             secret_manager_url="http://sm.example",
             secret_manager_token="sm-token",
-            infisical_project_id="proj-1",
         )
-        assert s.secret_manager_type == "infisical"
+        assert s.secret_manager_type == "openbao"
+
+    def test_static_needs_no_secret_manager_url_or_token(self) -> None:
+        from server.config import Settings
+
+        s = Settings(influx_url="http://x:8086", influx_token="tok", secret_manager_type="static")
+        assert s.secret_manager_url == ""
 
     def test_api_keys_defaults_to_empty(self) -> None:
-        """api_keys is no longer required — it's only meaningful for
-        StaticCredentialVerifier, which production config can't select."""
         from server.config import Settings
 
         s = Settings(influx_url="http://x:8086", influx_token="tok", **_SM_KWARGS)
@@ -263,25 +240,16 @@ class TestHashedCredentials:
         settings = config_module.get_settings()
         assert settings.parsed_cert_labels == {"machine-01": "team-a"}
 
-    def test_secret_manager_base_url_strips_trailing_api(
+    def test_secret_manager_base_url_strips_trailing_slash(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Regression: a SECRET_MANAGER_URL configured with a trailing /api made the
-        Infisical verifier fetch /api/api/v3/... — the property normalises it away."""
         monkeypatch.setenv("INFLUX_URL", "http://localhost:8086")
         monkeypatch.setenv("INFLUX_TOKEN", "tok")
         _set_sm_env(monkeypatch)
-        monkeypatch.setenv(
-            "SECRET_MANAGER_URL", "http://infisical.infisical.svc.cluster.local/api"
-        )
+        monkeypatch.setenv("SECRET_MANAGER_URL", "http://openbao:8200/")
 
         import server.config as config_module
 
-        monkeypatch.setattr(config_module, "_settings", None)
-        settings = config_module.get_settings()
-        assert settings.secret_manager_base_url == "http://infisical.infisical.svc.cluster.local"
-        # And a URL without the suffix is untouched (bar trailing-slash cleanup)
-        monkeypatch.setenv("SECRET_MANAGER_URL", "http://openbao:8200/")
         monkeypatch.setattr(config_module, "_settings", None)
         settings = config_module.get_settings()
         assert settings.secret_manager_base_url == "http://openbao:8200"
@@ -295,6 +263,5 @@ class TestHashedCredentials:
 
         monkeypatch.setattr(config_module, "_settings", None)
         settings = config_module.get_settings()
-        assert settings.secret_manager_type == "openbao"
-        assert settings.infisical_env_slug == "prod"
+        assert settings.secret_manager_type == "static"
         assert settings.openbao_secret_path == "secret/data/mallard/server"

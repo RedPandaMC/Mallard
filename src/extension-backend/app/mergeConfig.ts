@@ -64,6 +64,7 @@ export function mergeConfig(stored?: Partial<UserConfig>): UserConfig {
     ...(stored?.githubBilling !== undefined ? { githubBilling: stored.githubBilling } : {}),
     ...(stored?.dashboard !== undefined ? { dashboard: stored.dashboard } : {}),
     ...(stored?.display !== undefined ? { display: stored.display } : {}),
+    ...(stored?.currency !== undefined ? { currency: stored.currency } : {}),
     ...(stored?.export !== undefined ? { export: stored.export } : {}),
   };
 }

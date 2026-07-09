@@ -6,46 +6,58 @@ function makeFolder(name: string, fsPath: string): WorkspaceFolder {
   return { name, uri: { fsPath } } as unknown as WorkspaceFolder;
 }
 
-function hashOf(fsPath: string): string {
-  return encodeURIComponent(fsPath).replace(/%/g, '').toLowerCase();
-}
-
 describe('WorkspaceFolderMatcher', () => {
   it('returns undefined when getFolders() returns undefined', () => {
     const m = new WorkspaceFolderMatcher(() => undefined);
-    assert.equal(m.resolve('anything'), undefined);
+    assert.equal(m.resolve('/anything'), undefined);
   });
 
   it('returns undefined when getFolders() returns an empty array', () => {
     const m = new WorkspaceFolderMatcher(() => []);
-    assert.equal(m.resolve('any-hash'), undefined);
+    assert.equal(m.resolve('/home/user/proj'), undefined);
   });
 
-  it('returns undefined when no folder hash matches the sessionId', () => {
+  it('returns undefined for an empty cwd', () => {
     const m = new WorkspaceFolderMatcher(() => [makeFolder('proj', '/home/user/proj')]);
-    assert.equal(m.resolve('totally-different-hash'), undefined);
+    assert.equal(m.resolve(''), undefined);
   });
 
-  it('returns the folder name when the hash matches', () => {
-    const fsPath = '/home/user/myproject';
-    const m = new WorkspaceFolderMatcher(() => [makeFolder('myproject', fsPath)]);
-    assert.equal(m.resolve(hashOf(fsPath)), 'myproject');
+  it('returns undefined when the cwd is outside every folder', () => {
+    const m = new WorkspaceFolderMatcher(() => [makeFolder('proj', '/home/user/proj')]);
+    assert.equal(m.resolve('/home/user/other'), undefined);
   });
 
-  it('match is case-insensitive — upper-case sessionId resolves', () => {
-    const fsPath = '/home/user/MYPROJECT';
-    const expected = hashOf(fsPath); // already lowercase from the matcher
-    const m = new WorkspaceFolderMatcher(() => [makeFolder('MYPROJECT', fsPath)]);
-    assert.equal(m.resolve(expected.toUpperCase()), 'MYPROJECT');
+  it('returns the folder name when the cwd equals the folder path', () => {
+    const m = new WorkspaceFolderMatcher(() => [makeFolder('myproject', '/home/user/myproject')]);
+    assert.equal(m.resolve('/home/user/myproject'), 'myproject');
   });
 
-  it('returns the correct folder when multiple folders exist', () => {
-    const fsPathA = '/home/user/alpha';
-    const fsPathB = '/home/user/beta';
+  it('returns the folder name when the cwd is nested inside the folder', () => {
+    const m = new WorkspaceFolderMatcher(() => [makeFolder('myproject', '/home/user/myproject')]);
+    assert.equal(m.resolve('/home/user/myproject/src/deep'), 'myproject');
+  });
+
+  it('does not match a sibling folder that shares a path prefix', () => {
+    // /home/user/proj must NOT match a cwd under /home/user/proj-two
+    const m = new WorkspaceFolderMatcher(() => [makeFolder('proj', '/home/user/proj')]);
+    assert.equal(m.resolve('/home/user/proj-two/src'), undefined);
+  });
+
+  it('match is case-insensitive', () => {
+    const m = new WorkspaceFolderMatcher(() => [makeFolder('MYPROJECT', '/home/user/MYPROJECT')]);
+    assert.equal(m.resolve('/home/user/myproject/src'), 'MYPROJECT');
+  });
+
+  it('normalises backslashes and trailing separators', () => {
+    const m = new WorkspaceFolderMatcher(() => [makeFolder('win', 'C:\\Users\\me\\proj')]);
+    assert.equal(m.resolve('C:\\Users\\me\\proj\\src\\'), 'win');
+  });
+
+  it('picks the most specific (longest) matching folder', () => {
     const m = new WorkspaceFolderMatcher(() => [
-      makeFolder('alpha', fsPathA),
-      makeFolder('beta', fsPathB),
+      makeFolder('outer', '/home/user/outer'),
+      makeFolder('inner', '/home/user/outer/inner'),
     ]);
-    assert.equal(m.resolve(hashOf(fsPathB)), 'beta');
+    assert.equal(m.resolve('/home/user/outer/inner/pkg'), 'inner');
   });
 });
