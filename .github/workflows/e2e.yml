@@ -72,9 +72,6 @@ jobs:
           GF_SECURITY_ADMIN_PASSWORD=ci-grafana-password
           SERVER_DOMAIN=localhost
           API_KEYS=e2e-team:e2e-test-key
-          MQTT_PASSWORD=
-          CERT_LABELS=
-          WEBHOOK_HMAC_SECRETS=
           EOF
 
       - name: Start the stack
@@ -144,9 +141,6 @@ jobs:
           SERVER_DOMAIN=localhost
           OPENBAO_DEV_ROOT_TOKEN=ci-dev-root-token
           API_KEYS=e2e-team:e2e-test-key
-          MQTT_PASSWORD=
-          CERT_LABELS=
-          WEBHOOK_HMAC_SECRETS=
           EOF
 
       - name: Start the stack
