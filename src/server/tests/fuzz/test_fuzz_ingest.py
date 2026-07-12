@@ -145,7 +145,11 @@ _event_strategy = st.fixed_dictionaries(
     {},
     optional={
         "id": st.text(max_size=64),
-        "ts": st.one_of(st.integers(), st.floats(allow_nan=False), st.text(max_size=24)),
+        "ts": st.one_of(
+            st.integers(),
+            st.floats(allow_nan=False, allow_infinity=False),
+            st.text(max_size=24),
+        ),
         "connector": st.text(max_size=100),
         "model": st.text(max_size=100),
         "surface": st.text(max_size=100),

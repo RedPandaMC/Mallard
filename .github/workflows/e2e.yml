@@ -70,6 +70,9 @@ jobs:
           INFLUX_ORG=mallard
           INFLUX_BUCKET=metrics
           GF_SECURITY_ADMIN_PASSWORD=ci-grafana-password
+          # CI reuses the admin token for Grafana; production must create a
+          # read-only bucket-scoped token (src/server/docs/grafana-token.md).
+          GRAFANA_INFLUX_TOKEN=ci-influx-token
           SERVER_DOMAIN=localhost
           API_KEYS=e2e-team:e2e-test-key
           MQTT_PASSWORD=
@@ -141,6 +144,9 @@ jobs:
           INFLUX_ORG=mallard
           INFLUX_BUCKET=metrics
           GF_SECURITY_ADMIN_PASSWORD=ci-grafana-password
+          # CI reuses the admin token for Grafana; production must create a
+          # read-only bucket-scoped token (src/server/docs/grafana-token.md).
+          GRAFANA_INFLUX_TOKEN=ci-influx-token
           SERVER_DOMAIN=localhost
           OPENBAO_DEV_ROOT_TOKEN=ci-dev-root-token
           API_KEYS=e2e-team:e2e-test-key

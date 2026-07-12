@@ -187,3 +187,71 @@ describe('GitHubUsageService', () => {
     svc.dispose();
   });
 });
+
+describe('GitHubUsageService — response size cap', () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('cancels the body and degrades gracefully when Content-Length exceeds the cap', async () => {
+    let cancelled = 0;
+    globalThis.fetch = (async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-length': String(100 * 1024 * 1024) }),
+      body: { cancel: async () => void cancelled++ },
+      text: async () => { throw new Error('must not read an oversized body'); },
+    })) as never;
+    const svc = new GitHubUsageService(makeSession());
+    const result = await svc.fetch();
+    assert.ok(result.isOk(), 'oversized responses degrade like any endpoint failure');
+    const data = result._unsafeUnwrap();
+    assert.equal(data.quota, null);
+    assert.deepEqual(data.items, []);
+    assert.ok(cancelled > 0, 'the unread body stream is cancelled');
+  });
+
+  it('rejects a body that exceeds the cap when no Content-Length is declared', async () => {
+    globalThis.fetch = (async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      text: async () => 'x'.repeat(6 * 1024 * 1024),
+    })) as never;
+    const svc = new GitHubUsageService(makeSession());
+    const result = await svc.fetch();
+    assert.ok(result.isOk());
+    const data = result._unsafeUnwrap();
+    assert.equal(data.quota, null);
+    assert.deepEqual(data.items, []);
+  });
+});
+
+describe('GitHubUsageService — scope + sparse responses', () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('returns empty items for a billing response without usageItems', async () => {
+    stubFetch({ copilot_internal: QUOTA_RESPONSE, '/users/octocat/': {} });
+    const svc = new GitHubUsageService(makeSession());
+    const result = await svc.fetch();
+    assert.ok(result.isOk());
+    assert.deepEqual(result._unsafeUnwrap().items, []);
+    svc.dispose();
+  });
+
+  it('caches per workspace-folder scope independently of the user scope', async () => {
+    const requests = stubFetch({
+      copilot_internal: QUOTA_RESPONSE,
+      '/users/octocat/': BILLING_RESPONSE,
+    });
+    const svc = new GitHubUsageService(makeSession());
+    const scope = { uri: { toString: () => 'file:///workspace-a' } } as never;
+    await svc.fetch(scope);
+    const afterScoped = requests.length;
+    await svc.fetch(scope);
+    assert.equal(requests.length, afterScoped, 'scoped fetch cached');
+    await svc.fetch(); // user scope is a separate cache entry
+    assert.ok(requests.length > afterScoped, 'user scope fetches independently');
+    svc.dispose();
+  });
+});

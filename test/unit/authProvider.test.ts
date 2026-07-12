@@ -5,16 +5,17 @@ import {
   MetricExporter,
   NullMetricExporter,
 } from '../../src/extension-backend/export/MetricExporter';
+import * as vscode from 'vscode';
 import { SECRET_KEYS } from '../../src/extension-backend/app/credentials';
 import type { MallardConfig } from '../../src/extension-backend/config';
 import type { ExportConfig } from '../../src/extension-backend/domain/types';
-import type * as vscode from 'vscode';
 
 function makeConfig(over: {
   transport?: MallardConfig['export']['transport'];
   serverUrl?: string;
   webhookAuth?: MallardConfig['webhook']['auth'];
   mqttUrl?: string;
+  certificate?: MallardConfig['shared']['certificate'];
 } = {}): MallardConfig {
   return {
     copilotLogPath: '',
@@ -27,7 +28,7 @@ function makeConfig(over: {
     export: { transport: over.transport ?? '' },
     webhook: { auth: over.webhookAuth ?? 'apiKey' },
     mqtt: { url: over.mqttUrl ?? '', auth: 'password', username: '' },
-    shared: { certificate: { file: '', keyFile: '', caFile: '' } },
+    shared: { certificate: over.certificate ?? { file: '', keyFile: '', caFile: '' } },
   };
 }
 
@@ -103,6 +104,31 @@ describe('AuthProvider.createExporter', () => {
     exporter.dispose();
   });
 
+  it('builds the Authorization header path for bearer auth', async () => {
+    const { context, requested } = makeContext({ [SECRET_KEYS.webhookBearerToken]: 'tok-1' });
+    const exporter = await new AuthProvider(
+      makeConfig({ transport: 'webhook', serverUrl: 'https://mallard.example.com', webhookAuth: 'bearer' }),
+      context,
+    ).createExporter();
+    assert.ok(exporter instanceof MetricExporter);
+    assert.ok(requested.includes(SECRET_KEYS.webhookBearerToken));
+    exporter.dispose();
+  });
+
+  it('builds the mTLS path for certificate auth without header credentials', async () => {
+    const exporter = await new AuthProvider(
+      makeConfig({
+        transport: 'webhook',
+        serverUrl: 'https://mallard.example.com',
+        webhookAuth: 'certificate',
+        certificate: { file: '/certs/c.crt', keyFile: '/certs/c.key', caFile: '/certs/ca.crt' },
+      }),
+      makeContext().context,
+    ).createExporter();
+    assert.ok(exporter instanceof MetricExporter, 'certificate auth still builds the exporter');
+    exporter.dispose();
+  });
+
   it('builds an MQTT exporter from mqtt.url and reads the broker password slot', async () => {
     const { context, requested } = makeContext({ [SECRET_KEYS.mqttPassword]: 'pw' });
     const exporter = await new AuthProvider(
@@ -112,6 +138,25 @@ describe('AuthProvider.createExporter', () => {
     assert.ok(exporter instanceof MetricExporter);
     assert.ok(requested.includes(SECRET_KEYS.mqttPassword));
     exporter.dispose();
+  });
+
+  it('passes username, certificate paths, and workspace folders to the MQTT protocol', async () => {
+    const ws = vscode.workspace as { workspaceFolders?: unknown };
+    const origFolders = ws.workspaceFolders;
+    ws.workspaceFolders = [{ uri: { fsPath: '/repo/a' } }];
+    try {
+      const cfg = makeConfig({
+        transport: 'mqtt',
+        mqttUrl: 'mqtts://mallard.example.com:8883',
+        certificate: { file: '/certs/c.crt', keyFile: '/certs/c.key', caFile: '/certs/ca.crt' },
+      });
+      cfg.mqtt.username = 'alice';
+      const exporter = await new AuthProvider(cfg, makeContext().context).createExporter();
+      assert.ok(exporter instanceof MetricExporter);
+      exporter.dispose();
+    } finally {
+      ws.workspaceFolders = origFolders;
+    }
   });
 
   it('namespaces per-broker passwords for mqtt fanout targets', async () => {

@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+  canonicalize,
   findLogFiles,
   isPathSafe,
   isClaudeCodeLogFilename,
@@ -227,5 +228,39 @@ describe('isPathSafe', () => {
   });
   it('accepts when one of multiple roots matches', () => {
     assert.ok(isPathSafe('/b/file.log', ['/a', '/b']));
+  });
+});
+
+describe('canonicalize', () => {
+  it('resolves symlink-free existing paths to their real location', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mallard-canon-'));
+    try {
+      const real = await canonicalize(dir);
+      assert.equal(real, await fs.realpath(dir));
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to path.resolve for paths that do not exist', async () => {
+    const missing = path.join(os.tmpdir(), 'mallard-canon-missing', '..', 'mallard-canon-missing-2');
+    assert.equal(await canonicalize(missing), path.resolve(missing));
+  });
+
+  it('resolves a symlinked directory to its target', async function () {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mallard-canon-'));
+    const link = path.join(os.tmpdir(), `mallard-canon-link-${Date.now()}`);
+    try {
+      await fs.symlink(dir, link);
+    } catch {
+      this.skip(); // symlinks unavailable (e.g. Windows without privilege)
+      return;
+    }
+    try {
+      assert.equal(await canonicalize(link), await fs.realpath(dir));
+    } finally {
+      await fs.rm(link, { force: true });
+      await fs.rm(dir, { recursive: true, force: true });
+    }
   });
 });
