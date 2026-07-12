@@ -14,4 +14,4 @@ datasources:
       tlsSkipVerify: false
     secureJsonData:
       token: ${INFLUX_TOKEN}
-    editable: true
+    editable: false

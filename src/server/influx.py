@@ -26,6 +26,11 @@ _MEASUREMENT = "mallard_events"
 _TAG_VALUE_RE = re.compile(r"[^A-Za-z0-9._@ /-]+")
 _FIELD_KEY_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
+# cost_by_category keys are client-controlled; cap how many become distinct
+# InfluxDB field keys per point so a hostile payload (bounded only by the
+# 64 KB body limit) can't inflate schema/field cardinality.
+_MAX_DYNAMIC_FIELDS = 32
+
 
 def _tag_value(value: str) -> str:
     return _TAG_VALUE_RE.sub("_", value)[:64] or "unknown"
@@ -89,7 +94,15 @@ async def write_payload(
         )
         for name, value in e.tokens.items():
             point = point.field(name, int(value))
-        for key, value in e.cost_by_category.items():
+        for i, (key, value) in enumerate(e.cost_by_category.items()):
+            if i >= _MAX_DYNAMIC_FIELDS:
+                logger.warning(
+                    "Dropping %d cost_by_category entries beyond the %d-field cap (instance=%s)",
+                    len(e.cost_by_category) - _MAX_DYNAMIC_FIELDS,
+                    _MAX_DYNAMIC_FIELDS,
+                    batch.instance_id,
+                )
+                break
             point = point.field(_field_key("cbc", key), float(value))
         if e.attribution:
             point = point.tag("attribution", _tag_value(e.attribution))

@@ -22,11 +22,16 @@ services:
     image: quay.io/openbao/openbao:2.5.5
     command: server -config=/openbao/config/openbao.hcl
     environment:
-      BAO_ADDR: "http://127.0.0.1:8200"
+      BAO_ADDR: "https://127.0.0.1:8200"
+      BAO_CACERT: "/openbao/tls/ca.crt"
     # No host port publish: internal network only.
     volumes:
       - openbao-data:/openbao/data
       - ./openbao.prod.hcl:/openbao/config/openbao.hcl:ro
+      # Directory containing openbao.crt / openbao.key / ca.crt — the listener
+      # serves TLS so the server's X-Vault-Token never crosses the network in
+      # plaintext. See openbao.prod.hcl for how to generate these.
+      - ${OPENBAO_TLS_DIR:?directory with openbao.crt/openbao.key/ca.crt}:/openbao/tls:ro
     healthcheck:
       # 0 = unsealed & active, 2 = sealed. Treat "sealed" as not-yet-healthy so
       # dependents wait for the operator to unseal.
@@ -43,11 +48,14 @@ services:
   server:
     environment:
       SECRET_MANAGER_TYPE: openbao
-      SECRET_MANAGER_URL: http://openbao:8200
+      SECRET_MANAGER_URL: https://openbao:8200
       # Operator-provided (AppRole/scoped token). No dev default — the server
       # fails fast at startup if it isn't set.
       SECRET_MANAGER_TOKEN: ${SECRET_MANAGER_TOKEN:?set SECRET_MANAGER_TOKEN}
+      SECRET_MANAGER_CA_CERT_PATH: /openbao-tls/ca.crt
       OPENBAO_SECRET_PATH: secret/data/mallard/server
+    volumes:
+      - ${OPENBAO_TLS_DIR:?directory with openbao.crt/openbao.key/ca.crt}/ca.crt:/openbao-tls/ca.crt:ro
     depends_on:
       openbao:
         condition: service_healthy

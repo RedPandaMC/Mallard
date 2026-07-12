@@ -25,15 +25,55 @@ logger = logging.getLogger(__name__)
 _MAX_BODY_BYTES = 64 * 1024  # 64 KB
 
 
+def _client_ip_from_xff(xff: str, trusted: list) -> str | None:
+    """Right-most X-Forwarded-For hop that is not a trusted proxy.
+
+    Walking from the right trusts only what our own proxies appended: the
+    right-most untrusted entry is the IP the outermost trusted proxy actually
+    saw connect. Anything the client prepended itself sits further left and is
+    ignored, so a client can't mint limiter buckets with junk XFF values.
+    Returns None (caller falls back to the peer IP) on a malformed chain.
+    """
+    import ipaddress
+
+    for hop in reversed([h.strip() for h in xff.split(",") if h.strip()]):
+        try:
+            ip = ipaddress.ip_address(hop)
+        except ValueError:
+            return None
+        if not any(ip in net for net in trusted):
+            return str(ip)
+    return None
+
+
 def _get_key_for_rate_limit(request: Request) -> str:
     """
-    Pre-auth limiter key: client IP only. Keying on a client-supplied header
-    (the previous X-API-Key scheme) let an attacker mint a fresh bucket per
-    request with junk values, defeating the limit entirely — and stored raw
+    Pre-auth limiter key: the real client IP. Keying on a client-supplied
+    header (the previous X-API-Key scheme) let an attacker mint a fresh bucket
+    per request with junk values, defeating the limit entirely — and stored raw
     secrets as limiter keys. Per-credential limiting happens after auth in the
     ingest route, keyed on the verified label (see rate_limit.py).
+
+    When the connection comes from a proxy listed in TRUSTED_PROXIES, the key
+    is derived from X-Forwarded-For (see _client_ip_from_xff) — otherwise every
+    request behind the proxy would share the proxy's IP as one global bucket.
     """
-    return request.client.host if request.client else "unknown"
+    import ipaddress
+
+    peer = request.client.host if request.client else "unknown"
+    trusted = get_settings().parsed_trusted_proxies
+    if trusted and peer != "unknown":
+        try:
+            peer_ip = ipaddress.ip_address(peer)
+        except ValueError:  # pragma: no cover - uvicorn always hands us an IP
+            return peer
+        if any(peer_ip in net for net in trusted):
+            xff = request.headers.get("x-forwarded-for")
+            if xff:
+                client = _client_ip_from_xff(xff, trusted)
+                if client is not None:
+                    return client
+    return peer
 
 
 @asynccontextmanager
@@ -110,8 +150,11 @@ def create_app() -> FastAPI:
         description="Accepts metric payloads from Mallard VS Code extension instances.",
         version="1.0.0",
         lifespan=lifespan,
-        # Disable automatic /docs and /redoc in production if desired:
-        # docs_url=None, redoc_url=None,
+        # Interactive docs are recon surface on a machine-to-machine API — only
+        # serve them when explicitly enabled (ENABLE_DOCS=true).
+        docs_url="/docs" if settings.enable_docs else None,
+        redoc_url="/redoc" if settings.enable_docs else None,
+        openapi_url="/openapi.json" if settings.enable_docs else None,
     )
 
     # ── Middleware ────────────────────────────────────────────────────────────
@@ -123,11 +166,21 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def limit_body_size(request: Request, call_next):  # type: ignore[no-untyped-def]
         content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > _MAX_BODY_BYTES:
-            return JSONResponse(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                content={"detail": "Request body exceeds 64 KB limit"},
-            )
+        if content_length:
+            try:
+                declared = int(content_length)
+            except ValueError:
+                # uvicorn/h11 normally reject malformed Content-Length before
+                # the app sees it; belt-and-braces so it can never become a 500.
+                return JSONResponse(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    content={"detail": "Invalid Content-Length header"},
+                )
+            if declared > _MAX_BODY_BYTES:
+                return JSONResponse(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    content={"detail": "Request body exceeds 64 KB limit"},
+                )
         return await call_next(request)
 
     # ── Routers ───────────────────────────────────────────────────────────────

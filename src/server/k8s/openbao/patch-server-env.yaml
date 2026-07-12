@@ -18,5 +18,14 @@ spec:
           env:
             - name: SECRET_MANAGER_TYPE
               value: "openbao"
+            # The server sends X-Vault-Token on every credential fetch. Prefer
+            # enabling TLS on the OpenBao Helm install (see install.md) and
+            # switching this to https:// plus SECRET_MANAGER_CA_CERT_PATH
+            # pointing at a mounted CA cert; plain HTTP confines the token's
+            # exposure to the pod network.
             - name: SECRET_MANAGER_URL
               value: "http://openbao.openbao.svc.cluster.local:8200"
+            # - name: SECRET_MANAGER_URL
+            #   value: "https://openbao.openbao.svc.cluster.local:8200"
+            # - name: SECRET_MANAGER_CA_CERT_PATH
+            #   value: "/openbao-tls/ca.crt"   # mount the CA via a volume

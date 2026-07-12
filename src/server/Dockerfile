@@ -6,12 +6,21 @@ WORKDIR /build
 RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml .
+COPY src/server/requirements.lock .
 # Install into a self-contained venv instead of system site-packages: copying
 # /usr/local/lib/pythonX.Y/site-packages hardcoded the interpreter minor
 # version and silently broke on base-image bumps (it already bit once with
 # 3.13→3.14). The venv path is version-independent; both stages use the same
 # base image so the interpreter symlink inside the venv stays valid.
-RUN uv venv /opt/venv && uv pip install --python /opt/venv/bin/python --no-cache .
+#
+# Dependencies come from the committed lockfile (uv pip compile output) so
+# builds are reproducible and a compromised/broken transitive release can't be
+# pulled in silently; the project itself installs with --no-deps on top.
+# Regenerate after editing pyproject.toml dependencies:
+#   uv pip compile pyproject.toml --universal --python-version 3.12 -o src/server/requirements.lock
+RUN uv venv /opt/venv \
+    && uv pip install --python /opt/venv/bin/python --no-cache -r requirements.lock \
+    && uv pip install --python /opt/venv/bin/python --no-cache --no-deps .
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM python:3.14-slim

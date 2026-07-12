@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 from functools import cached_property
 from typing import TYPE_CHECKING, Literal
 
@@ -29,8 +30,25 @@ class Settings(BaseSettings):
     server_host: str = Field("0.0.0.0", description="Bind address")  # nosec B104 — intentional for containerised deployment
     server_port: int = Field(8080, description="Listen port")
 
+    # When true, serve the interactive /docs, /redoc, and /openapi.json pages.
+    # Off by default: they add recon surface on a machine-to-machine API.
+    enable_docs: bool = Field(False, description="Serve FastAPI interactive docs (/docs, /redoc)")
+
     # Rate limiting
     rate_limit: str = Field("60/minute", description="Per-key rate limit (slowapi format)")
+    # Behind a reverse proxy every connection carries the proxy's IP, which
+    # collapses the pre-auth per-IP limiter into one shared bucket (a single
+    # abusive client could exhaust it for everyone). Listing the proxy here
+    # keys the limiter on the right-most untrusted X-Forwarded-For hop instead.
+    # XFF from peers not on this list is never trusted.
+    trusted_proxies: str = Field(
+        "",
+        description=(
+            "Comma-separated IPs/CIDRs of reverse proxies whose X-Forwarded-For "
+            "is trusted for pre-auth rate limiting (e.g. '172.16.0.0/12'). "
+            "Empty = key on the connecting IP only."
+        ),
+    )
     # When set, the post-auth per-credential limiter is backed by Redis so the
     # limit holds across all replicas (the in-process limiter multiplies the
     # effective limit by the replica count and resets on restart). Empty falls
@@ -132,6 +150,20 @@ class Settings(BaseSettings):
             if not self.secret_manager_token.strip():
                 raise ValueError("SECRET_MANAGER_TOKEN must be set when SECRET_MANAGER_TYPE=openbao")
         return self
+
+    @cached_property
+    def parsed_trusted_proxies(self) -> list["ipaddress.IPv4Network | ipaddress.IPv6Network"]:
+        """Trusted proxy networks for X-Forwarded-For handling (computed once)."""
+        networks = []
+        for entry in self.trusted_proxies.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            try:
+                networks.append(ipaddress.ip_network(entry, strict=False))
+            except ValueError as exc:
+                raise ValueError(f"TRUSTED_PROXIES entry {entry!r} is not an IP or CIDR") from exc
+        return networks
 
     @cached_property
     def hashed_api_keys(self) -> dict[str, str]:

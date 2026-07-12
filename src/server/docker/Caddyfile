@@ -32,6 +32,17 @@ log {
 	# also stops clients from injecting a CN of their own.
 	request_header SSL_CLIENT_S_DN_CN {tls_client_subject}
 
+	# The server only trusts SSL_CLIENT_S_DN_CN when SSL_CLIENT_VERIFY reads
+	# "SUCCESS" (routers/ingest.py). Strip any client-supplied value first —
+	# otherwise enabling the mTLS block above with verify_if_given would let a
+	# client forge SSL_CLIENT_VERIFY: SUCCESS and authenticate as any CN — then
+	# assert it ourselves: with client_auth enabled, a presented cert has
+	# already been verified against the trusted CA during the handshake, so a
+	# non-empty subject means verification succeeded.
+	request_header -SSL_CLIENT_VERIFY
+	@clientCertVerified expression `{tls_client_subject} != ""`
+	request_header @clientCertVerified SSL_CLIENT_VERIFY "SUCCESS"
+
 	# WebSocket MQTT — the Mallard extension connects to wss://host/mqtt
 	@mqtt path /mqtt
 	reverse_proxy @mqtt server:8083 {
