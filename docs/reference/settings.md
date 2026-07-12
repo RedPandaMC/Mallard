@@ -83,7 +83,10 @@ configured server-side in the secret manager, not in the key value you enter.)
 ### Multiple webhook servers
 
 The webhook transport can mirror every payload to additional servers (e.g. a
-personal and a team endpoint). Declare them in `config.json`:
+personal and a team endpoint). Run **Mallard: Configure Export Fanout
+Targets** from the Command Palette to add, remove, and set credentials for
+targets — changes apply immediately, no reload needed. Targets are stored in
+`config.json` and can also be declared by hand:
 
 ```json
 "export": {

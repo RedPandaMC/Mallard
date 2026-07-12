@@ -129,6 +129,20 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
       );
     }),
   );
+  // Fanout target changes live in config.json (export.webhookTargets /
+  // export.mqttTargets) rather than settings — watch the export block too so
+  // "Mallard: Configure Export Fanout Targets" applies without a reload.
+  let lastExportBlock = JSON.stringify(userConfig.get().export ?? {});
+  context.subscriptions.push(
+    userConfig.onDidChange((c) => {
+      const next = JSON.stringify(c.export ?? {});
+      if (next === lastExportBlock) return;
+      lastExportBlock = next;
+      rebuildExporter().catch((err: unknown) =>
+        console.error('[mallard] exporter rebuild failed:', err),
+      );
+    }),
+  );
 
   const usage = new UsageService(store.reader, pricing, ingest, userConfig, currency, github);
 

@@ -126,6 +126,12 @@
         "icon": "$(key)"
       },
       {
+        "command": "mallard.configureExportTargets",
+        "title": "Configure Export Fanout Targets",
+        "category": "Mallard",
+        "icon": "$(server-environment)"
+      },
+      {
         "command": "mallard.setWebhookApiKey",
         "title": "Set Webhook API Key",
         "category": "Mallard",

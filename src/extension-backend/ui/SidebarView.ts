@@ -101,6 +101,10 @@ export class SidebarView implements vscode.WebviewViewProvider {
     const logoUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'media', 'mallard-icon-128.png'),
     );
+    // style-src 'unsafe-inline' is required (assessed July 2026): the inline
+    // <style> block below, the dynamic width/opacity style attributes on the
+    // model bars, and VS Code's own un-nonced _defaultStyles injection all
+    // need it. Style-only exposure — scripts stay nonce-locked.
     const csp = [
       `default-src 'none'`,
       `img-src ${webview.cspSource}`,

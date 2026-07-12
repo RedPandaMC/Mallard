@@ -31,9 +31,16 @@ export type Metric = 'cost' | 'credits' | 'tokens';
  * `gen_ai.usage.input_tokens` / `output_tokens` per call (span names `chat`,
  * `invoke_agent`, `execute_tool`); there are no cached-input, reasoning, tool,
  * or cost attributes. So only 'input' and 'output' can be derived locally
- * (split by token ratio). 'tool' and 'thinking' stay reserved for a future
- * source (e.g. GitHub billing SKUs). When nothing is attributable the category
- * chart reports `available: false`.
+ * (split by token ratio). 'thinking' is fed by Claude Code session logs.
+ *
+ * Follow-up (July 2026): GitHub's ai_credit/usage billing items were assessed
+ * as a 'tool' source and rejected — usageItems are per-model/SKU MONTHLY
+ * aggregates (gross/net amounts for the period), not per-request costs, so
+ * attributing them to cat_tool event rows would double-count against the
+ * local per-event estimates the dashboard already shows. 'tool' stays
+ * reserved until a source exposes per-request tool costs; zero-only
+ * categories are filtered out of the charts, so the reserved slot never
+ * renders empty.
  */
 export type CostCategory = 'input' | 'output' | 'tool' | 'thinking' | 'cache_creation' | 'cache_read' | 'unknown';
 

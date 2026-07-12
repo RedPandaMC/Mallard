@@ -11,6 +11,7 @@ import {
   promptAndStoreSecret,
 } from './app/credentials';
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
+import { configureExportTargets } from './app/exportTargets';
 import { DashboardPanel } from './ui/DashboardPanel';
 import { SidebarView } from './ui/SidebarView';
 import { formatCredits } from './domain/format';
@@ -338,6 +339,8 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
   const slotByKey = (key: string) => CREDENTIAL_SLOTS.find((s) => s.key === key)!;
   reg('mallard.manageCredentials', () =>
     manageCredentials(context.secrets, exportTargetSlots(userConfig.get().export)));
+  reg('mallard.configureExportTargets', () =>
+    configureExportTargets(context.secrets, userConfig));
   reg('mallard.setMqttPassword', () =>
     promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.mqttPassword)));
   reg('mallard.setWebhookApiKey', () =>
