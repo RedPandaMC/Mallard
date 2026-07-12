@@ -23,6 +23,11 @@ export function renderHtml(webview: vscode.Webview, extensionUri: vscode.Uri): s
     `default-src 'none'`,
     `img-src ${webview.cspSource} data:`,
     `font-src ${webview.cspSource}`,
+    // 'unsafe-inline' for styles is required (assessed July 2026, do not
+    // remove blindly): VS Code injects its own un-nonced _defaultStyles
+    // <style> element into every webview, and ECharts' DOM tooltips embed
+    // style="" attributes in their marker markup. Both are style-only —
+    // script-src stays nonce-locked with no inline/eval.
     `style-src ${webview.cspSource} 'unsafe-inline'`,
     `script-src 'nonce-${nonce}'`,
     `connect-src ${webview.cspSource}`,

@@ -10,7 +10,7 @@ import { watch, FSWatcher } from 'fs';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { UserConfig, SEED_USER_CONFIG } from '../domain/types';
-import { JsonConditionSchema } from '../domain/expr/jsonCondition';
+import { GroupSchema, RuleSchema } from '../domain/alertRules';
 import { JsonFileStore } from '../util/JsonFileStore';
 import { mergeConfig } from './mergeConfig';
 
@@ -18,7 +18,7 @@ export { mergeConfig } from './mergeConfig';
 
 const FILE = 'config.json';
 
-const ConfigSchema = z
+export const ConfigSchema = z
   .object({
     monthlyBudget: z.number(),
     includedCredits: z.number(),
@@ -31,34 +31,13 @@ const ConfigSchema = z
       .partial(),
     version: z.union([z.literal(1), z.literal(2)]).optional(),
     vars: z.record(z.string(), z.unknown()).optional(),
-    groups: z
-      .array(
-        z.object({
-          id: z.string(),
-          label: z.string().optional(),
-          active: JsonConditionSchema,
-        }),
-      )
-      .optional(),
-    rules: z
-      .array(
-        z.object({
-          id: z.string(),
-          severity: z.enum(['info', 'warning', 'critical']),
-          cooldown: z.string().optional(),
-          message: z.string(),
-          when: JsonConditionSchema,
-          active: JsonConditionSchema.optional(),
-          requiresAuth: z.boolean().optional(),
-          notify: z.boolean().optional(),
-          restrict: z
-            .object({
-              reEnableWhen: JsonConditionSchema.optional(),
-            })
-            .optional(),
-        }),
-      )
-      .optional(),
+    // Rules/groups reuse the canonical schemas from alertRules.ts. A previous
+    // inline copy required `when` and omitted conditions/match/thresholds/
+    // snoozeUntil, so a config.json using the documented `conditions`
+    // shorthand failed this parse and readFromDisk silently reset the WHOLE
+    // config to defaults.
+    groups: z.array(GroupSchema).optional(),
+    rules: z.array(RuleSchema).optional(),
     budget: z
       .object({
         monthlyUsd: z.number(),

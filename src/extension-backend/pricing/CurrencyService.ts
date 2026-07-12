@@ -14,6 +14,8 @@ const API_URL = 'https://api.frankfurter.app/latest?from=USD';
 const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 5_000;
 const MAX_REDIRECTS = 3;
+/** A full Frankfurter rates payload is well under 4 KB. */
+const MAX_RESPONSE_BYTES = 1024 * 1024;
 
 export type FxRates = Record<string, number>;
 
@@ -44,7 +46,15 @@ function fetchRates(url: string = API_URL, redirectsLeft: number = MAX_REDIRECTS
         return;
       }
       const chunks: Buffer[] = [];
-      res.on('data', (c: Buffer) => chunks.push(c));
+      let received = 0;
+      res.on('data', (c: Buffer) => {
+        received += c.length;
+        if (received > MAX_RESPONSE_BYTES) {
+          req.destroy(new Error(`Response exceeds ${MAX_RESPONSE_BYTES} bytes`));
+          return;
+        }
+        chunks.push(c);
+      });
       res.on('end', () => {
         try {
           const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {

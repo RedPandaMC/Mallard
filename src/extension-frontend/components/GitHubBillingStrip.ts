@@ -59,6 +59,12 @@ export function mountGitHubBillingStrip(el: HTMLElement): GitHubBillingStripHand
       if (status === 'signed-in' && s.githubBilling) {
         const { totalNetAmount, quota } = s.githubBilling;
         const currency = s.currency;
+        // githubBilling amounts are USD from the GitHub API while
+        // budget.usedCost is already fx-converted — convert before rendering
+        // or comparing, otherwise every non-USD display currency mislabels the
+        // "actual" figure and trips false divergence warnings.
+        const fxRate = currency !== 'USD' ? (s.fxRates[currency] ?? 1) : 1;
+        const actualCost = totalNetAmount * fxRate;
 
         const row = document.createElement('div');
         row.className = 'wv-gh-verified';
@@ -69,7 +75,7 @@ export function mountGitHubBillingStrip(el: HTMLElement): GitHubBillingStripHand
 
         const amount = document.createElement('span');
         amount.className = 'wv-gh-amount';
-        amount.textContent = `${formatMoney(totalNetAmount, currency)} actual`;
+        amount.textContent = `${formatMoney(actualCost, currency)} actual`;
 
         row.appendChild(badge);
         row.appendChild(amount);
@@ -88,10 +94,10 @@ export function mountGitHubBillingStrip(el: HTMLElement): GitHubBillingStripHand
 
         el.appendChild(row);
 
-        // Divergence warning
+        // Divergence warning — both sides in display currency
         const localCost = s.budget.usedCost;
-        if (totalNetAmount > 0) {
-          const divergence = Math.abs(localCost - totalNetAmount) / totalNetAmount;
+        if (actualCost > 0) {
+          const divergence = Math.abs(localCost - actualCost) / actualCost;
           if (divergence > 0.1) {
             const warn = document.createElement('div');
             warn.className = 'wv-gh-divergence';
@@ -101,7 +107,7 @@ export function mountGitHubBillingStrip(el: HTMLElement): GitHubBillingStripHand
             warn.appendChild(icon);
             warn.append(
               ` Local estimate (${formatMoney(localCost, currency)}) differs from API ` +
-              `(${formatMoney(totalNetAmount, currency)}). Other devices may account for the difference.`,
+              `(${formatMoney(actualCost, currency)}). Other devices may account for the difference.`,
             );
             el.appendChild(warn);
           }

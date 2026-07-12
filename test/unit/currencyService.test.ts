@@ -280,3 +280,42 @@ describe('CurrencyService', () => {
     }
   });
 });
+
+describe('CurrencyService — response size cap', () => {
+  it('destroys the request and keeps USD-only rates when the body exceeds the cap', async () => {
+    const dir = await tmpDir();
+    const origGet = https.get;
+    let destroyed = false;
+    https.get = ((_url: unknown, _opts: unknown, cb: (res: unknown) => void) => {
+      const reqListeners: Record<string, (e?: Error) => void> = {};
+      const fakeReq = {
+        on(ev: string, fn: (e?: Error) => void) { reqListeners[ev] = fn; return fakeReq; },
+        destroy(err?: Error) { destroyed = true; setImmediate(() => reqListeners['error']?.(err)); return fakeReq; },
+      } as unknown as ReturnType<typeof https.get>;
+      setImmediate(() => {
+        const listeners: Record<string, (d?: Buffer) => void> = {};
+        const res = { statusCode: 200, headers: {}, resume(): void {}, on(ev: string, fn: (d?: Buffer) => void) { listeners[ev] = fn; return res; } };
+        cb(res);
+        setImmediate(() => {
+          listeners['data']?.(Buffer.alloc(2 * 1024 * 1024, 0x61));
+          if (!destroyed) listeners['end']?.();
+        });
+      });
+      return fakeReq;
+    }) as typeof https.get;
+    const debugs: string[] = [];
+    const logger = { debug: (_t: string, m: string) => { debugs.push(m); }, info(): void {}, warn(): void {}, error(): void {} };
+    try {
+      const svc = new CurrencyService(dir, logger as never);
+      await svc.load();
+      await new Promise((r) => setTimeout(r, 100));
+      assert.ok(destroyed, 'oversized response must destroy the request');
+      assert.deepEqual(svc.currentRates(), { USD: 1 });
+      assert.ok(debugs.some((m) => m.includes('exceeds')), 'refresh failure logged');
+      svc.dispose();
+    } finally {
+      https.get = origGet;
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+});

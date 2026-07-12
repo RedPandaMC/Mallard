@@ -10,12 +10,12 @@ the dashboard's header selector instead.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `mallard.enabledConnectors` | `("copilot" \| "claude-code")[]` | both | Which connectors Mallard ingests from. Set automatically by the onboarding flow when both Copilot and Claude Code are installed. Changing it requires reloading the window. |
+| `mallard.enabledConnectors` | `("copilot" \| "claude-code")[]` | both | Which connectors Mallard ingests from. Set automatically by the onboarding flow when both Copilot and Claude Code are installed. Changing it requires reloading the window — Mallard prompts for the reload when it changes. |
 | `mallard.copilotLogPath` | `string` | `""` | Override the log directory. Blank means auto-detect via `vscode.env.logUri`. |
 | `mallard.pricingManifestUrl` | `string` | `""` | Override the pricing manifest URL. Blank means use the built-in URL. |
 | `mallard.palette` | `"swiss" \| "theme"` | `"swiss"` | Dashboard chart palette. `swiss` is the fixed duotone; `theme` derives the accent from your VS Code theme. Both keep the duotone structure and are checked for accessibility. |
 | `mallard.refreshIntervalMinutes` | `number` | `10` | How often Mallard re-scans logs and rebuilds the snapshot. Range: 1–60 minutes. Lower values update the dashboard faster but increase CPU usage. |
-| `mallard.dataRetentionDays` | `number` | `90` | How many days of raw events to keep before rolling up to daily rows. Range: 30–365. Older events are stored as daily aggregates; per-event detail is lost after this window. |
+| `mallard.dataRetentionDays` | `number` | `90` | How many days of raw events to keep before rolling up to daily rows. Range: 30–365. Older events are stored as daily aggregates; per-event detail is lost after this window. Applies at startup — Mallard prompts for a window reload when it changes. |
 | `mallard.githubBilling.org` | `string` | `""` | GitHub organization slug for org-level Copilot billing in this workspace. Overrides the `githubBilling.org` value from `config.json`. Blank means personal billing. |
 
 ## Metric export settings
@@ -29,7 +29,7 @@ so credentials are not synced across machines by VS Code Settings Sync.
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `mallard.server.url` | `string` | `""` | Base URL of your self-hosted Mallard server (e.g. `https://mallard.example.com`). Used as the webhook endpoint and as the fallback MQTT WebSocket host. |
-| `mallard.export.transport` | `"" \| "webhook" \| "mqtt"` | `""` | Transport to use. Leave blank to disable. Set `mallard.server.url` first. |
+| `mallard.export.transport` | `"" \| "webhook" \| "mqtt"` | `""` | Transport to use. Leave blank to disable. Set `mallard.server.url` first. Transport, auth, URL, and certificate changes apply immediately — the exporter is rebuilt in place. |
 
 ### Webhook auth
 
@@ -83,7 +83,10 @@ configured server-side in the secret manager, not in the key value you enter.)
 ### Multiple webhook servers
 
 The webhook transport can mirror every payload to additional servers (e.g. a
-personal and a team endpoint). Declare them in `config.json`:
+personal and a team endpoint). Run **Mallard: Configure Export Fanout
+Targets** from the Command Palette to add, remove, and set credentials for
+targets — changes apply immediately, no reload needed. Targets are stored in
+`config.json` and can also be declared by hand:
 
 ```json
 "export": {

@@ -9,6 +9,12 @@ data:
   INFLUX_BUCKET: "metrics"
   LOG_LEVEL: "INFO"
   RATE_LIMIT: "60/minute"
+  # Ingress-nginx proxies all traffic, so the pre-auth per-IP rate limiter must
+  # derive the client IP from X-Forwarded-For — otherwise every request shares
+  # the controller's pod IP as one global bucket. The private ranges below
+  # cover default pod network CIDRs; narrow to your ingress controller's CIDR
+  # if you can. XFF from peers outside these ranges is never trusted.
+  TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
   # Shared Redis backs the per-credential rate limiter so the limit holds across
   # all replicas (an in-process limiter would multiply it by the replica count
   # and reset on restart). Empty falls back to the in-process limiter.

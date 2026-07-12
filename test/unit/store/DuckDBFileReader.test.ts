@@ -13,14 +13,37 @@ function makeEvent(overrides?: Partial<UsageEvent>): UsageEvent {
   };
 }
 
+/**
+ * Fake for the streaming result the ingest path consumes: one chunk holding
+ * all rows (chunkSize splits it to exercise the multi-chunk loop). convertRows
+ * mimics the JSON converter by returning plain row values column-by-column.
+ */
+function makeStreamResult(rows: Record<string, unknown>[], chunkSize = Infinity) {
+  const columnNames = rows.length > 0 ? Object.keys(rows[0]!) : [];
+  let offset = 0;
+  return {
+    deduplicatedColumnNames: () => columnNames,
+    fetchChunk: async () => {
+      if (offset >= rows.length) return null;
+      const slice = rows.slice(offset, offset + chunkSize);
+      offset += slice.length;
+      return {
+        rowCount: slice.length,
+        convertRows: () => slice.map((r) => columnNames.map((c) => r[c])),
+      };
+    },
+  };
+}
+
 function makeReader(
   rows: Record<string, unknown>[],
   insertFn?: (events: UsageEvent[]) => Promise<number>,
 ): DuckDBFileReader {
   const mockConn = {
-    // ingestGlob reads rows via getRowObjectsJson (plain objects); hasField
-    // reads a COUNT(*) via getRowObjects. Provide both.
-    runAndReadAll: async () => ({ getRowObjects: () => rows, getRowObjectsJson: () => rows }),
+    // ingestGlob/ingestSqlite stream chunks; hasField reads a COUNT(*) via
+    // runAndReadAll. Provide both.
+    stream: async () => makeStreamResult(rows),
+    runAndReadAll: async () => ({ getRowObjects: () => rows }),
   };
   const mockWriter = { insert: insertFn ?? (async (events: UsageEvent[]) => events.length) };
   return new DuckDBFileReader(mockConn as never, mockWriter as never);
@@ -58,7 +81,7 @@ describe('DuckDBFileReader — ingestGlob', () => {
   it('includes WHERE clause when sinceMs is provided', async () => {
     let capturedSql = '';
     const mockConn = {
-      runAndReadAll: async (sql: string) => { capturedSql = sql; return { getRowObjects: () => [], getRowObjectsJson: () => [] }; },
+      stream: async (sql: string) => { capturedSql = sql; return makeStreamResult([]); },
     };
     const reader = new DuckDBFileReader(mockConn as never, { insert: async () => 0 } as never);
     await reader.ingestGlob(['/tmp/*.jsonl'], () => null, baseCtx, 1_700_000_000_000);
@@ -69,11 +92,21 @@ describe('DuckDBFileReader — ingestGlob', () => {
   it('omits WHERE clause when sinceMs is undefined', async () => {
     let capturedSql = '';
     const mockConn = {
-      runAndReadAll: async (sql: string) => { capturedSql = sql; return { getRowObjects: () => [], getRowObjectsJson: () => [] }; },
+      stream: async (sql: string) => { capturedSql = sql; return makeStreamResult([]); },
     };
     const reader = new DuckDBFileReader(mockConn as never, { insert: async () => 0 } as never);
     await reader.ingestGlob(['/tmp/*.jsonl'], () => null, baseCtx);
     assert.ok(!capturedSql.includes('WHERE'), 'no sinceMs should omit WHERE clause');
+  });
+
+  it('omits WHERE clause when sinceMs is not a finite number', async () => {
+    let capturedSql = '';
+    const mockConn = {
+      stream: async (sql: string) => { capturedSql = sql; return makeStreamResult([]); },
+    };
+    const reader = new DuckDBFileReader(mockConn as never, { insert: async () => 0 } as never);
+    await reader.ingestGlob(['/tmp/*.jsonl'], () => null, baseCtx, Number.NaN);
+    assert.ok(!capturedSql.includes('WHERE'), 'non-finite sinceMs must not reach the SQL text');
   });
 
   it('maps rows through mapRow and inserts non-null results', async () => {
@@ -81,7 +114,7 @@ describe('DuckDBFileReader — ingestGlob', () => {
     const rows = [{ modelId: 'gpt-4o' }, { modelId: 'gpt-4o' }];
     let insertedEvents: UsageEvent[] = [];
     const mockWriter = { insert: async (events: UsageEvent[]) => { insertedEvents = events; return events.length; } };
-    const mockConn = { runAndReadAll: async () => ({ getRowObjectsJson: () => rows }) };
+    const mockConn = { stream: async () => makeStreamResult(rows) };
     const reader = new DuckDBFileReader(mockConn as never, mockWriter as never);
     const result = await reader.ingestGlob(['/tmp/*.jsonl'], () => event, baseCtx);
     assert.equal(result.inserted, 2);
@@ -96,32 +129,26 @@ describe('DuckDBFileReader — ingestGlob', () => {
 
   it('returns 0 when DuckDB throws', async () => {
     const mockConn = {
-      runAndReadAll: async () => { throw new Error('DuckDB native error'); },
+      stream: async () => { throw new Error('DuckDB native error'); },
     };
     const reader = new DuckDBFileReader(mockConn as never, { insert: async () => 0 } as never);
     const result = await reader.ingestGlob(['/tmp/*.jsonl'], () => null, baseCtx);
     assert.deepEqual(result, { inserted: 0, maxEventTs: null });
   });
 
-  it('reads rows via getRowObjectsJson so nested structs reach mapRow as plain objects', async () => {
-    // getRowObjects() would hand back node-api wrapper values ({ entries }) that
-    // mapRow cannot navigate; the ingest path must use getRowObjectsJson().
+  it('streams chunks and reassembles rows so nested structs reach mapRow as plain objects', async () => {
+    // The streaming path converts each chunk with the same JSON converter
+    // getRowObjectsJson() uses, so nested STRUCT/LIST values arrive as plain
+    // objects mapRow can navigate.
     const nestedRow = {
       type: 'assistant',
       message: { model: 'claude-opus-4-8', usage: { input_tokens: '5', output_tokens: '9' } },
       timestamp: '2026-07-04T00:00:00Z',
     };
-    let usedJson = false;
-    const mockConn = {
-      runAndReadAll: async () => ({
-        getRowObjects: () => { throw new Error('ingest must not use getRowObjects'); },
-        getRowObjectsJson: () => { usedJson = true; return [nestedRow]; },
-      }),
-    };
+    const mockConn = { stream: async () => makeStreamResult([nestedRow]) };
     let seen: Record<string, unknown> | undefined;
     const reader = new DuckDBFileReader(mockConn as never, { insert: async (e: UsageEvent[]) => e.length } as never);
     const result = await reader.ingestGlob(['/tmp/*.jsonl'], (r) => { seen = r; return makeEvent(); }, baseCtx);
-    assert.ok(usedJson, 'ingest must read rows via getRowObjectsJson');
     assert.equal(result.inserted, 1);
     assert.deepEqual(
       (seen as { message: { usage: unknown } }).message.usage,
@@ -129,11 +156,20 @@ describe('DuckDBFileReader — ingestGlob', () => {
     );
   });
 
+  it('processes rows split across multiple chunks', async () => {
+    const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }, { id: 'e' }];
+    const mockConn = { stream: async () => makeStreamResult(rows, 2) };
+    const reader = new DuckDBFileReader(mockConn as never, { insert: async (e: UsageEvent[]) => e.length } as never);
+    let i = 0;
+    const result = await reader.ingestGlob(['/tmp/*.jsonl'], () => makeEvent({ id: `e${i++}` }), baseCtx);
+    assert.equal(result.inserted, 5);
+  });
+
   it('treats "No files found" as an empty result without warning', async () => {
     const warns: string[] = [];
     const logger = { warn: (_t: string, m: string) => { warns.push(m); }, debug: () => {}, info: () => {}, error: () => {} };
     const mockConn = {
-      runAndReadAll: async () => { throw new Error('IO Error: No files found that match the pattern "x"'); },
+      stream: async () => { throw new Error('IO Error: No files found that match the pattern "x"'); },
     };
     const reader = new DuckDBFileReader(mockConn as never, { insert: async () => 0 } as never, logger as never);
     const result = await reader.ingestGlob(['/tmp/*.jsonl'], () => null, baseCtx);
@@ -144,7 +180,7 @@ describe('DuckDBFileReader — ingestGlob', () => {
   it('escapes single quotes in glob paths', async () => {
     let capturedSql = '';
     const mockConn = {
-      runAndReadAll: async (sql: string) => { capturedSql = sql; return { getRowObjects: () => [], getRowObjectsJson: () => [] }; },
+      stream: async (sql: string) => { capturedSql = sql; return makeStreamResult([]); },
     };
     const reader = new DuckDBFileReader(mockConn as never, { insert: async () => 0 } as never);
     await reader.ingestGlob(["/tmp/it's/*.jsonl"], () => null, baseCtx);
@@ -154,7 +190,7 @@ describe('DuckDBFileReader — ingestGlob', () => {
   it('passes ctx to mapRow', async () => {
     const capturedCtxs: ParseContext[] = [];
     const row = { id: 'r1' };
-    const mockConn = { runAndReadAll: async () => ({ getRowObjectsJson: () => [row] }) };
+    const mockConn = { stream: async () => makeStreamResult([row]) };
     const reader = new DuckDBFileReader(mockConn as never, { insert: async (es: UsageEvent[]) => es.length } as never);
     await reader.ingestGlob(
       ['/tmp/*.jsonl'],
@@ -253,14 +289,21 @@ describe('DuckDBFileReader — hasField', () => {
     assert.ok(capturedSql.includes('WHERE custom_field ='), 'safe field name should be preserved');
   });
 
-  it('escapes single quotes in field value', async () => {
+  it('binds the field value as a parameter instead of splicing it into the SQL', async () => {
     let capturedSql = '';
+    let capturedParams: unknown[] | undefined;
     const mockConn = {
-      runAndReadAll: async (sql: string) => { capturedSql = sql; return { getRowObjects: () => [{ cnt: 0 }] }; },
+      runAndReadAll: async (sql: string, params?: unknown[]) => {
+        capturedSql = sql;
+        capturedParams = params;
+        return { getRowObjects: () => [{ cnt: 0 }] };
+      },
     };
     const reader = new DuckDBFileReader(mockConn as never, { insert: async () => 0 } as never);
     await reader.hasField(['/tmp/*.jsonl'], 'type', "val'ue");
-    assert.ok(capturedSql.includes("val''ue"), 'single quotes in value should be escaped');
+    assert.ok(capturedSql.includes('= ?'), 'value must be a bind placeholder');
+    assert.ok(!capturedSql.includes("val'ue"), 'raw value must not appear in the SQL text');
+    assert.deepEqual(capturedParams, ["val'ue"]);
   });
 
   it('escapes single quotes in glob paths', async () => {
@@ -284,14 +327,14 @@ describe('DuckDBFileReader — ingestSqlite', () => {
         if (opts.attachThrows && sql.startsWith('ATTACH')) throw new Error('attach fail');
         return undefined;
       },
-      runAndReadAll: async () => {
+      stream: async () => {
         if (opts.queryThrows) throw new Error('query fail');
-        return { getRowObjectsJson: () => opts.rows ?? [] };
+        return makeStreamResult(opts.rows ?? []);
       },
     };
   }
 
-  it('reads rows via getRowObjectsJson, attaches, inserts, and detaches', async () => {
+  it('streams rows, attaches, inserts, and detaches', async () => {
     const conn = makeSqliteConn({ rows: [{ modelId: 'x' }, { modelId: 'y' }] });
     const reader = new DuckDBFileReader(conn as never, { insert: async (e: UsageEvent[]) => e.length } as never);
     const result = await reader.ingestSqlite('/db/spans.sqlite', 'SELECT * FROM mallard_otel.spans', () => makeEvent(), baseCtx);

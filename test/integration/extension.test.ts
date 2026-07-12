@@ -13,6 +13,7 @@ const EXPECTED_COMMANDS = [
   'mallard.exportData',
   'mallard.prepareUninstall',
   'mallard.manageCredentials',
+  'mallard.configureExportTargets',
   'mallard.setMqttPassword',
   'mallard.setWebhookApiKey',
   'mallard.setWebhookBearerToken',

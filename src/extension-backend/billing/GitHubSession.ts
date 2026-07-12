@@ -3,11 +3,13 @@ import type { GitHubBillingConfig } from '../domain/types';
 import type { IAuthProvider } from './IBillingProvider';
 import { SECRET_KEYS } from '../app/credentials';
 import { defaultLogger, Logger } from '../util/logger';
+import { onSettingsChanged } from '../util/vscodeSettings';
 
 export class GitHubSession implements IAuthProvider {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChange: vscode.Event<void> = this._onDidChange.event;
   private readonly _sub: vscode.Disposable;
+  private readonly _orgSub: vscode.Disposable;
 
   private billingConfig: GitHubBillingConfig | undefined;
 
@@ -18,6 +20,10 @@ export class GitHubSession implements IAuthProvider {
     this._sub = vscode.authentication.onDidChangeSessions((e) => {
       if (e.provider.id === 'github') this._onDidChange.fire();
     });
+    // getOrg() reads this setting fresh per fetch, but nothing refetched when
+    // it changed — the old org's data stayed on screen until the next timer
+    // tick. Firing here clears GitHubUsageService's cache and refetches.
+    this._orgSub = onSettingsChanged(['mallard.githubBilling.org'], () => this._onDidChange.fire());
   }
 
   /** Update billing config (called when config.json changes). Invalidates cache. */
@@ -90,5 +96,6 @@ export class GitHubSession implements IAuthProvider {
   dispose(): void {
     this._onDidChange.dispose();
     this._sub.dispose();
+    this._orgSub.dispose();
   }
 }

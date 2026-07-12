@@ -15,7 +15,7 @@ Open from the activity bar icon or **Mallard: Open Dashboard**. The dashboard sh
 - **30-day bar chart**: daily spend with a projected-pace line and previous-period comparison bars
 - **Model breakdown**: top models by credits
 - **Sankey flow chart**: credits from each model to each surface (chat, inline, agent, edit)
-- **Cost-type chart**: input vs output token spend (plus cache and thinking categories for Claude Code sessions)
+- **Cost-type chart**: input vs output token spend (plus cache and thinking categories for Claude Code sessions). Categories with no attributed spend are hidden — a reserved `tool` category exists in the schema but no local log source produces it yet.
 
 A pop-out button opens the same view as a full editor tab.
 

@@ -186,11 +186,21 @@ async def ingest(
     """
     # Fast-path 413 for requests honest enough to declare their size
     content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > _MAX_BODY_BYTES:
-        return JSONResponse(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            content={"detail": "Request body exceeds 64 KB limit"},
-        )
+    if content_length:
+        try:
+            declared = int(content_length)
+        except ValueError:
+            # uvicorn/h11 normally reject malformed Content-Length before the
+            # app sees it; belt-and-braces so it can never become a 500.
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"detail": "Invalid Content-Length header"},
+            )
+        if declared > _MAX_BODY_BYTES:
+            return JSONResponse(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                content={"detail": "Request body exceeds 64 KB limit"},
+            )
 
     # Authenticate before reading or parsing a single body byte.
     source = await _resolve_source(request, verifier)

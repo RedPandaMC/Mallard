@@ -24,6 +24,8 @@ const LITELLM_PRICES_URL =
   'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
 const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 5_000;
+/** Hard cap on response bodies; LiteLLM's full price sheet is ~2 MB. */
+const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 
 /** Model families Mallard can encounter in Copilot/Claude Code logs. */
 const RELEVANT_MODEL_RE = /claude|gpt|gemini|^o\d|llama|mistral|raptor|mai-code/;
@@ -108,7 +110,15 @@ function fetchJson(url: string): Promise<unknown> {
         return;
       }
       const chunks: Buffer[] = [];
-      res.on('data', (c: Buffer) => chunks.push(c));
+      let received = 0;
+      res.on('data', (c: Buffer) => {
+        received += c.length;
+        if (received > MAX_RESPONSE_BYTES) {
+          req.destroy(new Error(`Response exceeds ${MAX_RESPONSE_BYTES} bytes`));
+          return;
+        }
+        chunks.push(c);
+      });
       res.on('end', () => {
         try {
           resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown);

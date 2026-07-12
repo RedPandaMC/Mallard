@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { RELEVANT_CONFIG_KEYS } from './config';
+import { watchReloadRequiredSettings } from './util/reloadPrompt';
 import { buildContainer, Container } from './container';
 import {
   ALL_SECRET_KEYS,
@@ -10,6 +11,7 @@ import {
   promptAndStoreSecret,
 } from './app/credentials';
 import { defaultReportPath, generateReport } from './app/ReportGenerator';
+import { configureExportTargets } from './app/exportTargets';
 import { DashboardPanel } from './ui/DashboardPanel';
 import { SidebarView } from './ui/SidebarView';
 import { formatCredits } from './domain/format';
@@ -112,6 +114,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
       }
     }),
+    // Settings only read at activation (connector registry, store retention)
+    // get a "Reload Window" prompt — changing them was a silent no-op before.
+    watchReloadRequiredSettings(),
   );
 
   await usage.start();
@@ -334,6 +339,8 @@ function registerCommands(context: vscode.ExtensionContext, c: Container): void 
   const slotByKey = (key: string) => CREDENTIAL_SLOTS.find((s) => s.key === key)!;
   reg('mallard.manageCredentials', () =>
     manageCredentials(context.secrets, exportTargetSlots(userConfig.get().export)));
+  reg('mallard.configureExportTargets', () =>
+    configureExportTargets(context.secrets, userConfig));
   reg('mallard.setMqttPassword', () =>
     promptAndStoreSecret(context.secrets, slotByKey(SECRET_KEYS.mqttPassword)));
   reg('mallard.setWebhookApiKey', () =>
