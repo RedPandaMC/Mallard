@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { RELEVANT_CONFIG_KEYS } from './config';
+import { watchReloadRequiredSettings } from './util/reloadPrompt';
 import { buildContainer, Container } from './container';
 import {
   ALL_SECRET_KEYS,
@@ -112,6 +113,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
       }
     }),
+    // Settings only read at activation (connector registry, store retention)
+    // get a "Reload Window" prompt — changing them was a silent no-op before.
+    watchReloadRequiredSettings(),
   );
 
   await usage.start();

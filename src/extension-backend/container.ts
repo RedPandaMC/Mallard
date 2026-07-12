@@ -4,7 +4,8 @@
  * context's subscriptions.
  */
 import * as vscode from 'vscode';
-import { readConfig, readCopilotOtel } from './config';
+import { EXPORT_CONFIG_KEYS, readConfig, readCopilotOtel } from './config';
+import { onSettingsChanged } from './util/vscodeSettings';
 import { UsageService } from './app/UsageService';
 import { UserConfigStore } from './app/UserConfigStore';
 import { LayoutStore } from './app/LayoutStore';
@@ -101,13 +102,33 @@ export async function buildContainer(context: vscode.ExtensionContext): Promise<
   );
 
   // Extra webhook/MQTT targets from config.json fan the export out to
-  // multiple destinations. Like the rest of the exporter config, changes
-  // require a reload.
-  const exporter = await new AuthProvider(
+  // multiple destinations.
+  let exporter = await new AuthProvider(
     cfg,
     context,
     userConfig.get().export ?? {},
   ).createExporter();
+
+  // Transport/auth/URL/cert changes rebuild the exporter in place — they used
+  // to silently require a window reload. The onInserted pipeline below reads
+  // `exporter` per call, so it picks up the replacement immediately.
+  const rebuildExporter = async (): Promise<void> => {
+    const next = await new AuthProvider(
+      readConfig(),
+      context,
+      userConfig.get().export ?? {},
+    ).createExporter();
+    const old = exporter;
+    exporter = next;
+    old.dispose();
+  };
+  context.subscriptions.push(
+    onSettingsChanged(EXPORT_CONFIG_KEYS, () => {
+      rebuildExporter().catch((err: unknown) =>
+        console.error('[mallard] exporter rebuild failed:', err),
+      );
+    }),
+  );
 
   const usage = new UsageService(store.reader, pricing, ingest, userConfig, currency, github);
 

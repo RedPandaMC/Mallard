@@ -34,13 +34,9 @@ export interface MallardConfig {
   };
 }
 
-export const RELEVANT_CONFIG_KEYS = [
-  'mallard.copilotLogPath',
-  'mallard.copilotOtelPath',
-  'mallard.pricingManifestUrl',
-  'mallard.palette',
-  'mallard.refreshIntervalMinutes',
-  'mallard.dataRetentionDays',
+/** Exporter-construction inputs: changing any of these rebuilds the exporter
+ *  in place (container.ts) — no window reload needed. */
+export const EXPORT_CONFIG_KEYS = [
   'mallard.server.url',
   'mallard.export.transport',
   'mallard.webhook.auth',
@@ -50,6 +46,16 @@ export const RELEVANT_CONFIG_KEYS = [
   'mallard.shared.certificate.file',
   'mallard.shared.certificate.keyFile',
   'mallard.shared.certificate.caFile',
+];
+
+export const RELEVANT_CONFIG_KEYS = [
+  'mallard.copilotLogPath',
+  'mallard.copilotOtelPath',
+  'mallard.pricingManifestUrl',
+  'mallard.palette',
+  'mallard.refreshIntervalMinutes',
+  'mallard.dataRetentionDays',
+  ...EXPORT_CONFIG_KEYS,
 ];
 
 export type CopilotOtelKind = 'ndjson' | 'sqlite' | 'none';
