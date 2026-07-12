@@ -41,7 +41,13 @@ function stubFetch(routes: Record<string, unknown | number>) {
     for (const [needle, response] of Object.entries(routes)) {
       if (u.includes(needle)) {
         if (typeof response === 'number') return { ok: false, status: response } as Response;
-        return { ok: true, status: 200, json: async () => response } as Response;
+        const body = JSON.stringify(response);
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-length': String(body.length) }),
+          text: async () => body,
+        } as Response;
       }
     }
     return { ok: false, status: 404 } as Response;

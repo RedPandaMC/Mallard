@@ -19,6 +19,8 @@ import { GitHubBillingData, GitHubBillingItem, GitHubQuota } from '../domain/typ
 
 const CACHE_TTL = 5 * 60 * 1000;
 const FETCH_TIMEOUT = 5_000;
+/** Billing/quota payloads are a few KB; anything larger is not GitHub. */
+const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 const GH_API = 'https://api.github.com';
 const API_VERSION = '2026-03-10';
 
@@ -68,7 +70,16 @@ async function fetchJson(url: string, token: string): Promise<unknown> {
     signal: AbortSignal.timeout(FETCH_TIMEOUT),
   });
   if (!res.ok) throw new Error(`GitHub API ${res.status}: ${url}`);
-  return res.json() as Promise<unknown>;
+  const declared = Number(res.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) {
+    await res.body?.cancel();
+    throw new Error(`GitHub API response exceeds ${MAX_RESPONSE_BYTES} bytes: ${url}`);
+  }
+  const body = await res.text();
+  if (body.length > MAX_RESPONSE_BYTES) {
+    throw new Error(`GitHub API response exceeds ${MAX_RESPONSE_BYTES} bytes: ${url}`);
+  }
+  return JSON.parse(body) as unknown;
 }
 
 function fetchWithRetry(url: string, token: string): Promise<unknown> {

@@ -231,8 +231,12 @@ export class EventReader implements IEventReader {
     }
 
     const { clause, params } = buildFilterSQL(filter);
-    const limitPart  = filter.limit  ? ` LIMIT ${filter.limit}`   : '';
-    const offsetPart = filter.offset ? ` OFFSET ${filter.offset}` : '';
+    // limit/offset are internal numbers; the integer guard keeps anything else
+    // out of the SQL text.
+    const limitPart =
+      filter.limit && Number.isInteger(filter.limit) ? ` LIMIT ${filter.limit}` : '';
+    const offsetPart =
+      filter.offset && Number.isInteger(filter.offset) ? ` OFFSET ${filter.offset}` : '';
     const sql = `SELECT * FROM events ${clause} ORDER BY ts${limitPart}${offsetPart}`;
 
     const rows = await readPrepared(this.conn, sql, params, rowToEvent);
@@ -362,15 +366,18 @@ export class EventReader implements IEventReader {
     const columnKeys = colRows.filter(Boolean);
     if (columnKeys.length === 0) return { rows: [], columnKeys: [] };
 
+    // Column values are log-derived strings — bind them rather than splicing
+    // them into the SQL text. Only the alias (a quoted identifier, `"` doubled)
+    // has to stay inline.
     const pivotCols = columnKeys.map(
       (k) =>
-        `COALESCE(SUM(CASE WHEN ${safeOn} = '${k.replace(/'/g, "''")}' THEN ${safeValue} ELSE 0 END), 0) AS "${k}"`,
+        `COALESCE(SUM(CASE WHEN ${safeOn} = ? THEN ${safeValue} ELSE 0 END), 0) AS "${k.replace(/"/g, '""')}"`,
     );
 
     const dataRows = await readPrepared(
       this.conn,
       `SELECT modelId, ${pivotCols.join(', ')} FROM events ${clause} GROUP BY modelId ORDER BY SUM(${safeValue}) DESC`,
-      params,
+      [...columnKeys, ...params],
       (r) => r,
     );
 
@@ -389,6 +396,8 @@ export class EventReader implements IEventReader {
   async rank(filter: RecordFilter, by: string, limit = 10): Promise<TimeBucket[]> {
     /* c8 ignore next */
     const safeBy = /^[a-zA-Z_]+$/.test(by) ? by : 'credits';
+    /* c8 ignore next */
+    if (!Number.isInteger(limit) || limit <= 0) limit = 10;
     const { clause, params } = buildFilterSQL(filter);
 
     const sql = `

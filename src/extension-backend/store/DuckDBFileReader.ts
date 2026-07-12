@@ -1,5 +1,5 @@
 /* c8 ignore next */
-import { DuckDBConnection } from '@duckdb/node-api';
+import { DuckDBConnection, JsonDuckDBValueConverter } from '@duckdb/node-api';
 import type { UsageEvent } from '../domain/types';
 import type { ParseContext } from '../ingest/otelParse';
 import type { IEventWriter } from './EventWriter';
@@ -69,6 +69,39 @@ export class DuckDBFileReader {
     return this.queue as Promise<IngestResult>;
   }
 
+  /**
+   * Stream a query chunk-by-chunk, mapping each chunk's rows to UsageEvents
+   * and discarding the raw rows immediately. Raw log rows (full JSON payloads)
+   * are 10-100x heavier than mapped events, so never materializing the whole
+   * result set bounds ingest memory on very large logs. Values are converted
+   * with the same JSON converter getRowObjectsJson() uses, so nested
+   * STRUCT/LIST columns still unwrap into plain JS objects/arrays that mapRow
+   * can navigate (e.g. a Claude row's `message.usage`).
+   */
+  private async streamEvents(
+    sql: string,
+    mapRow: RowMapper,
+    ctx: ParseContext,
+  ): Promise<{ events: UsageEvent[]; rowsRead: number }> {
+    const result = await this.conn.stream(sql);
+    const columnNames = result.deduplicatedColumnNames();
+    const events: UsageEvent[] = [];
+    let rowsRead = 0;
+    for (;;) {
+      const chunk = await result.fetchChunk();
+      if (!chunk || chunk.rowCount === 0) break;
+      const chunkRows = chunk.convertRows(JsonDuckDBValueConverter);
+      for (const values of chunkRows) {
+        rowsRead++;
+        const row: Record<string, unknown> = {};
+        for (let i = 0; i < columnNames.length; i++) row[columnNames[i]!] = values[i];
+        const ev = mapRow(row, ctx);
+        if (ev !== null) events.push(ev);
+      }
+    }
+    return { events, rowsRead };
+  }
+
   private async _ingestGlob(
     globs: string | string[],
     mapRow: RowMapper,
@@ -79,31 +112,30 @@ export class DuckDBFileReader {
     if (globArray.length === 0) return { inserted: 0, maxEventTs: null };
 
     const globList = globArray.map((g) => `'${g.replace(/'/g, "''")}'`).join(', ');
+    // sinceMs is an internal epoch-ms watermark; the integer guard keeps any
+    // non-numeric value out of the SQL text.
     const tsFilter =
-      sinceMs != null
-        ? `WHERE COALESCE(epoch_ms(TRY_CAST(timestamp AS TIMESTAMPTZ)), TRY_CAST(timestamp AS BIGINT)) > ${sinceMs}`
+      sinceMs != null && Number.isFinite(sinceMs)
+        ? `WHERE COALESCE(epoch_ms(TRY_CAST(timestamp AS TIMESTAMPTZ)), TRY_CAST(timestamp AS BIGINT)) > ${Math.floor(sinceMs)}`
         : '';
 
-    let rows: Record<string, unknown>[];
+    let events: UsageEvent[];
+    let rowsRead: number;
     try {
-      const result = await this.conn.runAndReadAll(
+      ({ events, rowsRead } = await this.streamEvents(
         `SELECT *, filename FROM read_ndjson([${globList}], ignore_errors := true, auto_detect := true, filename := true) ${tsFilter}`,
-      );
-      // getRowObjectsJson() unwraps nested STRUCT/LIST columns into plain JS
-      // objects/arrays. getRowObjects() would hand back node-api wrapper values
-      // ({ entries } / { items }) that mapRow cannot navigate — e.g. a Claude
-      // row's `message.usage` would read as undefined and every event drop.
-      rows = result.getRowObjectsJson() as Record<string, unknown>[];
+        mapRow,
+        ctx,
+      ));
     } catch (err) {
       if (isNoFilesError(err)) return { inserted: 0, maxEventTs: null };
       this.logger.warn('duckdb', `ingest failed for [${globArray.join(', ')}]: ${String(err)}`);
       return { inserted: 0, maxEventTs: null };
     }
 
-    const events = rows.map((r) => mapRow(r, ctx)).filter((e): e is UsageEvent => e !== null);
     this.logger.debug(
       'duckdb',
-      `ingest [${globArray.join(', ')}]: ${rows.length} rows read, ${events.length} events mapped`,
+      `ingest [${globArray.join(', ')}]: ${rowsRead} rows read, ${events.length} events mapped`,
     );
     if (events.length === 0) return { inserted: 0, maxEventTs: null };
     const inserted = await this.writer.insert(events);
@@ -151,10 +183,10 @@ export class DuckDBFileReader {
       return { inserted: 0, maxEventTs: null };
     }
 
-    let rows: Record<string, unknown>[] = [];
+    let events: UsageEvent[] = [];
+    let rowsRead = 0;
     try {
-      const result = await this.conn.runAndReadAll(query);
-      rows = result.getRowObjectsJson() as Record<string, unknown>[];
+      ({ events, rowsRead } = await this.streamEvents(query, mapRow, ctx));
     } catch (err) {
       this.logger.warn('duckdb', `sqlite query failed for ${dbPath}: ${String(err)}`);
     } finally {
@@ -165,10 +197,9 @@ export class DuckDBFileReader {
       }
     }
 
-    const events = rows.map((r) => mapRow(r, ctx)).filter((e): e is UsageEvent => e !== null);
     this.logger.debug(
       'duckdb',
-      `sqlite ingest ${dbPath}: ${rows.length} rows read, ${events.length} events mapped`,
+      `sqlite ingest ${dbPath}: ${rowsRead} rows read, ${events.length} events mapped`,
     );
     if (events.length === 0) return { inserted: 0, maxEventTs: null };
     const inserted = await this.writer.insert(events);
@@ -182,16 +213,18 @@ export class DuckDBFileReader {
    */
   async hasField(globs: string | string[], field: string, value: string): Promise<boolean> {
     const safeField = /^[a-zA-Z_]+$/.test(field) ? field : 'type';
-    const safeValue = value.replace(/'/g, "''");
     const globArray = Array.isArray(globs) ? globs : [globs];
     if (globArray.length === 0) return false;
     const globList = globArray.map((g) => `'${g.replace(/'/g, "''")}'`).join(', ');
 
     try {
+      // The glob list cannot be bound (DuckDB disallows parameters inside
+      // table-function arguments), but the compared value can be.
       const result = await this.conn.runAndReadAll(
         `SELECT COUNT(*) AS cnt
          FROM read_ndjson([${globList}], ignore_errors := true, auto_detect := true, filename := true)
-         WHERE ${safeField} = '${safeValue}'`,
+         WHERE ${safeField} = ?`,
+        [value],
       );
       const rows = result.getRowObjects() as Record<string, unknown>[];
       return Number(rows[0]?.['cnt'] ?? 0) > 0;

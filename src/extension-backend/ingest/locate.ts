@@ -107,6 +107,16 @@ export function isPathSafe(filePath: string, allowedRoots: string[]): boolean {
   });
 }
 
+/** Resolve symlinks so containment checks compare real locations; falls back
+ *  to a plain resolve for paths that don't (yet) exist. */
+export async function canonicalize(p: string): Promise<string> {
+  try {
+    return await fs.realpath(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
 /** Filename patterns that count as a Copilot log. */
 function isCopilotLogFilename(name: string): boolean {
   const lower = name.toLowerCase();
@@ -130,6 +140,13 @@ export async function findLogFiles(
 ): Promise<string[]> {
   const out: string[] = [];
 
+  // Canonicalize the start dir and roots once so a symlinked root can't alias
+  // the containment check. The walk itself never follows symlinks (Dirent
+  // isFile/isDirectory are both false for links), so entries below a real
+  // start dir are real paths.
+  const realRoots = await Promise.all(allowedRoots.map(canonicalize));
+  const startDir = await canonicalize(dir);
+
   async function walk(current: string, depth: number): Promise<void> {
     /* c8 ignore next */
     if (depth > maxDepth || out.length >= maxFiles) return;
@@ -144,7 +161,7 @@ export async function findLogFiles(
       if (out.length >= maxFiles) return;
       const full = path.join(current, entry.name);
       /* c8 ignore next */
-      if (!isPathSafe(full, allowedRoots)) continue;
+      if (!isPathSafe(full, realRoots)) continue;
       if (entry.isDirectory()) {
         await walk(full, depth + 1);
       } else if (entry.isFile()) {
@@ -153,7 +170,7 @@ export async function findLogFiles(
     }
   }
 
-  await walk(dir, 0);
+  await walk(startDir, 0);
   return out;
 }
 

@@ -183,16 +183,19 @@
         "mallard.copilotLogPath": {
           "type": "string",
           "default": "",
+          "scope": "machine-overridable",
           "description": "Override path to the Copilot log directory (blank = auto-detect via VS Code logUri)."
         },
         "mallard.copilotOtelPath": {
           "type": "string",
           "default": "",
+          "scope": "machine-overridable",
           "description": "Override path to Copilot's OpenTelemetry export target — a JSONL file, or a .sqlite/.db database. Blank = auto-detect from github.copilot.chat.otel.outfile. Run 'Mallard: Enable Copilot Usage Tracking' to set it up automatically."
         },
         "mallard.pricingManifestUrl": {
           "type": "string",
           "default": "",
+          "scope": "machine-overridable",
           "description": "Override URL for the pricing manifest JSON. Leave blank to use the auto-refreshed default."
         },
         "mallard.palette": {
