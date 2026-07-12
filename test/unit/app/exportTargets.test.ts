@@ -172,7 +172,7 @@ describe('configureExportTargets', () => {
     win.showQuickPick = (async (items: readonly vscode.QuickPickItem[]) =>
       (items as ReadonlyArray<{ action?: string }>).find((i) => i.action === 'add-mqtt')) as never;
     win.showInputBox = (async () => inputs.shift()) as never;
-    win.showInformationMessage = (async (msg: string, ...actions: string[]) =>
+    win.showInformationMessage = (async (_msg: string, ...actions: string[]) =>
       actions[0]) as never; // accept "Set Credentials…" (and the save toast)
 
     await configureExportTargets(secrets as never, cfg as unknown as UserConfigStore);
@@ -182,7 +182,7 @@ describe('configureExportTargets', () => {
 
   it('handles a config.json without an export block (dismissed picker)', async () => {
     const cfg = makeUserConfig();
-    (cfg.get() as { export?: ExportConfig }).export = undefined;
+    delete (cfg.get() as { export?: ExportConfig }).export;
     const secrets = makeSecrets();
     win.showQuickPick = (async () => undefined) as never; // dismiss
     await configureExportTargets(secrets as never, cfg as unknown as UserConfigStore);
@@ -191,7 +191,7 @@ describe('configureExportTargets', () => {
 
   it('writes nothing when the URL prompt is dismissed mid-add', async () => {
     const cfg = makeUserConfig();
-    (cfg.get() as { export?: ExportConfig }).export = undefined;
+    delete (cfg.get() as { export?: ExportConfig }).export;
     const secrets = makeSecrets();
     const inputs: (string | undefined)[] = ['team', undefined]; // name ok, URL dismissed
     win.showQuickPick = (async (items: readonly vscode.QuickPickItem[]) =>
