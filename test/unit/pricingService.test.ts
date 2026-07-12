@@ -342,3 +342,47 @@ describe('PricingService — lifecycle and clearCache', () => {
     }
   });
 });
+
+describe('PricingService — response size cap', () => {
+  /** Stub https.get with a body larger than the cap; destroy(err) propagates
+   *  to the request 'error' listener like a real aborted request, and a
+   *  destroyed response never reaches 'end'. */
+  function stubHttpsGetOversized(bytes: number): { restore(): void; destroyed(): boolean } {
+    const origGet = https.get;
+    let destroyed = false;
+    https.get = ((_url: unknown, _opts: unknown, cb: (res: unknown) => void) => {
+      const reqListeners: Record<string, (e?: Error) => void> = {};
+      const fakeReq = {
+        on(ev: string, fn: (e?: Error) => void) { reqListeners[ev] = fn; return fakeReq; },
+        destroy(err?: Error) { destroyed = true; setImmediate(() => reqListeners['error']?.(err)); return fakeReq; },
+      } as unknown as ReturnType<typeof https.get>;
+      setImmediate(() => {
+        const listeners: Record<string, (d?: Buffer) => void> = {};
+        const res = { statusCode: 200, on(ev: string, fn: (d?: Buffer) => void) { listeners[ev] = fn; } };
+        cb(res);
+        setImmediate(() => {
+          listeners['data']?.(Buffer.alloc(bytes, 0x61));
+          if (!destroyed) listeners['end']?.();
+        });
+      });
+      return fakeReq;
+    }) as typeof https.get;
+    return { restore: () => { https.get = origGet; }, destroyed: () => destroyed };
+  }
+
+  it('destroys the request and keeps the bundled manifest when the body exceeds the cap', async () => {
+    const dir = await tmpDir();
+    const stub = stubHttpsGetOversized(6 * 1024 * 1024);
+    try {
+      const svc = new PricingService(dir, BUNDLED);
+      await svc.load();
+      await new Promise((r) => setTimeout(r, 100));
+      assert.ok(stub.destroyed(), 'oversized response must destroy the request');
+      assert.equal(svc.pricePerCredit, 0.04, 'bundled manifest retained');
+      svc.dispose();
+    } finally {
+      stub.restore();
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+});

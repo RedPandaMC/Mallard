@@ -857,3 +857,25 @@ describe('EventStore — creditsByBranch', () => {
     store.dispose();
   });
 });
+
+describe('EventReader.pivot', () => {
+  it('binds log-derived column values — quotes in surface names are data, not SQL', async () => {
+    const dir = await tmpDir();
+    const store = await EventStore.open(dir);
+    const hostile = `wei"rd'surface`;
+    const ts = startOf(Date.now(), 'day') + 3_600_000;
+    await store.writer.insert([
+      makeEvent({ id: 'p1', ts, surface: hostile as never, credits: 2 }),
+      makeEvent({ id: 'p2', ts: ts + 1, credits: 3 }), // surface 'chat'
+    ]);
+
+    const result = await store.reader.pivot({}, 'surface', 'credits');
+    assert.deepStrictEqual([...result.columnKeys].sort(), [hostile, 'chat'].sort());
+    const row = result.rows.find((r) => r.modelId === 'gpt-4o');
+    assert.ok(row, 'pivot returns the model row');
+    assert.strictEqual(row[hostile], 2);
+    assert.strictEqual(row['chat'], 3);
+    store.dispose();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+});

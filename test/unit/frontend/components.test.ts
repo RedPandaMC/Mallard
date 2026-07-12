@@ -92,6 +92,34 @@ describe('components — mount + update DOM', () => {
     el.remove();
   });
 
+  it('GitHubBillingStrip converts USD billing amounts to the display currency before rendering and comparing', () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const h = mountGitHubBillingStrip(el);
+    const base = makeSnapshot(100);
+    const signedIn = {
+      ...base,
+      currency: 'EUR',
+      fxRates: { USD: 1, EUR: 2 },
+      // usedCost is already display-currency (EUR); totalNetAmount is USD.
+      budget: { ...base.budget, usedCost: 20 },
+      authStatus: 'signed-in' as AuthStatus,
+      githubBilling: { quota: null, items: [], fetchedAt: Date.now(), totalNetAmount: 10 },
+    };
+    h.update(signedIn);
+    const amount = el.querySelector('.wv-gh-amount');
+    assert.ok(amount?.textContent?.includes('20'), `renders 10 USD × 2 = 20 EUR, got "${amount?.textContent}"`);
+    assert.equal(
+      el.querySelector('.wv-gh-divergence'),
+      null,
+      '20 EUR local vs 10 USD (= 20 EUR) actual must not warn',
+    );
+    // A genuine divergence still warns.
+    h.update({ ...signedIn, budget: { ...base.budget, usedCost: 100 } });
+    assert.ok(el.querySelector('.wv-gh-divergence'), 'real divergence still warns');
+    el.remove();
+  });
+
   it('RestrictionBanner shows/hides based on state', () => {
     const el = document.createElement('div');
     document.body.appendChild(el);

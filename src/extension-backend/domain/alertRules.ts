@@ -28,7 +28,10 @@ const ThresholdLevelSchema = SimpleConditionSchema.extend({
   cooldown: z.string().optional(),
 });
 
-const RuleSchema = z
+/** Exported so UserConfigStore's ConfigSchema validates rules with the SAME
+ *  shape — a divergent inline copy silently rejected documented rule fields
+ *  (conditions/match/thresholds/snoozeUntil) and dropped the whole config. */
+export const RuleSchema = z
   .object({
     id: z.string().min(1),
     severity: z.enum(['info', 'warning', 'critical']).default('warning'),
@@ -52,13 +55,13 @@ const RuleSchema = z
     { message: 'A rule must have "when", "conditions", or "thresholds"' },
   );
 
-const GroupSchema = z.object({
+export const GroupSchema = z.object({
   id: z.string().min(1),
   label: z.string().optional(),
   active: JsonConditionSchema,
 });
 
-const VarsSchema = z.record(
+export const VarsSchema = z.record(
   z.string(),
   z.union([z.number(), z.string(), z.boolean(), z.array(z.union([z.string(), z.number()]))]),
 );

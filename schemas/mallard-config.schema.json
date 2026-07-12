@@ -97,6 +97,15 @@
     }
   },
   "properties": {
+    "version": {
+      "type": "integer",
+      "enum": [1, 2],
+      "description": "Config document version. Optional; defaults to the current version."
+    },
+    "currency": {
+      "type": "string",
+      "description": "Display currency ISO code (e.g. \"EUR\"). Set from the dashboard's header selector; costs are converted from USD with daily Frankfurter rates."
+    },
     "monthlyBudget": {
       "type": "number",
       "minimum": 0,
@@ -158,7 +167,7 @@
       "description": "Custom alert and restriction rules evaluated against the live usage snapshot.",
       "items": {
         "type": "object",
-        "required": ["id", "severity", "message"],
+        "required": ["id", "message"],
         "properties": {
           "id": { "type": "string", "description": "Unique rule identifier. Used for cooldown bookkeeping." },
           "severity": {

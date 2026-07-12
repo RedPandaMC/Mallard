@@ -56,6 +56,7 @@ require.cache['__vscode_stub__'] = {
       executeCommand: () => Promise.resolve(undefined),
     },
     ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
+    ViewColumn: { Active: -1, Beside: -2, One: 1, Two: 2, Three: 3 },
     ColorThemeKind: { Light: 1, Dark: 2, HighContrast: 3, HighContrastLight: 4 },
     Uri: {
       file: (p) => ({ fsPath: p, toString: () => `file://${p}` }),
